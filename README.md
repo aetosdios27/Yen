@@ -71,8 +71,8 @@ We only claim what a skeptic can check.
 | Languages          | TypeScript (strict), Solidity                                                                          |
 | Monorepo           | pnpm workspaces, Turborepo                                                                             |
 | Quality            | Biome, Vitest, Foundry, Playwright (planned)                                                           |
-| Web app            | Next.js PWA (planned)                                                                                  |
-| API                | Hono (planned)                                                                                         |
+| Web app            | Next.js placeholder; PWA planned                                                                       |
+| API                | Hono HTTP service with a health endpoint                                                               |
 | Data & ledger      | PostgreSQL 16, [Konto](https://github.com/aetosdios27/Konto) double-entry ledger integration (planned) |
 | Event log          | Hash-chained event log (planned)                                                                       |
 | Proofs & anchoring | SHA-256, Merkle trees, Polygon Amoy testnet anchoring (planned for MVP)                                |
@@ -95,13 +95,14 @@ Delivery is structured into six focus areas:
 ## Repository layout
 
 ```
-apps/        web (Next.js) and api (Hono)             - coming with YEN-11
-packages/    shared: money (paise), Merkle verify     - started
-             ledger, eventlog                          - planned
-contracts/   Foundry project (RootRegistry)           - planned, YEN-16
-infra/       Terraform                                - planned, YEN-17
-.github/     CI, rulesets, templates, repo-settings script
-.greptile/   AI review rules specific to this repo
+apps/web/         Next.js placeholder with typed environment settings
+apps/api/         Hono HTTP service with a health endpoint
+packages/shared/  Integer paise, branded IDs, Merkle proofs
+packages/ledger/  Placeholder for ledger integration
+packages/eventlog/ Placeholder for the append-only event log
+contracts/        Placeholder; RootRegistry is planned in YEN-16
+.github/          CI, rulesets, templates, repo-settings script
+.greptile/        AI review rules specific to this repo
 ```
 
 Money is always **integer paise** with the branded `Paise` type, never floats.
@@ -114,7 +115,21 @@ pnpm install
 pnpm verify            # biome ci + typecheck + test + build
 ```
 
-Other commands: `pnpm format` auto-fixes formatting and safe lint issues.
+To run the apps locally, first run `pnpm verify` above to build the API, then copy the example environment files:
+
+```sh
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env
+pnpm --filter @yen/api start  # API on port 3001
+```
+
+In a second terminal, start the web app on port 3000:
+
+```sh
+pnpm --filter @yen/web dev
+```
+
+The API requires `PORT`, and the web app requires an HTTP(S) `NEXT_PUBLIC_API_URL`. The example files provide local values. `pnpm format` auto-fixes formatting and safe lint issues.
 
 <a id="how-we-work"></a>
 <a id="security"></a>
