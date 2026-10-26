@@ -4,8 +4,8 @@ import { Ajv2020 } from "ajv/dist/2020.js";
 import { expect, it } from "vitest";
 import { createApp } from "./app.js";
 import { ApiError, errorCode, errorStatus } from "./errors.js";
-import { MemoryIdempotencyStore } from "./stores.js";
 import { devPolicy } from "./policy.js";
+import { MemoryIdempotencyStore } from "./stores.js";
 
 const responseSpec = z.object({
   headers: z.record(

@@ -130,9 +130,13 @@ in-memory rate-limit store lazily removes buckets once they would be full and ca
 entries at 10,000, evicting the oldest bucket when full. It has no background timer.
 Production needs a shared rate-limit store for consistent limits across processes.
 
-Logs contain only event, UUID requestId, method, route template, status, and durationMs.
-The JSON serializer strips unknown fields. No raw URL, query, body, header, principal,
-phone number, authorization, cookie, or idempotency key is logged.
+Request logs contain only event, UUID requestId, method, route template, status, and
+durationMs. Failure logs contain only event, requestId, method, route template,
+`errorKind` (`readiness`, `store`, `handler`, `validation`, or `unknown`), and the
+error constructor name. The JSON serializer strips unknown fields. We omit error
+messages and stacks because store exceptions and validation messages can contain
+input or secrets. No raw URL, query, body, header, principal, phone number,
+authorization, cookie, or idempotency key is logged.
 
 ## ADR: keep Hono
 

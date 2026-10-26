@@ -3,7 +3,15 @@ import type { MiddlewareHandler } from "hono";
 import { routePath } from "hono/route";
 import { idempotencyKey } from "./contract.js";
 import type { ApiEnv, AppDependencies } from "./dependencies.js";
-import { ApiError } from "./errors.js";
+import { ApiError, StoreError } from "./errors.js";
+
+async function storeCall<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch {
+    throw new StoreError();
+  }
+}
 
 export const requireAuth: MiddlewareHandler<ApiEnv> = async (c, next) => {
   if (!c.get("principal")) throw new ApiError("unauthenticated");
@@ -46,7 +54,7 @@ export function rateLimit(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
         : []),
     ];
     for (const { key, limit } of limits) {
-      const result = await deps.rateLimitStore.consume(key, limit, deps.clock());
+      const result = await storeCall(() => deps.rateLimitStore.consume(key, limit, deps.clock()));
       if (!result.allowed) {
         c.header("retry-after", String(result.retryAfterSeconds));
         throw new ApiError("rate_limited");
@@ -84,7 +92,7 @@ export function idempotency(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
       requestHash: Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join(""),
       createdAt: deps.clock(),
     };
-    const reservation = await deps.idempotencyStore.begin(request);
+    const reservation = await storeCall(() => deps.idempotencyStore.begin(request));
     if (reservation.kind !== "new") {
       if (reservation.requestHash !== request.requestHash || reservation.kind === "in_progress") {
         if (reservation.kind === "in_progress") c.header("retry-after", "1");
@@ -107,23 +115,25 @@ export function idempotency(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
     try {
       await next();
       if (c.res.status >= 500) {
-        await deps.idempotencyStore.release(request, reservation.token);
+        await storeCall(() => deps.idempotencyStore.release(request, reservation.token));
         return;
       }
-      await deps.idempotencyStore.complete(request, reservation.token, {
-        status: c.res.status,
-        headers: [...c.res.headers],
-        bodyBase64:
-          c.res.body === null
-            ? null
-            : btoa(
-                Array.from(new Uint8Array(await c.res.clone().arrayBuffer()), (byte) =>
-                  String.fromCharCode(byte),
-                ).join(""),
-              ),
-      });
+      await storeCall(async () =>
+        deps.idempotencyStore.complete(request, reservation.token, {
+          status: c.res.status,
+          headers: [...c.res.headers],
+          bodyBase64:
+            c.res.body === null
+              ? null
+              : btoa(
+                  Array.from(new Uint8Array(await c.res.clone().arrayBuffer()), (byte) =>
+                    String.fromCharCode(byte),
+                  ).join(""),
+                ),
+        }),
+      );
     } catch (error) {
-      await deps.idempotencyStore.release(request, reservation.token);
+      await storeCall(() => deps.idempotencyStore.release(request, reservation.token));
       throw error;
     }
   };

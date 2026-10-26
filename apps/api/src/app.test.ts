@@ -1,12 +1,13 @@
 import { readFile } from "node:fs/promises";
+import { HTTPException } from "hono/http-exception";
 import { expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
 import { fundSchema } from "./contract.js";
 import type { AppDependencies } from "./dependencies.js";
 import { ApiError, errorEnvelope, errorStatus } from "./errors.js";
-import { type RequestLog, serializeRequestLog } from "./logging.js";
-import { MemoryIdempotencyStore, MemoryRateLimitStore } from "./stores.js";
+import { type LogEntry, serializeRequestLog } from "./logging.js";
 import { devPolicy } from "./policy.js";
+import { MemoryIdempotencyStore, MemoryRateLimitStore } from "./stores.js";
 
 const principal = { id: "00000000-0000-4000-8000-000000000001" };
 const inboundId = "00000000-0000-4000-8000-000000000099";
@@ -15,7 +16,7 @@ const input = { name: "Festival", targetPaise: "9007199254740993" };
 function setup(overrides: Partial<AppDependencies> = {}) {
   let now = 0;
   let sequence = 100;
-  const entries: RequestLog[] = [];
+  const entries: LogEntry[] = [];
   const idGenerator = vi.fn(
     () => `00000000-0000-4000-8000-${String(sequence++).padStart(12, "0")}`,
   );
@@ -86,6 +87,74 @@ it("hides unknown error messages, causes, and stacks", async () => {
   const body = await response.text();
   expect(body).toContain('"code":"internal"');
   expect(body).not.toMatch(/secret|phone|919876543210|private|stack|cause/);
+});
+
+it.each([
+  {
+    kind: "readiness",
+    name: "ReadinessError",
+    request: "/ready",
+    configure: () => ({ readiness: async () => false }),
+  },
+  {
+    kind: "store",
+    name: "StoreError",
+    request: "/v1/me",
+    configure: () => ({
+      rateLimitStore: {
+        consume: async () => {
+          throw new Error("store secret");
+        },
+      },
+    }),
+  },
+  { kind: "handler", name: "Error", request: "/explode", configure: () => ({}) },
+  { kind: "validation", name: "HTTPException", request: "/v1/funds", configure: () => ({}) },
+  { kind: "unknown", name: "HTTPException", request: "/unknown-error", configure: () => ({}) },
+])(
+  "logs safe $kind failures with their source and route template",
+  async ({ kind, name, request, configure }) => {
+    const { app, entries } = setup(configure());
+    app.get("/explode", () => {
+      throw new Error("handler secret");
+    });
+    app.get("/unknown-error", () => {
+      throw new HTTPException(418);
+    });
+    const response = await app.request(
+      request,
+      kind === "validation" ? { ...post(), body: "{" } : undefined,
+    );
+    expect(response.status).toBe(kind === "validation" ? 400 : 500);
+    expect(entries.filter((entry) => entry.event === "http_failure")).toEqual([
+      {
+        event: "http_failure",
+        requestId: response.headers.get("x-request-id"),
+        route: request,
+        method: kind === "validation" ? "POST" : "GET",
+        errorKind: kind,
+        errorName: name,
+      },
+    ]);
+  },
+);
+
+it("never logs sensitive error contents or unexpected failure fields", async () => {
+  const { app, entries } = setup();
+  app.get("/secret/:id", () => {
+    throw new Error("phone +919876543210 Authorization: Bearer private-token");
+  });
+  const response = await app.request("/secret/919876543210?token=private-token", {
+    headers: { authorization: "Bearer private-token" },
+  });
+  expect(response.status).toBe(500);
+  const output = entries.map(serializeRequestLog).join("\n");
+  expect(output).toContain('"route":"/secret/:id"');
+  expect(output).not.toMatch(/919876543210|private-token|Authorization|phone|stack|message/);
+  const failure = entries.find((entry) => entry.event === "http_failure");
+  if (!failure) throw new Error("Expected failure log");
+  const contaminated = { ...failure, message: "private-token" };
+  expect(serializeRequestLog(contaminated)).not.toContain("private-token");
 });
 
 it.each([inboundId, "bad id", "919876543210", ""])(
@@ -386,8 +455,10 @@ it("logs only allowed metadata, using a route template and no raw inputs", async
   expect(logs).not.toMatch(
     /919876543210|private-token|cookie|private-key|secret-body|authorization|Idempotency/,
   );
-  expect(entries).toHaveLength(2);
-  expect(Object.keys(entries[0] ?? {})).toEqual([
+  expect(entries.filter((entry) => entry.event === "http_failure")).toHaveLength(1);
+  const requests = entries.filter((entry) => entry.event === "http_request");
+  expect(requests).toHaveLength(2);
+  expect(Object.keys(requests[0] ?? {})).toEqual([
     "event",
     "requestId",
     "method",

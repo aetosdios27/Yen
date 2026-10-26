@@ -60,6 +60,18 @@ export class ApiError extends Error {
   }
 }
 
+export class ReadinessError extends Error {
+  constructor() {
+    super("Readiness failed");
+  }
+}
+
+export class StoreError extends Error {
+  constructor() {
+    super("Store failed");
+  }
+}
+
 export function errorBody(error: ApiError, requestId: string) {
   return {
     error: {

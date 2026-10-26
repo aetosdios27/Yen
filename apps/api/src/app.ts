@@ -1,8 +1,9 @@
 import { OpenAPIHono, type z } from "@hono/zod-openapi";
 import { parseFundId } from "@yen/shared";
+import type { Context } from "hono";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
-import type { Context } from "hono";
+import { routePath } from "hono/route";
 import {
   createFundRoute,
   type fundSchema,
@@ -15,9 +16,11 @@ import {
   readyRoute,
 } from "./contract.js";
 import { type ApiEnv, type AppDependencies, defaultDependencies } from "./dependencies.js";
-import { ApiError, errorBody, errorStatus } from "./errors.js";
+import { ApiError, errorBody, errorStatus, ReadinessError, StoreError } from "./errors.js";
+import { logMethod } from "./logging.js";
 import { idempotency, rateLimit, requestContext, requireAuth } from "./middleware.js";
 import type { FundAction, FundResource } from "./policy.js";
+
 export { devPolicy } from "./policy.js";
 
 export function createApp(overrides: Partial<AppDependencies> = {}) {
@@ -51,6 +54,28 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     );
   }
   app.onError((error, c) => {
+    const errorKind =
+      error instanceof ReadinessError
+        ? "readiness"
+        : error instanceof StoreError
+          ? "store"
+          : error instanceof ApiError && error.code === "validation_failed"
+            ? "validation"
+            : error instanceof HTTPException
+              ? error.status === 400
+                ? "validation"
+                : "unknown"
+              : error instanceof Error
+                ? "handler"
+                : "unknown";
+    deps.logger.log({
+      event: "http_failure",
+      requestId: c.get("requestId"),
+      route: routePath(c, -1) || "unmatched",
+      method: logMethod(c.req.method),
+      errorKind,
+      errorName: error instanceof Error ? error.constructor.name : "Unknown",
+    });
     const failure =
       error instanceof ApiError
         ? error
@@ -77,7 +102,11 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   };
   app.openapi(healthRoute, (c) => c.json({ status: "ok" }, 200));
   app.openapi(readyRoute, async (c) => {
-    if (!(await deps.readiness())) throw new ApiError("internal");
+    try {
+      if (!(await deps.readiness())) throw new ReadinessError();
+    } catch {
+      throw new ReadinessError();
+    }
     return c.json({ status: "ok" }, 200);
   });
   app.openapi(meRoute, (c) => c.json(principalSchema.parse(c.get("principal")), 200));
