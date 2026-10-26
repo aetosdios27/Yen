@@ -49,7 +49,38 @@ it("reaches controls with Tab and activates buttons with Enter and Space", async
   expect(clicks).toEqual(["enter", "space"]);
 });
 
-it("closes a toast with Escape", async () => {
+function ShowToastHarness() {
+  const [open, setOpen] = useState(false);
+  return (
+    <main>
+      <button type="button" onClick={() => setOpen(true)}>
+        Show toast
+      </button>
+      <Toast open={open} title="Fund saved" onClose={() => setOpen(false)} />
+    </main>
+  );
+}
+
+it("closes a toast with Escape even without focusing Dismiss", async () => {
+  const user = userEvent.setup();
+
+  render(
+    <LocaleProvider>
+      <ShowToastHarness />
+    </LocaleProvider>,
+  );
+
+  const trigger = screen.getByRole("button", { name: "Show toast" });
+  await user.click(trigger);
+  expect(screen.getByText("Fund saved")).toBeTruthy();
+  expect(document.activeElement).toBe(trigger);
+
+  await user.keyboard("{Escape}");
+
+  expect(screen.queryByText("Fund saved")).toBeNull();
+});
+
+it("closes a toast with Escape when dismiss button has focus", async () => {
   const user = userEvent.setup();
 
   render(

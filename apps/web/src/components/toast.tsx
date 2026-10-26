@@ -1,6 +1,6 @@
 "use client";
 
-import type { KeyboardEvent, ReactNode } from "react";
+import { type KeyboardEvent, type ReactNode, useEffect } from "react";
 import { useI18n } from "../i18n";
 import { cn } from "./cn";
 import { AlertTriangleIcon, CheckCircleIcon, InfoIcon, XCircleIcon, XIcon } from "./icons";
@@ -25,11 +25,28 @@ export type ToastProps = {
   title: string;
   description?: string;
   tone?: ToastTone;
+  open?: boolean;
   onClose?: () => void;
 };
 
-export function Toast({ title, description, tone = "info", onClose }: ToastProps) {
+export function Toast({ title, description, tone = "info", open = true, onClose }: ToastProps) {
   const { t } = useI18n();
+
+  useEffect(() => {
+    if (!open || onClose === undefined) return;
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onClose?.();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
+
+  if (!open) {
+    return <div role="status" aria-live="polite" aria-atomic="true" className="sr-only" />;
+  }
 
   function handleEscape(event: KeyboardEvent<HTMLButtonElement>) {
     if (event.key === "Escape" && onClose !== undefined) {

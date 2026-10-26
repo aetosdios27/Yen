@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
+import { en } from "../../i18n/messages/en";
 import { DesignSystemReview } from "./design-system-review";
 
 export const metadata: Metadata = {
-  title: "Design system · Yen",
-  description: "A 375 px review of Yen design tokens, components and languages.",
+  title: en.metadata.designSystemTitle,
+  description: en.metadata.designSystemDescription,
 };
 
 export default function DesignSystemPage() {

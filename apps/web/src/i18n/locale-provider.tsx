@@ -54,3 +54,24 @@ export function useI18n(): LocaleContextValue {
   }
   return value;
 }
+
+/**
+ * Synchronises document.title and meta[name="description"] with the active
+ * locale so the browser tab and page metadata stay localized on language flips.
+ */
+export function useDocumentTitle(titleKey: MessageKey, descriptionKey?: MessageKey): void {
+  const { t } = useI18n();
+
+  useEffect(() => {
+    document.title = t(titleKey);
+    if (descriptionKey !== undefined) {
+      let meta = document.querySelector('meta[name="description"]');
+      if (meta === null) {
+        meta = document.createElement("meta");
+        meta.setAttribute("name", "description");
+        document.head.appendChild(meta);
+      }
+      meta.setAttribute("content", t(descriptionKey));
+    }
+  }, [t, titleKey, descriptionKey]);
+}

@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useI18n } from "../i18n";
+import { useDocumentTitle, useI18n } from "../i18n";
 
 export default function Home() {
   const { t } = useI18n();
+  useDocumentTitle("metadata.appTitle", "metadata.appDescription");
 
   return (
     <section className="mx-auto flex w-full max-w-xl flex-col items-start gap-4 py-6">

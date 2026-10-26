@@ -5,6 +5,12 @@ export const hi: Messages = {
   app: {
     name: "Yen",
   },
+  metadata: {
+    appTitle: "येन",
+    appDescription: "सामुदायिक धन, जिसे आप जाँच सकते हैं।",
+    designSystemTitle: "डिज़ाइन सिस्टम · Yen",
+    designSystemDescription: "375 पिक्सल फ़ोन चौड़ाई पर येन टोकन, घटकों और भाषाओं की समीक्षा।",
+  },
   common: {
     skipToContent: "मुख्य सामग्री पर जाएँ",
     loading: "लोड हो रहा है",

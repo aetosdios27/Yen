@@ -63,14 +63,25 @@ it("marks the current step for assistive technology", () => {
 });
 
 it("announces a toast politely and keeps its dismiss control outside the live region", () => {
-  render(
+  const { rerender } = render(
     <LocaleProvider>
-      <Toast title="Saved" onClose={() => undefined} />
+      <Toast open={false} title="Saved" onClose={() => undefined} />
+    </LocaleProvider>,
+  );
+
+  const initialStatus = screen.getByRole("status");
+  expect(initialStatus.getAttribute("aria-live")).toBe("polite");
+  expect(initialStatus.textContent).toBe("");
+
+  rerender(
+    <LocaleProvider>
+      <Toast open={true} title="Saved" onClose={() => undefined} />
     </LocaleProvider>,
   );
 
   const status = screen.getByRole("status");
   expect(status.getAttribute("aria-live")).toBe("polite");
+  expect(status.textContent).toContain("Saved");
   expect(status.querySelector("button")).toBeNull();
   expect(screen.getByRole("button", { name: "Dismiss" })).toBeTruthy();
 });

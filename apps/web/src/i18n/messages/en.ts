@@ -7,6 +7,12 @@ export const en = {
   app: {
     name: "Yen",
   },
+  metadata: {
+    appTitle: "Yen",
+    appDescription: "Community money you can check.",
+    designSystemTitle: "Design system · Yen",
+    designSystemDescription: "A 375 px review of Yen design tokens, components and languages.",
+  },
   common: {
     skipToContent: "Skip to main content",
     loading: "Loading",

@@ -15,7 +15,7 @@ import {
   type TimelineItem,
   Toast,
 } from "../../components";
-import { type MessageKey, toIntlLocale, useI18n } from "../../i18n";
+import { type MessageKey, toIntlLocale, useDocumentTitle, useI18n } from "../../i18n";
 
 const STATUSES: readonly Status[] = ["verified", "pending", "unmatched", "rejected"];
 
@@ -76,6 +76,7 @@ function Section({
 
 export function DesignSystemReview() {
   const { locale, t } = useI18n();
+  useDocumentTitle("metadata.designSystemTitle", "metadata.designSystemDescription");
   const [toastOpen, setToastOpen] = useState(false);
 
   const dateFormat = new Intl.DateTimeFormat(toIntlLocale(locale), {
@@ -287,14 +288,13 @@ export function DesignSystemReview() {
             <Button variant="secondary" className="w-full" onClick={() => setToastOpen(true)}>
               {t("designSystem.toastTrigger")}
             </Button>
-            {toastOpen ? (
-              <Toast
-                tone="success"
-                title={t("designSystem.toastHeading")}
-                description={t("designSystem.toastDescription")}
-                onClose={() => setToastOpen(false)}
-              />
-            ) : null}
+            <Toast
+              open={toastOpen}
+              tone="success"
+              title={t("designSystem.toastHeading")}
+              description={t("designSystem.toastDescription")}
+              onClose={() => setToastOpen(false)}
+            />
           </Section>
 
           <Section

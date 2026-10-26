@@ -1,5 +1,5 @@
 export { catalog } from "./catalog";
-export { LocaleProvider, type Translate, useI18n } from "./locale-provider";
+export { LocaleProvider, type Translate, useDocumentTitle, useI18n } from "./locale-provider";
 export {
   isLocale,
   LOCALES,
