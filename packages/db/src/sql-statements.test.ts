@@ -75,3 +75,60 @@ it.each([
 ])("rejects unterminated construct in %s", (source, construct) => {
   expect(() => splitSqlStatements(source)).toThrow(`line 1: unterminated ${construct}`);
 });
+
+it.each([
+  "CREATE FUNCTION f() RETURNS int LANGUAGE SQL BEGIN ATOMIC SELECT 42; END;",
+  "CREATE PROCEDURE p() LANGUAGE SQL BEGIN ATOMIC END;",
+  "CREATE FUNCTION f() RETURNS int LANGUAGE SQL BEGIN ATOMIC SELECT 42 AS case; END;",
+  "CREATE FUNCTION f() RETURNS int LANGUAGE SQL BEGIN ATOMIC SELECT 42 case; END;",
+  "CREATE FUNCTION f() RETURNS xml LANGUAGE SQL BEGIN ATOMIC SELECT XMLELEMENT(NAME case); END;",
+  "CREATE FUNCTION f() RETURNS int LANGUAGE SQL BEGIN ATOMIC SELECT x.case FROM (SELECT 42 AS case) x; END;",
+  "CREATE OR REPLACE PROCEDURE p() LANGUAGE SQL BEGIN ATOMIC SELECT 1; SELECT 2; END;",
+  `CREATE FUNCTION f() RETURNS int LANGUAGE SQL BEGIN ATOMIC
+   SELECT CASE WHEN true THEN CASE WHEN true THEN 42 ELSE 0 END ELSE 0 END;
+   SELECT "END", 'CASE; END', $$END;$$; END;`,
+])("keeps atomic body fragments guarded in %s", (source) => {
+  const statements = splitSqlStatements(`${source} COMMIT;`);
+  expect(statements[0]?.leadingKeywords[0]).toBe("CREATE");
+  expect(statements.at(-2)?.leadingKeywords).toEqual([]);
+  expect(statements.at(-2)?.tokens).toEqual([
+    { kind: "identifier", value: "END", line: expect.any(Number) },
+  ]);
+  expect(statements.at(-1)?.leadingKeywords[0]).toBe("COMMIT");
+});
+
+it.each(["COMMIT", "ROLLBACK", "END TRANSACTION", "BEGIN", "SAVEPOINT x"])(
+  "preserves a transaction-control fragment %s inside an atomic body",
+  (control) => {
+    const statements = splitSqlStatements(
+      `CREATE FUNCTION f() RETURNS int LANGUAGE SQL BEGIN ATOMIC SELECT 42; ${control}; END;`,
+    );
+    expect(statements[2]?.leadingKeywords[0]).toBe(control.split(" ")[0]);
+    const firstBodyStatement = splitSqlStatements(
+      `CREATE FUNCTION f() RETURNS int LANGUAGE SQL BEGIN ATOMIC ${control}; END;`,
+    );
+    expect(firstBodyStatement[1]?.leadingKeywords[0]).toBe(control.split(" ")[0]);
+  },
+);
+
+it("keeps transaction control visible after a malformed CASE fragment", () => {
+  const statements = splitSqlStatements(
+    "CREATE FUNCTION f() RETURNS int LANGUAGE SQL BEGIN ATOMIC SELECT CASE WHEN true THEN 1; END; COMMIT;",
+  );
+  expect(statements.at(-1)?.leadingKeywords[0]).toBe("COMMIT");
+});
+
+it.each([
+  'CREATE FUNCTION f() RETURNS int LANGUAGE SQL "BEGIN" ATOMIC SELECT 42; END;',
+  'CREATE FUNCTION f() RETURNS int LANGUAGE SQL BEGIN "ATOMIC" SELECT 42; END;',
+  "CREATE FUNCTION f(begin atomic) RETURNS int LANGUAGE SQL AS 'SELECT 1'; END;",
+])("does not mistake quoted body markers for keywords in %s", (source) => {
+  expect(splitSqlStatements(source).at(-1)?.leadingKeywords[0]).toBe("END");
+});
+
+it.each([
+  'CREATE FUNCTION f() RETURNS int LANGUAGE SQL BEGIN ATOMIC SELECT "CASE"; "END"; COMMIT;',
+  "CREATE FUNCTION f() RETURNS int LANGUAGE SQL BEGIN ATOMIC SELECT 1;",
+])("fails closed on an ambiguous atomic body in %s", (source) => {
+  expect(() => splitSqlStatements(source)).toThrow(/ambiguous atomic routine body/);
+});

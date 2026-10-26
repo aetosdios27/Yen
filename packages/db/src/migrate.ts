@@ -129,7 +129,7 @@ export async function migrate(
     await connection`SELECT pg_advisory_lock(1497714225, 1)`;
     try {
       await connection`
-        CREATE TABLE IF NOT EXISTS schema_migrations (
+        CREATE TABLE IF NOT EXISTS public.schema_migrations (
           version integer PRIMARY KEY CHECK (version > 0),
           name text NOT NULL UNIQUE,
           checksum text NOT NULL CHECK (checksum ~ '^[0-9a-f]{64}$'),
@@ -137,7 +137,7 @@ export async function migrate(
         )
       `;
       const applied = appliedSchema.parse(
-        await connection`SELECT version, name, checksum FROM schema_migrations ORDER BY version`,
+        await connection`SELECT version, name, checksum FROM public.schema_migrations ORDER BY version`,
       );
       for (const [index, previous] of applied.entries()) {
         const migration = migrations[index];
@@ -167,7 +167,7 @@ export async function migrate(
             migration.name,
           );
           await connection`
-            INSERT INTO schema_migrations (version, name, checksum)
+            INSERT INTO public.schema_migrations (version, name, checksum)
             VALUES (${migration.version}, ${migration.name}, ${migration.checksum})
           `;
           await connection`COMMIT`;

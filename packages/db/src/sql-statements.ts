@@ -9,6 +9,7 @@ export type SqlToken =
   | { kind: "stringLiteral"; value: string; line: number }
   | { kind: "openParen"; line: number }
   | { kind: "comma"; line: number }
+  | { kind: "dot"; line: number }
   | { kind: "other"; line: number }
   | { kind: "unicodeIdentifier"; line: number }
   | { kind: "unsafeString"; line: number };
@@ -33,6 +34,30 @@ export function splitSqlStatements(source: string): SqlStatement[] {
   let statementLine = 0;
   let leadingKeywords: string[] = [];
   let tokens: SqlToken[] = [];
+  let quotedIdentifiers = new Set<number>();
+  let atomicBody = false;
+  let atomicClosingEnd = false;
+  let parenDepth = 0;
+
+  function unquotedWord(position: number, word: string): boolean {
+    const token = tokens[position];
+    return (
+      token?.kind === "identifier" &&
+      !quotedIdentifiers.has(position) &&
+      token.value.toUpperCase() === word
+    );
+  }
+
+  function routineHeader(): boolean {
+    return (
+      unquotedWord(0, "CREATE") &&
+      (unquotedWord(1, "FUNCTION") ||
+        unquotedWord(1, "PROCEDURE") ||
+        (unquotedWord(1, "OR") &&
+          unquotedWord(2, "REPLACE") &&
+          (unquotedWord(3, "FUNCTION") || unquotedWord(3, "PROCEDURE"))))
+    );
+  }
 
   function codePointAt(position: number): number | undefined {
     return source.codePointAt(position);
@@ -91,10 +116,18 @@ export function splitSqlStatements(source: string): SqlStatement[] {
   }
 
   function finish(): void {
+    if (atomicClosingEnd && tokens.length === 1 && unquotedWord(0, "END")) {
+      // Keep the token available to the other preflight checks.
+      leadingKeywords = [];
+      atomicBody = false;
+    }
     if (statementLine !== 0) statements.push({ line: statementLine, leadingKeywords, tokens });
     statementLine = 0;
     leadingKeywords = [];
     tokens = [];
+    quotedIdentifiers = new Set<number>();
+    atomicClosingEnd = false;
+    parenDepth = 0;
   }
 
   function singleQuote(escaped: boolean): void {
@@ -217,6 +250,7 @@ export function splitSqlStatements(source: string): SqlStatement[] {
     } else if (char === '"') {
       start();
       const tokenLine = line;
+      quotedIdentifiers.add(tokens.length);
       tokens.push({ kind: "identifier", value: doubleQuote(), line: tokenLine });
     } else if (
       (char === "U" || char === "u") &&
@@ -261,14 +295,33 @@ export function splitSqlStatements(source: string): SqlStatement[] {
         if (codePoint === undefined || !isIdentifierContinuation(codePoint)) break;
         wordEnd = nextCharacter(wordEnd);
       }
-      if (leadingKeywords.length < 2) {
-        leadingKeywords.push(source.slice(wordStart, wordEnd).toUpperCase());
+      const value = source.slice(wordStart, wordEnd);
+      const word = value.toUpperCase();
+      let startsAtomicBody = false;
+      if (
+        !atomicBody &&
+        parenDepth === 0 &&
+        word === "ATOMIC" &&
+        unquotedWord(tokens.length - 1, "BEGIN") &&
+        routineHeader()
+      ) {
+        atomicBody = true;
+        startsAtomicBody = true;
+      } else if (atomicBody && word === "END" && tokens.length === 0) {
+        atomicClosingEnd = true;
       }
-      tokens.push({ kind: "identifier", value: source.slice(wordStart, wordEnd), line: tokenLine });
+      if (leadingKeywords.length < 2) leadingKeywords.push(word);
+      tokens.push({ kind: "identifier", value, line: tokenLine });
       advance(wordEnd);
+      if (startsAtomicBody) finish();
     } else if (char === "(") {
       start();
       tokens.push({ kind: "openParen", line });
+      parenDepth++;
+      advance(index + 1);
+    } else if (char === ".") {
+      start();
+      tokens.push({ kind: "dot", line });
       advance(index + 1);
     } else if (char === ",") {
       start();
@@ -277,9 +330,11 @@ export function splitSqlStatements(source: string): SqlStatement[] {
     } else {
       start();
       tokens.push({ kind: "other", line });
+      if (char === ")") parenDepth = Math.max(0, parenDepth - 1);
       advance(index + 1);
     }
   }
   finish();
+  if (atomicBody) throw new Error(`line ${line}: unterminated or ambiguous atomic routine body`);
   return statements;
 }

@@ -71,6 +71,17 @@ databaseSuite("migration runner", (sql, url) => {
     ]);
   });
 
+  it("records history when a migration changes its search path", async () => {
+    await writeFile(
+      join(dir, "0001_search_path.sql"),
+      "CREATE SCHEMA app; SET LOCAL search_path = app; CREATE TABLE example (id int);",
+    );
+    await migrate(sql, { dir });
+    expect(await sql`SELECT version FROM public.schema_migrations`).toEqual([{ version: 1 }]);
+    expect(await sql`SELECT to_regclass('app.example') AS name`).toEqual([{ name: "app.example" }]);
+    await migrate(sql, { dir });
+  });
+
   it("is a no-op on the second run, including application data and applied_at", async () => {
     await migrate(sql);
     await sql`INSERT INTO idempotency_keys (key, request_hash, response) VALUES ('keep', 'hash', '{}')`;
