@@ -280,6 +280,11 @@ export function parseUnsignedEvent(input: unknown): Result<UnsignedEvent> {
   ) {
     return { ok: false, error: "Invalid unsigned event envelope: exactly eight fields required" };
   }
+  try {
+    canonicalize(input);
+  } catch {
+    return { ok: false, error: "Unsigned event contains a non-canonical JSON value" };
+  }
   const parsed = unsignedEventSchema.safeParse(input);
   if (!parsed.success)
     return { ok: false, error: "Invalid unsigned event envelope: exactly eight fields required" };
@@ -290,6 +295,11 @@ export function parseUnsignedEvent(input: unknown): Result<UnsignedEvent> {
 }
 
 export function parseEvent(input: unknown): Result<Event> {
+  try {
+    canonicalize(input);
+  } catch {
+    return { ok: false, error: "Event contains a non-canonical JSON value" };
+  }
   const parsed = eventSchema.safeParse(input);
   if (!parsed.success)
     return { ok: false, error: "Invalid event envelope, type, version, or payload" };

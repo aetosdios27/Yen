@@ -320,6 +320,21 @@ describe("chain verification", () => {
     expect(syncClosed).toBe(true);
   });
 
+  it.each([0, 1, 3])("reports the first extra event at zero-based index %i", async (count) => {
+    const prefix = events.slice(0, count);
+    const expectedHead = chainHead({
+      count,
+      latestHash: prefix.at(-1)?.hash ?? genesisHash,
+    });
+    const values = events.slice(0, count + 1);
+    const broken = { ok: false, index: count, seq: count + 1, reason: "unexpected events" };
+    async function* stream(): AsyncIterable<unknown> {
+      yield* values;
+    }
+    expect(await verifyChain(values, expectedHead)).toEqual(broken);
+    expect(await verifyChainStream(stream(), expectedHead)).toEqual(broken);
+  });
+
   it("closes iterators after a failed event or a thrown next call", async () => {
     let structureClosed = false;
     async function* invalid(): AsyncIterable<unknown> {
@@ -366,6 +381,104 @@ describe("chain verification", () => {
     errorClosed = false;
     await expect(verifyChainStream(failed, head)).rejects.toThrow("source failed");
     expect(errorClosed).toBe(true);
+  });
+
+  it("preserves a thrown next error when async cleanup also throws", async () => {
+    const sourceError = new Error("source failed");
+    const cleanupError = new Error("cleanup failed");
+    let returns = 0;
+    const source: AsyncIterable<unknown> = {
+      [Symbol.asyncIterator]() {
+        return {
+          async next(): Promise<IteratorResult<unknown>> {
+            throw sourceError;
+          },
+          async return(): Promise<IteratorResult<unknown>> {
+            returns++;
+            throw cleanupError;
+          },
+        };
+      },
+    };
+    await expect(checkChainStructureStream(source)).rejects.toBe(sourceError);
+    expect(returns).toBe(1);
+  });
+
+  it("preserves a thrown sync next error when adapter cleanup also throws", async () => {
+    const sourceError = new Error("source failed");
+    const cleanupError = new Error("cleanup failed");
+    let returns = 0;
+    const source: Iterable<unknown> = {
+      [Symbol.iterator]() {
+        return {
+          next(): IteratorResult<unknown> {
+            throw sourceError;
+          },
+          return(): IteratorResult<unknown> {
+            returns++;
+            throw cleanupError;
+          },
+        };
+      },
+    };
+    await expect(checkChainStructure(source)).rejects.toBe(sourceError);
+    expect(returns).toBe(1);
+  });
+
+  it("surfaces cleanup errors on early exits", async () => {
+    const asyncError = new Error("async cleanup failed");
+    const syncError = new Error("sync cleanup failed");
+    let asyncReturns = 0;
+    let syncReturns = 0;
+    const asyncSource: AsyncIterable<unknown> = {
+      [Symbol.asyncIterator]() {
+        return {
+          async next(): Promise<IteratorResult<unknown>> {
+            return { done: false, value: { invalid: true } };
+          },
+          async return(): Promise<IteratorResult<unknown>> {
+            asyncReturns++;
+            throw asyncError;
+          },
+        };
+      },
+    };
+    const syncSource: Iterable<unknown> = {
+      [Symbol.iterator]() {
+        return {
+          next(): IteratorResult<unknown> {
+            return { done: false, value: { invalid: true } };
+          },
+          return(): IteratorResult<unknown> {
+            syncReturns++;
+            throw syncError;
+          },
+        };
+      },
+    };
+    await expect(checkChainStructureStream(asyncSource)).rejects.toBe(asyncError);
+    await expect(checkChainStructure(syncSource)).rejects.toBe(syncError);
+    expect(asyncReturns).toBe(1);
+    expect(syncReturns).toBe(1);
+  });
+
+  it.each(["envelope", "payload"])("rejects raw %s fields that normalization would drop", async (level) => {
+    const first = events[0];
+    if (first === undefined) throw new Error("Missing golden event");
+    for (const kind of ["hidden", "symbol", "getter"] as const) {
+      const raw = { ...first, payload: { ...first.payload } };
+      const target = level === "envelope" ? raw : raw.payload;
+      if (kind === "hidden") Object.defineProperty(target, "hidden", { value: true });
+      if (kind === "symbol") Object.defineProperty(target, Symbol("hidden"), { value: true });
+      if (kind === "getter") {
+        Object.defineProperty(target, "hidden", { enumerable: true, get: () => true });
+      }
+      expect(parseEvent(raw).ok, `${level} ${kind}`).toBe(false);
+      expect(await verifyChain([raw], chainHead({ count: 1, latestHash: first.hash }))).toMatchObject({
+        ok: false,
+        index: 0,
+      });
+    }
   });
   it("requires the same canonical pseudonym ID for actors and member references", () => {
     const first = events[0];

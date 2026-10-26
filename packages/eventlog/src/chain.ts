@@ -108,6 +108,7 @@ async function scanChainStructureStream(
   let previous: Event | null = null;
   const iterator = events[Symbol.asyncIterator]();
   let exhausted = false;
+  let sourceFailed = false;
   try {
     while (true) {
       const next = await iterator.next();
@@ -153,8 +154,17 @@ async function scanChainStructureStream(
       previous = event;
       count++;
     }
+  } catch (error) {
+    sourceFailed = true;
+    throw error;
   } finally {
-    if (!exhausted) await iterator.return?.();
+    if (!exhausted) {
+      try {
+        await iterator.return?.();
+      } catch (error) {
+        if (!sourceFailed) throw error;
+      }
+    }
   }
   const latestHash = previous === null ? genesisHash : previous.hash;
   return { ok: true, kind: "structure-only", observedHead: { count, latestHash } };
@@ -169,6 +179,7 @@ export async function checkChainStructureStream(
 async function* asAsync(events: Iterable<unknown>): AsyncIterable<unknown> {
   const iterator = events[Symbol.iterator]();
   let exhausted = false;
+  let sourceFailed = false;
   try {
     while (true) {
       const next = iterator.next();
@@ -178,8 +189,17 @@ async function* asAsync(events: Iterable<unknown>): AsyncIterable<unknown> {
       }
       yield next.value;
     }
+  } catch (error) {
+    sourceFailed = true;
+    throw error;
   } finally {
-    if (!exhausted) iterator.return?.();
+    if (!exhausted) {
+      try {
+        iterator.return?.();
+      } catch (error) {
+        if (!sourceFailed) throw error;
+      }
+    }
   }
 }
 
