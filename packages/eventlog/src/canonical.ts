@@ -36,7 +36,7 @@ export function canonicalize(value: unknown): string {
         if (Object.getOwnPropertySymbols(input).length !== 0) {
           throw new TypeError("Canonical JSON rejects array symbol keys");
         }
-        if (Object.hasOwn(input, "toJSON")) {
+        if ("toJSON" in input) {
           throw new TypeError("Canonical JSON rejects array toJSON");
         }
         for (const key of Object.keys(input)) {
