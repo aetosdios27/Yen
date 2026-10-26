@@ -67,6 +67,21 @@ chain IDs were rejected. The Amoy template still has null deployment fields.
 
 ## ABI, CI, and JavaScript
 
+The manifest writer now validates environment variables, the broadcast and
+artifact files, all six JSON-RPC reply shapes, and its output with Zod before
+using their fields. `node --test contracts/script/*.test.mjs` passed 25 cases,
+including a valid manifest and malformed input and RPC failures that each report
+one line without a stack trace. The Foundry CI job runs these tests after build.
+`contracts/package.json` resolves Zod from the pnpm workspace without adding
+Turbo scripts. The local Anvil deployment check passed again with the validated
+writer, including the wrong-chain and wrong-publisher rejections.
+
+`pnpm install --frozen-lockfile`, `pnpm check`, the three `@yen/shared` commands,
+and `pnpm turbo run typecheck test build --filter="...[origin/main]"` passed.
+The filtered Turbo run executed three shared-package tasks and no contracts
+tasks. Shared tests passed 142 tests in eight files. The pinned Podman Foundry
+`forge fmt --check`, `forge build`, and `forge test` passed; Foundry ran 22 tests.
+
 ABI regeneration succeeded. `export-abi.mjs --check` passed, then exited 1 with
 `Stale ABI` after deliberately changing `publishRoot` to `publishRootDrift`.
 It passed again after restoring the file. The built `@yen/shared` entry point

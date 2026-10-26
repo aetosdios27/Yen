@@ -170,6 +170,9 @@ jobs:
 
       - run: forge fmt --check
       - run: forge build
+      - name: Test deployment manifest writer
+        run: node --test contracts/script/*.test.mjs
+        working-directory: .
       - run: forge test
       - name: Require full RootRegistry line and branch coverage
         run: |
