@@ -1,0 +1,29 @@
+[profile.default]
+src = "src"
+test = "test"
+script = "script"
+out = "out"
+libs = ["lib"]
+remappings = ["forge-std/=lib/forge-std/src/"]
+solc = "0.8.30"
+auto_detect_solc = false
+evm_version = "paris"
+optimizer = true
+optimizer_runs = 200
+bytecode_hash = "ipfs"
+
+[profile.default.fuzz]
+runs = 1024
+seed = "0x59454e3136"
+
+[profile.default.invariant]
+runs = 256
+depth = 128
+fail_on_revert = true
+show_metrics = true
+
+[fmt]
+line_length = 100
+
+[rpc_endpoints]
+amoy = "${AMOY_RPC_URL}"
