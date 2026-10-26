@@ -8,6 +8,9 @@ export function databaseSuite(name: string, tests: (sql: Sql, url: string) => vo
     if (process.env.CI !== undefined) {
       throw new Error("YEN_TEST_DATABASE_URL must point to a Postgres ADMIN connection in CI");
     }
+    process.stderr.write(
+      `Skipping ${name}: set YEN_TEST_DATABASE_URL to a Postgres 16 ADMIN connection to run DB tests.\n`,
+    );
     describe.skip(`${name}: set YEN_TEST_DATABASE_URL to run real Postgres tests`, () => {
       it("requires a Postgres ADMIN connection", () => {});
     });
