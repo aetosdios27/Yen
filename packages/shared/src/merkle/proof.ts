@@ -1,16 +1,12 @@
 import * as z from "zod/mini";
+import { type FundId, fundIdSchema, type Result } from "../ids.js";
 import { fromHex, type Hash32, hash32, type Salt32, salt32, toHex } from "./hash.js";
 import type { InclusionProof } from "./tree.js";
 
-declare const fundIdBrand: unique symbol;
 const eventProofBrand = Symbol("EventProof");
-const fundIdPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 const hex32Pattern = /^[0-9a-f]{64}$/;
 
-export type FundId = string & { readonly [fundIdBrand]: "FundId" };
-export type Result<T> =
-  | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly error: string };
+export { type FundId, parseFundId, type Result } from "../ids.js";
 
 type EventProofFields = {
   readonly format: "yen/event-proof/v1";
@@ -26,16 +22,6 @@ export type EventProof = EventProofFields & { readonly [eventProofBrand]: true }
 
 export function createEventProof(fields: EventProofFields): EventProof {
   return { ...fields, [eventProofBrand]: true };
-}
-
-function isFundId(input: unknown): input is FundId {
-  return typeof input === "string" && fundIdPattern.test(input);
-}
-
-export function parseFundId(input: unknown): Result<FundId> {
-  return isFundId(input)
-    ? { ok: true, value: input }
-    : { ok: false, error: "Expected a canonical lowercase UUID" };
 }
 
 function hex32(input: unknown): Result<Uint8Array> {
@@ -70,7 +56,6 @@ function pathLength(index: number, size: number): number {
 }
 
 const hex32Schema = z.string().check(z.regex(hex32Pattern));
-const fundIdSchema = z.string().check(z.regex(fundIdPattern));
 const nonnegativeSafeIntegerSchema = z.int().check(z.nonnegative());
 const inclusionProofSchema = z
   .strictObject({
@@ -119,7 +104,7 @@ export function parseEventProof(input: unknown): Result<EventProof> {
       salt: salt32(fromHex(bundle.salt)),
       eventHash: hash32(fromHex(bundle.eventHash)),
       eventProof: checkedInclusionProof(bundle.eventProof),
-      fundId: bundle.fundId as FundId,
+      fundId: bundle.fundId,
       latestEventHash: hash32(fromHex(bundle.latestEventHash)),
       fundProof: checkedInclusionProof(bundle.fundProof),
     }),
