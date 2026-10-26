@@ -54,7 +54,9 @@ Files use `migrations/NNNN_name.sql`, starting at `0001` with no gaps or duplica
 
 One session advisory lock covers history validation and all migrations. Each pending file and its history row commit in a single transaction. A failure rolls back that file and releases the lock; earlier files stay committed. Before applying any migration, the runner rejects top-level transaction-control statements in every file, including `BEGIN`, `COMMIT`, and `ROLLBACK`. Transaction words inside comments, strings, and dollar-quoted bodies are not top-level statements. `CREATE INDEX CONCURRENTLY` and other non-transactional statements are still unsupported.
 
-The runner forces `standard_conforming_strings = on` and forbids migrations from changing it.
+The runner forces `standard_conforming_strings = on` and forbids migrations from changing it. A `set_config` call is allowed only when its first argument is one ordinary or `E''` string literal naming another setting. Dynamic setting names are rejected.
+
+The preflight deliberately rejects a few valid SQL forms: an ordinary string ending in a backslash before its closing quote (for example `SELECT '\';`) is rejected even though PostgreSQL accepts it with `standard_conforming_strings = on`, so the lexer and server cannot disagree if the session setting changes. Write such strings with `E''` escapes. Any use of the identifier `standard_conforming_strings`, even as a table or column name, is also rejected; rename that identifier.
 
 Applied files are immutable. An edited checksum, missing file, renamed file, version gap, duplicate version, or out-of-order history fails the run. A second run leaves application data and migration history unchanged. There are no down migrations. Run the runner through a direct Postgres connection or session-pooling proxy because transaction-pooling proxies cannot preserve its session advisory lock.
 
