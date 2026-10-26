@@ -1,11 +1,14 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   type FundId,
+  fundIdSchema,
   type OrgId,
+  orgIdSchema,
   parseFundId,
   parseOrgId,
   parseUserId,
   type UserId,
+  userIdSchema,
 } from "./ids.js";
 import { parseFundId as parseMerkleFundId } from "./merkle/proof.js";
 
@@ -32,6 +35,14 @@ describe.each([parseOrgId, parseFundId, parseUserId])("ID parser %s", (parse) =>
   ])("rejects noncanonical input %j", (value) => {
     expect(parse(value)).toEqual({ ok: false, error: "Expected a canonical lowercase UUID" });
   });
+});
+
+it("exports schemas that accept only canonical lowercase UUIDs", () => {
+  for (const schema of [fundIdSchema, orgIdSchema, userIdSchema]) {
+    expect(schema.safeParse("019a1122-3344-7556-899a-bbccddeeff00").success).toBe(true);
+    expect(schema.safeParse("019A1122-3344-7556-899A-BBCCDDEEFF00").success).toBe(false);
+    expect(schema.safeParse("019a112233447556899abbccddeeff00").success).toBe(false);
+  }
 });
 
 it("keeps ID brands distinct and uses the same FundId at the Merkle boundary", () => {

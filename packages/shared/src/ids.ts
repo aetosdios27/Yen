@@ -4,8 +4,8 @@ const uuidSchema = z
   .string()
   .check(z.length(36), z.regex(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/));
 export const fundIdSchema = uuidSchema.brand<"FundId">();
-const orgIdSchema = uuidSchema.brand<"OrgId">();
-const userIdSchema = uuidSchema.brand<"UserId">();
+export const orgIdSchema = uuidSchema.brand<"OrgId">();
+export const userIdSchema = uuidSchema.brand<"UserId">();
 
 export type FundId = z.infer<typeof fundIdSchema>;
 export type OrgId = z.infer<typeof orgIdSchema>;
