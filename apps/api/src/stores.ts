@@ -67,9 +67,14 @@ export class MemoryIdempotencyStore implements IdempotencyStore {
       return { kind: "in_progress", requestHash: existing.requestHash };
     }
     while (this.entries.size >= this.maxEntries) {
-      const oldestComplete = [...this.entries].find(([, entry]) => entry.kind === "complete");
-      if (!oldestComplete) throw new Error("Idempotency store capacity exhausted");
-      this.entries.delete(oldestComplete[0]);
+      let evicted = false;
+      for (const [key, entry] of this.entries) {
+        if (entry.kind !== "complete") continue;
+        this.entries.delete(key);
+        evicted = true;
+        break;
+      }
+      if (!evicted) throw new Error("Idempotency store capacity exhausted");
     }
     const token = crypto.randomUUID();
     this.entries.set(request.key, {

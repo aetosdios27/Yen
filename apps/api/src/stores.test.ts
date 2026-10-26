@@ -45,6 +45,45 @@ it("caps retained completed responses", async () => {
   expect(await store.begin({ ...request, key: "a" })).toMatchObject({ kind: "new" });
 });
 
+it("evicts the oldest completed entry and keeps in-progress reservations", async () => {
+  const store = new MemoryIdempotencyStore({ clock: () => 0, maxEntries: 4 });
+  const reserve = async (key: string) => {
+    const entry = { ...request, key };
+    const reservation = await store.begin(entry);
+    if (reservation.kind !== "new") throw new Error("Expected reservation");
+    return { entry, token: reservation.token };
+  };
+  const inProgressA = await reserve("a");
+  const completedB = await reserve("b");
+  await store.complete(completedB.entry, completedB.token, response);
+  const inProgressC = await reserve("c");
+  const completedD = await reserve("d");
+  await store.complete(completedD.entry, completedD.token, response);
+
+  const addedE = await reserve("e");
+
+  expect(await store.begin(inProgressA.entry)).toEqual({
+    kind: "in_progress",
+    requestHash: "hash",
+  });
+  expect(await store.begin(inProgressC.entry)).toEqual({
+    kind: "in_progress",
+    requestHash: "hash",
+  });
+  expect(await store.begin(addedE.entry)).toEqual({ kind: "in_progress", requestHash: "hash" });
+  expect(await store.begin(completedD.entry)).toMatchObject({ kind: "complete" });
+  expect(await store.begin(completedB.entry)).toMatchObject({ kind: "new" });
+});
+
+it("refuses capacity when every retained entry is in progress", async () => {
+  const store = new MemoryIdempotencyStore({ clock: () => 0, maxEntries: 1 });
+  const reservation = await store.begin(request);
+  if (reservation.kind !== "new") throw new Error("Expected reservation");
+  await expect(store.begin({ ...request, key: "other" })).rejects.toThrow(
+    "Idempotency store capacity exhausted",
+  );
+});
+
 it("expires completed responses after the replay window", async () => {
   let now = 0;
   const store = new MemoryIdempotencyStore({ clock: () => now, replayRetentionMs: 10 });
