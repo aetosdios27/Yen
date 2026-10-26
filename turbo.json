@@ -1,13 +1,18 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
-  "globalDependencies": ["tsconfig.base.json", "biome.json", ".nvmrc"],
+  "globalDependencies": ["tsconfig.base.json", "biome.json", "vitest.config.ts", ".nvmrc"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "env": ["NEXT_PUBLIC_API_URL"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "typecheck": {
       "dependsOn": ["^build"]
+    },
+    "@yen/web#typecheck": {
+      "dependsOn": ["build"]
     },
     "test": {
       "dependsOn": ["^build"]
