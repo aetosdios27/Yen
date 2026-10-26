@@ -162,7 +162,7 @@ export interface operations {
       200: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -176,7 +176,7 @@ export interface operations {
       500: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -198,7 +198,7 @@ export interface operations {
       200: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -212,7 +212,7 @@ export interface operations {
       500: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -234,7 +234,7 @@ export interface operations {
       200: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -245,7 +245,7 @@ export interface operations {
       400: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -256,7 +256,7 @@ export interface operations {
       401: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -267,7 +267,7 @@ export interface operations {
       403: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -278,7 +278,7 @@ export interface operations {
       404: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -289,7 +289,7 @@ export interface operations {
       409: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -300,9 +300,9 @@ export interface operations {
       429: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           /** @description Seconds until retry */
-          "retry-after"?: number;
+          "retry-after": string;
           [name: string]: unknown;
         };
         content: {
@@ -313,7 +313,7 @@ export interface operations {
       500: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -341,7 +341,7 @@ export interface operations {
       201: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -354,7 +354,7 @@ export interface operations {
       400: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -365,7 +365,7 @@ export interface operations {
       401: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -376,7 +376,7 @@ export interface operations {
       403: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -387,7 +387,7 @@ export interface operations {
       404: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -398,7 +398,7 @@ export interface operations {
       409: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -409,9 +409,9 @@ export interface operations {
       429: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           /** @description Seconds until retry */
-          "retry-after"?: number;
+          "retry-after": string;
           [name: string]: unknown;
         };
         content: {
@@ -422,7 +422,7 @@ export interface operations {
       500: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -436,6 +436,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Canonical lowercase FundId UUID; invalid IDs return 404 */
         fundId: string;
       };
       cookie?: never;
@@ -446,7 +447,7 @@ export interface operations {
       200: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -457,7 +458,7 @@ export interface operations {
       400: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -468,7 +469,7 @@ export interface operations {
       401: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -479,7 +480,7 @@ export interface operations {
       403: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -490,7 +491,7 @@ export interface operations {
       404: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -501,7 +502,7 @@ export interface operations {
       409: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -512,9 +513,9 @@ export interface operations {
       429: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           /** @description Seconds until retry */
-          "retry-after"?: number;
+          "retry-after": string;
           [name: string]: unknown;
         };
         content: {
@@ -525,7 +526,7 @@ export interface operations {
       500: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -547,7 +548,7 @@ export interface operations {
       200: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -560,9 +561,9 @@ export interface operations {
       429: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           /** @description Seconds until retry */
-          "retry-after"?: number;
+          "retry-after": string;
           [name: string]: unknown;
         };
         content: {
@@ -573,7 +574,7 @@ export interface operations {
       500: {
         headers: {
           /** @description Request correlation ID */
-          "x-request-id"?: string;
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {

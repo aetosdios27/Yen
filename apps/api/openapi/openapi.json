@@ -101,7 +101,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -119,7 +120,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -139,7 +141,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -157,7 +160,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -178,7 +182,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -190,7 +195,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -202,7 +208,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -214,7 +221,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -226,7 +234,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -238,7 +247,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -250,11 +260,13 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               },
               "retry-after": {
-                "schema": { "type": "integer", "minimum": 1 },
-                "description": "Seconds until retry"
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
               }
             },
             "content": {
@@ -266,7 +278,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -306,7 +319,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               },
               "idempotent-replayed": {
                 "schema": { "type": "string", "enum": ["true"] },
@@ -320,7 +334,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -332,7 +347,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -344,7 +360,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -356,7 +373,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -368,7 +386,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -380,11 +399,13 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               },
               "retry-after": {
-                "schema": { "type": "integer", "minimum": 1 },
-                "description": "Seconds until retry"
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
               }
             },
             "content": {
@@ -396,7 +417,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -412,7 +434,16 @@
         "security": [{ "bearerAuth": [] }],
         "description": "STUB: reads a fake fund created in this process by the same principal. Invalid canonical FundId or missing fund returns 404.",
         "parameters": [
-          { "schema": { "type": "string" }, "required": true, "name": "fundId", "in": "path" }
+          {
+            "schema": {
+              "type": "string",
+              "description": "Canonical lowercase FundId UUID; invalid IDs return 404"
+            },
+            "required": true,
+            "description": "Canonical lowercase FundId UUID; invalid IDs return 404",
+            "name": "fundId",
+            "in": "path"
+          }
         ],
         "responses": {
           "200": {
@@ -420,7 +451,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Fund" } } }
@@ -430,7 +462,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -442,7 +475,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -454,7 +488,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -466,7 +501,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -478,7 +514,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -490,11 +527,13 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               },
               "retry-after": {
-                "schema": { "type": "integer", "minimum": 1 },
-                "description": "Seconds until retry"
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
               }
             },
             "content": {
@@ -506,7 +545,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -525,7 +565,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {
@@ -537,11 +578,13 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               },
               "retry-after": {
-                "schema": { "type": "integer", "minimum": 1 },
-                "description": "Seconds until retry"
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
               }
             },
             "content": {
@@ -553,7 +596,8 @@
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID"
+                "description": "Request correlation ID",
+                "required": true
               }
             },
             "content": {

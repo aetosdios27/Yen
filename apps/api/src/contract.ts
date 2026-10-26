@@ -6,6 +6,7 @@ const responseHeaders = {
   "x-request-id": {
     schema: { type: "string", format: "uuid" },
     description: "Request correlation ID",
+    required: true,
   },
 } as const;
 
@@ -22,8 +23,9 @@ const limitedResponse = {
   headers: {
     ...responseHeaders,
     "retry-after": {
-      schema: { type: "integer" as const, minimum: 1 },
+      schema: { type: "string" as const, pattern: "^[1-9][0-9]*$" },
       description: "Seconds until retry",
+      required: true,
     },
   },
 };
@@ -115,7 +117,12 @@ export const getFundRoute = createRoute({
   description:
     "STUB: reads a fake fund created in this process by the same principal. Invalid canonical FundId or missing fund returns 404.",
   request: {
-    params: z.object({ fundId: z.string().openapi({ param: { name: "fundId", in: "path" } }) }),
+    params: z.object({
+      fundId: z.string().openapi({
+        description: "Canonical lowercase FundId UUID; invalid IDs return 404",
+        param: { name: "fundId", in: "path" },
+      }),
+    }),
   },
   responses: { 200: jsonResponse(fundSchema, "Fake fund"), ...protectedErrors },
 });
