@@ -38,6 +38,24 @@ gh api -X PUT "repos/$repo/actions/permissions/fork-pr-contributor-approval" \
   -f approval_policy=all_external_contributors --silent \
   || echo "warn: could not set fork PR approval policy"
 
+echo "==> Actions: allow-list and enforced SHA pinning"
+gh api -X PUT "repos/$repo/actions/permissions" \
+  -F enabled=true -f allowed_actions=selected -F sha_pinning_required=true --silent
+gh api -X PUT "repos/$repo/actions/permissions/selected-actions" \
+  -F github_owned_allowed=true -F verified_allowed=false \
+  -f 'patterns_allowed[]=gitleaks/gitleaks-action@*' \
+  -f 'patterns_allowed[]=pnpm/action-setup@*' \
+  -f 'patterns_allowed[]=amannn/action-semantic-pull-request@*' --silent
+
+echo "==> Immutable releases"
+gh api -X PUT "repos/$repo/immutable-releases" --silent || echo "warn: could not enable immutable releases"
+
+echo "==> Secret scanning extras (may need a paid tier; best effort)"
+gh api -X PATCH "repos/$repo" \
+  -f 'security_and_analysis[secret_scanning_non_provider_patterns][status]=enabled' \
+  -f 'security_and_analysis[secret_scanning_validity_checks][status]=enabled' --silent \
+  || echo "warn: could not enable secret scanning extras"
+
 echo "==> Rulesets"
 for file in "$dir"/*.json; do
   name="$(jq -r .name "$file")"
