@@ -73,6 +73,6 @@ safe to replace:
 5. Record the result below. Do not count a preview-only test as a rehearsal;
    instant rollback acts on production.
 
-| Date | Operator | Rolled back from | Rolled back to | Result |
-| ---- | -------- | ---------------- | -------------- | ------ |
+| Date      | Operator | Rolled back from | Rolled back to | Result |
+| --------- | -------- | ---------------- | -------------- | ------ |
 | _pending_ |          |                  |                |        |

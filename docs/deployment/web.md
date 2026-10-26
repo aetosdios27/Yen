@@ -57,9 +57,9 @@ Set every value in **Project → Settings → Environment Variables**. Never com
 deployment values, and never put them in `vercel.json`: that file is shared by
 preview and production.
 
-| Variable              | Production                | Preview                   | Development             |
-| --------------------- | ------------------------- | ------------------------- | ----------------------- |
-| `NEXT_PUBLIC_API_URL` | production API origin     | staging API origin        | `http://localhost:3001` |
+| Variable              | Production            | Preview            | Development             |
+| --------------------- | --------------------- | ------------------ | ----------------------- |
+| `NEXT_PUBLIC_API_URL` | production API origin | staging API origin | `http://localhost:3001` |
 
 The origins are the deployed API URLs for each environment; keep them in the
 team password manager or the Linear infrastructure note, not in this file.
@@ -124,13 +124,13 @@ The repository configuration is inert until the project is imported. Complete
 these steps in order:
 
 - [ ] Import the project with the settings above and set both
-      `NEXT_PUBLIC_API_URL` scopes.
+  `NEXT_PUBLIC_API_URL` scopes.
 - [ ] Redeploy `main` and confirm the production URL loads with the production
-      API origin.
+  API origin.
 - [ ] Open a small PR touching `apps/web` and confirm the Vercel bot comments a
-      working preview URL; open it on a phone.
+  working preview URL; open it on a phone.
 - [ ] Confirm the preview uses the staging API origin and cannot see the
-      production value.
+  production value.
 - [ ] Merge a harmless change to `main` and confirm production updates.
 - [ ] Rehearse the [rollback runbook](../runbooks/web-rollback.md) once and
-      record the deployment IDs and date there.
+  record the deployment IDs and date there.
