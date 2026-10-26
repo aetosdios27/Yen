@@ -31,10 +31,12 @@ configures the project as follows.
    deployment rather than making previews public.
 
 Vercel reads the install path from the Root Directory. The committed
-`installCommand` installs `@yen/web` and its workspace dependencies only:
+`installCommand` installs `@yen/web`, `@yen/shared`, and the root build tooling
+(the pinned Turbo and TypeScript), while leaving the API, contracts and
+unrelated packages out:
 
 ```sh
-pnpm install --filter @yen/web... --frozen-lockfile
+pnpm install --filter @yen/web... --filter yen --frozen-lockfile
 ```
 
 The build runs Turborepo from the repository root so `@yen/shared` is built
