@@ -1,7 +1,14 @@
 export type SqlStatement = {
   line: number;
   leadingKeywords: string[];
+  tokens: SqlToken[];
 };
+
+export type SqlToken =
+  | { kind: "identifier"; value: string; line: number }
+  | { kind: "openParen"; line: number }
+  | { kind: "unicodeIdentifier"; line: number }
+  | { kind: "unsafeString"; line: number };
 
 function isIdentifierStart(codePoint: number): boolean {
   return (
@@ -22,6 +29,7 @@ export function splitSqlStatements(source: string): SqlStatement[] {
   let line = 1;
   let statementLine = 0;
   let leadingKeywords: string[] = [];
+  let tokens: SqlToken[] = [];
 
   function codePointAt(position: number): number | undefined {
     return source.codePointAt(position);
@@ -80,9 +88,10 @@ export function splitSqlStatements(source: string): SqlStatement[] {
   }
 
   function finish(): void {
-    if (statementLine !== 0) statements.push({ line: statementLine, leadingKeywords });
+    if (statementLine !== 0) statements.push({ line: statementLine, leadingKeywords, tokens });
     statementLine = 0;
     leadingKeywords = [];
+    tokens = [];
   }
 
   function singleQuote(escaped: boolean): void {
@@ -94,6 +103,9 @@ export function splitSqlStatements(source: string): SqlStatement[] {
       } else if (source[index] === "'") {
         if (source[index + 1] === "'") advance(index + 2);
         else {
+          if (!escaped && source[index - 1] === "\\") {
+            tokens.push({ kind: "unsafeString", line: startLine });
+          }
           advance(index + 1);
           return;
         }
@@ -104,15 +116,16 @@ export function splitSqlStatements(source: string): SqlStatement[] {
     throw new Error(`line ${startLine}: unterminated single-quoted string`);
   }
 
-  function doubleQuote(): void {
+  function doubleQuote(): string {
     const startLine = line;
+    const startIndex = index;
     advance(index + 1);
     while (index < source.length) {
       if (source[index] === '"') {
         if (source[index + 1] === '"') advance(index + 2);
         else {
           advance(index + 1);
-          return;
+          return source.slice(startIndex + 1, index - 1).replaceAll('""', '"');
         }
       } else {
         advance(index + 1);
@@ -154,6 +167,17 @@ export function splitSqlStatements(source: string): SqlStatement[] {
       singleQuote(false);
     } else if (char === '"') {
       start();
+      const tokenLine = line;
+      tokens.push({ kind: "identifier", value: doubleQuote(), line: tokenLine });
+    } else if (
+      (char === "U" || char === "u") &&
+      source[index + 1] === "&" &&
+      source[index + 2] === '"' &&
+      !followsIdentifier(index)
+    ) {
+      start();
+      tokens.push({ kind: "unicodeIdentifier", line });
+      advance(index + 2);
       doubleQuote();
     } else if (
       (char === "E" || char === "e") &&
@@ -179,6 +203,7 @@ export function splitSqlStatements(source: string): SqlStatement[] {
     } else if (isIdentifierStart(codePointAt(index) ?? 0)) {
       start();
       const wordStart = index;
+      const tokenLine = line;
       let wordEnd = nextCharacter(index);
       while (wordEnd < source.length) {
         const codePoint = codePointAt(wordEnd);
@@ -188,7 +213,12 @@ export function splitSqlStatements(source: string): SqlStatement[] {
       if (leadingKeywords.length < 2) {
         leadingKeywords.push(source.slice(wordStart, wordEnd).toUpperCase());
       }
+      tokens.push({ kind: "identifier", value: source.slice(wordStart, wordEnd), line: tokenLine });
       advance(wordEnd);
+    } else if (char === "(") {
+      start();
+      tokens.push({ kind: "openParen", line });
+      advance(index + 1);
     } else {
       start();
       advance(index + 1);

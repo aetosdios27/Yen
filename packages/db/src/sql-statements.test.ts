@@ -31,15 +31,31 @@ it.each([
 
 it("records the first token's line for each statement", () => {
   expect(splitSqlStatements("-- header\n SELECT 1; /* gap */\n  COMMIT; ")).toEqual([
-    { line: 2, leadingKeywords: ["SELECT"] },
-    { line: 3, leadingKeywords: ["COMMIT"] },
+    {
+      line: 2,
+      leadingKeywords: ["SELECT"],
+      tokens: [{ kind: "identifier", value: "SELECT", line: 2 }],
+    },
+    {
+      line: 3,
+      leadingKeywords: ["COMMIT"],
+      tokens: [{ kind: "identifier", value: "COMMIT", line: 3 }],
+    },
   ]);
 });
 
 it("counts bare carriage returns and CRLF as one line each", () => {
   expect(splitSqlStatements("-- note\rSELECT 1;\r\nCOMMIT;")).toEqual([
-    { line: 2, leadingKeywords: ["SELECT"] },
-    { line: 3, leadingKeywords: ["COMMIT"] },
+    {
+      line: 2,
+      leadingKeywords: ["SELECT"],
+      tokens: [{ kind: "identifier", value: "SELECT", line: 2 }],
+    },
+    {
+      line: 3,
+      leadingKeywords: ["COMMIT"],
+      tokens: [{ kind: "identifier", value: "COMMIT", line: 3 }],
+    },
   ]);
 });
 
