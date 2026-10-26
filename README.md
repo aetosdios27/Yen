@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo.svg" alt="Yen logo: a Y drawn as a Merkle tree" width="112" height="112">
+<img src="assets/logo.svg" alt="Yen logo: a white Y on a dark rounded square, with two ledger lines crossing its stem like the bars of a yen sign" width="128" height="128">
 
 # Yen
 
