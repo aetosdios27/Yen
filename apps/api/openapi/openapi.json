@@ -61,18 +61,19 @@
         "required": ["id"]
       },
       "Fund": {
-        "allOf": [
-          { "$ref": "#/components/schemas/CreateFund" },
-          {
-            "type": "object",
-            "properties": {
-              "id": { "type": "string", "format": "uuid" },
-              "createdAt": { "type": "string", "format": "date-time" }
-            },
-            "required": ["id", "createdAt"],
-            "additionalProperties": false
-          }
-        ]
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "targetPaise": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$",
+            "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
+          },
+          "id": { "type": "string", "format": "uuid" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["name", "targetPaise", "id", "createdAt"],
+        "additionalProperties": false
       },
       "CreateFund": {
         "type": "object",
@@ -336,6 +337,10 @@
                 "schema": { "type": "string", "format": "uuid" },
                 "description": "Request correlation ID",
                 "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
               }
             },
             "content": {
@@ -349,6 +354,10 @@
                 "schema": { "type": "string", "format": "uuid" },
                 "description": "Request correlation ID",
                 "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
               }
             },
             "content": {
@@ -362,6 +371,10 @@
                 "schema": { "type": "string", "format": "uuid" },
                 "description": "Request correlation ID",
                 "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
               }
             },
             "content": {
@@ -375,6 +388,10 @@
                 "schema": { "type": "string", "format": "uuid" },
                 "description": "Request correlation ID",
                 "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
               }
             },
             "content": {
@@ -388,6 +405,14 @@
                 "schema": { "type": "string", "format": "uuid" },
                 "description": "Request correlation ID",
                 "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry"
               }
             },
             "content": {

@@ -9,9 +9,25 @@ const responseHeaders = {
     required: true,
   },
 } as const;
+const replayHeader = {
+  "idempotent-replayed": {
+    schema: { type: "string" as const, enum: ["true"] },
+    description: "Present on replay",
+  },
+};
+const retryHeader = {
+  "retry-after": {
+    schema: { type: "string" as const, pattern: "^[1-9][0-9]*$" },
+    description: "Seconds until retry",
+  },
+};
 
 function jsonResponse<T extends z.ZodType>(schema: T, description: string) {
   return { description, headers: responseHeaders, content: { "application/json": { schema } } };
+}
+
+function withReplay<T extends { headers: object }>(response: T) {
+  return { ...response, headers: { ...response.headers, ...replayHeader } };
 }
 
 const internalResponse = jsonResponse(
@@ -22,11 +38,7 @@ const limitedResponse = {
   ...jsonResponse(errorEnvelope, "Rate limit exceeded"),
   headers: {
     ...responseHeaders,
-    "retry-after": {
-      schema: { type: "string" as const, pattern: "^[1-9][0-9]*$" },
-      description: "Seconds until retry",
-      required: true,
-    },
+    "retry-after": { ...retryHeader["retry-after"], required: true },
   },
 };
 const protectedErrors = {
@@ -44,12 +56,11 @@ const protectedErrors = {
 const security = [{ bearerAuth: [] }];
 
 export const principalSchema = z.object({ id: z.string().uuid() }).openapi("Principal");
-export const fundInput = z
-  .object({ name: z.string().trim().min(1).max(120), targetPaise: paiseWire })
+const fundFields = { name: z.string().trim().min(1).max(120), targetPaise: paiseWire };
+export const fundInput = z.object(fundFields).strict().openapi("CreateFund");
+export const fundSchema = z
+  .object({ ...fundFields, id: z.string().uuid(), createdAt: z.iso.datetime() })
   .strict()
-  .openapi("CreateFund");
-export const fundSchema = fundInput
-  .extend({ id: z.string().uuid(), createdAt: z.iso.datetime() })
   .openapi("Fund");
 
 const statusSchema = z.object({ status: z.literal("ok") });
@@ -96,17 +107,17 @@ export const createFundRoute = createRoute({
     body: { required: true, content: { "application/json": { schema: fundInput } } },
   },
   responses: {
-    201: {
-      ...jsonResponse(fundSchema, "Fake fund created"),
-      headers: {
-        ...responseHeaders,
-        "idempotent-replayed": {
-          schema: { type: "string", enum: ["true"] },
-          description: "Present on replay",
-        },
-      },
+    201: withReplay(jsonResponse(fundSchema, "Fake fund created")),
+    400: withReplay(protectedErrors[400]),
+    401: withReplay(protectedErrors[401]),
+    403: withReplay(protectedErrors[403]),
+    404: withReplay(protectedErrors[404]),
+    409: {
+      ...withReplay(protectedErrors[409]),
+      headers: { ...responseHeaders, ...replayHeader, ...retryHeader },
     },
-    ...protectedErrors,
+    429: protectedErrors[429],
+    500: protectedErrors[500],
   },
 });
 export const getFundRoute = createRoute({

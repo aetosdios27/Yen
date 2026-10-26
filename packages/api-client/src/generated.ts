@@ -129,7 +129,10 @@ export interface components {
       /** Format: uuid */
       id: string;
     };
-    Fund: components["schemas"]["CreateFund"] & {
+    Fund: {
+      name: string;
+      /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
+      targetPaise: string;
       /** Format: uuid */
       id: string;
       /** Format: date-time */
@@ -355,6 +358,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
           [name: string]: unknown;
         };
         content: {
@@ -366,6 +371,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
           [name: string]: unknown;
         };
         content: {
@@ -377,6 +384,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
           [name: string]: unknown;
         };
         content: {
@@ -388,6 +397,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
           [name: string]: unknown;
         };
         content: {
@@ -399,6 +410,10 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          /** @description Seconds until retry */
+          "retry-after"?: string;
           [name: string]: unknown;
         };
         content: {
