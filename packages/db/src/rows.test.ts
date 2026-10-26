@@ -1,10 +1,12 @@
-import { describe, expect, it } from "vitest";
+import type { PhoneE164 } from "@yen/shared";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   fundRowSchema,
   idempotencyKeyRowSchema,
   membershipRowSchema,
   orgRowSchema,
   pseudonymRowSchema,
+  type UserRow,
   userRowSchema,
 } from "./rows.js";
 import { uuidv7 } from "./uuidv7.js";
@@ -51,6 +53,15 @@ describe("row parsing at the database boundary", () => {
     expect(fundRowSchema.parse(fund).target_paise).toBe(0n);
     for (const target_paise of [1, "1", -1n, 1.5]) {
       expect(fundRowSchema.safeParse({ ...fund, target_paise }).success).toBe(false);
+    }
+  });
+
+  it("requires canonical E.164 phone values in user rows", () => {
+    expectTypeOf<UserRow["phone"]>().toEqualTypeOf<PhoneE164>();
+    const user = { id, display_name: "Owner", locale: "en", created_at: now };
+    expect(userRowSchema.safeParse({ ...user, phone: "+919876543210" }).success).toBe(true);
+    for (const phone of ["9876543210", "+91 98765 43210", ""]) {
+      expect(userRowSchema.safeParse({ ...user, phone }).success).toBe(false);
     }
   });
 

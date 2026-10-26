@@ -117,6 +117,31 @@ databaseSuite("app schema on Postgres 16", (sql) => {
     `).rejects.toMatchObject({ code: "23505" });
   });
 
+  it.each([
+    "9876543210",
+    "+0123456789",
+    "+91 98765 43210",
+    "+91-9876543210",
+    "",
+    "+1234567890123456",
+  ])("rejects noncanonical phone %j", async (phone) => {
+    await expect(sql`
+      INSERT INTO users (id, phone, display_name) VALUES (${uuidv7()}, ${phone}, 'Invalid')
+    `).rejects.toMatchObject({ code: "23514" });
+  });
+
+  it("stores a canonical phone and rejects another spelling of the same number", async () => {
+    const id = uuidv7();
+    await sql`INSERT INTO users (id, phone, display_name) VALUES (${id}, '+919876543210', 'Valid')`;
+    await expect(sql`
+      INSERT INTO users (id, phone, display_name)
+      VALUES (${uuidv7()}, '+91 98765 43210', 'Duplicate spelling')
+    `).rejects.toMatchObject({ code: "23514" });
+    expect(await sql`SELECT phone FROM users WHERE id = ${id}`).toEqual([
+      { phone: "+919876543210" },
+    ]);
+  });
+
   it("enforces org owner and fund org foreign keys", async () => {
     await expect(sql`
       INSERT INTO orgs (id, name, legal_form, owner_id)

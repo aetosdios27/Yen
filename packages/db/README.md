@@ -22,6 +22,8 @@ The five fund roles are `owner`, `treasurer`, `approver`, `auditor`, and `member
 
 Parse query results with the exported `userRowSchema`, `orgRowSchema`, `fundRowSchema`, `membershipRowSchema`, `pseudonymRowSchema`, or `idempotencyKeyRowSchema`. Each schema has a corresponding inferred `*Row` type. ID parsing uses `@yen/shared`'s branded `UserId`, `OrgId`, and `FundId` parsers.
 
+User phones are stored only in canonical E.164 form and parsed as `PhoneE164` from `@yen/shared`. Converting free text such as `98765 43210` to `+919876543210` belongs to the login flow (YEN-22) and needs a product decision; the database and shared parser do not guess country codes.
+
 ```ts
 import { createSql, fundRowSchema } from "@yen/db";
 
@@ -48,7 +50,7 @@ The CLI runs TypeScript directly on Node 24, so it needs no prior build. For pro
 
 Files use `migrations/NNNN_name.sql`, starting at `0001` with no gaps or duplicate versions. Names use lowercase letters, digits, and underscores. The runner sorts by version and records the full filename, version, SHA-256 of the file bytes, and `applied_at` in `schema_migrations`.
 
-One session advisory lock covers history validation and all migrations. Each pending file and its history row commit in a single transaction. A failure rolls back that file and releases the lock; earlier files stay committed. Files must contain transactional SQL without explicit transaction control. Operations such as `CREATE INDEX CONCURRENTLY` need a separate deployment procedure.
+One session advisory lock covers history validation and all migrations. Each pending file and its history row commit in a single transaction. A failure rolls back that file and releases the lock; earlier files stay committed. The runner rejects transaction-control statements in every file before applying any migration because migrations run inside its own transaction. `CREATE INDEX CONCURRENTLY` and other non-transactional statements are therefore not supported yet.
 
 Applied files are immutable. An edited checksum, missing file, renamed file, version gap, duplicate version, or out-of-order history fails the run. A second run leaves application data and migration history unchanged. There are no down migrations. Run the runner through a direct Postgres connection or session-pooling proxy because transaction-pooling proxies cannot preserve its session advisory lock.
 

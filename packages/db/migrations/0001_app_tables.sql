@@ -1,6 +1,6 @@
 CREATE TABLE users (
   id uuid PRIMARY KEY,
-  phone text NOT NULL UNIQUE,
+  phone text NOT NULL UNIQUE CHECK (phone ~ '^\+[1-9][0-9]{7,14}$'),
   display_name text NOT NULL,
   locale text NOT NULL DEFAULT 'en',
   created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP

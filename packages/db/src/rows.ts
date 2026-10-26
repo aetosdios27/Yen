@@ -1,4 +1,4 @@
-import { parseFundId, parseOrgId, parseUserId } from "@yen/shared";
+import { parseFundId, parseOrgId, parsePhoneE164, parseUserId } from "@yen/shared";
 import * as z from "zod";
 
 function brandedId<T>(
@@ -15,10 +15,11 @@ function brandedId<T>(
 const userId = brandedId(parseUserId);
 const orgId = brandedId(parseOrgId);
 const fundId = brandedId(parseFundId);
+const phoneE164 = brandedId(parsePhoneE164);
 
 export const userRowSchema = z.object({
   id: userId,
-  phone: z.string(),
+  phone: phoneE164,
   display_name: z.string(),
   locale: z.string(),
   created_at: z.date(),
