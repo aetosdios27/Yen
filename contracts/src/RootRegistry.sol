@@ -22,8 +22,8 @@ contract RootRegistry {
     event PublisherTransferred(address indexed previousPublisher, address indexed newPublisher);
 
     address public publisher;
-    address public pendingPublisher;
     uint64 public latestSequence;
+    address public pendingPublisher;
     mapping(uint64 sequence => bytes32 root) private _roots;
 
     modifier onlyPublisher() {

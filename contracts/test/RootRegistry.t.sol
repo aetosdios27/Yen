@@ -41,6 +41,33 @@ contract RootRegistryTest is Test {
         assertEq(registry.rootAt(type(uint64).max), bytes32(0));
     }
 
+    /// @dev Pins the packing that lets publishRoot read authority and the sequence from one slot.
+    function testStatePackingSharesSlotZero() public {
+        bytes32 initialSlot = vm.load(address(registry), bytes32(uint256(0)));
+        assertEq(address(uint160(uint256(initialSlot))), publisher);
+        assertEq(uint64(uint256(initialSlot) >> 160), 0);
+        assertEq(uint256(initialSlot) >> 224, 0);
+
+        vm.prank(publisher);
+        registry.proposePublisher(successor);
+        assertEq(registry.pendingPublisher(), successor);
+        assertEq(vm.load(address(registry), bytes32(uint256(0))), initialSlot);
+        assertEq(
+            vm.load(address(registry), bytes32(uint256(1))), bytes32(uint256(uint160(successor)))
+        );
+
+        vm.prank(publisher);
+        registry.publishRoot(ROOT, 1);
+
+        bytes32 publishedSlot = vm.load(address(registry), bytes32(uint256(0)));
+        assertEq(address(uint160(uint256(publishedSlot))), publisher);
+        assertEq(uint64(uint256(publishedSlot) >> 160), 1);
+        assertEq(uint256(publishedSlot) >> 224, 0);
+        assertEq(
+            vm.load(address(registry), bytes32(uint256(1))), bytes32(uint256(uint160(successor)))
+        );
+    }
+
     function testConstructorEmitsTransfer() public {
         vm.expectEmit(true, true, false, true);
         emit PublisherTransferred(address(0), publisher);
