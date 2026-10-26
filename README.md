@@ -34,6 +34,8 @@ Yen makes the record checkable instead of trusted.
 
 ## How it works
 
+This is the planned MVP flow. The repo currently contains foundation packages and placeholder apps.
+
 Yen **never holds your money**. It stays in the club's own bank account. Yen watches the account, enforces who must approve spending, and keeps a record nobody can quietly rewrite.
 
 ```mermaid
@@ -57,7 +59,7 @@ flowchart LR
 
 ## What we promise, and what we don't
 
-We only claim what a skeptic can check.
+These are requirements for the MVP. The scaffold does not yet implement the full flow.
 
 | We guarantee                                           | We do not guarantee                                                                                                            |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
@@ -83,29 +85,32 @@ Dates are targets, not promises.
 
 ## Tech
 
-| Layer    | Choice                                                                           |
-| -------- | -------------------------------------------------------------------------------- |
-| Language | TypeScript (strict), Solidity                                                    |
-| Monorepo | pnpm workspaces, Turborepo                                                       |
-| Quality  | Biome, Vitest, Foundry (contracts), Playwright (e2e, planned)                    |
-| Web      | Next.js PWA (planned)                                                            |
-| Data     | PostgreSQL 16, [Konto](https://github.com/aetosdios27/Konto) double-entry ledger |
-| Proofs   | SHA-256 hash chain, Merkle trees, Polygon (Amoy testnet in MVP)                  |
-| Auth     | Phone OTP, WebAuthn passkeys for approvals (planned)                             |
+| Layer    | Choice                                                                        |
+| -------- | ----------------------------------------------------------------------------- |
+| Language | TypeScript (strict), Solidity                                                 |
+| Monorepo | pnpm workspaces, Turborepo                                                    |
+| Quality  | Biome, Vitest; Foundry and Playwright planned                                 |
+| Web      | Next.js App Router, React (PWA planned)                                       |
+| API      | Hono on Node.js                                                               |
+| Data     | PostgreSQL 16, [Konto](https://github.com/aetosdios27/Konto) ledger (planned) |
+| Proofs   | SHA-256 hash chain, Merkle trees, Polygon (Amoy testnet in MVP)               |
+| Auth     | Phone OTP, WebAuthn passkeys for approvals (planned)                          |
 
 ## Repository layout
 
 ```
-apps/        web (Next.js) and api (Hono)             - coming with YEN-11
-packages/    shared: money (paise), Merkle verify     - started
-             ledger, eventlog                          - planned
-contracts/   Foundry RootRegistry, tests, Amoy deploy - YEN-16; see contracts/README.md
-infra/       Terraform                                - planned, YEN-17
-.github/     CI, rulesets, templates, repo-settings script
-.greptile/   AI review rules specific to this repo
+apps/web/         Next.js App Router placeholder, typed env
+apps/api/         Hono HTTP service, /health, typed env
+packages/shared/  Integer paise, branded UUIDs, Merkle proofs
+packages/ledger/  Empty package for ledger code (no Konto yet)
+packages/eventlog/ Empty package for the append-only event log
+contracts/        Placeholder; Foundry comes with YEN-16
+.github/          CI, rulesets, templates, repo-settings script
+.greptile/        AI review rules specific to this repo
 ```
 
 Money is always **integer paise** with the branded `Paise` type, never floats.
+Infrastructure is planned in YEN-17; nothing is deployed.
 
 ## Getting started
 
@@ -116,6 +121,19 @@ pnpm verify            # biome ci + typecheck + test + build
 ```
 
 Other commands: `pnpm format` auto-fixes formatting and safe lint issues.
+
+To run locally after `pnpm verify`, copy each app's `.env.example` to `.env`:
+
+```sh
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env
+pnpm --filter @yen/api start  # API on port 3001
+pnpm --filter @yen/web dev    # Web on port 3000, in a second terminal
+```
+
+The API requires `PORT`; web startup requires an HTTP(S) `NEXT_PUBLIC_API_URL`.
+Each app validates env once at startup and reports invalid variable names without values.
+Web builds skip runtime env validation so `pnpm verify` needs no env files or secrets.
 
 ## How we work
 

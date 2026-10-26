@@ -1,3 +1,14 @@
+export {
+  type FundId,
+  fundIdSchema,
+  type OrgId,
+  orgIdSchema,
+  parseFundId,
+  parseOrgId,
+  parseUserId,
+  type UserId,
+  userIdSchema,
+} from "./ids.js";
 export { fromHex, type Hash32, hash32, type Salt32, salt32, toHex } from "./merkle/hash.js";
 export {
   buildIntervalTree,
@@ -9,10 +20,8 @@ export {
 } from "./merkle/interval.js";
 export {
   type EventProof,
-  type FundId,
   parseEventProof,
   parseEventProofJson,
-  parseFundId,
   parseHash32,
   parseInclusionProof,
   parseSalt32,
