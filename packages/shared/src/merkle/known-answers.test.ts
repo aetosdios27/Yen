@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import vectors from "../../test-vectors/merkle.json" with { type: "json" };
-import { fromHex, type Hash32, hash32, salt32, toHex } from "./hash.js";
+import { fromHex, type Hash32, hash32, salt32, sha256, toHex } from "./hash.js";
 import { buildIntervalTree, fingerprint, proveEvent, verifyEventProof } from "./interval.js";
 import { parseEventProof, parseFundId, type Result, serializeEventProof } from "./proof.js";
 import { leafHash, merkleRoot, proveInclusion, verifyInclusion } from "./tree.js";
 
 const h = (hex: string): Hash32 => hash32(fromHex(hex));
 const leafHashes = vectors.leaves.map((v) => h(v.leaf));
+const countBytes = (count: number) => fromHex(count.toString(16).padStart(16, "0"));
 
 function unwrap<T>(result: Result<T>): T {
   if (!result.ok) throw new Error(result.error);
@@ -77,7 +78,27 @@ describe("nested known answers from the independent Python implementation", () =
         a.fundId < b.fundId ? -1 : a.fundId > b.fundId ? 1 : 0,
       );
       expect(tree.fundRoots.map(toHex)).toEqual(ordered.map((fund) => fund.fundRoot));
-      expect(toHex(await merkleRoot(ordered.map((fund) => h(fund.fundLeaf))))).toBe(vector.root);
+      for (const fund of ordered) {
+        expect(
+          toHex(
+            await sha256(
+              Uint8Array.of(0x02),
+              countBytes(fund.events.length),
+              h(fund.fundRoot),
+              h(fund.fingerprint),
+            ),
+          ),
+        ).toBe(fund.fundLeaf);
+      }
+      expect(
+        toHex(
+          await sha256(
+            Uint8Array.of(0x04),
+            countBytes(ordered.length),
+            await merkleRoot(ordered.map((fund) => h(fund.fundLeaf))),
+          ),
+        ),
+      ).toBe(vector.root);
       for (const expected of vector.proofs) {
         const bundle = unwrap(parseEventProof(expected));
         expect(await verifyEventProof(bundle, h(vector.root))).toBe(true);

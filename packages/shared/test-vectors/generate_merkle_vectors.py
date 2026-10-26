@@ -8,8 +8,8 @@ Spec, written from RFC 6962 section 2.1 rather than from the TypeScript code:
   shape       = split at the largest power of two strictly below n
   fund root   = tree over the fund's event leaves, in seq order
   fingerprint = SHA256(0x03 || fundId as 16 UUID bytes || latestEventHash)
-  fund leaf   = SHA256(0x02 || fundRoot || fingerprint)
-  global root = tree over fund leaves, funds sorted by fundId bytes
+  fund leaf   = SHA256(0x02 || u64be(eventCount) || fundRoot || fingerprint)
+  global root = SHA256(0x04 || u64be(fundCount) || tree over sorted fund leaves)
 
 Run: python3 packages/shared/test-vectors/generate_merkle_vectors.py
 Uses only the standard library.
@@ -116,7 +116,10 @@ def interval_vector(name: str, event_counts: list[int]) -> dict:
     for fund in ordered:
         leaves = [event_leaf(s, e) for s, e in fund["events"]]
         root = mth(leaves)
-        fund_leaf = sha256(b"\x02", root, fingerprint(fund["fundId"], fund["latest"]))
+        fund_leaf = sha256(
+            b"\x02", len(leaves).to_bytes(8, "big"), root,
+            fingerprint(fund["fundId"], fund["latest"]),
+        )
         fund_trees.append((fund, leaves, root, fund_leaf))
     fund_leaves = [t[3] for t in fund_trees]
 
@@ -156,11 +159,15 @@ def interval_vector(name: str, event_counts: list[int]) -> dict:
                 ],
                 "fundRoot": roots[fund["fundId"]],
                 "fingerprint": fingerprint(fund["fundId"], fund["latest"]).hex(),
-                "fundLeaf": sha256(b"\x02", bytes.fromhex(roots[fund["fundId"]]), fingerprint(fund["fundId"], fund["latest"])).hex(),
+                "fundLeaf": sha256(
+                    b"\x02", len(fund["events"]).to_bytes(8, "big"),
+                    bytes.fromhex(roots[fund["fundId"]]),
+                    fingerprint(fund["fundId"], fund["latest"]),
+                ).hex(),
             }
             for fund in funds
         ],
-        "root": mth(fund_leaves).hex(),
+        "root": sha256(b"\x04", len(fund_leaves).to_bytes(8, "big"), mth(fund_leaves)).hex(),
         "proofs": proofs,
     }
 
@@ -188,6 +195,7 @@ def build() -> dict:
         "intervals": [
             interval_vector("no-funds", []),
             interval_vector("one-fund-one-event", [1]),
+            interval_vector("only-idle-fund", [0]),
             interval_vector("idle-fund", [3, 0, 5]),
             interval_vector("five-funds", [1, 2, 3, 4, 7]),
         ],

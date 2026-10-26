@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { hash32, salt32, toHex } from "./hash.js";
 import { buildIntervalTree, type IntervalFund, proveEvent, verifyEventProof } from "./interval.js";
-import { parseFundId } from "./proof.js";
+import { parseEventProofJson, parseFundId, serializeEventProof } from "./proof.js";
 
 const id = parseFundId("00000000-0000-0000-0000-000000000001");
 const missingId = parseFundId("00000000-0000-0000-0000-000000000002");
@@ -29,6 +29,39 @@ describe("interval builder", () => {
     expect(await verifyEventProof(first, tree.root)).toBe(true);
     expect(await verifyEventProof(last, tree.root)).toBe(true);
   });
+
+  it.each(["eventProof", "fundProof"] as const)(
+    "rejects relabelled %s sizes, including the RFC five-versus-seven ambiguity",
+    async (key) => {
+      const events = Array.from({ length: 5 }, (_, seq) => event(seq));
+      const funds = Array.from({ length: 5 }, (_, index) => {
+        const id = parseFundId(
+          `00000000-0000-0000-0000-${(index + 1).toString().padStart(12, "0")}`,
+        );
+        if (!id.ok) throw new Error(id.error);
+        return { ...fund(), fundId: id.value, latestEventHash: event(4).eventHash, events };
+      });
+      const tree = await buildIntervalTree(funds);
+      const bundle = await proveEvent(tree, fundId, 0);
+      expect(bundle.eventProof).toMatchObject({ index: 0, size: 5 });
+      expect(bundle.fundProof).toMatchObject({ index: 0, size: 5 });
+      expect(await verifyEventProof(bundle, tree.root)).toBe(true);
+      const sizes = [4, 6, 7, 8];
+      for (let bit = 0; bit < 53; bit++) {
+        const mask = 2 ** bit;
+        sizes.push(5 + (Math.floor(5 / mask) % 2 === 0 ? mask : -mask));
+      }
+      for (const size of sizes) {
+        const tampered = { ...bundle, [key]: { ...bundle[key], size } };
+        if (size === 7) {
+          const parsed = parseEventProofJson(serializeEventProof(tampered));
+          if (!parsed.ok) throw new Error(parsed.error);
+          expect(await verifyEventProof(parsed.value, tree.root)).toBe(false);
+        }
+        expect(await verifyEventProof(tampered, tree.root)).toBe(false);
+      }
+    },
+  );
 
   it("rejects duplicate funds and duplicate sequences", async () => {
     await expect(buildIntervalTree([fund(), fund()])).rejects.toThrow("Duplicate fund ID");

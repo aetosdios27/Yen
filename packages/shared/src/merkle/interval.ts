@@ -1,12 +1,6 @@
 import { equalBytes, fromHex, type Hash32, hash32, type Salt32, salt32, sha256 } from "./hash.js";
 import { createEventProof, type EventProof, type FundId } from "./proof.js";
-import {
-  leafHash,
-  merkleRoot,
-  proveInclusion,
-  rootFromInclusion,
-  verifyInclusion,
-} from "./tree.js";
+import { leafHash, merkleRoot, proveInclusion, rootFromInclusion } from "./tree.js";
 
 export type IntervalEvent = {
   readonly seq: number;
@@ -26,8 +20,18 @@ export function fingerprint(fundId: FundId, latestEventHash: Hash32): Promise<Ha
   return sha256(Uint8Array.of(0x03), fromHex(fundId.replaceAll("-", "")), latestEventHash);
 }
 
-function fundLeaf(root: Hash32, identity: Hash32): Promise<Hash32> {
-  return sha256(Uint8Array.of(0x02), root, identity);
+function u64be(count: number): Uint8Array {
+  const bytes = new Uint8Array(8);
+  new DataView(bytes.buffer).setBigUint64(0, BigInt(count), false);
+  return bytes;
+}
+
+function fundLeaf(eventCount: number, root: Hash32, identity: Hash32): Promise<Hash32> {
+  return sha256(Uint8Array.of(0x02), u64be(eventCount), root, identity);
+}
+
+function globalRoot(fundCount: number, root: Hash32): Promise<Hash32> {
+  return sha256(Uint8Array.of(0x04), u64be(fundCount), root);
 }
 
 class IntervalTree {
@@ -109,9 +113,15 @@ export async function buildIntervalTree(funds: readonly IntervalFund[]): Promise
     );
     const root = await merkleRoot(eventLeaves);
     trees.push({ ...fund, root, leaves: eventLeaves });
-    leaves.push(await fundLeaf(root, await fingerprint(fund.fundId, fund.latestEventHash)));
+    leaves.push(
+      await fundLeaf(
+        eventLeaves.length,
+        root,
+        await fingerprint(fund.fundId, fund.latestEventHash),
+      ),
+    );
   }
-  return new IntervalTree(trees, leaves, await merkleRoot(leaves));
+  return new IntervalTree(trees, leaves, await globalRoot(leaves.length, await merkleRoot(leaves)));
 }
 
 export function proveEvent(tree: IntervalTree, fundId: FundId, seq: number): Promise<EventProof> {
@@ -127,6 +137,14 @@ export async function verifyEventProof(
     await leafHash(bundle.salt, bundle.eventHash),
   );
   if (root === undefined) return false;
-  const leaf = await fundLeaf(root, await fingerprint(bundle.fundId, bundle.latestEventHash));
-  return verifyInclusion(bundle.fundProof, leaf, expectedGlobalRoot);
+  const leaf = await fundLeaf(
+    bundle.eventProof.size,
+    root,
+    await fingerprint(bundle.fundId, bundle.latestEventHash),
+  );
+  const intervalRoot = await rootFromInclusion(bundle.fundProof, leaf);
+  return (
+    intervalRoot !== undefined &&
+    equalBytes(await globalRoot(bundle.fundProof.size, intervalRoot), expectedGlobalRoot)
+  );
 }

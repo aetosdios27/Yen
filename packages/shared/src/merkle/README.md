@@ -12,9 +12,16 @@ The byte formulas are:
 event leaf  = SHA256(0x00 || salt[32] || eventHash[32])
 node        = SHA256(0x01 || left[32] || right[32])
 fingerprint = SHA256(0x03 || fundId[16 UUID bytes] || latestEventHash[32])
-fund leaf   = SHA256(0x02 || fundRoot[32] || fingerprint[32])
+fund leaf   = SHA256(0x02 || u64be(eventCount) || fundRoot[32] || fingerprint[32])
+global root = SHA256(0x04 || u64be(fundCount) || merkleRoot(fundLeaves)[32])
 empty root  = SHA256(empty input)
 ```
+
+`u64be` encodes a count in eight unsigned big-endian bytes. Counts are nonnegative
+safe integers. An empty fund's `fundRoot` is the empty root and its fund leaf commits
+to event count zero. An interval with zero funds has global root
+`SHA256(0x04 || u64be(0) || SHA256(empty input))`. `IntervalTree.root` returns the
+wrapped global root, a single 32-byte value intended for anchoring.
 
 Trees use the [RFC 6962 §2.1](https://www.rfc-editor.org/rfc/rfc6962.html#section-2.1)
 split at the largest power of two below the size. Odd nodes are never duplicated.
@@ -37,10 +44,13 @@ between intervals. Sequence numbers are ordering inputs, not fields in the leaf 
 The fingerprint binds the claimed fund ID and latest hash; conflicting roots still
 require comparison through an authenticated publication channel.
 
-RFC inclusion paths do not always authenticate the exact tree size: the path for
-index 0 in a five-leaf tree can also verify with size 7. Identical leaves can have
-interchangeable proofs at occupied indices. Exact counts and distinct occurrences
-require separately authenticated metadata. These limits also apply to both nested paths.
+Plain `verifyInclusion` uses RFC inclusion paths, which do not always authenticate
+the exact tree size: the path for index 0 in a five-leaf tree can also verify with
+size 7. The two-level `verifyEventProof` closes this limitation by committing to
+`eventProof.size` in the fund leaf and `fundProof.size` in the global root; any change
+would be detected against the authenticated global root. Identical event leaves can
+still have interchangeable proofs at occupied indices. Distinct occurrences require
+separately authenticated metadata.
 
 Only the global root is intended for public publication. Fund IDs enter hash inputs
 but do not appear in that published root. A disclosed proof bundle contains its fund

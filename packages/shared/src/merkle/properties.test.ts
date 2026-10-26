@@ -73,33 +73,6 @@ describe("Merkle properties", () => {
     );
   });
 
-  it("every single-bit size tamper fails for complete trees", async () => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc
-          .integer({ min: 0, max: 5 })
-          .chain((power) => fc.array(bytes, { minLength: 2 ** power, maxLength: 2 ** power })),
-        fc.nat(),
-        fc.integer({ min: 0, max: 8 }),
-        async (raw, choice, bit) => {
-          const leaves = raw.map(hash32);
-          const index = choice % leaves.length;
-          const leaf = leaves.at(index);
-          if (leaf === undefined) throw new Error("Nonempty generated leaves");
-          const proof = await proveInclusion(leaves, index);
-          expect(
-            await verifyInclusion(
-              { ...proof, size: proof.size ^ (1 << bit) },
-              leaf,
-              await merkleRoot(leaves),
-            ),
-          ).toBe(false);
-        },
-      ),
-      options,
-    );
-  });
-
   it("two-level proofs reject single-bit salt, event hash, latest hash and root tampering or another fund", async () => {
     const id = parseFundId("00000000-0000-0000-0000-000000000001");
     const otherId = parseFundId("00000000-0000-0000-0000-000000000002");
@@ -157,13 +130,14 @@ describe("Merkle properties", () => {
     );
   });
 
-  it("every event verifies across generated intervals with shuffled funds, events and idle funds", async () => {
+  it("every event verifies and any single-bit size tamper fails across generated intervals", async () => {
     await fc.assert(
       fc.asyncProperty(
         fc.array(fc.array(fc.record({ salt: bytes, eventHash: bytes }), { maxLength: 7 }), {
           maxLength: 5,
         }),
-        async (rawFunds) => {
+        fc.integer({ min: 0, max: 52 }),
+        async (rawFunds, bit) => {
           const funds = rawFunds
             .map((rawEvents, index) => {
               const id = parseFundId(
@@ -185,9 +159,16 @@ describe("Merkle properties", () => {
           const tree = await buildIntervalTree(funds);
           for (const fund of funds) {
             for (const event of fund.events) {
-              expect(
-                await verifyEventProof(await proveEvent(tree, fund.fundId, event.seq), tree.root),
-              ).toBe(true);
+              const bundle = await proveEvent(tree, fund.fundId, event.seq);
+              expect(await verifyEventProof(bundle, tree.root)).toBe(true);
+              for (const key of ["eventProof", "fundProof"] as const) {
+                const proof = bundle[key];
+                const mask = 2 ** bit;
+                const size = proof.size + (Math.floor(proof.size / mask) % 2 === 0 ? mask : -mask);
+                expect(
+                  await verifyEventProof({ ...bundle, [key]: { ...proof, size } }, tree.root),
+                ).toBe(false);
+              }
             }
           }
         },
