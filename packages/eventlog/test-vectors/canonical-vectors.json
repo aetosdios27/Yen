@@ -1,0 +1,80 @@
+[
+  {
+    "name": "rfc_numbers",
+    "input": [333333333.3333333, 1e30, 4.5, 0.002, 1e-27],
+    "canonical": "[333333333.3333333,1e+30,4.5,0.002,1e-27]"
+  },
+  {
+    "name": "rfc_strings",
+    "input": {
+      "€": "Euro Sign",
+      "\r": "Carriage Return",
+      "דּ": "Hebrew Letter Dalet With Dagesh",
+      "1": "One",
+      "😀": "Grinning Face",
+      "": "Control",
+      "ö": "Latin Small Letter O With Diaeresis"
+    },
+    "canonical": "{\"\\r\":\"Carriage Return\",\"1\":\"One\",\"\":\"Control\",\"ö\":\"Latin Small Letter O With Diaeresis\",\"€\":\"Euro Sign\",\"😀\":\"Grinning Face\",\"דּ\":\"Hebrew Letter Dalet With Dagesh\"}"
+  },
+  {
+    "name": "nested",
+    "input": {
+      "z": [
+        {
+          "b": 2,
+          "a": [true, null, "😀"]
+        }
+      ],
+      "a": {
+        "𐀀": "line\n\t\\\"",
+        "": " "
+      }
+    },
+    "canonical": "{\"a\":{\"𐀀\":\"line\\n\\t\\\\\\\"\",\"\":\" \"},\"z\":[{\"a\":[true,null,\"😀\"],\"b\":2}]}"
+  },
+  {
+    "name": "numbers_edges",
+    "input": [1e21, 1e-7, -0.0, 0.30000000000000004, 1e-6, 1e20],
+    "canonical": "[1e+21,1e-7,0,0.30000000000000004,0.000001,100000000000000000000]"
+  },
+  {
+    "name": "escapes",
+    "input": "\b\t\n\f\r\u0000\u001f/\\\"",
+    "canonical": "\"\\b\\t\\n\\f\\r\\u0000\\u001f/\\\\\\\"\""
+  },
+  {
+    "name": "utf16_sort",
+    "input": {
+      "": 1,
+      "𐀀": 2,
+      "A": 3
+    },
+    "canonical": "{\"A\":3,\"𐀀\":2,\"\":1}"
+  },
+  {
+    "name": "surrogate_pair",
+    "input": "😀",
+    "canonical": "\"😀\""
+  },
+  {
+    "name": "line_separator",
+    "input": " ",
+    "canonical": "\" \""
+  },
+  {
+    "name": "paragraph_separator",
+    "input": " ",
+    "canonical": "\" \""
+  },
+  {
+    "name": "delete_control",
+    "input": "",
+    "canonical": "\"\""
+  },
+  {
+    "name": "lone_surrogate",
+    "input": "\ud800",
+    "error": "lone surrogate"
+  }
+]

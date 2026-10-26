@@ -1,1 +1,36 @@
-export {};
+export { canonicalize } from "./canonical.js";
+export {
+  type ChainBreakReason,
+  type ChainHead,
+  type ChainStructureCheck,
+  type ChainVerification,
+  chainHead,
+  checkChainStructure,
+  checkChainStructureStream,
+  computeEventHash,
+  eventHashDomain,
+  eventHashToLeafInput,
+  eventLeafHash,
+  genesisHash,
+  makeNextEvent,
+  type ObservedChainHead,
+  verifyChain,
+  verifyChainStream,
+} from "./chain.js";
+export {
+  type ActorPseudonymId,
+  actorPseudonymSchema,
+  type Event,
+  type EventHashHex,
+  type EventInput,
+  eventSubjectId,
+  hashHexSchema,
+  isUtcEventTime,
+  occurredAtSchema,
+  type PseudonymId,
+  parseEvent,
+  parseUnsignedEvent,
+  payloadSchemas,
+  pseudonymIdSchema,
+  type UnsignedEvent,
+} from "./model.js";

@@ -9,7 +9,7 @@ export {
   type UserId,
   userIdSchema,
 } from "./ids.js";
-export { fromHex, type Hash32, hash32, type Salt32, salt32, toHex } from "./merkle/hash.js";
+export { fromHex, type Hash32, hash32, type Salt32, salt32, sha256, toHex } from "./merkle/hash.js";
 export {
   buildIntervalTree,
   type IntervalEvent,
