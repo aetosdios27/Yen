@@ -120,13 +120,29 @@ databaseSuite("migration runner", (sql, url) => {
     await writeFile(join(dir, "0001_create.sql"), "CREATE TABLE should_not_exist (id integer);");
     await writeFile(join(dir, "0002_control.sql"), `  ${statement.toLowerCase()};`);
     await expect(migrate(sql, { dir })).rejects.toThrow(
-      /0002_control\.sql.*migrations run inside the runner's own transaction/i,
+      /0002_control\.sql:1.*migrations run inside the runner's own transaction/i,
     );
     expect(await sql`SELECT to_regclass('public.schema_migrations') AS history`).toEqual([
       { history: null },
     ]);
     expect(await sql`SELECT to_regclass('public.should_not_exist') AS table_name`).toEqual([
       { table_name: null },
+    ]);
+  });
+
+  it.each([
+    "select 1;commit;",
+    "BEGIN;",
+    "  rollback ;",
+    "START  TRANSACTION;",
+    "COMMIT AND CHAIN;",
+    "SAVEPOINT x;",
+    "end;",
+  ])("rejects top-level control in %s with its line", async (source) => {
+    await writeFile(join(dir, "0001_control.sql"), source);
+    await expect(migrate(sql, { dir })).rejects.toThrow(/0001_control\.sql:1.*transaction/i);
+    expect(await sql`SELECT to_regclass('public.schema_migrations') AS name`).toEqual([
+      { name: null },
     ]);
   });
 
@@ -139,9 +155,43 @@ databaseSuite("migration runner", (sql, url) => {
     expect(await sql`SELECT message FROM safe`).toEqual([{ message: "COMMIT" }]);
   });
 
-  it("detects transaction control missed by the line scan", async () => {
+  it("rejects same-line COMMIT before creating a table or history", async () => {
     await writeFile(join(dir, "0001_hidden.sql"), "CREATE TABLE hidden (id integer); COMMIT;");
-    await expect(migrate(sql, { dir })).rejects.toThrow(/0001_hidden\.sql.*transaction/i);
+    await expect(migrate(sql, { dir })).rejects.toThrow(/0001_hidden\.sql:1.*transaction/i);
+    expect(await sql`SELECT to_regclass('public.hidden') AS name`).toEqual([{ name: null }]);
+    expect(await sql`SELECT to_regclass('public.schema_migrations') AS name`).toEqual([
+      { name: null },
+    ]);
+  });
+
+  it("accepts a DO block with transaction words inside its dollar quote", async () => {
+    await writeFile(join(dir, "0001_block.sql"), "DO $$\nBEGIN\n  PERFORM 1;\nEND\n$$;");
+    await migrate(sql, { dir });
+    expect(await sql`SELECT version FROM schema_migrations`).toEqual([{ version: 1 }]);
+  });
+
+  it.each([
+    "SELECT 'unfinished",
+    "SELECT E'unfinished\\'",
+    'SELECT "unfinished',
+    "SELECT $body$ unfinished $$",
+    "/* outer /* inner */",
+  ])("names the file for unterminated SQL in %s", async (source) => {
+    await writeFile(join(dir, "0001_invalid.sql"), source);
+    await expect(migrate(sql, { dir })).rejects.toThrow(/0001_invalid\.sql: line 1: unterminated/);
+    expect(await sql`SELECT to_regclass('public.schema_migrations') AS name`).toEqual([
+      { name: null },
+    ]);
+  });
+
+  it("rolls back a DO block that tries to commit its transaction", async () => {
+    await writeFile(
+      join(dir, "0001_block.sql"),
+      "DO $$ BEGIN CREATE TABLE escaped_do (id int); COMMIT; END $$;",
+    );
+    await expect(migrate(sql, { dir })).rejects.toThrow();
+    expect(await sql`SELECT to_regclass('public.escaped_do') AS name`).toEqual([{ name: null }]);
+    expect(await sql`SELECT version FROM schema_migrations`).toEqual([]);
   });
 
   it("rejects an invalid SQL migration filename", async () => {

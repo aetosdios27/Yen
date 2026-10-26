@@ -4,13 +4,25 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as z from "zod";
 import type { Sql } from "./client.js";
+import { splitSqlStatements } from "./sql-statements.ts";
 
 const defaultDir = fileURLToPath(new URL("../migrations/", import.meta.url));
 const appliedSchema = z.array(
   z.object({ version: z.int().positive(), name: z.string(), checksum: z.string() }),
 );
-const transactionControl =
-  /^[ \t]*(?:START\s+TRANSACTION|PREPARE\s+TRANSACTION|COMMIT\s+PREPARED|ROLLBACK\s+PREPARED|BEGIN|COMMIT|END|ABORT|ROLLBACK|SAVEPOINT|RELEASE)\b/im;
+const transactionControl = new Set([
+  "BEGIN",
+  "COMMIT",
+  "END",
+  "ABORT",
+  "ROLLBACK",
+  "SAVEPOINT",
+  "RELEASE",
+  "START TRANSACTION",
+  "PREPARE TRANSACTION",
+  "COMMIT PREPARED",
+  "ROLLBACK PREPARED",
+]);
 const transactionIdSchema = z.object({ id: z.string() });
 
 async function readMigrations(dir: string) {
@@ -27,8 +39,23 @@ async function readMigrations(dir: string) {
       }
       const bytes = await readFile(join(dir, name));
       const source = bytes.toString("utf8");
-      if (transactionControl.test(source)) {
-        throw new Error(`${name}: migrations run inside the runner's own transaction`);
+      let statements: ReturnType<typeof splitSqlStatements>;
+      try {
+        statements = splitSqlStatements(source);
+      } catch (error) {
+        if (error instanceof Error) throw new Error(`${name}: ${error.message}`, { cause: error });
+        throw error;
+      }
+      for (const statement of statements) {
+        const [first, second] = statement.leadingKeywords;
+        if (
+          (first && transactionControl.has(first)) ||
+          (first && second && transactionControl.has(`${first} ${second}`))
+        ) {
+          throw new Error(
+            `${name}:${statement.line}: migrations run inside the runner's own transaction`,
+          );
+        }
       }
       return {
         version,
