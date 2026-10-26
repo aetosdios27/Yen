@@ -34,6 +34,23 @@ RootRegistry coverage: lines 29/29, branches 8/8
 Deliberately reducing LCOV branch hits to 7 made the checker exit 1 with
 `lines 29/29, branches 7/8`. Restoring the report made it pass.
 
+## Storage packing follow-up (2026-10-27)
+
+`publisher` and `latestSequence` now share slot 0; `pendingPublisher` is in
+slot 1. `testStatePackingSharesSlotZero` checks the slot after deployment, after
+a nonzero pending proposal, and after one publication.
+
+`forge snapshot` gas before and after the reorder (the fuzz row is the mean):
+
+| Test                                          |  Before |   After |
+| --------------------------------------------- | ------: | ------: |
+| `testPublishEmitsAndPreservesHistory`         |  95,527 |  76,428 |
+| `testAllowsRepeatedRootAtDifferentSequences`  |  87,555 |  68,459 |
+| `testFuzzPublishRoundTrip`                    |  90,434 |  71,259 |
+| `testRejectsZeroRootWithoutConsumingSequence` |  65,087 |  46,000 |
+| `testReplayAndOverwriteAreRejected`           |  68,797 |  49,670 |
+| `testSequenceCannotWrap`                      | 398,786 | 375,601 |
+
 ## Local deployment
 
 `bash contracts/script/test-deploy.sh` passed using Anvil in an internal Podman
