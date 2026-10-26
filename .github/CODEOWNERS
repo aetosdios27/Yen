@@ -1,0 +1,7 @@
+# Default owner. Once the second teammate joins, add them here and turn on
+# "require_code_owner_review" in .github/rulesets/main.json.
+*                @aetosdios27
+/.github/        @aetosdios27
+/contracts/      @aetosdios27
+/packages/ledger/   @aetosdios27
+/packages/eventlog/ @aetosdios27

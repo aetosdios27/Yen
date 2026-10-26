@@ -1,0 +1,67 @@
+{
+  "strictness": 2,
+  "commentTypes": ["logic", "syntax", "style"],
+  "autoReview": ["open", "push"],
+  "statusCheck": true,
+  "fixWithAI": true,
+  "ignorePatterns": "pnpm-lock.yaml\n**/dist/**\n**/.next/**\n**/.turbo/**\ncontracts/lib/**\ncontracts/out/**\ncontracts/cache/**",
+  "instructions": "Yen is a transparency platform for community funds in India. Correctness of money, permissions and the tamper-evident event log matters more than style. TypeScript monorepo (pnpm, Turborepo, Biome, Vitest), Postgres, Solidity/Foundry. Money is integer paise. Prefer a few high-signal comments over many nitpicks.",
+  "rules": [
+    {
+      "id": "money-is-paise",
+      "rule": "Money amounts must be integer paise using the Paise branded type from @yen/shared. Flag floating-point arithmetic, parseFloat, or plain number/string used for amounts.",
+      "scope": ["apps/**", "packages/**"],
+      "severity": "high"
+    },
+    {
+      "id": "events-are-append-only",
+      "rule": "Never UPDATE or DELETE rows in fund_events or Konto ledger tables. Event writes must go through appendEvent only.",
+      "severity": "high"
+    },
+    {
+      "id": "ledger-and-event-same-transaction",
+      "rule": "Any code that posts to the ledger must append the matching event in the same database transaction. Flag ledger writes and event appends in separate transactions.",
+      "scope": ["apps/api/**", "packages/ledger/**", "packages/eventlog/**"],
+      "severity": "high"
+    },
+    {
+      "id": "authz-through-can-and-redact",
+      "rule": "Every API route that reads or changes fund data must authorize through can() and shape output through redact(). Flag routes that query fund data directly and return it.",
+      "scope": ["apps/api/**"],
+      "severity": "high"
+    },
+    {
+      "id": "no-pii-in-events-or-logs",
+      "rule": "Event payloads, Merkle leaves, logs, error reports and on-chain data must not contain phone numbers, names, UPI IDs, bank account numbers or OTPs. Use pseudonymous IDs.",
+      "severity": "high"
+    },
+    {
+      "id": "idempotent-money-handlers",
+      "rule": "Money-affecting POST handlers, webhook consumers and background jobs must be idempotent (idempotency key, unique constraint, or dedupe key) and safe to retry or replay.",
+      "scope": ["apps/api/**", "packages/**"],
+      "severity": "high"
+    },
+    {
+      "id": "parse-at-the-boundary",
+      "rule": "External input (HTTP bodies, webhooks, partner payloads, env vars, file uploads) must be validated with zod at the boundary. Flag unchecked casts of external data and any use of any.",
+      "severity": "medium"
+    },
+    {
+      "id": "migrations-forward-only",
+      "rule": "Database migrations must be forward-only, safe on tables with data (no long locks, no destructive drops without a prior release), and must not touch immutable event or ledger tables except to add constraints.",
+      "scope": ["**/migrations/**"],
+      "severity": "medium"
+    },
+    {
+      "id": "plain-language-ui",
+      "rule": "User-facing strings must be translatable (EN and HI) and avoid jargon such as hash, block, ledger, wallet, on-chain. Use plain words like record, proof, account book.",
+      "scope": ["apps/web/**"],
+      "severity": "medium"
+    },
+    {
+      "id": "tests-for-trust-code",
+      "rule": "Changes to money, permission, hashing or approval logic must include tests that would fail if the behavior broke. Flag such changes with no test changes.",
+      "severity": "medium"
+    }
+  ]
+}
