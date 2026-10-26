@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { leafHash, type Result, salt32, toHex } from "@yen/shared";
+import { leafHash, parseFundId, type Result, salt32, toHex } from "@yen/shared";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import * as z from "zod/mini";
@@ -44,7 +44,11 @@ function unwrap<T>(result: Result<T>): T {
 const vectors = vectorSchema.parse(fixture("canonical-vectors.json"));
 const golden = goldenSchema.parse(fixture("golden-events.json"));
 const events = golden.events.map((row) => unwrap(parseEvent(row.event)));
+const firstGoldenEvent = events[0];
+if (firstGoldenEvent === undefined) throw new Error("Missing golden event");
+const fundId = firstGoldenEvent.fund_id;
 const head = chainHead({
+  fundId,
   count: events.length,
   latestHash: events.at(-1)?.hash ?? genesisHash,
 });
@@ -207,6 +211,7 @@ describe("frozen event hashes", () => {
       ok: true,
       count: events.length,
       latestHash: head.latestHash,
+      verifiedAgainst: head,
     });
   });
 
@@ -282,15 +287,86 @@ describe("chain verification", () => {
       { count: -1, latestHash: genesisHash },
       { count: Number.MAX_SAFE_INTEGER + 1, latestHash: genesisHash },
       { count: 0, latestHash: head.latestHash },
+      { fundId: "NOT-A-FUND", count: 0, latestHash: genesisHash },
     ]) {
-      expect(() => chainHead(malformed)).toThrow();
+      expect(() => Reflect.apply(chainHead, undefined, [malformed])).toThrow();
     }
+  });
+
+  it("binds integrity results and observed structure to the fund", async () => {
+    const other = unwrap(parseFundId("00000000-0000-0000-0000-000000000002"));
+    const wrongFundHead = chainHead({
+      fundId: other,
+      count: head.count,
+      latestHash: head.latestHash,
+    });
+    expect(await verifyChain(events, wrongFundHead)).toEqual({
+      ok: false,
+      index: 0,
+      seq: 1,
+      reason: "fund mismatch",
+    });
+    async function* stream(): AsyncIterable<unknown> {
+      yield* events;
+    }
+    expect(await verifyChainStream(stream(), wrongFundHead)).toMatchObject({
+      ok: false,
+      index: 0,
+      reason: "fund mismatch",
+    });
+    expect(await checkChainStructure(events)).toEqual({
+      status: "structure-consistent",
+      observedHead: { fundId, count: head.count, latestHash: head.latestHash },
+    });
+    const first = events[0];
+    if (first === undefined) throw new Error("Missing golden event");
+    const { seq: _seq, prev_hash: _prevHash, hash: _hash, ...input } = first;
+    const otherEvent = await makeNextEvent(null, { ...input, fund_id: other });
+    expect(await checkChainStructure([first, otherEvent])).toEqual({
+      status: "broken",
+      index: 1,
+      seq: 1,
+      reason: "fund mismatch",
+    });
+    expect(await verifyChain([first, otherEvent], head)).toEqual({
+      ok: false,
+      index: 1,
+      seq: 1,
+      reason: "fund mismatch",
+    });
+    async function* mixedStream(): AsyncIterable<unknown> {
+      yield first;
+      yield otherEvent;
+    }
+    expect(await checkChainStructureStream(mixedStream())).toMatchObject({
+      status: "broken",
+      index: 1,
+      reason: "fund mismatch",
+    });
+    const emptyHead = chainHead({ fundId: other, count: 0, latestHash: genesisHash });
+    expect(await verifyChain([], emptyHead)).toEqual({
+      ok: true,
+      count: 0,
+      latestHash: genesisHash,
+      verifiedAgainst: emptyHead,
+    });
+    expect(await checkChainStructure([])).toEqual({
+      status: "structure-consistent",
+      observedHead: { fundId: null, count: 0, latestHash: genesisHash },
+    });
+  });
+
+  it("cannot treat a structure result as a verified result", async () => {
+    const result = await checkChainStructure([]);
+    // @ts-expect-error A structure result cannot authorize a verified badge.
+    if (result.ok) throw new Error("A structure result exposed ok");
+    expect(result.status).toBe("structure-consistent");
   });
 
   it("stops at the first extra event and closes the stream", async () => {
     const first = events[0];
     if (first === undefined) throw new Error("Missing golden event");
-    const oneHead = chainHead({ count: 1, latestHash: first.hash });
+    const oneHead = chainHead({ fundId, count: 1, latestHash: first.hash });
     const expected = { ok: false, index: 1, seq: 2, reason: "unexpected events" };
     const second = events[1];
     if (second === undefined) throw new Error("Missing golden event");
@@ -323,6 +399,7 @@ describe("chain verification", () => {
   it.each([0, 1, 3])("reports the first extra event at zero-based index %i", async (count) => {
     const prefix = events.slice(0, count);
     const expectedHead = chainHead({
+      fundId,
       count,
       latestHash: prefix.at(-1)?.hash ?? genesisHash,
     });
@@ -345,7 +422,10 @@ describe("chain verification", () => {
         structureClosed = true;
       }
     }
-    expect(await checkChainStructureStream(invalid())).toMatchObject({ ok: false, index: 0 });
+    expect(await checkChainStructureStream(invalid())).toMatchObject({
+      status: "broken",
+      index: 0,
+    });
     expect(structureClosed).toBe(true);
 
     let syncStructureClosed = false;
@@ -357,7 +437,10 @@ describe("chain verification", () => {
         syncStructureClosed = true;
       }
     }
-    expect(await checkChainStructure(invalidSync())).toMatchObject({ ok: false, index: 0 });
+    expect(await checkChainStructure(invalidSync())).toMatchObject({
+      status: "broken",
+      index: 0,
+    });
     expect(syncStructureClosed).toBe(true);
 
     let errorClosed = false;
@@ -462,21 +545,55 @@ describe("chain verification", () => {
     expect(syncReturns).toBe(1);
   });
 
-  it.each(["envelope", "payload"])("rejects raw %s fields that normalization would drop", async (level) => {
+  it.each(["envelope", "payload"])(
+    "rejects raw %s fields that normalization would drop",
+    async (level) => {
+      const first = events[0];
+      if (first === undefined) throw new Error("Missing golden event");
+      for (const kind of ["hidden", "symbol", "getter"]) {
+        const raw = { ...first, payload: { ...first.payload } };
+        const target = level === "envelope" ? raw : raw.payload;
+        if (kind === "hidden") Object.defineProperty(target, "hidden", { value: true });
+        if (kind === "symbol") Object.defineProperty(target, Symbol("hidden"), { value: true });
+        if (kind === "getter") {
+          Object.defineProperty(target, "hidden", { enumerable: true, get: () => true });
+        }
+        expect(parseEvent(raw).ok, `${level} ${kind}`).toBe(false);
+        expect(
+          await verifyChain([raw], chainHead({ fundId, count: 1, latestHash: first.hash })),
+        ).toMatchObject({
+          ok: false,
+          index: 0,
+        });
+      }
+    },
+  );
+
+  it("rejects accessors on known envelope and payload fields before reading them", async () => {
     const first = events[0];
     if (first === undefined) throw new Error("Missing golden event");
-    for (const kind of ["hidden", "symbol", "getter"] as const) {
-      const raw = { ...first, payload: { ...first.payload } };
-      const target = level === "envelope" ? raw : raw.payload;
-      if (kind === "hidden") Object.defineProperty(target, "hidden", { value: true });
-      if (kind === "symbol") Object.defineProperty(target, Symbol("hidden"), { value: true });
-      if (kind === "getter") {
-        Object.defineProperty(target, "hidden", { enumerable: true, get: () => true });
-      }
-      expect(parseEvent(raw).ok, `${level} ${kind}`).toBe(false);
-      expect(await verifyChain([raw], chainHead({ count: 1, latestHash: first.hash }))).toMatchObject({
+    const envelope = { ...first };
+    Object.defineProperty(envelope, "type", {
+      enumerable: true,
+      get() {
+        throw new Error("envelope getter ran");
+      },
+    });
+    const payload = { ...first, payload: { ...first.payload } };
+    Object.defineProperty(payload.payload, "visibility", {
+      enumerable: true,
+      get() {
+        throw new Error("payload getter ran");
+      },
+    });
+    for (const raw of [envelope, payload]) {
+      expect(parseEvent(raw).ok).toBe(false);
+      expect(
+        await verifyChain([raw], chainHead({ fundId, count: 1, latestHash: first.hash })),
+      ).toMatchObject({
         ok: false,
         index: 0,
+        reason: "bad envelope",
       });
     }
   });
@@ -516,6 +633,7 @@ describe("chain verification", () => {
     }
     const shorter = events.slice(0, -1);
     const shortHead = chainHead({
+      fundId,
       count: shorter.length,
       latestHash: shorter.at(-1)?.hash ?? genesisHash,
     });
@@ -558,26 +676,26 @@ describe("chain verification", () => {
         reason,
       });
     }
-    const emptyHead = chainHead({ count: 0, latestHash: genesisHash });
+    const emptyHead = chainHead({ fundId, count: 0, latestHash: genesisHash });
     expect(await verifyChain([], emptyHead)).toEqual({
       ok: true,
       count: 0,
       latestHash: genesisHash,
+      verifiedAgainst: emptyHead,
     });
     expect(await verifyChainStream(stream([]), emptyHead)).toEqual({
       ok: true,
       count: 0,
       latestHash: genesisHash,
+      verifiedAgainst: emptyHead,
     });
     expect(await checkChainStructure(shorter)).toEqual({
-      ok: true,
-      kind: "structure-only",
-      observedHead: { count: shortHead.count, latestHash: shortHead.latestHash },
+      status: "structure-consistent",
+      observedHead: { fundId, count: shortHead.count, latestHash: shortHead.latestHash },
     });
     expect(await checkChainStructureStream(stream(shorter))).toEqual({
-      ok: true,
-      kind: "structure-only",
-      observedHead: { count: shortHead.count, latestHash: shortHead.latestHash },
+      status: "structure-consistent",
+      observedHead: { fundId, count: shortHead.count, latestHash: shortHead.latestHash },
     });
   });
   it("detects a changed field at that event or its successor", async () => {
@@ -686,6 +804,7 @@ describe("chain verification", () => {
       ok: true,
       count: events.length,
       latestHash: head.latestHash,
+      verifiedAgainst: head,
     });
     const badVersion: unknown[] = [...events];
     badVersion[2] = { ...events[2], version: 2 };

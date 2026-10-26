@@ -1,4 +1,14 @@
-import { fromHex, type Hash32, hash32, leafHash, type Salt32, sha256, toHex } from "@yen/shared";
+import {
+  type FundId,
+  fromHex,
+  fundIdSchema,
+  type Hash32,
+  hash32,
+  leafHash,
+  type Salt32,
+  sha256,
+  toHex,
+} from "@yen/shared";
 import * as z from "zod/mini";
 import { canonicalize } from "./canonical.js";
 import {
@@ -66,43 +76,78 @@ export type ChainBreakReason =
   | "non-monotonic time"
   | "non-UTC time"
   | "truncation"
-  | "unexpected events";
+  | "unexpected events"
+  | "fund mismatch";
 
 const chainHeadSchema = z
   .strictObject({
+    fundId: fundIdSchema,
     count: z.int().check(z.minimum(0), z.maximum(Number.MAX_SAFE_INTEGER)),
     latestHash: hashHexSchema,
   })
   .check(z.refine(({ count, latestHash }) => count !== 0 || latestHash === genesisHash))
   .brand<"ChainHead">();
 export type ChainHead = z.infer<typeof chainHeadSchema>;
-export type ObservedChainHead = Readonly<{ count: number; latestHash: EventHashHex }>;
+export type ObservedChainHead = Readonly<{
+  fundId: string | null;
+  count: number;
+  latestHash: EventHashHex;
+}>;
 
-export function chainHead(input: unknown): ChainHead {
+export function chainHead(
+  input: Readonly<{ fundId: FundId; count: number; latestHash: EventHashHex }>,
+): ChainHead {
   return chainHeadSchema.parse(input);
 }
 
-type ChainBreak = {
-  readonly ok: false;
+type ChainBreakDetails = {
+  /** Zero-based position in the supplied sequence, while seq is one-based. */
   readonly index: number;
+  /** One-based event sequence, or null if the event has no valid sequence. */
   readonly seq: number | null;
   readonly reason: ChainBreakReason;
 };
+type ChainBreak = ChainBreakDetails & { readonly ok: false };
+type ChainStructureBreak = ChainBreakDetails & { readonly status: "broken" };
 
 export type ChainVerification =
-  | { readonly ok: true; readonly count: number; readonly latestHash: EventHashHex }
+  | {
+      readonly ok: true;
+      readonly count: number;
+      readonly latestHash: EventHashHex;
+      readonly verifiedAgainst: ChainHead;
+    }
   | ChainBreak;
 export type ChainStructureCheck =
-  | { readonly ok: true; readonly kind: "structure-only"; readonly observedHead: ObservedChainHead }
-  | ChainBreak;
+  | { readonly status: "structure-consistent"; readonly observedHead: ObservedChainHead }
+  | ChainStructureBreak;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+async function closeAsyncIterator(
+  iterator: AsyncIterator<unknown>,
+  sourceFailed: boolean,
+): Promise<void> {
+  try {
+    await iterator.return?.();
+  } catch (error) {
+    if (!sourceFailed) throw error;
+  }
+}
+
+function closeSyncIterator(iterator: Iterator<unknown>, sourceFailed: boolean): void {
+  try {
+    iterator.return?.();
+  } catch (error) {
+    if (!sourceFailed) throw error;
+  }
+}
+
 async function scanChainStructureStream(
   events: AsyncIterable<unknown>,
-  expectedCount?: number,
+  expected?: ChainHead,
 ): Promise<ChainStructureCheck> {
   let count = 0;
   let previous: Event | null = null;
@@ -116,22 +161,28 @@ async function scanChainStructureStream(
         exhausted = true;
         break;
       }
-      if (expectedCount !== undefined && count >= expectedCount) {
-        return { ok: false, index: count, seq: count + 1, reason: "unexpected events" };
-      }
       const raw = next.value;
       const index = count;
+      const seqDescriptor = isRecord(raw) ? Object.getOwnPropertyDescriptor(raw, "seq") : undefined;
       const rawSeq =
-        isRecord(raw) && typeof raw.seq === "number" && Number.isSafeInteger(raw.seq)
-          ? raw.seq
+        seqDescriptor !== undefined &&
+        "value" in seqDescriptor &&
+        typeof seqDescriptor.value === "number" &&
+        Number.isSafeInteger(seqDescriptor.value)
+          ? seqDescriptor.value
           : null;
-      const broken = (reason: ChainBreakReason): ChainBreak => ({
-        ok: false,
+      const broken = (reason: ChainBreakReason): ChainStructureBreak => ({
+        status: "broken",
         index,
         seq: rawSeq,
         reason,
       });
       if (!isRecord(raw)) return broken("bad envelope");
+      try {
+        canonicalize(raw);
+      } catch {
+        return broken("bad envelope");
+      }
       if (
         typeof raw.type !== "string" ||
         !Object.hasOwn(payloadSchemas, raw.type) ||
@@ -143,7 +194,10 @@ async function scanChainStructureStream(
       const parsed = parseEvent(raw);
       if (!parsed.ok) return broken("bad envelope");
       const event = parsed.value;
-      if (previous !== null && event.fund_id !== previous.fund_id) return broken("bad envelope");
+      if (expected !== undefined && event.fund_id !== expected.fundId)
+        return broken("fund mismatch");
+      if (previous !== null && event.fund_id !== previous.fund_id) return broken("fund mismatch");
+      if (expected !== undefined && count >= expected.count) return broken("unexpected events");
       if (event.seq !== index + 1) return broken("gap");
       if (event.prev_hash !== (previous === null ? genesisHash : previous.hash))
         return broken("wrong prev_hash");
@@ -158,16 +212,13 @@ async function scanChainStructureStream(
     sourceFailed = true;
     throw error;
   } finally {
-    if (!exhausted) {
-      try {
-        await iterator.return?.();
-      } catch (error) {
-        if (!sourceFailed) throw error;
-      }
-    }
+    if (!exhausted) await closeAsyncIterator(iterator, sourceFailed);
   }
   const latestHash = previous === null ? genesisHash : previous.hash;
-  return { ok: true, kind: "structure-only", observedHead: { count, latestHash } };
+  return {
+    status: "structure-consistent",
+    observedHead: { fundId: previous?.fund_id ?? null, count, latestHash },
+  };
 }
 
 export async function checkChainStructureStream(
@@ -193,13 +244,7 @@ async function* asAsync(events: Iterable<unknown>): AsyncIterable<unknown> {
     sourceFailed = true;
     throw error;
   } finally {
-    if (!exhausted) {
-      try {
-        iterator.return?.();
-      } catch (error) {
-        if (!sourceFailed) throw error;
-      }
-    }
+    if (!exhausted) closeSyncIterator(iterator, sourceFailed);
   }
 }
 
@@ -212,8 +257,10 @@ export async function verifyChainStream(
   expected: ChainHead,
 ): Promise<ChainVerification> {
   const authenticated = chainHead(expected);
-  const result = await scanChainStructureStream(events, authenticated.count);
-  if (!result.ok) return result;
+  const result = await scanChainStructureStream(events, authenticated);
+  if (result.status === "broken") {
+    return { ok: false, index: result.index, seq: result.seq, reason: result.reason };
+  }
   const { count, latestHash } = result.observedHead;
   if (count < authenticated.count) {
     return { ok: false, index: count, seq: count + 1, reason: "truncation" };
@@ -221,7 +268,7 @@ export async function verifyChainStream(
   if (latestHash !== authenticated.latestHash) {
     return { ok: false, index: count, seq: count, reason: "wrong hash" };
   }
-  return { ok: true, count, latestHash };
+  return { ok: true, count, latestHash, verifiedAgainst: authenticated };
 }
 
 export async function verifyChain(
