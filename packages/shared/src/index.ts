@@ -37,3 +37,8 @@ export {
 } from "./merkle/tree.js";
 export { addPaise, formatInr, type Paise, paise } from "./paise.js";
 export { paiseWire } from "./paise-wire.js";
+export {
+  type RootRegistryAddress,
+  rootRegistryAbi,
+  rootRegistryAddress,
+} from "./registry/abi.js";
