@@ -1,7 +1,7 @@
 export {
   type FundId,
-  type OrgId,
   fundIdSchema,
+  type OrgId,
   orgIdSchema,
   parseFundId,
   parseOrgId,
