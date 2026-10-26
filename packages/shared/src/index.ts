@@ -33,3 +33,4 @@ export {
   verifyInclusion,
 } from "./merkle/tree.js";
 export { addPaise, formatInr, type Paise, paise } from "./paise.js";
+export { paiseWire } from "./paise-wire.js";
