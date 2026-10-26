@@ -4,7 +4,7 @@ export {
   type ChainHead,
   type ChainStructureCheck,
   type ChainVerification,
-  chainHeadSchema,
+  chainHead,
   checkChainStructure,
   checkChainStructureStream,
   computeEventHash,
@@ -13,6 +13,7 @@ export {
   eventLeafHash,
   genesisHash,
   makeNextEvent,
+  type ObservedChainHead,
   verifyChain,
   verifyChainStream,
 } from "./chain.js";

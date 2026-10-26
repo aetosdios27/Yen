@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import * as z from "zod/mini";
 import {
   canonicalize,
-  chainHeadSchema,
+  chainHead,
   checkChainStructure,
   checkChainStructureStream,
   computeEventHash,
@@ -44,7 +44,7 @@ function unwrap<T>(result: Result<T>): T {
 const vectors = vectorSchema.parse(fixture("canonical-vectors.json"));
 const golden = goldenSchema.parse(fixture("golden-events.json"));
 const events = golden.events.map((row) => unwrap(parseEvent(row.event)));
-const head = chainHeadSchema.parse({
+const head = chainHead({
   count: events.length,
   latestHash: events.at(-1)?.hash ?? genesisHash,
 });
@@ -263,6 +263,110 @@ function tamperField(event: Event, fieldIndex: number): unknown {
 }
 
 describe("chain verification", () => {
+  it("rejects malformed authenticated heads at runtime", async () => {
+    for (const malformed of [
+      { count: "1", latestHash: head.latestHash },
+      { count: 1, latestHash: "00" },
+    ]) {
+      await expect(Reflect.apply(verifyChain, undefined, [events, malformed])).rejects.toThrow();
+      await expect(
+        Reflect.apply(verifyChainStream, undefined, [
+          (async function* () {
+            yield* events;
+          })(),
+          malformed,
+        ]),
+      ).rejects.toThrow();
+    }
+    for (const malformed of [
+      { count: -1, latestHash: genesisHash },
+      { count: Number.MAX_SAFE_INTEGER + 1, latestHash: genesisHash },
+      { count: 0, latestHash: head.latestHash },
+    ]) {
+      expect(() => chainHead(malformed)).toThrow();
+    }
+  });
+
+  it("stops at the first extra event and closes the stream", async () => {
+    const first = events[0];
+    if (first === undefined) throw new Error("Missing golden event");
+    const oneHead = chainHead({ count: 1, latestHash: first.hash });
+    const expected = { ok: false, index: 1, seq: 2, reason: "unexpected events" };
+    const second = events[1];
+    if (second === undefined) throw new Error("Missing golden event");
+    expect(await verifyChain([first, second], oneHead)).toEqual(expected);
+    let closed = false;
+    async function* infinite(): AsyncIterable<unknown> {
+      try {
+        yield first;
+        while (true) yield second;
+      } finally {
+        closed = true;
+      }
+    }
+    expect(await verifyChainStream(infinite(), oneHead)).toEqual(expected);
+    expect(closed).toBe(true);
+
+    let syncClosed = false;
+    function* sync(): Iterable<unknown> {
+      try {
+        yield first;
+        while (true) yield second;
+      } finally {
+        syncClosed = true;
+      }
+    }
+    expect(await verifyChain(sync(), oneHead)).toEqual(expected);
+    expect(syncClosed).toBe(true);
+  });
+
+  it("closes iterators after a failed event or a thrown next call", async () => {
+    let structureClosed = false;
+    async function* invalid(): AsyncIterable<unknown> {
+      try {
+        yield { invalid: true };
+        yield events[0];
+      } finally {
+        structureClosed = true;
+      }
+    }
+    expect(await checkChainStructureStream(invalid())).toMatchObject({ ok: false, index: 0 });
+    expect(structureClosed).toBe(true);
+
+    let syncStructureClosed = false;
+    function* invalidSync(): Iterable<unknown> {
+      try {
+        yield { invalid: true };
+        yield events[0];
+      } finally {
+        syncStructureClosed = true;
+      }
+    }
+    expect(await checkChainStructure(invalidSync())).toMatchObject({ ok: false, index: 0 });
+    expect(syncStructureClosed).toBe(true);
+
+    let errorClosed = false;
+    const failed = {
+      [Symbol.asyncIterator]() {
+        let count = 0;
+        return {
+          async next(): Promise<IteratorResult<unknown>> {
+            if (count++ === 0) return { done: false, value: events[0] };
+            throw new Error("source failed");
+          },
+          async return(): Promise<IteratorResult<unknown>> {
+            errorClosed = true;
+            return { done: true, value: undefined };
+          },
+        };
+      },
+    };
+    await expect(checkChainStructureStream(failed)).rejects.toThrow("source failed");
+    expect(errorClosed).toBe(true);
+    errorClosed = false;
+    await expect(verifyChainStream(failed, head)).rejects.toThrow("source failed");
+    expect(errorClosed).toBe(true);
+  });
   it("requires the same canonical pseudonym ID for actors and member references", () => {
     const first = events[0];
     const added = events.find((event) => event.type === "member.added");
@@ -298,7 +402,7 @@ describe("chain verification", () => {
       yield* values;
     }
     const shorter = events.slice(0, -1);
-    const shortHead = chainHeadSchema.parse({
+    const shortHead = chainHead({
       count: shorter.length,
       latestHash: shorter.at(-1)?.hash ?? genesisHash,
     });
@@ -318,26 +422,21 @@ describe("chain verification", () => {
       { values: events, expected: shortHead, reason: "unexpected events" },
       {
         values: events,
-        expected: chainHeadSchema.parse({ ...head, latestHash: genesisHash }),
+        expected: chainHead({ ...head, latestHash: genesisHash }),
         reason: "wrong hash",
       },
       {
         values: events,
-        expected: chainHeadSchema.parse({ ...head, count: head.count + 1 }),
+        expected: chainHead({ ...head, count: head.count + 1 }),
         reason: "truncation",
       },
       {
         values: events,
-        expected: chainHeadSchema.parse({ ...head, count: head.count - 1 }),
+        expected: chainHead({ ...head, count: head.count - 1 }),
         reason: "unexpected events",
       },
       { values: [...events, extra], expected: head, reason: "unexpected events" },
       { values: [], expected: head, reason: "truncation" },
-      {
-        values: [],
-        expected: chainHeadSchema.parse({ count: 0, latestHash: first.hash }),
-        reason: "truncation",
-      },
     ];
     for (const { values, expected, reason } of cases) {
       expect(await verifyChain(values, expected)).toMatchObject({ ok: false, reason });
@@ -346,7 +445,7 @@ describe("chain verification", () => {
         reason,
       });
     }
-    const emptyHead = chainHeadSchema.parse({ count: 0, latestHash: genesisHash });
+    const emptyHead = chainHead({ count: 0, latestHash: genesisHash });
     expect(await verifyChain([], emptyHead)).toEqual({
       ok: true,
       count: 0,
@@ -360,12 +459,12 @@ describe("chain verification", () => {
     expect(await checkChainStructure(shorter)).toEqual({
       ok: true,
       kind: "structure-only",
-      head: shortHead,
+      observedHead: { count: shortHead.count, latestHash: shortHead.latestHash },
     });
     expect(await checkChainStructureStream(stream(shorter))).toEqual({
       ok: true,
       kind: "structure-only",
-      head: shortHead,
+      observedHead: { count: shortHead.count, latestHash: shortHead.latestHash },
     });
   });
   it("detects a changed field at that event or its successor", async () => {

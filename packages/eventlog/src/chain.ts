@@ -68,13 +68,19 @@ export type ChainBreakReason =
   | "truncation"
   | "unexpected events";
 
-export const chainHeadSchema = z
+const chainHeadSchema = z
   .strictObject({
     count: z.int().check(z.minimum(0), z.maximum(Number.MAX_SAFE_INTEGER)),
     latestHash: hashHexSchema,
   })
+  .check(z.refine(({ count, latestHash }) => count !== 0 || latestHash === genesisHash))
   .brand<"ChainHead">();
 export type ChainHead = z.infer<typeof chainHeadSchema>;
+export type ObservedChainHead = Readonly<{ count: number; latestHash: EventHashHex }>;
+
+export function chainHead(input: unknown): ChainHead {
+  return chainHeadSchema.parse(input);
+}
 
 type ChainBreak = {
   readonly ok: false;
@@ -87,78 +93,112 @@ export type ChainVerification =
   | { readonly ok: true; readonly count: number; readonly latestHash: EventHashHex }
   | ChainBreak;
 export type ChainStructureCheck =
-  | { readonly ok: true; readonly kind: "structure-only"; readonly head: ChainHead }
+  | { readonly ok: true; readonly kind: "structure-only"; readonly observedHead: ObservedChainHead }
   | ChainBreak;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export async function checkChainStructureStream(
+async function scanChainStructureStream(
   events: AsyncIterable<unknown>,
+  expectedCount?: number,
 ): Promise<ChainStructureCheck> {
   let count = 0;
   let previous: Event | null = null;
-  for await (const raw of events) {
-    const index = count;
-    const rawSeq =
-      isRecord(raw) && typeof raw.seq === "number" && Number.isSafeInteger(raw.seq)
-        ? raw.seq
-        : null;
-    const broken = (reason: ChainBreakReason): ChainBreak => ({
-      ok: false,
-      index,
-      seq: rawSeq,
-      reason,
-    });
-    if (!isRecord(raw)) return broken("bad envelope");
-    if (
-      typeof raw.type !== "string" ||
-      !Object.hasOwn(payloadSchemas, raw.type) ||
-      raw.version !== 1
-    ) {
-      return broken("unknown type/version");
+  const iterator = events[Symbol.asyncIterator]();
+  let exhausted = false;
+  try {
+    while (true) {
+      const next = await iterator.next();
+      if (next.done) {
+        exhausted = true;
+        break;
+      }
+      if (expectedCount !== undefined && count >= expectedCount) {
+        return { ok: false, index: count, seq: count + 1, reason: "unexpected events" };
+      }
+      const raw = next.value;
+      const index = count;
+      const rawSeq =
+        isRecord(raw) && typeof raw.seq === "number" && Number.isSafeInteger(raw.seq)
+          ? raw.seq
+          : null;
+      const broken = (reason: ChainBreakReason): ChainBreak => ({
+        ok: false,
+        index,
+        seq: rawSeq,
+        reason,
+      });
+      if (!isRecord(raw)) return broken("bad envelope");
+      if (
+        typeof raw.type !== "string" ||
+        !Object.hasOwn(payloadSchemas, raw.type) ||
+        raw.version !== 1
+      ) {
+        return broken("unknown type/version");
+      }
+      if (!isUtcEventTime(raw.occurred_at)) return broken("non-UTC time");
+      const parsed = parseEvent(raw);
+      if (!parsed.ok) return broken("bad envelope");
+      const event = parsed.value;
+      if (previous !== null && event.fund_id !== previous.fund_id) return broken("bad envelope");
+      if (event.seq !== index + 1) return broken("gap");
+      if (event.prev_hash !== (previous === null ? genesisHash : previous.hash))
+        return broken("wrong prev_hash");
+      if (previous !== null && event.occurred_at < previous.occurred_at)
+        return broken("non-monotonic time");
+      const { hash, ...envelope } = event;
+      if (hash !== (await computeEventHash(envelope))) return broken("wrong hash");
+      previous = event;
+      count++;
     }
-    if (!isUtcEventTime(raw.occurred_at)) return broken("non-UTC time");
-    const parsed = parseEvent(raw);
-    if (!parsed.ok) return broken("bad envelope");
-    const event = parsed.value;
-    if (previous !== null && event.fund_id !== previous.fund_id) return broken("bad envelope");
-    if (event.seq !== index + 1) return broken("gap");
-    if (event.prev_hash !== (previous === null ? genesisHash : previous.hash))
-      return broken("wrong prev_hash");
-    if (previous !== null && event.occurred_at < previous.occurred_at)
-      return broken("non-monotonic time");
-    const { hash, ...envelope } = event;
-    if (hash !== (await computeEventHash(envelope))) return broken("wrong hash");
-    previous = event;
-    count++;
+  } finally {
+    if (!exhausted) await iterator.return?.();
   }
   const latestHash = previous === null ? genesisHash : previous.hash;
-  return { ok: true, kind: "structure-only", head: chainHeadSchema.parse({ count, latestHash }) };
+  return { ok: true, kind: "structure-only", observedHead: { count, latestHash } };
+}
+
+export async function checkChainStructureStream(
+  events: AsyncIterable<unknown>,
+): Promise<ChainStructureCheck> {
+  return scanChainStructureStream(events);
+}
+
+async function* asAsync(events: Iterable<unknown>): AsyncIterable<unknown> {
+  const iterator = events[Symbol.iterator]();
+  let exhausted = false;
+  try {
+    while (true) {
+      const next = iterator.next();
+      if (next.done) {
+        exhausted = true;
+        return;
+      }
+      yield next.value;
+    }
+  } finally {
+    if (!exhausted) iterator.return?.();
+  }
 }
 
 export async function checkChainStructure(events: Iterable<unknown>): Promise<ChainStructureCheck> {
-  async function* stream(): AsyncIterable<unknown> {
-    yield* events;
-  }
-  return checkChainStructureStream(stream());
+  return checkChainStructureStream(asAsync(events));
 }
 
 export async function verifyChainStream(
   events: AsyncIterable<unknown>,
   expected: ChainHead,
 ): Promise<ChainVerification> {
-  const result = await checkChainStructureStream(events);
+  const authenticated = chainHead(expected);
+  const result = await scanChainStructureStream(events, authenticated.count);
   if (!result.ok) return result;
-  const { count, latestHash } = result.head;
-  if (count < expected.count || (count === 0 && latestHash !== expected.latestHash)) {
+  const { count, latestHash } = result.observedHead;
+  if (count < authenticated.count) {
     return { ok: false, index: count, seq: count + 1, reason: "truncation" };
   }
-  if (count > expected.count) {
-    return { ok: false, index: count, seq: count + 1, reason: "unexpected events" };
-  }
-  if (latestHash !== expected.latestHash) {
+  if (latestHash !== authenticated.latestHash) {
     return { ok: false, index: count, seq: count, reason: "wrong hash" };
   }
   return { ok: true, count, latestHash };
@@ -168,8 +208,5 @@ export async function verifyChain(
   events: Iterable<unknown>,
   expected: ChainHead,
 ): Promise<ChainVerification> {
-  async function* stream(): AsyncIterable<unknown> {
-    yield* events;
-  }
-  return verifyChainStream(stream(), expected);
+  return verifyChainStream(asAsync(events), expected);
 }
