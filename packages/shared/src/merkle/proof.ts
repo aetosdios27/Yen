@@ -1,8 +1,11 @@
+import * as z from "zod/mini";
 import { fromHex, type Hash32, hash32, type Salt32, salt32, toHex } from "./hash.js";
 import type { InclusionProof } from "./tree.js";
 
 declare const fundIdBrand: unique symbol;
 const eventProofBrand = Symbol("EventProof");
+const fundIdPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
+const hex32Pattern = /^[0-9a-f]{64}$/;
 
 export type FundId = string & { readonly [fundIdBrand]: "FundId" };
 export type Result<T> =
@@ -26,7 +29,7 @@ export function createEventProof(fields: EventProofFields): EventProof {
 }
 
 function isFundId(input: unknown): input is FundId {
-  return typeof input === "string" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(input);
+  return typeof input === "string" && fundIdPattern.test(input);
 }
 
 export function parseFundId(input: unknown): Result<FundId> {
@@ -36,7 +39,7 @@ export function parseFundId(input: unknown): Result<FundId> {
 }
 
 function hex32(input: unknown): Result<Uint8Array> {
-  return typeof input === "string" && /^[0-9a-f]{64}$/.test(input)
+  return typeof input === "string" && hex32Pattern.test(input)
     ? { ok: true, value: fromHex(input) }
     : { ok: false, error: "Expected 32 bytes encoded as lowercase hex" };
 }
@@ -49,16 +52,6 @@ export function parseHash32(input: unknown): Result<Hash32> {
 export function parseSalt32(input: unknown): Result<Salt32> {
   const parsed = hex32(input);
   return parsed.ok ? { ok: true, value: salt32(parsed.value) } : parsed;
-}
-
-function isRecord(input: unknown): input is Record<string, unknown> {
-  return typeof input === "object" && input !== null && !Array.isArray(input);
-}
-
-function hasKeys(input: Record<string, unknown>, keys: readonly string[]): boolean {
-  return (
-    Object.keys(input).length === keys.length && keys.every((key) => Object.hasOwn(input, key))
-  );
 }
 
 function pathLength(index: number, size: number): number {
@@ -76,70 +69,59 @@ function pathLength(index: number, size: number): number {
   return length;
 }
 
+const hex32Schema = z.string().check(z.regex(hex32Pattern));
+const fundIdSchema = z.string().check(z.regex(fundIdPattern));
+const nonnegativeSafeIntegerSchema = z.int().check(z.nonnegative());
+const inclusionProofSchema = z
+  .strictObject({
+    index: nonnegativeSafeIntegerSchema,
+    size: nonnegativeSafeIntegerSchema,
+    path: z.array(hex32Schema),
+  })
+  .check(
+    z.refine(({ index, size, path }) => index < size && path.length === pathLength(index, size)),
+  );
+const eventProofSchema = z.strictObject({
+  format: z.literal("yen/event-proof/v1"),
+  salt: hex32Schema,
+  eventHash: hex32Schema,
+  eventProof: inclusionProofSchema,
+  fundId: fundIdSchema,
+  latestEventHash: hex32Schema,
+  fundProof: inclusionProofSchema,
+});
+
+function checkedInclusionProof(proof: z.infer<typeof inclusionProofSchema>): InclusionProof {
+  return {
+    index: proof.index,
+    size: proof.size,
+    path: proof.path.map((hex) => hash32(fromHex(hex))),
+  };
+}
+
 export function parseInclusionProof(input: unknown): Result<InclusionProof> {
-  if (!isRecord(input) || !hasKeys(input, ["index", "size", "path"])) {
-    return { ok: false, error: "Expected index, size and path" };
-  }
-  const { index, size, path } = input;
-  if (
-    typeof index !== "number" ||
-    typeof size !== "number" ||
-    !Number.isSafeInteger(index) ||
-    !Number.isSafeInteger(size) ||
-    index < 0 ||
-    index >= size ||
-    !Array.isArray(path) ||
-    path.length !== pathLength(index, size)
-  ) {
-    return { ok: false, error: "Invalid inclusion proof position or path length" };
-  }
-  const hashes: Hash32[] = [];
-  for (const element of path) {
-    const parsed = parseHash32(element);
-    if (!parsed.ok) return parsed;
-    hashes.push(parsed.value);
-  }
-  return { ok: true, value: { index, size, path: hashes } };
+  const parsed = inclusionProofSchema.safeParse(input);
+  return parsed.success
+    ? { ok: true, value: checkedInclusionProof(parsed.data) }
+    : { ok: false, error: "Invalid inclusion proof" };
 }
 
 export function parseEventProof(input: unknown): Result<EventProof> {
-  if (
-    !isRecord(input) ||
-    !hasKeys(input, [
-      "format",
-      "salt",
-      "eventHash",
-      "eventProof",
-      "fundId",
-      "latestEventHash",
-      "fundProof",
-    ]) ||
-    input.format !== "yen/event-proof/v1"
-  ) {
+  const parsed = eventProofSchema.safeParse(input);
+  if (!parsed.success) {
     return { ok: false, error: "Expected a yen/event-proof/v1 bundle" };
   }
-  const salt = parseSalt32(input.salt);
-  if (!salt.ok) return salt;
-  const eventHash = parseHash32(input.eventHash);
-  if (!eventHash.ok) return eventHash;
-  const eventProof = parseInclusionProof(input.eventProof);
-  if (!eventProof.ok) return eventProof;
-  const fundId = parseFundId(input.fundId);
-  if (!fundId.ok) return fundId;
-  const latestEventHash = parseHash32(input.latestEventHash);
-  if (!latestEventHash.ok) return latestEventHash;
-  const fundProof = parseInclusionProof(input.fundProof);
-  if (!fundProof.ok) return fundProof;
+  const bundle = parsed.data;
   return {
     ok: true,
     value: createEventProof({
-      format: input.format,
-      salt: salt.value,
-      eventHash: eventHash.value,
-      eventProof: eventProof.value,
-      fundId: fundId.value,
-      latestEventHash: latestEventHash.value,
-      fundProof: fundProof.value,
+      format: bundle.format,
+      salt: salt32(fromHex(bundle.salt)),
+      eventHash: hash32(fromHex(bundle.eventHash)),
+      eventProof: checkedInclusionProof(bundle.eventProof),
+      fundId: bundle.fundId as FundId,
+      latestEventHash: hash32(fromHex(bundle.latestEventHash)),
+      fundProof: checkedInclusionProof(bundle.fundProof),
     }),
   };
 }

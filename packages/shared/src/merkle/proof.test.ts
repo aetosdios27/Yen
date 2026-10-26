@@ -53,6 +53,10 @@ describe("untrusted proof boundary", () => {
     expect(parseEventProof(value).ok).toBe(false);
   });
 
+  it("rejects unknown keys in proof JSON", () => {
+    expect(parseEventProofJson(JSON.stringify({ ...wire, extra: 1 })).ok).toBe(false);
+  });
+
   it("requires every bundle field and both inclusion levels", () => {
     for (const key of Object.keys(wire)) {
       const partial: Record<string, unknown> = { ...wire };
