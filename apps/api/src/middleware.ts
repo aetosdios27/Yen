@@ -104,18 +104,27 @@ export function idempotency(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
       c.header("idempotent-replayed", "true");
       return;
     }
-    await next();
-    await deps.idempotencyStore.complete(request, {
-      status: c.res.status,
-      headers: [...c.res.headers],
-      bodyBase64:
-        c.res.body === null
-          ? null
-          : btoa(
-              Array.from(new Uint8Array(await c.res.clone().arrayBuffer()), (byte) =>
-                String.fromCharCode(byte),
-              ).join(""),
-            ),
-    });
+    try {
+      await next();
+      if (c.res.status >= 500) {
+        await deps.idempotencyStore.release(request, reservation.token);
+        return;
+      }
+      await deps.idempotencyStore.complete(request, reservation.token, {
+        status: c.res.status,
+        headers: [...c.res.headers],
+        bodyBase64:
+          c.res.body === null
+            ? null
+            : btoa(
+                Array.from(new Uint8Array(await c.res.clone().arrayBuffer()), (byte) =>
+                  String.fromCharCode(byte),
+                ).join(""),
+              ),
+      });
+    } catch (error) {
+      await deps.idempotencyStore.release(request, reservation.token);
+      throw error;
+    }
   };
 }

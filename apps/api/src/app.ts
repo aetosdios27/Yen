@@ -18,7 +18,7 @@ import { ApiError, errorBody, errorStatus } from "./errors.js";
 import { idempotency, rateLimit, requestContext, requireAuth } from "./middleware.js";
 
 export function createApp(overrides: Partial<AppDependencies> = {}) {
-  const deps = { ...defaultDependencies(), ...overrides };
+  const deps = { ...defaultDependencies(overrides.clock), ...overrides };
   const app = new OpenAPIHono<ApiEnv>({
     defaultHook: (result) => {
       if (!result.success) {

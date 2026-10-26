@@ -1,19 +1,60 @@
 import { expect, it } from "vitest";
 import { MemoryIdempotencyStore, MemoryRateLimitStore } from "./stores.js";
 
-it("reserves idempotency keys atomically and preserves complete responses", async () => {
-  const store = new MemoryIdempotencyStore();
-  const request = { key: '["principal","key"]', requestHash: "hash", createdAt: 0 };
-  const results = await Promise.all([store.begin(request), store.begin(request)]);
-  expect(results).toEqual([{ kind: "new" }, { kind: "in_progress", requestHash: "hash" }]);
-  const response = {
-    status: 201,
-    headers: [["content-type", "application/json"]] satisfies [string, string][],
-    bodyBase64: "e30=",
-  };
-  await store.complete(request, response);
+const request = { key: '["principal","key"]', requestHash: "hash", createdAt: 0 };
+const response = {
+  status: 201,
+  headers: [["content-type", "application/json"]] satisfies [string, string][],
+  bodyBase64: "e30=",
+};
+
+it("reserves atomically and replays completed responses", async () => {
+  const store = new MemoryIdempotencyStore({ clock: () => 0 });
+  const first = await store.begin(request);
+  expect(first.kind).toBe("new");
+  if (first.kind !== "new") throw new Error("Expected reservation");
+  expect(await store.begin(request)).toEqual({ kind: "in_progress", requestHash: "hash" });
+  await store.complete(request, first.token, response);
   expect(await store.begin(request)).toEqual({ kind: "complete", requestHash: "hash", response });
-  await expect(store.complete(request, response)).rejects.toThrow();
+  await expect(store.complete(request, first.token, response)).rejects.toThrow();
+});
+
+it("takes over an expired lease and fences the abandoned attempt", async () => {
+  let now = 0;
+  const store = new MemoryIdempotencyStore({ clock: () => now, inProgressTtlMs: 30 });
+  const first = await store.begin(request);
+  if (first.kind !== "new") throw new Error("Expected reservation");
+  now = 30;
+  const replacement = await store.begin(request);
+  expect(replacement.kind).toBe("new");
+  if (replacement.kind !== "new") throw new Error("Expected replacement");
+  expect(replacement.token).not.toBe(first.token);
+  await expect(store.complete(request, first.token, response)).rejects.toThrow();
+  await store.complete(request, replacement.token, response);
+  expect(await store.begin(request)).toMatchObject({ kind: "complete", response });
+});
+
+it("caps retained completed responses", async () => {
+  const store = new MemoryIdempotencyStore({ clock: () => 0, maxEntries: 2 });
+  for (const key of ["a", "b", "c"]) {
+    const entry = { ...request, key };
+    const reservation = await store.begin(entry);
+    if (reservation.kind !== "new") throw new Error("Expected reservation");
+    await store.complete(entry, reservation.token, response);
+  }
+  expect(await store.begin({ ...request, key: "a" })).toMatchObject({ kind: "new" });
+});
+
+it("expires completed responses after the replay window", async () => {
+  let now = 0;
+  const store = new MemoryIdempotencyStore({ clock: () => now, replayRetentionMs: 10 });
+  const first = await store.begin(request);
+  if (first.kind !== "new") throw new Error("Expected reservation");
+  await store.complete(request, first.token, response);
+  now = 9;
+  expect(await store.begin(request)).toMatchObject({ kind: "complete" });
+  now = 10;
+  expect(await store.begin(request)).toMatchObject({ kind: "new" });
 });
 
 it("refills token buckets by elapsed time and isolates keys", async () => {
@@ -24,4 +65,16 @@ it("refills token buckets by elapsed time and isolates keys", async () => {
   expect(await store.consume("a", limit, 0)).toEqual({ allowed: false, retryAfterSeconds: 5 });
   expect(await store.consume("b", limit, 0)).toEqual({ allowed: true });
   expect(await store.consume("a", limit, 5000)).toEqual({ allowed: true });
+});
+
+it("evicts full idle buckets and caps active buckets", async () => {
+  const store = new MemoryRateLimitStore({ maxEntries: 2 });
+  const limit = { capacity: 1, refillMs: 10 };
+  await store.consume("a", limit, 0);
+  await store.consume("b", limit, 0);
+  await store.consume("c", limit, 0);
+  expect(await store.consume("a", limit, 0)).toEqual({ allowed: true });
+  expect(await store.consume("c", limit, 0)).toEqual({ allowed: false, retryAfterSeconds: 1 });
+  await store.consume("d", limit, 10);
+  expect(store.entryCount).toBe(1);
 });

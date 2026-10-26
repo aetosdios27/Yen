@@ -82,21 +82,31 @@ An existing reservation returns `in_progress`; completed entries return `complet
 with their original hash and full response. Changed input or a concurrent duplicate
 returns `409 idempotency_conflict`. An in-progress response also has `retry-after: 1`.
 
-`complete` stores status, all response headers, and a base64 body (`null` for a response with no body). Successful requests
-and completed errors both replay with `idempotent-replayed: true`. The response body
+Reservations are 30-second leases by default. After expiry, `begin` can replace a
+reservation and issue a new fencing token. `complete` and `release` accept that token;
+an abandoned attempt cannot overwrite or release its replacement. A handler exception,
+response persistence failure, or response with status 500 or higher releases the key.
+Only completed responses below 500 replay with `idempotent-replayed: true`.
+
+`complete` stores status, all response headers, and a base64 body (`null` for a response with no body). The response body
 is identical, including an original error's requestId; `x-request-id` identifies the
 current HTTP request. Replays consume rate-limit tokens.
 
-The interface maps to `idempotency_keys(key, request_hash, response jsonb, created_at)`:
-`response = null` represents an in-progress reservation, and `response` stores the
-`StoredResponse` object on completion. `createdAt` is epoch milliseconds.
-A later Postgres adapter must enforce uniqueness atomically and complete a reservation
-only when its hash matches. YEN-18/24 owns that implementation.
+The interface maps to an `idempotency_keys` row with `key`, `request_hash`, `token`,
+`lease_expires_at`, `response jsonb`, `replay_expires_at`, and `created_at`.
+`response = null` represents an in-progress reservation. `begin` needs an atomic
+insert or expired-lease takeover; completion and release must compare the token and
+hash. `createdAt` is epoch milliseconds. YEN-18/24 owns the Postgres adapter and
+schema; this contract does not change that migration.
 
-The in-memory store has process lifetime and retains reservations. If execution or
-response persistence stops halfway, the key remains blocked to prevent duplicate
-side effects. Durable transactional completion, crash recovery, retention, and cleanup
-belong to the Postgres implementation. The mock is intended for local development.
+The in-memory store expires completed responses after 24 hours by default and sweeps
+expired entries lazily on access. It caps entries at 10,000, evicting the oldest
+completed responses first. When all slots hold active leases, it rejects a new
+reservation until a lease expires; it never evicts an active lease to make room.
+These defaults are injectable as `inProgressTtlMs`, `replayRetentionMs`, and
+`maxEntries`. Production needs a shared store for consistent idempotency across
+processes. A released or expired key can execute again, so operations with durable
+side effects still need transactional coordination in that store.
 
 ## Rate limits and logs
 
@@ -108,7 +118,10 @@ seconds in `retry-after`. Liveness and readiness bypass rate limits.
 
 The Node entrypoint resolves the socket peer address. Forwarded headers are ignored.
 Configure a trusted resolver explicitly when deploying behind a proxy.
-Store instances are injectable and in-memory limits apply to one process.
+Store instances are injectable and in-memory limits apply to one process. The
+in-memory rate-limit store lazily removes buckets once they would be full and caps
+entries at 10,000, evicting the oldest bucket when full. It has no background timer.
+Production needs a shared rate-limit store for consistent limits across processes.
 
 Logs contain only event, UUID requestId, method, route template, status, and durationMs.
 The JSON serializer strips unknown fields. No raw URL, query, body, header, principal,

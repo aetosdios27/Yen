@@ -33,11 +33,11 @@ export interface AppDependencies {
   readonly rateLimits: { readonly ip: RateLimit; readonly principal: RateLimit };
 }
 
-export function defaultDependencies(): AppDependencies {
+export function defaultDependencies(clock: () => number = Date.now): AppDependencies {
   return {
-    clock: Date.now,
+    clock,
     idGenerator: () => crypto.randomUUID(),
-    idempotencyStore: new MemoryIdempotencyStore(),
+    idempotencyStore: new MemoryIdempotencyStore({ clock }),
     rateLimitStore: new MemoryRateLimitStore(),
     logger: jsonLogger,
     principal: null,

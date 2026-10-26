@@ -245,7 +245,8 @@ it("rejects concurrent duplicates before both can execute", async () => {
         }
         return result;
       },
-      complete: (request, response) => store.complete(request, response),
+      complete: (request, token, response) => store.complete(request, token, response),
+      release: (request, token) => store.release(request, token),
     },
   });
   const first = app.request("/v1/funds", post());
@@ -360,7 +361,7 @@ it("serves exactly the committed OpenAPI 3.1 document", async () => {
   expect(JSON.parse(committed).openapi).toBe("3.1.0");
 });
 
-it("replays completed errors without re-executing a failing operation", async () => {
+it("releases a reservation when the handler fails", async () => {
   const { app } = setup();
   const operation = vi.fn(() => {
     throw new Error("private failure");
@@ -370,12 +371,26 @@ it("replays completed errors without re-executing a failing operation", async ()
   const second = await app.request("/v1/failing-operation", post());
   expect(first.status).toBe(500);
   expect(second.status).toBe(500);
-  expect(second.headers.get("idempotent-replayed")).toBe("true");
-  expect(await second.text()).toBe(await first.text());
-  expect(operation).toHaveBeenCalledTimes(1);
+  expect(second.headers.get("idempotent-replayed")).toBeNull();
+  expect(operation).toHaveBeenCalledTimes(2);
 });
 
-it("keeps a reservation when response persistence fails", async () => {
+it("releases a reservation for an explicit 5xx response", async () => {
+  const { app } = setup();
+  const operation = vi.fn();
+  app.post("/v1/unavailable", (c) => {
+    operation();
+    return c.json({ error: "unavailable" }, 503);
+  });
+  const first = await app.request("/v1/unavailable", post());
+  const second = await app.request("/v1/unavailable", post());
+  expect(first.status).toBe(503);
+  expect(second.status).toBe(503);
+  expect(second.headers.get("idempotent-replayed")).toBeNull();
+  expect(operation).toHaveBeenCalledTimes(2);
+});
+
+it("releases a reservation when response persistence fails", async () => {
   const store = new MemoryIdempotencyStore();
   const { app } = setup({
     idempotencyStore: {
@@ -383,6 +398,7 @@ it("keeps a reservation when response persistence fails", async () => {
       complete: async () => {
         throw new Error("private persistence failure");
       },
+      release: (request, token) => store.release(request, token),
     },
   });
   const operation = vi.fn();
@@ -391,8 +407,8 @@ it("keeps a reservation when response persistence fails", async () => {
     return c.json({ success: true });
   });
   expect((await app.request("/v1/write", post())).status).toBe(500);
-  expect((await app.request("/v1/write", post())).status).toBe(409);
-  expect(operation).toHaveBeenCalledTimes(1);
+  expect((await app.request("/v1/write", post())).status).toBe(500);
+  expect(operation).toHaveBeenCalledTimes(2);
 });
 
 it("replays binary response bytes and custom headers", async () => {
