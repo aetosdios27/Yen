@@ -1,4 +1,4 @@
-import { createApp } from "@yen/api";
+import { createApp, devPolicy } from "@yen/api";
 import { expect, it } from "vitest";
 import { createYenClient } from "./index.js";
 
@@ -6,6 +6,7 @@ function client() {
   const app = createApp({
     principal: { id: "00000000-0000-4000-8000-000000000001" },
     logger: { log: () => undefined },
+    policy: devPolicy,
   });
   return createYenClient({
     baseUrl: "http://yen.test",

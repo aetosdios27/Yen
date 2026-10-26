@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { rateLimitEnv, rateLimits } from "./config.js";
 import { jsonLogger, type Logger } from "./logging.js";
+import { denyAllPolicy, type Policy } from "./policy.js";
 import {
   type IdempotencyStore,
   MemoryIdempotencyStore,
@@ -26,6 +27,7 @@ export interface AppDependencies {
   readonly idempotencyStore: IdempotencyStore;
   readonly rateLimitStore: RateLimitStore;
   readonly logger: Logger;
+  readonly policy: Policy;
   readonly principal: Principal | null;
   readonly clientIp: (context: Context<ApiEnv>) => string;
   readonly corsOrigins: string[];
@@ -40,6 +42,7 @@ export function defaultDependencies(clock: () => number = Date.now): AppDependen
     idempotencyStore: new MemoryIdempotencyStore({ clock }),
     rateLimitStore: new MemoryRateLimitStore(),
     logger: jsonLogger,
+    policy: denyAllPolicy,
     principal: null,
     clientIp: () => "unknown",
     corsOrigins: [],

@@ -292,6 +292,7 @@
     },
     "/v1/funds": {
       "post": {
+        "tags": ["funds"],
         "operationId": "createFund",
         "security": [{ "bearerAuth": [] }],
         "description": "STUB: creates an in-memory fake fund. Data is lost on restart. Requires Idempotency-Key; identical method, URL, content type and body bytes replay. A changed request or an in-progress duplicate returns 409. Money is nonnegative integer paise encoded as canonical decimal strings.",
@@ -455,9 +456,10 @@
     },
     "/v1/funds/{fundId}": {
       "get": {
+        "tags": ["funds"],
         "operationId": "getFund",
         "security": [{ "bearerAuth": [] }],
-        "description": "STUB: reads a fake fund created in this process by the same principal. Invalid canonical FundId or missing fund returns 404.",
+        "description": "STUB: reads a fake fund created in this process by the same principal. Invalid canonical FundId, missing fund, or policy denial returns 404 to conceal existence.",
         "parameters": [
           {
             "schema": {

@@ -18,6 +18,13 @@ Route definitions in `src/contract.ts` own request and response schemas.
 Fund data disappears on restart. A fund starts with `name` and `targetPaise`.
 The response adds a canonical lowercase UUID `id` and an ISO timestamp `createdAt`.
 Invalid or missing FundIds return `404`, using `@yen/shared`'s branded parser.
+`createApp` defaults to a deny-all `Policy`. Every fund handler calls `can(principal,
+action, resource)` before accessing or changing fund data and sends only the result
+of `redact(viewer, resource)`. Inject `devPolicy` explicitly in tests and `dev:mock`;
+it permits creation and owner reads. Denied creates return `403 forbidden`. Denied
+reads return `404 not_found` so a caller cannot learn whether a fund exists.
+YEN-26 will supply the real role and approval checks; YEN-31 will supply public
+visibility and redaction rules. Until then, production needs an explicit policy.
 All authenticated routes reject requests until a principal is explicitly injected.
 The bearer security scheme reserves the contract for YEN-22; it does not authenticate tokens today.
 

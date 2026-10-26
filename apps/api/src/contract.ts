@@ -96,6 +96,7 @@ export const idempotencyKey = z
 export const createFundRoute = createRoute({
   method: "post",
   path: "/v1/funds",
+  tags: ["funds"],
   operationId: "createFund",
   security,
   description:
@@ -123,10 +124,11 @@ export const createFundRoute = createRoute({
 export const getFundRoute = createRoute({
   method: "get",
   path: "/v1/funds/{fundId}",
+  tags: ["funds"],
   operationId: "getFund",
   security,
   description:
-    "STUB: reads a fake fund created in this process by the same principal. Invalid canonical FundId or missing fund returns 404.",
+    "STUB: reads a fake fund created in this process by the same principal. Invalid canonical FundId, missing fund, or policy denial returns 404 to conceal existence.",
   request: {
     params: z.object({
       fundId: z.string().openapi({

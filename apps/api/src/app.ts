@@ -2,6 +2,7 @@ import { OpenAPIHono, type z } from "@hono/zod-openapi";
 import { parseFundId } from "@yen/shared";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
+import type { Context } from "hono";
 import {
   createFundRoute,
   type fundSchema,
@@ -16,6 +17,8 @@ import {
 import { type ApiEnv, type AppDependencies, defaultDependencies } from "./dependencies.js";
 import { ApiError, errorBody, errorStatus } from "./errors.js";
 import { idempotency, rateLimit, requestContext, requireAuth } from "./middleware.js";
+import type { FundAction, FundResource } from "./policy.js";
+export { devPolicy } from "./policy.js";
 
 export function createApp(overrides: Partial<AppDependencies> = {}) {
   const deps = { ...defaultDependencies(overrides.clock), ...overrides };
@@ -64,6 +67,14 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   app.use("/v1/funds/*", requireAuth);
 
   const funds = new Map<string, { owner: string; fund: z.infer<typeof fundSchema> }>();
+  const authorizedFund = (c: Context<ApiEnv>, action: FundAction, resource: FundResource) => {
+    const principal = c.get("principal");
+    if (!principal) throw new ApiError("unauthenticated");
+    if (!deps.policy.can(principal, action, resource)) {
+      throw new ApiError(action === "fund:read" ? "not_found" : "forbidden");
+    }
+    return principal;
+  };
   app.openapi(healthRoute, (c) => c.json({ status: "ok" }, 200));
   app.openapi(readyRoute, async (c) => {
     if (!(await deps.readiness())) throw new ApiError("internal");
@@ -71,8 +82,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   });
   app.openapi(meRoute, (c) => c.json(principalSchema.parse(c.get("principal")), 200));
   app.openapi(createFundRoute, (c) => {
-    const principal = c.get("principal");
-    if (!principal) throw new ApiError("unauthenticated");
+    const principal = authorizedFund(c, "fund:create", { kind: "fund" });
     const id = parseFundId(deps.idGenerator());
     if (!id.ok) throw new ApiError("internal");
     const fund = {
@@ -80,15 +90,18 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       id: id.value,
       createdAt: new Date(deps.clock()).toISOString(),
     };
-    funds.set(id.value, { owner: principal.id, fund });
-    return c.json(fund, 201);
+    const resource = { kind: "fund", fund: { owner: principal.id, fund } } as const;
+    funds.set(id.value, resource.fund);
+    return c.json(deps.policy.redact(principal, resource), 201);
   });
   app.openapi(getFundRoute, (c) => {
     const id = parseFundId(c.req.valid("param").fundId);
     if (!id.ok) throw new ApiError("not_found");
     const entry = funds.get(id.value);
-    if (!entry || entry.owner !== c.get("principal")?.id) throw new ApiError("not_found");
-    return c.json(entry.fund, 200);
+    if (!entry) throw new ApiError("not_found");
+    const resource = { kind: "fund", fund: entry } as const;
+    const principal = authorizedFund(c, "fund:read", resource);
+    return c.json(deps.policy.redact(principal, resource), 200);
   });
   app.openapi(openapiRoute, (c) => c.json(openapiSchema.parse(openApiDocument(app)), 200));
   app.openAPIRegistry.registerComponent("securitySchemes", "bearerAuth", {

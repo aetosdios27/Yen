@@ -5,6 +5,7 @@ import { expect, it } from "vitest";
 import { createApp } from "./app.js";
 import { ApiError, errorCode, errorStatus } from "./errors.js";
 import { MemoryIdempotencyStore } from "./stores.js";
+import { devPolicy } from "./policy.js";
 
 const responseSpec = z.object({
   headers: z.record(
@@ -78,6 +79,7 @@ it("validates every documented status and sent header against the committed Open
     idGenerator,
     clock: () => 0,
     logger: { log: () => undefined },
+    policy: devPolicy,
   };
   const app = createApp(base);
   const post = {

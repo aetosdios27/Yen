@@ -6,6 +6,7 @@ import type { AppDependencies } from "./dependencies.js";
 import { ApiError, errorEnvelope, errorStatus } from "./errors.js";
 import { type RequestLog, serializeRequestLog } from "./logging.js";
 import { MemoryIdempotencyStore, MemoryRateLimitStore } from "./stores.js";
+import { devPolicy } from "./policy.js";
 
 const principal = { id: "00000000-0000-4000-8000-000000000001" };
 const inboundId = "00000000-0000-4000-8000-000000000099";
@@ -23,6 +24,7 @@ function setup(overrides: Partial<AppDependencies> = {}) {
     clock: () => now,
     idGenerator,
     logger: { log: (entry) => entries.push(entry) },
+    policy: devPolicy,
     ...overrides,
   });
   return {
@@ -127,6 +129,67 @@ it("creates and retrieves a validated stub fund with lossless money", async () =
   const read = await app.request(`/v1/funds/${fund.id}`);
   expect(read.status).toBe(200);
   expect(await read.json()).toEqual(fund);
+});
+
+it("denies every documented funds route with the default policy", async () => {
+  const app = createApp({ principal, logger: { log: () => undefined } });
+  const document = app.getOpenAPI31Document({
+    openapi: "3.1.0",
+    info: { title: "test", version: "1" },
+  });
+  const routes = Object.entries(document.paths ?? {}).flatMap(([path, methods]) =>
+    Object.entries(methods ?? {})
+      .filter(
+        ([, operation]) =>
+          typeof operation === "object" &&
+          operation !== null &&
+          "tags" in operation &&
+          Array.isArray(operation.tags) &&
+          operation.tags.includes("funds"),
+      )
+      .map(([method]) => ({ path, method })),
+  );
+  expect(routes).toHaveLength(2);
+  for (const route of routes) {
+    const url = route.path.replace("{fundId}", inboundId);
+    const response = await app.request(
+      url,
+      route.method === "post" ? post(input, "deny-route") : undefined,
+    );
+    expect([403, 404]).toContain(response.status);
+    expect(await response.text()).not.toMatch(/Festival|targetPaise|createdAt/);
+  }
+});
+
+it("consults policy for both fund routes and returns only its redacted view", async () => {
+  const can = vi.fn(devPolicy.can);
+  const sentinel = {
+    id: inboundId,
+    name: "Policy view",
+    targetPaise: "7",
+    createdAt: "1970-01-01T00:00:00.000Z",
+  };
+  const redact = vi.fn(() => sentinel);
+  const { app } = setup({ policy: { can, redact } });
+  const created = await app.request("/v1/funds", post());
+  expect(await created.json()).toEqual(sentinel);
+  const id = "00000000-0000-4000-8000-000000000101";
+  const read = await app.request(`/v1/funds/${id}`);
+  expect(await read.json()).toEqual(sentinel);
+  expect(can.mock.calls.map(([, action]) => action)).toEqual(["fund:create", "fund:read"]);
+  expect(redact).toHaveBeenCalledTimes(2);
+});
+
+it("conceals an existing fund when read policy denies it", async () => {
+  const can = vi.fn(
+    (viewer, action, resource) =>
+      action === "fund:create" && devPolicy.can(viewer, action, resource),
+  );
+  const { app } = setup({ policy: { can, redact: devPolicy.redact } });
+  const created = fundSchema.parse(await (await app.request("/v1/funds", post())).json());
+  const response = await app.request(`/v1/funds/${created.id}`);
+  expect(response.status).toBe(404);
+  expect(errorEnvelope.parse(await response.json()).error.code).toBe("not_found");
 });
 
 it.each([

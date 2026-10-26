@@ -74,7 +74,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** @description STUB: reads a fake fund created in this process by the same principal. Invalid canonical FundId or missing fund returns 404. */
+    /** @description STUB: reads a fake fund created in this process by the same principal. Invalid canonical FundId, missing fund, or policy denial returns 404 to conceal existence. */
     get: operations["getFund"];
     put?: never;
     post?: never;
