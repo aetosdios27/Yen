@@ -150,6 +150,37 @@ it("validates every documented status and sent header against the committed Open
   };
   await errors.request("/v1/funds", invalid);
   await check("/v1/funds", "post", await errors.request("/v1/funds", invalid));
+  const errorCodes: Record<string, string> = {
+    "400": "validation_failed",
+    "401": "unauthenticated",
+    "403": "forbidden",
+    "404": "not_found",
+    "409": "conflict",
+    "500": "internal",
+  };
+  for (const [path, methods] of Object.entries(document.paths)) {
+    for (const [method, operation] of Object.entries(methods)) {
+      for (const status of Object.keys(operation.responses)) {
+        if (status === "200") {
+          const url = path === "/v1/funds/{fundId}" ? `/v1/funds/${id}` : path;
+          await check(path, method, await app.request(url));
+        } else if (status === "201") {
+          await check(path, method, await app.request("/v1/funds", post));
+        } else if (status === "429") {
+          await check(path, method, await rateLimited.request("/v1/me"));
+        } else if (status === "409" && method === "post") {
+          await check(path, method, await conflict.request("/v1/funds", post));
+        } else {
+          const code = errorCode.parse(errorCodes[status]);
+          const errorApp = createApp(base);
+          errorApp.get("/contract-error", () => {
+            throw new ApiError(code);
+          });
+          await check(path, method, await errorApp.request("/contract-error"));
+        }
+      }
+    }
+  }
   const documentedStatuses = new Set(
     Object.values(document.paths).flatMap((methods) =>
       Object.values(methods).flatMap((operation) => Object.keys(operation.responses)),
