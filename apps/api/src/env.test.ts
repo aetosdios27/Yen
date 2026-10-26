@@ -4,6 +4,9 @@ beforeEach(() => {
   vi.resetModules();
   vi.stubEnv("NODE_ENV", "test");
   vi.stubEnv("PORT", undefined);
+  vi.stubEnv("RATE_LIMIT_IP_CAPACITY", undefined);
+  vi.stubEnv("RATE_LIMIT_PRINCIPAL_CAPACITY", undefined);
+  vi.stubEnv("RATE_LIMIT_REFILL_MS", undefined);
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -11,7 +14,13 @@ afterEach(() => vi.unstubAllEnvs());
 it("exports typed env and parses it only once per startup", async () => {
   vi.stubEnv("PORT", "3001");
   const { env } = await import("./env.js");
-  expect(env).toEqual({ NODE_ENV: "test", PORT: 3001 });
+  expect(env).toMatchObject({
+    NODE_ENV: "test",
+    PORT: 3001,
+    RATE_LIMIT_IP_CAPACITY: 120,
+    RATE_LIMIT_PRINCIPAL_CAPACITY: 60,
+    RATE_LIMIT_REFILL_MS: 60000,
+  });
   vi.stubEnv("PORT", "invalid");
   expect((await import("./env.js")).env).toBe(env);
 });
@@ -30,3 +39,26 @@ it("lists every invalid variable", async () => {
   await expect(import("./env.js")).rejects.toThrow(/NODE_ENV[\s\S]*PORT/);
   await expect(import("./env.js")).rejects.not.toThrow("invalid-private-value");
 });
+
+it("accepts configured rate limits", async () => {
+  vi.stubEnv("PORT", "3001");
+  vi.stubEnv("RATE_LIMIT_IP_CAPACITY", "10");
+  vi.stubEnv("RATE_LIMIT_PRINCIPAL_CAPACITY", "5");
+  vi.stubEnv("RATE_LIMIT_REFILL_MS", "2000");
+  const { env } = await import("./env.js");
+  expect(env).toMatchObject({
+    RATE_LIMIT_IP_CAPACITY: 10,
+    RATE_LIMIT_PRINCIPAL_CAPACITY: 5,
+    RATE_LIMIT_REFILL_MS: 2000,
+  });
+});
+
+it.each(["0", "-1", "1.5", "Infinity", "private-value"])(
+  "rejects invalid rate limits %s",
+  async (value) => {
+    vi.stubEnv("PORT", "3001");
+    vi.stubEnv("RATE_LIMIT_IP_CAPACITY", value);
+    await expect(import("./env.js")).rejects.toThrow("RATE_LIMIT_IP_CAPACITY");
+    await expect(import("./env.js")).rejects.not.toThrow("private-value");
+  },
+);

@@ -44,6 +44,12 @@ jobs:
       - name: Lint and format
         run: pnpm check
 
+      - name: OpenAPI diff
+        run: |
+          pnpm --filter @yen/shared build
+          pnpm --filter @yen/api openapi:check
+          pnpm --filter @yen/api-client generate:check
+
       - name: Typecheck, test, build
         env:
           BASE_REF: ${{ github.base_ref }}

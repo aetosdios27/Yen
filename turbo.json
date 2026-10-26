@@ -13,6 +13,10 @@
     },
     "test": {
       "dependsOn": ["^build"]
+    },
+    "@yen/api-client#test": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/apps/api/openapi/openapi.json"]
     }
   }
 }

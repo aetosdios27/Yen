@@ -6,18 +6,29 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
-    "start": "node --env-file-if-exists=.env dist/server.js"
+    "test": "pnpm openapi:check && vitest run",
+    "start": "node --env-file-if-exists=.env dist/server.js",
+    "openapi:generate": "pnpm --filter @yen/shared build && tsx scripts/openapi.ts",
+    "openapi:check": "tsx scripts/openapi.ts --check",
+    "dev:mock": "pnpm --filter @yen/shared build && PORT=${PORT:-3001} tsx --env-file-if-exists=.env src/mock-server.ts"
   },
   "dependencies": {
     "@hono/node-server": "2.1.5",
+    "@hono/zod-openapi": "1.6.3",
     "@yen/shared": "workspace:*",
     "hono": "4.13.14",
     "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "tsx": "4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/app.d.ts",
+      "default": "./dist/app.js"
+    }
   }
 }
