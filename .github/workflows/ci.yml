@@ -58,6 +58,9 @@ jobs:
       - name: Lint and format
         run: pnpm check
 
+      - name: Governance guard
+        run: node --test .github/scripts/governance.test.mjs
+
       - name: Typecheck, test, build
         env:
           BASE_REF: ${{ github.base_ref }}

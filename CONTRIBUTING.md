@@ -20,14 +20,15 @@ The full handbook lives in Linear (**06 · Engineering Handbook**). This file is
 
 ## What `main` enforces
 
-| Rule                                 | Effect                                   |
-| ------------------------------------ | ---------------------------------------- |
-| Pull request required                | no direct push, force-push or deletion   |
-| 1 approval, not from the last pusher | merging always needs two people          |
-| Stale approvals dismissed            | new commits need a fresh approval        |
-| Review threads resolved              | includes Greptile's                      |
-| `CI Gate` green, branch up to date   | one required check aggregates everything |
-| Squash merge only, linear history    | one PR is one commit on `main`           |
+| Rule                                 | Effect                                    |
+| ------------------------------------ | ----------------------------------------- |
+| Pull request required                | no direct push, force-push or deletion    |
+| 1 approval, not from the last pusher | merging always needs two people           |
+| Stale approvals dismissed            | new commits need a fresh approval         |
+| Code-owner review                    | the approver must be listed in CODEOWNERS |
+| Review threads resolved              | includes Greptile's                       |
+| `CI Gate` green, branch up to date   | one required check aggregates everything  |
+| Squash merge only, linear history    | one PR is one commit on `main`            |
 
 ## Local checks
 
