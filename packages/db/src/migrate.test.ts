@@ -9,6 +9,7 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import * as z from "zod";
 import { createSql } from "./client.js";
 import { migrate } from "./migrate.js";
+import { splitSqlStatements } from "./sql-statements.js";
 import { databaseSuite } from "./test/database.js";
 
 const records = z.array(
@@ -164,10 +165,71 @@ databaseSuite("migration runner", (sql, url) => {
     ]);
   });
 
+  it.each([
+    ["CREATE TABLE escaped (é$$ int); COMMIT; SELECT $$ok$$;", 1],
+    ["CREATE TABLE escaped (é$$ int);\nCOMMIT; SELECT $$ok$$;", 2],
+  ])("rejects COMMIT after a Unicode identifier in %s", async (source, line) => {
+    await writeFile(join(dir, "0001_escaped.sql"), source);
+    await expect(migrate(sql, { dir })).rejects.toThrow(
+      new RegExp(`0001_escaped\\.sql:${line}.*transaction`, "i"),
+    );
+    expect(await sql`SELECT to_regclass('public.escaped') AS name`).toEqual([{ name: null }]);
+    expect(await sql`SELECT to_regclass('public.schema_migrations') AS name`).toEqual([
+      { name: null },
+    ]);
+  });
+
   it("accepts a DO block with transaction words inside its dollar quote", async () => {
     await writeFile(join(dir, "0001_block.sql"), "DO $$\nBEGIN\n  PERFORM 1;\nEND\n$$;");
     await migrate(sql, { dir });
     expect(await sql`SELECT version FROM schema_migrations`).toEqual([{ version: 1 }]);
+  });
+
+  it("applies a DO block with a Unicode dollar tag", async () => {
+    await writeFile(join(dir, "0001_unicode.sql"), "DO $é$ BEGIN PERFORM 1; END $é$;");
+    await migrate(sql, { dir });
+    expect(await sql`SELECT version FROM schema_migrations`).toEqual([{ version: 1 }]);
+  });
+
+  it.each([
+    "INSERT INTO boundary_trace SELECT 1 AS é$$; INSERT INTO boundary_trace VALUES (2);",
+    "INSERT INTO boundary_trace SELECT 1 AS 𐀀$$; INSERT INTO boundary_trace VALUES (2);",
+    "INSERT INTO boundary_trace SELECT 1 AS a$$b; INSERT INTO boundary_trace VALUES (2);",
+    "DO $é$ BEGIN INSERT INTO boundary_trace VALUES (1); END $é$; INSERT INTO boundary_trace VALUES (2);",
+    "DO $_x$ BEGIN INSERT INTO boundary_trace VALUES (1); END $_x$; INSERT INTO boundary_trace VALUES (2);",
+    "DO $a1$ BEGIN INSERT INTO boundary_trace VALUES (1); END $a1$; INSERT INTO boundary_trace VALUES (2);",
+    "INSERT INTO boundary_trace SELECT 1 WHERE E'a\\'b' = E'a\\'b'; INSERT INTO boundary_trace VALUES (2);",
+    "INSERT INTO boundary_trace SELECT 1 WHERE U&'d\\0061ta' = 'data'; INSERT INTO boundary_trace VALUES (2);",
+  ])("matches PostgreSQL statement boundaries in %s", async (source) => {
+    const connection = await sql.reserve();
+    try {
+      await connection`BEGIN`;
+      await connection`CREATE TEMP TABLE boundary_trace (statement_index int) ON COMMIT DROP`;
+      await connection.unsafe(source).simple();
+      const rows =
+        await connection`SELECT statement_index FROM boundary_trace ORDER BY statement_index`;
+      expect(rows).toEqual([{ statement_index: 1 }, { statement_index: 2 }]);
+      expect(splitSqlStatements(source)).toHaveLength(rows.length);
+    } finally {
+      await connection`ROLLBACK`;
+      connection.release();
+    }
+  });
+
+  it("recognizes $1 as a server parameter, not a dollar quote", async () => {
+    expect(splitSqlStatements("SELECT $1")).toHaveLength(1);
+    expect(await sql.unsafe("SELECT $1 AS value", [7])).toEqual([{ value: "7" }]);
+  });
+
+  it.each([
+    ["SELECT 1 AS éE'a\\';", "'a\\'"],
+    ["SELECT 1 AS éU&'x';", "&"],
+  ])("matches PostgreSQL prefix adjacency in %s", async (source, token) => {
+    await expect(sql.unsafe(source).simple()).rejects.toMatchObject({
+      code: "42601",
+      position: String(source.indexOf(token) + 1),
+    });
+    expect(splitSqlStatements(`${source} SELECT 2;`)).toHaveLength(2);
   });
 
   it.each([

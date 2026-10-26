@@ -16,6 +16,13 @@ it.each([
   ["SELECT $1;", ["SELECT"]],
   ["SELECT $1, $body$; COMMIT; $body$;", ["SELECT"]],
   ["DO $body$ BEGIN PERFORM '$$; COMMIT'; END $body$;", ["DO"]],
+  ["CREATE TABLE escaped (é$$ int); COMMIT; SELECT $$ok$$;", ["CREATE", "COMMIT", "SELECT"]],
+  ["CREATE TABLE escaped (𐀀$$ int); COMMIT; SELECT $$ok$$;", ["CREATE", "COMMIT", "SELECT"]],
+  ["CREATE TABLE a$$b (id int); SELECT 1;", ["CREATE", "SELECT"]],
+  ["DO $é$ BEGIN PERFORM 1; END $é$;", ["DO"]],
+  ["DO $_x$ BEGIN PERFORM 1; END $_x$;", ["DO"]],
+  ["DO $a1$ BEGIN PERFORM 1; END $a1$;", ["DO"]],
+  ["PREPARE p(int) AS SELECT $1; EXECUTE p(1);", ["PREPARE", "EXECUTE"]],
 ])("splits top-level statements in %s", (source, keywords) => {
   expect(splitSqlStatements(source).map((statement) => statement.leadingKeywords[0])).toEqual(
     keywords,
