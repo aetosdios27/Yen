@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
   title: "Yen",
-  description: "Community money you can check.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
