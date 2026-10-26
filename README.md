@@ -99,7 +99,7 @@ Dates are targets, not promises.
 apps/        web (Next.js) and api (Hono)             - coming with YEN-11
 packages/    shared: money (paise), Merkle verify     - started
              ledger, eventlog                          - planned
-contracts/   Foundry project (RootRegistry)           - planned, YEN-16
+contracts/   Foundry RootRegistry, tests, Amoy deploy - YEN-16; see contracts/README.md
 infra/       Terraform                                - planned, YEN-17
 .github/     CI, rulesets, templates, repo-settings script
 .greptile/   AI review rules specific to this repo
