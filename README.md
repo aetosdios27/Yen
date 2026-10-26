@@ -15,8 +15,8 @@ Donors verify every rupee. Treasurers cannot quietly spend it.
 [![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.base.json)
 [![Node 24](https://img.shields.io/badge/Node-24-5FA04E?logo=nodedotjs&logoColor=white)](.nvmrc)
 [![pnpm](https://img.shields.io/badge/pnpm-12-F69220?logo=pnpm&logoColor=white)](package.json)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](#how-it-works)
-[![Polygon Amoy testnet](https://img.shields.io/badge/chain-Polygon%20Amoy%20(testnet)-8247E5?logo=polygon&logoColor=white)](#how-it-works)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](#built-with)
+[![Polygon Amoy testnet](https://img.shields.io/badge/chain-Polygon%20Amoy%20(testnet)-8247E5?logo=polygon&logoColor=white)](#built-with)
 
 [Why Yen](#why-yen) · [How it works](#how-it-works) · [Guarantees and limits](#guarantees-and-limits) · [Built with](#built-with) · [Roadmap](#roadmap) · [Getting started](#getting-started)
 
