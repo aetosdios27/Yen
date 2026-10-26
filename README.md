@@ -5,22 +5,20 @@
 # Yen
 
 **Community money you can check.**<br>
-Donors verify every rupee. Treasurers can't quietly spend it.
+Donors verify every rupee. Treasurers cannot quietly spend it.
 
 [![CI](https://github.com/aetosdios27/Yen/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/aetosdios27/Yen/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/aetosdios27/Yen/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/aetosdios27/Yen/actions/workflows/codeql.yml)
 [![Merges: reviewed PRs only](https://img.shields.io/badge/merges-reviewed%20PRs%20only-2ea44f)](CONTRIBUTING.md)
 [![Security policy](https://img.shields.io/badge/security-policy-blue)](SECURITY.md)
-[![Status: pre-MVP](https://img.shields.io/badge/status-pre--MVP-orange)](#status)
 
 [![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.base.json)
 [![Node 24](https://img.shields.io/badge/Node-24-5FA04E?logo=nodedotjs&logoColor=white)](.nvmrc)
 [![pnpm](https://img.shields.io/badge/pnpm-12-F69220?logo=pnpm&logoColor=white)](package.json)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](#how-it-works)
-[![Polygon Amoy testnet](https://img.shields.io/badge/chain-Polygon%20Amoy%20(testnet)-8247E5?logo=polygon&logoColor=white)](#how-it-works)
-[![Last commit](https://img.shields.io/github/last-commit/aetosdios27/Yen)](https://github.com/aetosdios27/Yen/commits/main)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](#built-with)
+[![Polygon Amoy testnet](https://img.shields.io/badge/chain-Polygon%20Amoy%20(testnet)-8247E5?logo=polygon&logoColor=white)](#built-with)
 
-[Why](#why-yen) · [How it works](#how-it-works) · [What we promise](#what-we-promise-and-what-we-dont) · [Status](#status) · [Getting started](#getting-started) · [Contributing](CONTRIBUTING.md)
+[Why Yen](#why-yen) · [How it works](#how-it-works) · [Guarantees and limits](#guarantees-and-limits) · [Built with](#built-with) · [Roadmap](#roadmap) · [Getting started](#getting-started)
 
 </div>
 
@@ -28,89 +26,86 @@ Donors verify every rupee. Treasurers can't quietly spend it.
 
 ## Why Yen
 
-Clubs, festivals, temples, housing societies and small NGOs run on UPI and cash collected by one person, tracked in a spreadsheet or a WhatsApp group. Donors can't check where the money went. Honest treasurers can't prove they're honest. Disputes get settled by whoever is louder.
-
-Yen makes the record checkable instead of trusted.
+Clubs, festivals, housing societies and small NGOs collect money through personal UPI accounts and spreadsheets. Donors cannot verify where the money went, while honest treasurers cannot prove their integrity. When questions arise, disputes are settled by whoever is loudest rather than checkable records.
 
 ## How it works
 
-This is the planned MVP flow. The repo currently contains foundation packages and placeholder apps.
-
-Yen **never holds your money**. It stays in the club's own bank account. Yen watches the account, enforces who must approve spending, and keeps a record nobody can quietly rewrite.
+Yen **never holds money**. Funds stay in the club's own bank account. This section describes the design; most of it is still being built and nothing is deployed yet. Yen watches the account, enforces configured spending approvals, and ensures any change would be detected.
 
 ```mermaid
 flowchart LR
-    D([Donor]) -- pays the club's UPI --> B[(Club bank account)]
+    D([Donor]) -- pays the club UPI --> B[(Club bank account)]
     T([Treasurer]) -- asks to spend, with a bill --> R[Expense request]
     A([Approvers]) -- confirm with a passkey --> R
-    R --> L[Hash-chained event log]
+    R --> L["Hash-chained event log (planned)"]
     B -- bank feed --> M{Match debits to approvals}
     M -- no matching approval --> F[/Flag shown to everyone/]
     M --> L
-    L -- Merkle root every ~15 min --> C[(Polygon)]
+    L -- Merkle root batch (planned) --> C["Polygon Amoy testnet (planned)"]
     D -. checks a record in the browser .-> C
 ```
 
-1. **Donations** go straight to the club's UPI. The bank confirms them, so a claimed payment isn't counted until the bank shows it.
-2. **Spending needs permission.** The treasurer files an expense with a bill photo. A quorum of approvers confirms with a passkey, and donors get a window to object.
-3. **Every bank debit is matched** to an approved request. Money that left without approval is flagged to everyone.
-4. **Every event is chained.** Each record includes the hash of the one before it, so any edit or deletion breaks the chain.
-5. **Fingerprints go on a public chain.** Only a Merkle root is published, never names or amounts. Anyone can recompute and check a record in their browser, without trusting us.
+1. **Donations go directly to the club bank account.** The bank feed confirms incoming payments, so a payment is recorded only when the bank reports it.
+2. **Spending requires permission.** The treasurer submits an expense request with a bill. Configured approvers confirm with passkeys, and donors receive an objection window.
+3. **Debits match approved requests.** Bank debits are reconciled against approved requests. Any debit without a matching approval is flagged publicly.
+4. **Events are hash-chained in the event log (planned).** Each record includes the cryptographic hash of the prior record, ensuring any change would be detected.
+5. **Merkle roots anchor to a public chain (planned).** Periodic root hashes are published to the Polygon Amoy testnet without names or amounts. Anyone can verify proofs locally in the browser.
 
-## What we promise, and what we don't
+<a id="what-we-promise-and-what-we-dont"></a>
+## Guarantees and limits
 
-These are requirements for the MVP. The scaffold does not yet implement the full flow.
+We only claim what a skeptic can check.
 
-| We guarantee                                           | We do not guarantee                                                                                                            |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| A recorded event can't be changed or deleted unnoticed | That a bill is genuine. We prove it wasn't altered after upload, not that the vendor is real                                   |
-| Spending needs the approvals the club configured       | That a treasurer can't misuse money. They can't do it _unnoticed_, but in observer mode they can still pay from their bank app |
-| Bank debits are compared against approvals             | Anything about cash. It isn't in the bank feed                                                                                 |
-| Personal data stays off the chain                      | That we can't see your data. Privacy tiers limit what _others_ see                                                             |
+| We guarantee                                                 | We do not guarantee                                                                                                             |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| Any change or deletion of a recorded event would be detected | That a bill is genuine. We verify it was not altered after upload, not that the vendor is real                                  |
+| Spending needs the approvals the club configured             | That a treasurer cannot misuse money. They cannot do so undetected, but in observer mode they can still pay from their bank app |
+| Bank debits are compared against approvals                   | Anything about cash. Cash is not in the bank feed                                                                               |
+| Personal data stays off the chain                            | That operators cannot inspect database records. Privacy tiers limit what others see                                             |
 
-## Status
+<a id="tech"></a>
+## Built with
 
-**Pre-MVP.** Foundation phase; nothing is deployed yet. The plan is tracked in Linear (team access) and summarised here.
+| Component          | Technology                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------ |
+| Languages          | TypeScript (strict), Solidity                                                                          |
+| Monorepo           | pnpm workspaces, Turborepo                                                                             |
+| Quality            | Biome, Vitest, Foundry, Playwright (planned)                                                           |
+| Web app            | Next.js placeholder; PWA planned                                                                       |
+| API                | Hono HTTP service with a health endpoint                                                               |
+| Data & ledger      | PostgreSQL 16, [Konto](https://github.com/aetosdios27/Konto) double-entry ledger integration (planned) |
+| Event log          | Hash-chained event log (planned)                                                                       |
+| Proofs & anchoring | SHA-256, Merkle trees, Polygon Amoy testnet anchoring (planned for MVP)                                |
+| Auth               | Phone OTP, WebAuthn passkeys for approvals (planned)                                                   |
 
-| Milestone                 | Goal                                              | Target   |
-| ------------------------- | ------------------------------------------------- | -------- |
-| M0 Foundation             | Repo rules, CI, monorepo, previews, staging       | Nov 2026 |
-| M1 Identity & ledger core | Auth, roles, ledger, tamper-evident log           | Dec 2026 |
-| M2 Funds & spending       | Donations, requests, approvals, bills, objections | Jan 2027 |
-| M3 Transparency layer     | Public fund page, Merkle proofs, chain anchoring  | Jan 2027 |
-| M4 Money rails            | Bank reconciliation, unapproved-debit alerts      | Jan 2027 |
-| M5 Hardening & pilot      | Security review, DPDP, one real club              | Feb 2027 |
+<a id="status"></a>
+## Roadmap
 
-Dates are targets, not promises.
+Delivery is structured into six focus areas:
 
-## Tech
-
-| Layer    | Choice                                                                        |
-| -------- | ----------------------------------------------------------------------------- |
-| Language | TypeScript (strict), Solidity                                                 |
-| Monorepo | pnpm workspaces, Turborepo                                                    |
-| Quality  | Biome, Vitest; Foundry and Playwright planned                                 |
-| Web      | Next.js App Router, React (PWA planned)                                       |
-| API      | Hono on Node.js                                                               |
-| Data     | PostgreSQL 16, [Konto](https://github.com/aetosdios27/Konto) ledger (planned) |
-| Proofs   | SHA-256 hash chain, Merkle trees, Polygon (Amoy testnet in MVP)               |
-| Auth     | Phone OTP, WebAuthn passkeys for approvals (planned)                          |
+| Stage                          | Deliverables                                                                            | Status      |
+| ------------------------------ | --------------------------------------------------------------------------------------- | ----------- |
+| Foundation                     | Monorepo workspace, CI pipelines, security scanning and repository rulesets             | In progress |
+| Identity and ledger core       | Authentication, role permissions, double-entry ledger and hash-chained event log        | Planned     |
+| Funds and spending             | Donation intake, expense requests, passkey approvals, bill uploads and donor objections | Planned     |
+| Transparency layer             | Client-side Merkle proof verification, public fund view and testnet anchoring           | In progress |
+| Money rails and reconciliation | Bank feed integration and unapproved debit alerts                                       | Planned     |
+| Hardening and pilot            | Security review, data privacy review and initial community pilot                        | Planned     |
 
 ## Repository layout
 
 ```
-apps/web/         Next.js App Router placeholder, typed env
-apps/api/         Hono HTTP service, /health, typed env
-packages/shared/  Integer paise, branded UUIDs, Merkle proofs
-packages/ledger/  Empty package for ledger code (no Konto yet)
-packages/eventlog/ Empty package for the append-only event log
-contracts/        Placeholder; Foundry comes with YEN-16
+apps/web/         Next.js placeholder with typed environment settings
+apps/api/         Hono HTTP service with a health endpoint
+packages/shared/  Integer paise, branded IDs, Merkle proofs
+packages/ledger/  Placeholder for ledger integration
+packages/eventlog/ Placeholder for the append-only event log
+contracts/        Placeholder; RootRegistry is planned in YEN-16
 .github/          CI, rulesets, templates, repo-settings script
 .greptile/        AI review rules specific to this repo
 ```
 
 Money is always **integer paise** with the branded `Paise` type, never floats.
-Infrastructure is planned in YEN-17; nothing is deployed.
 
 ## Getting started
 
@@ -120,29 +115,30 @@ pnpm install
 pnpm verify            # biome ci + typecheck + test + build
 ```
 
-Other commands: `pnpm format` auto-fixes formatting and safe lint issues.
-
-To run locally after `pnpm verify`, copy each app's `.env.example` to `.env`:
+To run the apps locally, first run `pnpm verify` above to build the API, then copy the example environment files:
 
 ```sh
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env
 pnpm --filter @yen/api start  # API on port 3001
-pnpm --filter @yen/web dev    # Web on port 3000, in a second terminal
 ```
 
-The API requires `PORT`; web startup requires an HTTP(S) `NEXT_PUBLIC_API_URL`.
-Each app validates env once at startup and reports invalid variable names without values.
-Web builds skip runtime env validation so `pnpm verify` needs no env files or secrets.
+In a second terminal, start the web app on port 3000:
 
-## How we work
+```sh
+pnpm --filter @yen/web dev
+```
 
-`main` is protected by rulesets with no bypass for anyone: every change is a pull request, approved by someone other than its author, with **CI Gate** green. Merges are squashed. The full flow is in [CONTRIBUTING.md](CONTRIBUTING.md), and the rules themselves live in [`.github/rulesets/`](.github/rulesets).
+The API requires `PORT`, and the web app requires an HTTP(S) `NEXT_PUBLIC_API_URL`. The example files provide local values. `pnpm format` auto-fixes formatting and safe lint issues.
 
-## Security
+<a id="how-we-work"></a>
+<a id="security"></a>
+## Contributing and security
 
-Please report vulnerabilities privately; see [SECURITY.md](SECURITY.md). Short version: we will never edit recorded events, bypass an approval, or hold users' funds, and any path that allows one is a high-severity report.
+Direct pushes to `main` are blocked. Every change requires an independent review and passing CI checks. See [CONTRIBUTING.md](CONTRIBUTING.md) for pull request guidelines and [`.github/rulesets/`](.github/rulesets) for branch protection policies.
+
+To report security vulnerabilities privately, follow [SECURITY.md](SECURITY.md). Any path that permits editing recorded events, bypassing configured approvals, or holding user funds is treated as critical.
 
 ## License
 
-Not yet decided; all rights reserved until we choose one.
+All rights reserved until an open-source license is selected.

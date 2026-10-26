@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RootRegistry Polygon Amoy deployment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "status",
+    "chainId",
+    "address",
+    "transactionHash",
+    "blockNumber",
+    "compilerVersion",
+    "publisher"
+  ],
+  "properties": {
+    "$schema": { "const": "./amoy.schema.json" },
+    "status": { "enum": ["template", "deployed"] },
+    "chainId": { "const": 80002 },
+    "address": { "$ref": "#/$defs/address" },
+    "transactionHash": {
+      "type": ["string", "null"],
+      "pattern": "^0x[0-9a-fA-F]{64}$"
+    },
+    "blockNumber": { "type": ["integer", "null"], "minimum": 1 },
+    "compilerVersion": { "const": "0.8.30+commit.73712a01" },
+    "publisher": { "$ref": "#/$defs/address" }
+  },
+  "$defs": {
+    "address": {
+      "type": ["string", "null"],
+      "pattern": "^0x[0-9a-fA-F]{40}$",
+      "not": { "const": "0x0000000000000000000000000000000000000000" }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "template" } } },
+      "then": {
+        "properties": {
+          "address": { "type": "null" },
+          "transactionHash": { "type": "null" },
+          "blockNumber": { "type": "null" },
+          "publisher": { "type": "null" }
+        }
+      },
+      "else": {
+        "properties": {
+          "address": { "type": "string" },
+          "transactionHash": { "type": "string" },
+          "blockNumber": { "type": "integer" },
+          "publisher": { "type": "string" }
+        }
+      }
+    }
+  ]
+}

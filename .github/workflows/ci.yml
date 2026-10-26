@@ -145,10 +145,64 @@ jobs:
             exit 1
           fi
 
+  foundry:
+    name: Foundry
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          cache: true
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      - name: Install Foundry v1.5.0 with verified checksum
+        run: |
+          set -euo pipefail
+          # Published SHA-256: https://api.github.com/repos/foundry-rs/foundry/releases/tags/v1.5.0
+          # assets[name=foundry_v1.5.0_linux_amd64.tar.gz].digest
+          archive="$RUNNER_TEMP/foundry_v1.5.0_linux_amd64.tar.gz"
+          curl --fail --location --silent --show-error --retry 3 \
+            https://github.com/foundry-rs/foundry/releases/download/v1.5.0/foundry_v1.5.0_linux_amd64.tar.gz \
+            --output "$archive"
+          printf '5cd98f9092bcc28be087939491f786b2bf3ed55e492996a409e29519b8ab4dc8  %s\n' "$archive" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/foundry-bin"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/foundry-bin" forge
+          echo "$RUNNER_TEMP/foundry-bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/foundry-bin/forge" --version
+
+      - run: forge fmt --check
+      - run: forge build
+      - name: Test deployment manifest writer
+        run: node --test contracts/script/*.test.mjs
+        working-directory: .
+      - run: forge test
+      - name: Require full RootRegistry line and branch coverage
+        run: |
+          forge coverage --report summary --report lcov
+          node script/check-coverage.mjs
+      - run: forge snapshot --check
+      - name: Check generated shared ABI
+        run: node script/export-abi.mjs --check
+
   gate:
     name: CI Gate
     if: always()
-    needs: [verify, secrets, dependency-review, pr-checks]
+    needs: [verify, secrets, dependency-review, pr-checks, foundry]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -157,10 +211,11 @@ jobs:
           NEEDS: ${{ toJSON(needs) }}
         run: |
           echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
-          # verify and secrets always run; the others are skipped outside pull requests.
+          # verify, secrets, and foundry always run; the others are skipped outside pull requests.
           echo "$NEEDS" | jq -e '
             (.verify.result == "success") and
             (.secrets.result == "success") and
+            (.foundry.result == "success") and
             (.["dependency-review"].result | IN("success", "skipped")) and
             (.["pr-checks"].result | IN("success", "skipped"))
           ' > /dev/null
