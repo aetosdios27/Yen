@@ -36,6 +36,13 @@ it("records the first token's line for each statement", () => {
   ]);
 });
 
+it("counts bare carriage returns and CRLF as one line each", () => {
+  expect(splitSqlStatements("-- note\rSELECT 1;\r\nCOMMIT;")).toEqual([
+    { line: 2, leadingKeywords: ["SELECT"] },
+    { line: 3, leadingKeywords: ["COMMIT"] },
+  ]);
+});
+
 it.each([
   ["SELECT 'unfinished", "single-quoted string"],
   ["SELECT E'unfinished\\'", "single-quoted string"],

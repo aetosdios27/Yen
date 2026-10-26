@@ -165,6 +165,81 @@ databaseSuite("migration runner", (sql, url) => {
     ]);
   });
 
+  it("rejects COMMIT after a bare carriage return without persisting the table", async () => {
+    await writeFile(
+      join(dir, "0001_escaped.sql"),
+      "CREATE TABLE escaped (id int); -- note\rCOMMIT;",
+    );
+    await expect(migrate(sql, { dir })).rejects.toThrow(/0001_escaped\.sql:2.*transaction/i);
+    expect(await sql`SELECT to_regclass('public.escaped') AS name`).toEqual([{ name: null }]);
+    expect(await sql`SELECT to_regclass('public.schema_migrations') AS name`).toEqual([
+      { name: null },
+    ]);
+  });
+
+  it.each([
+    ["bare CR", "-- note\rCREATE TABLE accepted (id int); INSERT INTO accepted VALUES (3);"],
+    ["form feed", "CREATE\fTABLE accepted (id int); INSERT INTO accepted VALUES (3);"],
+    [
+      "operator before line comment",
+      "CREATE TABLE accepted (id int); INSERT INTO accepted VALUES (1+-- note\r2);",
+    ],
+    [
+      "operator before block comment",
+      "CREATE TABLE accepted (id int); INSERT INTO accepted VALUES (1+/* note */2);",
+    ],
+    [
+      "block marker in line comment",
+      "-- /* ignored\rCREATE TABLE accepted (id int); INSERT INTO accepted VALUES (3);",
+    ],
+    [
+      "line marker in block comment",
+      "/* -- ignored */ CREATE TABLE accepted (id int); INSERT INTO accepted VALUES (3);",
+    ],
+    [
+      "nested block comments",
+      "/* outer /* inner */ outer */ CREATE TABLE accepted (id int); INSERT INTO accepted VALUES (3);",
+    ],
+    [
+      "form feed inside line comment",
+      "-- note\fCOMMIT;\rCREATE TABLE accepted (id int); INSERT INTO accepted VALUES (3);",
+    ],
+    [
+      "vertical tab inside line comment",
+      "-- note\vCOMMIT;\rCREATE TABLE accepted (id int); INSERT INTO accepted VALUES (3);",
+    ],
+  ])("executes %s with PostgreSQL statement boundaries", async (_name, source) => {
+    await writeFile(join(dir, "0001_accepted.sql"), source);
+    await migrate(sql, { dir });
+    expect(await sql`SELECT id FROM accepted`).toEqual([{ id: 3 }]);
+    expect(await sql`SELECT version FROM schema_migrations`).toEqual([{ version: 1 }]);
+    expect(splitSqlStatements(source)).toHaveLength(2);
+  });
+
+  it("matches PostgreSQL 16's vertical-tab and stray block terminator errors", async () => {
+    await expect(sql.unsafe("SELECT 1\vAS value").simple()).rejects.toMatchObject({
+      code: "42601",
+    });
+    await expect(sql.unsafe("SELECT 1 */ 2").simple()).rejects.toMatchObject({ code: "42883" });
+    await expect(sql.unsafe("/* outer /* inner */").simple()).rejects.toMatchObject({
+      code: "42601",
+    });
+    expect(splitSqlStatements("SELECT 1\vAS value; SELECT 2;")).toHaveLength(2);
+    expect(splitSqlStatements("SELECT 1 */ 2; SELECT 3;")).toHaveLength(2);
+  });
+
+  it("rejects NUL bytes before creating migration history", async () => {
+    await expect(sql.unsafe("SELECT 1\0SELECT 2").simple()).rejects.toMatchObject({
+      code: "08P01",
+    });
+    await writeFile(join(dir, "0001_nul.sql"), "CREATE TABLE escaped (id int);\0COMMIT;");
+    await expect(migrate(sql, { dir })).rejects.toThrow("0001_nul.sql: line 1: NUL byte");
+    expect(await sql`SELECT to_regclass('public.escaped') AS name`).toEqual([{ name: null }]);
+    expect(await sql`SELECT to_regclass('public.schema_migrations') AS name`).toEqual([
+      { name: null },
+    ]);
+  });
+
   it.each([
     ["CREATE TABLE escaped (é$$ int); COMMIT; SELECT $$ok$$;", 1],
     ["CREATE TABLE escaped (é$$ int);\nCOMMIT; SELECT $$ok$$;", 2],

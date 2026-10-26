@@ -67,7 +67,10 @@ export function splitSqlStatements(source: string): SqlStatement[] {
 
   function advance(end: number): void {
     while (index < end) {
-      if (source[index] === "\n") line++;
+      if (source[index] === "\0") throw new Error(`line ${line}: NUL byte in SQL source`);
+      if (source[index] === "\r" || (source[index] === "\n" && source[index - 1] !== "\r")) {
+        line++;
+      }
       index++;
     }
   }
@@ -121,11 +124,12 @@ export function splitSqlStatements(source: string): SqlStatement[] {
   while (index < source.length) {
     const char = source[index];
     if (char === undefined) break;
-    if (/\s/.test(char)) {
+    if (/[ \t\n\r\f]/.test(char)) {
       advance(index + 1);
     } else if (source.startsWith("--", index)) {
-      const end = source.indexOf("\n", index + 2);
-      advance(end === -1 ? source.length : end);
+      let end = index + 2;
+      while (end < source.length && source[end] !== "\r" && source[end] !== "\n") end++;
+      advance(end);
     } else if (source.startsWith("/*", index)) {
       const startLine = line;
       let depth = 1;
