@@ -117,6 +117,7 @@ pnpm verify            # biome ci + typecheck + test + build
 Other commands: `pnpm format` auto-fixes formatting and safe lint issues.
 
 <a id="how-we-work"></a>
+<a id="security"></a>
 ## Contributing and security
 
 Direct pushes to `main` are blocked. Every change requires an independent review and passing CI checks. See [CONTRIBUTING.md](CONTRIBUTING.md) for pull request guidelines and [`.github/rulesets/`](.github/rulesets) for branch protection policies.
