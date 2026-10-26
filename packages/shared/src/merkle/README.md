@@ -59,6 +59,7 @@ already-disclosed data nor guarantees data availability.
 
 The independent Python fixtures regenerate with
 `python3 packages/shared/test-vectors/generate_merkle_vectors.py` from the repository root.
-Published CT test vectors are not used. Portability tests execute the same verifier
-in Node and a browser bundle when esbuild resolves locally, otherwise in a restricted
-VM with only WebCrypto, TextEncoder, and Uint8Array supplied as host globals.
+Published CT test vectors are not used. Portability tests require esbuild to build
+an ESM bundle with `platform: "browser"` and reject every `node:` import. They compare
+valid and tampered proofs in Node and the browser bundle, executing the bundle in a
+restricted VM with only WebCrypto, TextEncoder, and Uint8Array supplied as host globals.
