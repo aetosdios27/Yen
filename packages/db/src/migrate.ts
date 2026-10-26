@@ -24,6 +24,23 @@ const transactionControl = new Set([
   "ROLLBACK PREPARED",
 ]);
 const transactionIdSchema = z.object({ id: z.string() });
+const stringSettingSchema = z
+  .array(z.object({ standard_conforming_strings: z.string() }))
+  .length(1);
+
+export async function assertStandardConformingStringsOn(
+  show: () => Promise<unknown>,
+  context: string,
+): Promise<void> {
+  try {
+    const rows = stringSettingSchema.parse(await show());
+    if (rows[0]?.standard_conforming_strings !== "on") {
+      throw new Error(`server reported ${rows[0]?.standard_conforming_strings}`);
+    }
+  } catch (error) {
+    throw new Error(`${context}: standard_conforming_strings must be on`, { cause: error });
+  }
+}
 
 async function readMigrations(dir: string) {
   const names = (await readdir(dir)).filter((name) => name.endsWith(".sql")).sort();
@@ -56,6 +73,24 @@ async function readMigrations(dir: string) {
             `${name}:${statement.line}: migrations run inside the runner's own transaction`,
           );
         }
+        for (const [index, token] of statement.tokens.entries()) {
+          if (token.kind === "unsafeString") {
+            throw new Error(`${name}:${token.line}: ordinary string ends with a backslash`);
+          }
+          if (token.kind === "unicodeIdentifier") {
+            throw new Error(`${name}:${token.line}: Unicode-escaped identifiers are not permitted`);
+          }
+          if (token.kind !== "identifier") continue;
+          const value = token.value.toLowerCase();
+          if (value === "standard_conforming_strings") {
+            throw new Error(
+              `${name}:${token.line}: migrations may not change standard_conforming_strings`,
+            );
+          }
+          if (value === "set_config" && statement.tokens[index + 1]?.kind === "openParen") {
+            throw new Error(`${name}:${token.line}: migrations may not call set_config`);
+          }
+        }
       }
       return {
         version,
@@ -74,6 +109,15 @@ export async function migrate(
   const migrations = await readMigrations(dir);
   const connection = await sql.reserve();
   try {
+    try {
+      await connection`SET standard_conforming_strings = on`;
+    } catch (error) {
+      throw new Error("Failed to set standard_conforming_strings = on", { cause: error });
+    }
+    await assertStandardConformingStringsOn(
+      () => connection`SHOW standard_conforming_strings`,
+      "Before migrations",
+    );
     await connection`SELECT pg_advisory_lock(1497714225, 1)`;
     try {
       await connection`
@@ -110,6 +154,10 @@ export async function migrate(
           if (before !== after) {
             throw new Error(`${migration.name}: migration ended the runner's own transaction`);
           }
+          await assertStandardConformingStringsOn(
+            () => connection`SHOW standard_conforming_strings`,
+            migration.name,
+          );
           await connection`
             INSERT INTO schema_migrations (version, name, checksum)
             VALUES (${migration.version}, ${migration.name}, ${migration.checksum})

@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import * as z from "zod";
 import { createSql } from "./client.js";
-import { migrate } from "./migrate.js";
+import { assertStandardConformingStringsOn, migrate } from "./migrate.js";
 import { splitSqlStatements } from "./sql-statements.js";
 import { databaseSuite } from "./test/database.js";
 
@@ -16,6 +16,21 @@ const records = z.array(
   z.object({ version: z.number(), name: z.string(), checksum: z.string(), applied_at: z.date() }),
 );
 const defaultDir = fileURLToPath(new URL("../migrations/", import.meta.url));
+
+it("checks the post-migration SHOW result before history can be inserted", async () => {
+  await expect(
+    assertStandardConformingStringsOn(
+      async () => [{ standard_conforming_strings: "off" }],
+      "0001_change.sql",
+    ),
+  ).rejects.toThrow("0001_change.sql: standard_conforming_strings must be on");
+  await expect(
+    assertStandardConformingStringsOn(
+      async () => [{ standard_conforming_strings: "on" }],
+      "0001_safe.sql",
+    ),
+  ).resolves.toBeUndefined();
+});
 
 databaseSuite("migration runner", (sql, url) => {
   let dir: string;
@@ -163,6 +178,85 @@ databaseSuite("migration runner", (sql, url) => {
     expect(await sql`SELECT to_regclass('public.schema_migrations') AS name`).toEqual([
       { name: null },
     ]);
+  });
+
+  it("forces standard strings on for a database whose default is off", async () => {
+    const databaseName = new URL(url).pathname.slice(1);
+    await sql`ALTER DATABASE ${sql(databaseName)} SET standard_conforming_strings = off`;
+    const other = createSql(url);
+    try {
+      expect(await other`SHOW standard_conforming_strings`).toEqual([
+        { standard_conforming_strings: "off" },
+      ]);
+      await writeFile(join(dir, "0001_safe.sql"), "CREATE TABLE safe (id integer);");
+      await migrate(other, { dir });
+      expect(await other`SELECT to_regclass('public.safe') AS name`).toEqual([{ name: "safe" }]);
+      expect(await other`SELECT version FROM schema_migrations`).toEqual([{ version: 1 }]);
+    } finally {
+      await other.end();
+      await sql`ALTER DATABASE ${sql(databaseName)} RESET standard_conforming_strings`;
+    }
+  });
+
+  it("rejects the escaped-quote COMMIT from an off-default database before applying anything", async () => {
+    const databaseName = new URL(url).pathname.slice(1);
+    await sql`ALTER DATABASE ${sql(databaseName)} SET standard_conforming_strings = off`;
+    const other = createSql(url);
+    try {
+      await writeFile(
+        join(dir, "0001_escaped.sql"),
+        "CREATE TABLE escaped (id int); SELECT '\\'; SELECT '; COMMIT; --';",
+      );
+      await expect(migrate(other, { dir })).rejects.toThrow(/0001_escaped\.sql:1/);
+      expect(await other`SELECT to_regclass('public.escaped') AS name`).toEqual([{ name: null }]);
+      expect(await other`SELECT to_regclass('public.schema_migrations') AS name`).toEqual([
+        { name: null },
+      ]);
+    } finally {
+      await other.end();
+      await sql`ALTER DATABASE ${sql(databaseName)} RESET standard_conforming_strings`;
+    }
+  });
+
+  it.each([
+    "SET standard_conforming_strings = off;",
+    "SET LOCAL standard_conforming_strings = off;",
+    "RESET standard_conforming_strings;",
+    "SELECT set_config('standard_conforming_strings', 'off', true);",
+    'SET "standard_conforming_strings" = off;',
+    "ALTER SYSTEM SET standard_conforming_strings = off;",
+    "ALTER DATABASE postgres SET standard_conforming_strings = off;",
+    "ALTER ROLE postgres SET standard_conforming_strings = off;",
+    'SET U&"standard\\005fconforming_strings" = off;',
+  ])("rejects a migration that changes string parsing: %s", async (source) => {
+    await writeFile(join(dir, "0001_setting.sql"), `-- harmless\n${source}`);
+    await expect(migrate(sql, { dir })).rejects.toThrow(/0001_setting\.sql:2/);
+    expect(await sql`SELECT to_regclass('public.schema_migrations') AS name`).toEqual([
+      { name: null },
+    ]);
+  });
+
+  it("allows setting names inside comments and string literals", async () => {
+    await writeFile(
+      join(dir, "0001_literals.sql"),
+      "-- standard_conforming_strings set_config\nCREATE TABLE accepted (message text);\nINSERT INTO accepted VALUES ('standard_conforming_strings set_config');",
+    );
+    await migrate(sql, { dir });
+    expect(await sql`SELECT message FROM accepted`).toEqual([
+      { message: "standard_conforming_strings set_config" },
+    ]);
+  });
+
+  it("rolls back when a dollar-quoted block turns standard strings off", async () => {
+    await writeFile(
+      join(dir, "0001_block.sql"),
+      "CREATE TABLE escaped (id int); DO $$ BEGIN PERFORM set_config('standard_conforming_strings', 'off', true); END $$;",
+    );
+    await expect(migrate(sql, { dir })).rejects.toThrow(
+      "0001_block.sql: standard_conforming_strings must be on",
+    );
+    expect(await sql`SELECT to_regclass('public.escaped') AS name`).toEqual([{ name: null }]);
+    expect(await sql`SELECT version FROM schema_migrations`).toEqual([]);
   });
 
   it("rejects COMMIT after a bare carriage return without persisting the table", async () => {
