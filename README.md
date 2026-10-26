@@ -30,7 +30,7 @@ Clubs, festivals, housing societies and small NGOs collect money through persona
 
 ## How it works
 
-Yen **never holds money**. Funds stay in the club's own bank account. Yen watches the account, enforces configured spending approvals, and ensures any change would be detected.
+Yen **never holds money**. Funds stay in the club's own bank account. This section describes the design; most of it is still being built and nothing is deployed yet. Yen watches the account, enforces configured spending approvals, and ensures any change would be detected.
 
 ```mermaid
 flowchart LR
@@ -81,11 +81,11 @@ We only claim what a skeptic can check.
 <a id="status"></a>
 ## Roadmap
 
-Nothing is deployed yet. Delivery is structured into six focus areas:
+Delivery is structured into six focus areas:
 
 | Stage                          | Deliverables                                                                            | Status      |
 | ------------------------------ | --------------------------------------------------------------------------------------- | ----------- |
-| Foundation                     | Monorepo workspace, CI pipelines, security scanning and repository rulesets             | Done        |
+| Foundation                     | Monorepo workspace, CI pipelines, security scanning and repository rulesets             | In progress |
 | Identity and ledger core       | Authentication, role permissions, double-entry ledger and hash-chained event log        | Planned     |
 | Funds and spending             | Donation intake, expense requests, passkey approvals, bill uploads and donor objections | Planned     |
 | Transparency layer             | Client-side Merkle proof verification, public fund view and testnet anchoring           | In progress |
