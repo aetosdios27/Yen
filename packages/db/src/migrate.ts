@@ -9,6 +9,9 @@ const defaultDir = fileURLToPath(new URL("../migrations/", import.meta.url));
 const appliedSchema = z.array(
   z.object({ version: z.int().positive(), name: z.string(), checksum: z.string() }),
 );
+const transactionControl =
+  /^[ \t]*(?:START\s+TRANSACTION|PREPARE\s+TRANSACTION|COMMIT\s+PREPARED|ROLLBACK\s+PREPARED|BEGIN|COMMIT|END|ABORT|ROLLBACK|SAVEPOINT|RELEASE)\b/im;
+const transactionIdSchema = z.object({ id: z.string() });
 
 async function readMigrations(dir: string) {
   const names = (await readdir(dir)).filter((name) => name.endsWith(".sql")).sort();
@@ -23,10 +26,14 @@ async function readMigrations(dir: string) {
         );
       }
       const bytes = await readFile(join(dir, name));
+      const source = bytes.toString("utf8");
+      if (transactionControl.test(source)) {
+        throw new Error(`${name}: migrations run inside the runner's own transaction`);
+      }
       return {
         version,
         name,
-        source: bytes.toString("utf8"),
+        source,
         checksum: createHash("sha256").update(bytes).digest("hex"),
       };
     }),
@@ -66,7 +73,16 @@ export async function migrate(
         // postgres.js reserved connections lack begin() at runtime; keep transactions on the lock session.
         await connection`BEGIN`;
         try {
+          const before = transactionIdSchema.parse(
+            (await connection`SELECT txid_current()::text AS id`)[0],
+          ).id;
           await connection.unsafe(migration.source).simple();
+          const after = transactionIdSchema.parse(
+            (await connection`SELECT txid_current()::text AS id`)[0],
+          ).id;
+          if (before !== after) {
+            throw new Error(`${migration.name}: migration ended the runner's own transaction`);
+          }
           await connection`
             INSERT INTO schema_migrations (version, name, checksum)
             VALUES (${migration.version}, ${migration.name}, ${migration.checksum})

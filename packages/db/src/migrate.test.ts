@@ -104,6 +104,46 @@ databaseSuite("migration runner", (sql, url) => {
     expect(await sql`SELECT id FROM ordered`).toEqual([{ id: 1 }]);
   });
 
+  it.each([
+    "BEGIN",
+    "COMMIT",
+    "END",
+    "ABORT",
+    "ROLLBACK",
+    "START TRANSACTION",
+    "SAVEPOINT",
+    "RELEASE",
+    "PREPARE TRANSACTION",
+    "COMMIT PREPARED",
+    "ROLLBACK PREPARED",
+  ])("rejects %s before applying any migration", async (statement) => {
+    await writeFile(join(dir, "0001_create.sql"), "CREATE TABLE should_not_exist (id integer);");
+    await writeFile(join(dir, "0002_control.sql"), `  ${statement.toLowerCase()};`);
+    await expect(migrate(sql, { dir })).rejects.toThrow(
+      /0002_control\.sql.*migrations run inside the runner's own transaction/i,
+    );
+    expect(await sql`SELECT to_regclass('public.schema_migrations') AS history`).toEqual([
+      { history: null },
+    ]);
+    expect(await sql`SELECT to_regclass('public.should_not_exist') AS table_name`).toEqual([
+      { table_name: null },
+    ]);
+  });
+
+  it("accepts transaction words in comments and non-statement-start string literals", async () => {
+    await writeFile(
+      join(dir, "0001_safe.sql"),
+      "-- COMMIT\nCREATE TABLE safe (message text);\nINSERT INTO safe VALUES ('COMMIT');",
+    );
+    await migrate(sql, { dir });
+    expect(await sql`SELECT message FROM safe`).toEqual([{ message: "COMMIT" }]);
+  });
+
+  it("detects transaction control missed by the line scan", async () => {
+    await writeFile(join(dir, "0001_hidden.sql"), "CREATE TABLE hidden (id integer); COMMIT;");
+    await expect(migrate(sql, { dir })).rejects.toThrow(/0001_hidden\.sql.*transaction/i);
+  });
+
   it("rejects an invalid SQL migration filename", async () => {
     await writeFile(join(dir, "001_wrong.sql"), "SELECT 1;");
     await expect(migrate(sql, { dir })).rejects.toThrow(
