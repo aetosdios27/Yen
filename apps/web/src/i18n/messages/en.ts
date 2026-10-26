@@ -28,10 +28,128 @@ export const en = {
     hi: "हिन्दी",
     "en-XA": "Pseudo (test)",
   },
-  home: {
-    title: "Yen",
-    intro: "Community money you can check. Every record stays visible to the people who gave.",
-    designSystemCta: "Review the design system",
+  landing: {
+    hero: {
+      title: "Community money you can check.",
+      lead: "Donors can verify every rupee, and treasurers have proof they are honest.",
+      cta: "Join the pilot waitlist",
+    },
+    explainer: {
+      title: "How do I know it's true?",
+      intro: "Plain answers, no technical background needed.",
+      whatTitle: "What gets recorded?",
+      whatBody:
+        "Every donation and every approved expense becomes a numbered record in the club's account book. The club chooses who can see it.",
+      editTitle: "What stops someone editing a record?",
+      editBody:
+        "Each record carries a proof that covers the records before it. Change one line and the proof no longer matches, so the next person to check sees that it changed.",
+      checkTitle: "Who can check?",
+      checkBody:
+        "Anyone with the link. Checking the public record needs no account, no login and no payment.",
+      moneyTitle: "Does Yen hold the money?",
+      moneyBody:
+        "No. Money goes straight to the club's own bank account. Yen only reads and shows the records.",
+    },
+    steps: {
+      title: "How it works",
+      intro: "Three steps for every rupee.",
+      step1Title: "Collect by UPI",
+      step1Body: "Members and donors pay the club's own UPI. The money never passes through Yen.",
+      step2Title: "Upload the bill and approve",
+      step2Body:
+        "The treasurer adds a photo of the bill. Members confirm it on WhatsApp or in Yen before it is paid.",
+      step3Title: "Check the public record",
+      step3Body: "Anyone can open the record and see what came in and what went out.",
+    },
+    waitlist: {
+      title: "Join the pilot waitlist",
+      intro:
+        "We are starting with a few clubs and societies. Tell us about yours and we will contact you about the pilot.",
+    },
+  },
+  waitlist: {
+    name: {
+      label: "Full name",
+      placeholder: "Asha Rao",
+      error: "Enter your full name.",
+    },
+    contact: {
+      label: "Phone or email",
+      placeholder: "98765 43210 or asha@example.com",
+      hint: "We use this only to contact you about the pilot.",
+      error: "Enter a 10-digit phone number or an email address.",
+    },
+    org: {
+      label: "Club, society or organisation",
+      placeholder: "Green Park Residents Welfare Association",
+      error: "Enter the name of your club, society or organisation.",
+    },
+    consent: {
+      label: "I agree to be contacted on WhatsApp regarding the Yen pilot",
+      error: "Tick the box so we can contact you.",
+    },
+    submit: "Join the waitlist",
+    success: {
+      title: "You are on the waitlist.",
+      body: "We will contact you about the pilot. You can close this page.",
+      consent: "Consent recorded on {date}: {text}",
+    },
+  },
+  legal: {
+    terms: {
+      title: "Terms of use",
+      updated: "Last updated 26 October 2026",
+      intro:
+        "These terms explain how Yen works and what you can expect from it. Using Yen means you agree to them.",
+      serviceTitle: "Yen is a technology service, not a bank",
+      serviceBody:
+        "Yen is software for clubs, societies and community groups. It is not a bank, not a payment processor and not a money custodian: the platform never holds anyone's funds.",
+      moneyTitle: "Your money stays yours",
+      moneyBody:
+        "Donations go straight to the club's own bank account. Yen reads the club's records and shows them to members; it cannot move money in or out.",
+      usingTitle: "Using Yen responsibly",
+      usingBody:
+        "Treasurers record donations and expenses accurately, and approvers confirm only spending they have checked. Each club is responsible for what it publishes.",
+      publicTitle: "Public records",
+      publicBody:
+        "Records a club shares publicly can be read by anyone with the link. Personal contact details are never part of those records.",
+      pilotTitle: "The pilot",
+      pilotBody:
+        "Yen is in an early pilot, so features may change and are provided as is without guarantees. Indian law applies to these terms.",
+    },
+    privacy: {
+      title: "Privacy notice",
+      updated: "Last updated 26 October 2026",
+      intro:
+        "This notice explains what personal data Yen collects, why we collect it, and your rights under India's Digital Personal Data Protection Act (DPDP).",
+      collectTitle: "What we collect",
+      collectBody:
+        "When you join the waitlist we collect your name, your phone number or email address, and your club, society or organisation name. Nothing else.",
+      whyTitle: "Why we collect it",
+      whyBody:
+        "Only to contact you about the Yen pilot and to record that you agreed to be contacted.",
+      publicTitle: "What is never public",
+      publicBody:
+        "Your name and contact details are never written into public records. Only club activity appears there.",
+      storageTitle: "Where it is stored",
+      storageBody:
+        "Personal data is stored on servers in India. We do not sell it or share it for advertising.",
+      trackingTitle: "No tracking",
+      trackingBody:
+        "Yen uses no third-party tracking cookies, no advertising cookies and no analytics scripts.",
+      rightsTitle: "Your choices",
+      rightsBody:
+        "You can ask us to correct or delete your personal data at any time, and you may raise a complaint with the Data Protection Board of India.",
+      changesTitle: "Changes to this notice",
+      changesBody:
+        "When this notice changes, the updated version appears on this page with a new date.",
+    },
+  },
+  footer: {
+    note: "Yen never holds your money.",
+    navLabel: "Legal",
+    terms: "Terms of use",
+    privacy: "Privacy notice",
   },
   designSystem: {
     title: "Design system",

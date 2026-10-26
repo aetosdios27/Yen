@@ -7,7 +7,7 @@ export type InputProps = Omit<ComponentPropsWithRef<"input">, "id"> & {
   id?: string;
   label: string;
   hint?: string;
-  error?: string;
+  error?: string | undefined;
 };
 
 export function Input({ id, label, hint, error, className, ...props }: InputProps) {
