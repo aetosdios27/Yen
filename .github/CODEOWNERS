@@ -1,7 +1,7 @@
-# Default owner. Once the second teammate joins, add them here and turn on
-# "require_code_owner_review" in .github/rulesets/main.json.
-*                @aetosdios27
-/.github/        @aetosdios27
-/contracts/      @aetosdios27
-/packages/ledger/   @aetosdios27
-/packages/eventlog/ @aetosdios27
+# Both teammates own everything, so either can approve the other's pull request.
+# With require_code_owner_review on, an approval from anyone else does not count.
+*                   @aetosdios27 @pranav718
+/.github/           @aetosdios27 @pranav718
+/contracts/         @aetosdios27 @pranav718
+/packages/ledger/   @aetosdios27 @pranav718
+/packages/eventlog/ @aetosdios27 @pranav718
