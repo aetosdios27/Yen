@@ -16,9 +16,13 @@ concurrency:
 
 jobs:
   analyze:
-    name: Analyze (javascript-typescript)
+    name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript, actions]
     permissions:
       contents: read
       security-events: write
@@ -28,8 +32,9 @@ jobs:
           persist-credentials: false
       - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
-          languages: javascript-typescript
+          languages: ${{ matrix.language }}
           build-mode: none
+          queries: security-extended
       - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
-          category: /language:javascript-typescript
+          category: /language:${{ matrix.language }}
