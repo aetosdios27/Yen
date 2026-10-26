@@ -1,0 +1,10 @@
+{
+  "$schema": "./amoy.schema.json",
+  "status": "template",
+  "chainId": 80002,
+  "address": null,
+  "transactionHash": null,
+  "blockNumber": null,
+  "compilerVersion": "0.8.30+commit.73712a01",
+  "publisher": null
+}

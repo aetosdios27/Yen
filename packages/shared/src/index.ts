@@ -36,3 +36,8 @@ export {
   verifyInclusion,
 } from "./merkle/tree.js";
 export { addPaise, formatInr, type Paise, paise } from "./paise.js";
+export {
+  type RootRegistryAddress,
+  rootRegistryAbi,
+  rootRegistryAddress,
+} from "./registry/abi.js";
