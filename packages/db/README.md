@@ -48,6 +48,8 @@ DATABASE_URL=postgres://postgres:pw@localhost:55432/yen pnpm --filter @yen/db mi
 
 The CLI runs TypeScript directly on Node 24, so it needs no prior build. For programmatic use, call `await migrate(sql)` or `await migrate(sql, { dir: absoluteDirectory })` with a client from `createSql()`.
 
+`DATABASE_URL` and `YEN_TEST_DATABASE_URL` accept `postgres://` and `postgresql://` URLs with a nonempty host. Credentials, ports, database paths, query parameters, IPv6 hosts, and valid percent escapes are supported. Whitespace and malformed percent escapes are rejected. Invalid settings fail validation before client construction, and validation errors name the variable without including its value.
+
 Files use `migrations/NNNN_name.sql`, starting at `0001` with no gaps or duplicate versions. Names use lowercase letters, digits, and underscores. The runner sorts by version and records the full filename, version, SHA-256 of the file bytes, and `applied_at` in `schema_migrations`.
 
 One session advisory lock covers history validation and all migrations. Each pending file and its history row commit in a single transaction. A failure rolls back that file and releases the lock; earlier files stay committed. Before applying any migration, the runner rejects top-level transaction-control statements in every file, including `BEGIN`, `COMMIT`, and `ROLLBACK`. Transaction words inside comments, strings, and dollar-quoted bodies are not top-level statements. `CREATE INDEX CONCURRENTLY` and other non-transactional statements are still unsupported.
@@ -70,4 +72,4 @@ YEN_TEST_DATABASE_URL=postgres://postgres:pw@localhost:55432/postgres pnpm verif
 
 `YEN_TEST_DATABASE_URL` must permit `CREATE DATABASE` and `DROP DATABASE`. Each database test file creates a unique `yen_test_<random UUID>` database and drops it after the suite, including failed tests. Test DDL and migrations run only inside those throwaway databases. The admin database is used only to create and drop them. An interrupted process can leave its throwaway database behind.
 
-Without this variable, database suites skip with a message only when `CI` is unset. In CI, a missing variable is a hard failure. `packages/db/turbo.json` passes the variable and `CI` through Turbo's environment filter and disables test caching so database checks always execute.
+Without this variable, database suites skip with a message when `CI` is unset, `false`, or `0`. `CI=true` and `CI=1` make a missing variable a hard failure. These CI values are case-sensitive; other values, including an empty string, are rejected. An explicitly empty or invalid test URL fails in both local and CI modes. `packages/db/turbo.json` passes the variable and `CI` through Turbo's environment filter and disables test caching so database checks always execute.

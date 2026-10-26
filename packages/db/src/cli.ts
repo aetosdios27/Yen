@@ -1,8 +1,8 @@
 import { createSql } from "./client.ts";
+import { parseDatabaseUrl } from "./env.ts";
 import { migrate } from "./migrate.ts";
 
-const url = process.env.DATABASE_URL;
-if (!url) throw new Error("DATABASE_URL is required to run migrations");
+const url = parseDatabaseUrl(process.env.DATABASE_URL, "DATABASE_URL");
 
 const sql = createSql(url);
 try {
