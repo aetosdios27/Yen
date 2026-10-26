@@ -1,0 +1,32 @@
+{
+  "name": "@yen/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "generate": "node scripts/generate.mjs",
+    "generate:check": "node scripts/generate.mjs --check",
+    "test": "pnpm generate:check && vitest run"
+  },
+  "dependencies": {
+    "openapi-fetch": "0.17.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@yen/api": "workspace:*",
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3",
+    "vitest": "^5.0.5"
+  }
+}

@@ -1,7 +1,9 @@
 import * as z from "zod";
+import { rateLimitEnv } from "./config.js";
 
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  ...rateLimitEnv.shape,
   PORT: z.coerce.number().int().min(1).max(65535),
 });
 
