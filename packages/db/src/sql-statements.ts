@@ -6,7 +6,10 @@ export type SqlStatement = {
 
 export type SqlToken =
   | { kind: "identifier"; value: string; line: number }
+  | { kind: "stringLiteral"; value: string; line: number }
   | { kind: "openParen"; line: number }
+  | { kind: "comma"; line: number }
+  | { kind: "other"; line: number }
   | { kind: "unicodeIdentifier"; line: number }
   | { kind: "unsafeString"; line: number };
 
@@ -96,20 +99,66 @@ export function splitSqlStatements(source: string): SqlStatement[] {
 
   function singleQuote(escaped: boolean): void {
     const startLine = line;
+    let value = "";
     advance(index + 1);
     while (index < source.length) {
       if (escaped && source[index] === "\\") {
-        advance(Math.min(index + 2, source.length));
+        const next = source[index + 1];
+        if (next === undefined)
+          throw new Error(`line ${startLine}: unterminated single-quoted string`);
+        let escapeEnd = index + 2;
+        if (/[0-7]/.test(next)) {
+          while (escapeEnd < index + 4 && /[0-7]/.test(source[escapeEnd] ?? "")) escapeEnd++;
+          value += String.fromCharCode(
+            Number.parseInt(source.slice(index + 1, escapeEnd), 8) % 256,
+          );
+        } else if (next === "x" || next === "X") {
+          while (escapeEnd < index + 4 && /[0-9a-fA-F]/.test(source[escapeEnd] ?? "")) {
+            escapeEnd++;
+          }
+          value +=
+            escapeEnd === index + 2
+              ? next
+              : String.fromCharCode(Number.parseInt(source.slice(index + 2, escapeEnd), 16));
+        } else if (next === "u" || next === "U") {
+          const digits = next === "u" ? 4 : 8;
+          const encoded = source.slice(index + 2, index + 2 + digits);
+          if (encoded.length === digits && /^[0-9a-fA-F]+$/.test(encoded)) {
+            const codePoint = Number.parseInt(encoded, 16);
+            value += codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : next;
+            escapeEnd += digits;
+          } else {
+            value += next;
+          }
+        } else {
+          value +=
+            next === "b"
+              ? "\b"
+              : next === "f"
+                ? "\f"
+                : next === "n"
+                  ? "\n"
+                  : next === "r"
+                    ? "\r"
+                    : next === "t"
+                      ? "\t"
+                      : next;
+        }
+        advance(escapeEnd);
       } else if (source[index] === "'") {
-        if (source[index + 1] === "'") advance(index + 2);
-        else {
+        if (source[index + 1] === "'") {
+          value += "'";
+          advance(index + 2);
+        } else {
           if (!escaped && source[index - 1] === "\\") {
             tokens.push({ kind: "unsafeString", line: startLine });
           }
+          tokens.push({ kind: "stringLiteral", value, line: startLine });
           advance(index + 1);
           return;
         }
       } else {
+        value += source[index];
         advance(index + 1);
       }
     }
@@ -192,12 +241,14 @@ export function splitSqlStatements(source: string): SqlStatement[] {
       if (opening) {
         start();
         const startLine = line;
+        tokens.push({ kind: "other", line: startLine });
         advance(index + opening.length);
         const end = source.indexOf(opening, index);
         if (end === -1) throw new Error(`line ${startLine}: unterminated dollar-quoted string`);
         advance(end + opening.length);
       } else {
         start();
+        tokens.push({ kind: "other", line });
         advance(index + 1);
       }
     } else if (isIdentifierStart(codePointAt(index) ?? 0)) {
@@ -219,8 +270,13 @@ export function splitSqlStatements(source: string): SqlStatement[] {
       start();
       tokens.push({ kind: "openParen", line });
       advance(index + 1);
+    } else if (char === ",") {
+      start();
+      tokens.push({ kind: "comma", line });
+      advance(index + 1);
     } else {
       start();
+      tokens.push({ kind: "other", line });
       advance(index + 1);
     }
   }

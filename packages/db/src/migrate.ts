@@ -88,7 +88,15 @@ async function readMigrations(dir: string) {
             );
           }
           if (value === "set_config" && statement.tokens[index + 1]?.kind === "openParen") {
-            throw new Error(`${name}:${token.line}: migrations may not call set_config`);
+            const setting = statement.tokens[index + 2];
+            const separator = statement.tokens[index + 3];
+            if (
+              setting?.kind !== "stringLiteral" ||
+              separator?.kind !== "comma" ||
+              setting.value.toLowerCase().includes("standard_conforming_strings")
+            ) {
+              throw new Error(`${name}:${token.line}: unsafe set_config first argument`);
+            }
           }
         }
       }

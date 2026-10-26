@@ -236,6 +236,66 @@ databaseSuite("migration runner", (sql, url) => {
     ]);
   });
 
+  it.each([
+    "SELECT set_config('standard_conforming_strings', 'off', false);",
+    "SELECT set_config('STANDARD_CONFORMING_STRINGS', 'off', false);",
+    "SELECT set_config('pg_catalog.standard_conforming_strings', 'off', false);",
+    "SELECT set_config(E'standard\\137conforming_strings', 'off', false);",
+    "SELECT set_config(E'standard\\x5fconforming_strings', 'off', false);",
+    "SELECT set_config(E'standard\\u005fconforming_strings', 'off', false);",
+    "SELECT set_config('standard_' || 'conforming_strings', 'off', false);",
+    "SELECT set_config(name_col, 'off', false);",
+    "SELECT set_config(lower('X'), 'off', false);",
+    "SELECT set_config($$search_path$$, 'public', false);",
+    "SELECT set_config('search_path'::text, 'public', false);",
+  ])("rejects unsafe set_config first arguments: %s", async (source) => {
+    await writeFile(join(dir, "0001_setting.sql"), `SELECT 1;\n${source}`);
+    await expect(migrate(sql, { dir })).rejects.toThrow(/0001_setting\.sql:2/);
+  });
+
+  it.each([
+    "SELECT set_config('search_path', 'public', false);",
+    "SELECT set_config( /* setting */ E'search_path' /* name */, 'public', false);",
+    "SELECT set_config(E'search\\137path', 'public', false);",
+    "SELECT set_config(E'search\\x5fpath', 'public', false);",
+    "SELECT set_config(E'search\\u005fpath', 'public', false);",
+  ])("applies set_config with a safe literal first argument: %s", async (source) => {
+    await writeFile(
+      join(dir, "0001_setting.sql"),
+      `${source}\nCREATE TABLE setting_probe (value text); INSERT INTO setting_probe SELECT current_setting('search_path');`,
+    );
+    await migrate(sql, { dir });
+    expect(await sql`SELECT version FROM schema_migrations`).toEqual([{ version: 1 }]);
+    expect(await sql`SELECT value FROM setting_probe`).toEqual([{ value: "public" }]);
+  });
+
+  it("still rejects COMMIT after an allowed set_config call", async () => {
+    await writeFile(
+      join(dir, "0001_setting.sql"),
+      "SELECT set_config('search_path', 'public', false);\n/* harmless */ COMMIT;",
+    );
+    await expect(migrate(sql, { dir })).rejects.toThrow(/0001_setting\.sql:2.*transaction/i);
+  });
+
+  it.each([
+    ["trailing backslash", "SELECT '\\';", /ordinary string ends with a backslash/],
+    [
+      "table identifier",
+      "CREATE TABLE standard_conforming_strings (id int);",
+      /may not change standard_conforming_strings/,
+    ],
+    [
+      "column identifier",
+      "CREATE TABLE safe (standard_conforming_strings text);",
+      /may not change standard_conforming_strings/,
+    ],
+  ])("rejects the documented conservative case: %s", async (_case, source, reason) => {
+    await writeFile(join(dir, "0001_conservative.sql"), source);
+    await expect(migrate(sql, { dir })).rejects.toThrow(
+      new RegExp(`0001_conservative\\.sql:1:.*${reason.source}`),
+    );
+  });
+
   it("allows setting names inside comments and string literals", async () => {
     await writeFile(
       join(dir, "0001_literals.sql"),

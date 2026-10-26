@@ -34,7 +34,10 @@ it("records the first token's line for each statement", () => {
     {
       line: 2,
       leadingKeywords: ["SELECT"],
-      tokens: [{ kind: "identifier", value: "SELECT", line: 2 }],
+      tokens: [
+        { kind: "identifier", value: "SELECT", line: 2 },
+        { kind: "other", line: 2 },
+      ],
     },
     {
       line: 3,
@@ -49,7 +52,10 @@ it("counts bare carriage returns and CRLF as one line each", () => {
     {
       line: 2,
       leadingKeywords: ["SELECT"],
-      tokens: [{ kind: "identifier", value: "SELECT", line: 2 }],
+      tokens: [
+        { kind: "identifier", value: "SELECT", line: 2 },
+        { kind: "other", line: 2 },
+      ],
     },
     {
       line: 3,
