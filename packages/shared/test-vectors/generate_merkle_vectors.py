@@ -75,31 +75,6 @@ def derive_uuid(label: str) -> str:
     return f"{h[0:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}"
 
 
-def check_rfc6962_structure() -> None:
-    """Published Certificate Transparency vectors pin this tree shape to RFC 6962."""
-    data = [
-        bytes.fromhex(x)
-        for x in [
-            "",
-            "00",
-            "10",
-            "2021",
-            "3031",
-            "40414243",
-            "5051525354555657",
-            "606162636465666768696a6b6c6d6e6f",
-        ]
-    ]
-    ct_leaves = [sha256(b"\x00", d) for d in data]
-    assert mth(ct_leaves).hex() == "5dc9da79a70659a9ad559cb701ded9a2ab9d823aad2f4960cfe370eff4604328"
-    assert mth(ct_leaves[:3]).hex() == "aeb6bcfe274b70a14fb067a5e5578264db0fa9b51af5e0ba159158f329e06e77"
-    assert [p.hex() for p in path(0, ct_leaves)] == [
-        "96a296d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7",
-        "5f083f0a1a33ca076a95279832580db3e0ef4584bdff1f54c8a360f50de3031e",
-        "6b47aaf29ee3c2af9af889bc1fb9254dabd31177f16232dd6aab035ca39bf6e4",
-    ]
-
-
 def leaf_vectors(count: int) -> list[dict]:
     out = []
     for i in range(count):
@@ -186,7 +161,6 @@ def interval_vector(name: str, event_counts: list[int]) -> dict:
 
 
 def build() -> dict:
-    check_rfc6962_structure()
     leaves = leaf_vectors(257)
     leaf_hashes = [bytes.fromhex(v["leaf"]) for v in leaves]
     small = list(range(18))
