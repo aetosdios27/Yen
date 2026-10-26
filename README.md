@@ -59,39 +59,39 @@ flowchart LR
 
 We only claim what a skeptic can check.
 
-| We guarantee | We do not guarantee |
-|---|---|
-| A recorded event can't be changed or deleted unnoticed | That a bill is genuine. We prove it wasn't altered after upload, not that the vendor is real |
-| Spending needs the approvals the club configured | That a treasurer can't misuse money. They can't do it *unnoticed*, but in observer mode they can still pay from their bank app |
-| Bank debits are compared against approvals | Anything about cash. It isn't in the bank feed |
-| Personal data stays off the chain | That we can't see your data. Privacy tiers limit what *others* see |
+| We guarantee                                           | We do not guarantee                                                                                                            |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| A recorded event can't be changed or deleted unnoticed | That a bill is genuine. We prove it wasn't altered after upload, not that the vendor is real                                   |
+| Spending needs the approvals the club configured       | That a treasurer can't misuse money. They can't do it _unnoticed_, but in observer mode they can still pay from their bank app |
+| Bank debits are compared against approvals             | Anything about cash. It isn't in the bank feed                                                                                 |
+| Personal data stays off the chain                      | That we can't see your data. Privacy tiers limit what _others_ see                                                             |
 
 ## Status
 
 **Pre-MVP.** Foundation phase; nothing is deployed yet. The plan is tracked in Linear (team access) and summarised here.
 
-| Milestone | Goal | Target |
-|---|---|---|
-| M0 Foundation | Repo rules, CI, monorepo, previews, staging | Nov 2026 |
-| M1 Identity & ledger core | Auth, roles, ledger, tamper-evident log | Dec 2026 |
-| M2 Funds & spending | Donations, requests, approvals, bills, objections | Jan 2027 |
-| M3 Transparency layer | Public fund page, Merkle proofs, chain anchoring | Jan 2027 |
-| M4 Money rails | Bank reconciliation, unapproved-debit alerts | Jan 2027 |
-| M5 Hardening & pilot | Security review, DPDP, one real club | Feb 2027 |
+| Milestone                 | Goal                                              | Target   |
+| ------------------------- | ------------------------------------------------- | -------- |
+| M0 Foundation             | Repo rules, CI, monorepo, previews, staging       | Nov 2026 |
+| M1 Identity & ledger core | Auth, roles, ledger, tamper-evident log           | Dec 2026 |
+| M2 Funds & spending       | Donations, requests, approvals, bills, objections | Jan 2027 |
+| M3 Transparency layer     | Public fund page, Merkle proofs, chain anchoring  | Jan 2027 |
+| M4 Money rails            | Bank reconciliation, unapproved-debit alerts      | Jan 2027 |
+| M5 Hardening & pilot      | Security review, DPDP, one real club              | Feb 2027 |
 
 Dates are targets, not promises.
 
 ## Tech
 
-| Layer | Choice |
-|---|---|
-| Language | TypeScript (strict), Solidity |
-| Monorepo | pnpm workspaces, Turborepo |
-| Quality | Biome, Vitest, Foundry (contracts), Playwright (e2e, planned) |
-| Web | Next.js PWA (planned) |
-| Data | PostgreSQL 16, [Konto](https://github.com/aetosdios27/Konto) double-entry ledger |
-| Proofs | SHA-256 hash chain, Merkle trees, Polygon (Amoy testnet in MVP) |
-| Auth | Phone OTP, WebAuthn passkeys for approvals (planned) |
+| Layer    | Choice                                                                           |
+| -------- | -------------------------------------------------------------------------------- |
+| Language | TypeScript (strict), Solidity                                                    |
+| Monorepo | pnpm workspaces, Turborepo                                                       |
+| Quality  | Biome, Vitest, Foundry (contracts), Playwright (e2e, planned)                    |
+| Web      | Next.js PWA (planned)                                                            |
+| Data     | PostgreSQL 16, [Konto](https://github.com/aetosdios27/Konto) double-entry ledger |
+| Proofs   | SHA-256 hash chain, Merkle trees, Polygon (Amoy testnet in MVP)                  |
+| Auth     | Phone OTP, WebAuthn passkeys for approvals (planned)                             |
 
 ## Repository layout
 
