@@ -71,6 +71,19 @@ describe("RFC 8785 canonical JSON", () => {
     expect(() => canonicalize(lone.input)).toThrow(/lone surrogate/i);
   });
 
+  it("loads independent U+2028, U+2029, and DEL vectors", () => {
+    for (const [name, canonical] of [
+      ["line_separator", '"\u2028"'],
+      ["paragraph_separator", '"\u2029"'],
+      ["delete_control", '"\u007f"'],
+    ]) {
+      const vector = vectors.find((candidate) => candidate.name === name);
+      expect(vector).toMatchObject({ canonical });
+      if (vector === undefined) throw new Error(`Missing ${name} vector`);
+      expect(canonicalize(vector.input)).toBe(canonical);
+    }
+  });
+
   it("rejects non-JSON values, invalid unicode, and cycles", () => {
     const cyclic: Record<string, unknown> = {};
     cyclic.self = cyclic;
@@ -111,6 +124,24 @@ describe("RFC 8785 canonical JSON", () => {
     const sparse = [1, 2, 3];
     delete sparse[1];
     expect(() => canonicalize(sparse)).toThrow(/sparse array/i);
+  });
+
+  it("rejects hidden properties, symbol keys, and accessors", () => {
+    const hiddenArray = [1];
+    Object.defineProperty(hiddenArray, "hidden", { value: 2 });
+    const hiddenObject = { visible: 1 };
+    Object.defineProperty(hiddenObject, "hidden", { value: 2 });
+    const symbolObject = { visible: 1 };
+    Object.defineProperty(symbolObject, Symbol("hidden"), { value: 2 });
+    const accessorArray = [1];
+    Object.defineProperty(accessorArray, "0", { get: () => 1 });
+    const accessorObject = Object.defineProperty({}, "value", {
+      enumerable: true,
+      get: () => 1,
+    });
+    for (const value of [hiddenArray, hiddenObject, symbolObject, accessorArray, accessorObject]) {
+      expect(() => canonicalize(value)).toThrow();
+    }
   });
 
   it("is stable across JSON parse round trips", () => {

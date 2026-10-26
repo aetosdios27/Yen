@@ -58,6 +58,21 @@
     "canonical": "\"😀\""
   },
   {
+    "name": "line_separator",
+    "input": " ",
+    "canonical": "\" \""
+  },
+  {
+    "name": "paragraph_separator",
+    "input": " ",
+    "canonical": "\" \""
+  },
+  {
+    "name": "delete_control",
+    "input": "",
+    "canonical": "\"\""
+  },
+  {
     "name": "lone_surrogate",
     "input": "\ud800",
     "error": "lone surrogate"

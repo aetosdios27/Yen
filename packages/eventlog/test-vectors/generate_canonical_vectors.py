@@ -140,6 +140,9 @@ def canonical_vectors():
         ("escapes", "\b\t\n\f\r\x00\x1f/\\\""),
         ("utf16_sort", {"\ue000": 1, "𐀀": 2, "A": 3}),
         ("surrogate_pair", "\ud83d\ude00"),
+        ("line_separator", "\u2028"),
+        ("paragraph_separator", "\u2029"),
+        ("delete_control", "\u007f"),
     ]
     result = [{"name": name, "input": value, "canonical": canonical(value)} for name, value in cases]
     lone_surrogate = "\ud800"

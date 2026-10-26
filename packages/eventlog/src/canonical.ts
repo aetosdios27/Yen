@@ -33,13 +33,14 @@ export function canonicalize(value: unknown): string {
         if (Object.getPrototypeOf(input) !== Array.prototype) {
           throw new TypeError("Canonical JSON requires plain arrays");
         }
-        if (Object.getOwnPropertySymbols(input).length !== 0) {
-          throw new TypeError("Canonical JSON rejects array symbol keys");
-        }
         if ("toJSON" in input) {
           throw new TypeError("Canonical JSON rejects array toJSON");
         }
-        for (const key of Object.keys(input)) {
+        for (const key of Reflect.ownKeys(input)) {
+          if (key === "length") continue;
+          if (typeof key !== "string") {
+            throw new TypeError("Canonical JSON rejects array symbol keys");
+          }
           const index = Number(key);
           if (
             !Number.isSafeInteger(index) ||
@@ -48,6 +49,10 @@ export function canonicalize(value: unknown): string {
             `${index}` !== key
           ) {
             throw new TypeError("Canonical JSON rejects annotated arrays");
+          }
+          const descriptor = Object.getOwnPropertyDescriptor(input, key);
+          if (descriptor === undefined || !descriptor.enumerable || !("value" in descriptor)) {
+            throw new TypeError("Canonical JSON requires enumerable array data properties");
           }
         }
         const parts: string[] = [];
@@ -61,15 +66,23 @@ export function canonicalize(value: unknown): string {
       if (prototype !== Object.prototype && prototype !== null) {
         throw new TypeError("Canonical JSON requires plain objects");
       }
-      if (Object.getOwnPropertySymbols(input).length !== 0) {
-        throw new TypeError("Canonical JSON rejects symbol keys");
-      }
       const parts: string[] = [];
-      for (const key of Object.keys(input).sort()) {
+      const keys = Reflect.ownKeys(input);
+      for (const key of keys) {
+        if (typeof key !== "string") throw new TypeError("Canonical JSON rejects symbol keys");
+        const descriptor = Object.getOwnPropertyDescriptor(input, key);
+        if (descriptor === undefined || !descriptor.enumerable || !("value" in descriptor)) {
+          throw new TypeError("Canonical JSON requires enumerable object data properties");
+        }
+      }
+      for (const key of keys.sort()) {
+        if (typeof key !== "string") throw new TypeError("Canonical JSON rejects symbol keys");
         if (!validUnicode(key)) throw new TypeError("Canonical JSON rejects lone surrogates");
-        parts.push(
-          `${JSON.stringify(key)}:${encode(Object.getOwnPropertyDescriptor(input, key)?.value)}`,
-        );
+        const descriptor = Object.getOwnPropertyDescriptor(input, key);
+        if (descriptor === undefined || !("value" in descriptor)) {
+          throw new TypeError("Canonical JSON requires object data properties");
+        }
+        parts.push(`${JSON.stringify(key)}:${encode(descriptor.value)}`);
       }
       return `{${parts.join(",")}}`;
     } finally {
