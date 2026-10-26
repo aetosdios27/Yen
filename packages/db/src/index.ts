@@ -1,4 +1,5 @@
 export { createSql, type Sql } from "./client.js";
+export { migrate } from "./migrate.js";
 export {
   type FundRow,
   fundRowSchema,

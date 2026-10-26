@@ -35,3 +35,37 @@ try {
 ```
 
 Postgres `bigint` values remain JavaScript `bigint`, including values beyond `Number.MAX_SAFE_INTEGER`. `@yen/shared`'s `Paise` is a safe-integer number: callers must range-check before conversion and call `paise()` at that boundary. JSON responses must encode bigint values explicitly, for example as decimal strings. `uuidv7()` uses the current Unix milliseconds and cryptographic randomness; IDs within a millisecond are unique probabilistically and are not monotonically ordered.
+
+## Run migrations
+
+From the workspace root, set `DATABASE_URL` to the database you intend to migrate:
+
+```sh
+DATABASE_URL=postgres://postgres:pw@localhost:55432/yen pnpm --filter @yen/db migrate
+```
+
+The CLI runs TypeScript directly on Node 24, so it needs no prior build. For programmatic use, call `await migrate(sql)` or `await migrate(sql, { dir: absoluteDirectory })` with a client from `createSql()`.
+
+Files use `migrations/NNNN_name.sql`, starting at `0001` with no gaps or duplicate versions. Names use lowercase letters, digits, and underscores. The runner sorts by version and records the full filename, version, SHA-256 of the file bytes, and `applied_at` in `schema_migrations`.
+
+One session advisory lock covers history validation and all migrations. Each pending file and its history row commit in a single transaction. A failure rolls back that file and releases the lock; earlier files stay committed. Files must contain transactional SQL without explicit transaction control. Operations such as `CREATE INDEX CONCURRENTLY` need a separate deployment procedure.
+
+Applied files are immutable. An edited checksum, missing file, renamed file, version gap, duplicate version, or out-of-order history fails the run. A second run leaves application data and migration history unchanged. There are no down migrations. Run the runner through a direct Postgres connection or session-pooling proxy because transaction-pooling proxies cannot preserve its session advisory lock.
+
+## Run database tests locally
+
+Start Postgres 16 with Podman, or replace `podman` with `docker`:
+
+```sh
+podman run -d --name yen-pg -e POSTGRES_PASSWORD=pw -p 55432:5432 docker.io/library/postgres:16
+```
+
+If `konto-pg-probe` is already running on port 55432 with these credentials, reuse it. Set the admin connection and run tests from the workspace root:
+
+```sh
+YEN_TEST_DATABASE_URL=postgres://postgres:pw@localhost:55432/postgres pnpm verify
+```
+
+`YEN_TEST_DATABASE_URL` must permit `CREATE DATABASE` and `DROP DATABASE`. Each database test file creates a unique `yen_test_<random UUID>` database and drops it after the suite, including failed tests. Test DDL and migrations run only inside those throwaway databases. The admin database is used only to create and drop them. An interrupted process can leave its throwaway database behind.
+
+Without this variable, database suites skip with a message only when `CI` is unset. In CI, a missing variable is a hard failure. `packages/db/turbo.json` passes the variable and `CI` through Turbo's environment filter and disables test caching so database checks always execute.
