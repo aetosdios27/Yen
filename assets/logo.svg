@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="t">
+  <title id="t">Yen</title>
+  <defs>
+    <linearGradient id="bg" x1="24" y1="0" x2="232" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4F46E5"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="60" fill="url(#bg)"/>
+  <!-- A Y drawn as a Merkle tree: two records merge into one proof, which is anchored below. -->
+  <g stroke="#fff" stroke-width="14" stroke-linecap="round" fill="none">
+    <path d="M78 74 L128 132 L178 74"/>
+    <path d="M128 132 V190"/>
+  </g>
+  <g fill="#fff">
+    <circle cx="78" cy="74" r="16"/>
+    <circle cx="178" cy="74" r="16"/>
+    <circle cx="128" cy="132" r="18"/>
+  </g>
+  <circle cx="128" cy="190" r="16" fill="#A5B4FC" stroke="#fff" stroke-width="8"/>
+</svg>
