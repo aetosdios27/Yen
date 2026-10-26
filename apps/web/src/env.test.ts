@@ -1,0 +1,38 @@
+import {
+  PHASE_DEVELOPMENT_SERVER,
+  PHASE_PRODUCTION_BUILD,
+  PHASE_PRODUCTION_SERVER,
+} from "next/constants.js";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import nextConfig from "../next.config";
+
+beforeEach(() => {
+  vi.resetModules();
+  vi.stubEnv("NEXT_PUBLIC_API_URL", undefined);
+});
+
+afterEach(() => vi.unstubAllEnvs());
+
+it("validates at startup and exports the parsed env only once", async () => {
+  vi.stubEnv("NEXT_PUBLIC_API_URL", "http://localhost:3001");
+  await nextConfig(PHASE_PRODUCTION_SERVER);
+  const { env } = await import("./env");
+  expect(env).toEqual({ NEXT_PUBLIC_API_URL: "http://localhost:3001" });
+  vi.stubEnv("NEXT_PUBLIC_API_URL", "invalid-private-value");
+  expect((await import("./env")).env).toBe(env);
+});
+
+it.each([undefined, "", "invalid-private-value", "/api", "ftp://example.com"])(
+  "fails startup for missing or invalid NEXT_PUBLIC_API_URL %s",
+  async (url) => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", url);
+    for (const phase of [PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_SERVER]) {
+      await expect(nextConfig(phase)).rejects.toThrow("NEXT_PUBLIC_API_URL");
+      await expect(nextConfig(phase)).rejects.not.toThrow("invalid-private-value");
+    }
+  },
+);
+
+it("skips runtime env validation during production builds", async () => {
+  await expect(nextConfig(PHASE_PRODUCTION_BUILD)).resolves.toEqual({});
+});
