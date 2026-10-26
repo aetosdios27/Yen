@@ -1,4 +1,4 @@
-import { fundIdSchema, type Result } from "@yen/shared";
+import { fundIdSchema, paise, type Result } from "@yen/shared";
 import * as z from "zod/mini";
 import { canonicalize } from "./canonical.js";
 
@@ -22,6 +22,8 @@ const nonnegativeInt = z.int().check(z.minimum(0), z.maximum(Number.MAX_SAFE_INT
 const signedInt = z
   .int()
   .check(z.minimum(-Number.MAX_SAFE_INTEGER), z.maximum(Number.MAX_SAFE_INTEGER));
+const positivePaise = z.pipe(positiveInt, z.transform(paise));
+const signedPaise = z.pipe(signedInt, z.transform(paise));
 
 function isUtcMillisecondInstant(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return false;
@@ -52,7 +54,7 @@ export const payloadSchemas = {
     role: z.enum(["member", "approver", "treasurer"]),
   }),
   "member.removed": z.strictObject({ member_id: pseudonymIdSchema }),
-  "donation.pledged": z.strictObject({ donation_id: donationId, amount_paise: positiveInt }),
+  "donation.pledged": z.strictObject({ donation_id: donationId, amount_paise: positivePaise }),
   "donation.verified": z.strictObject({
     donation_id: donationId,
     bank_transaction_id: bankTransactionId,
@@ -61,7 +63,7 @@ export const payloadSchemas = {
     donation_id: donationId,
     reason: z.enum(["unmatched", "duplicate", "cancelled"]),
   }),
-  "expense.submitted": z.strictObject({ expense_id: expenseId, amount_paise: positiveInt }),
+  "expense.submitted": z.strictObject({ expense_id: expenseId, amount_paise: positivePaise }),
   "expense.evidence_added": z.strictObject({
     expense_id: expenseId,
     evidence_id: evidenceId,
@@ -90,13 +92,13 @@ export const payloadSchemas = {
   }),
   "bank.credit_seen": z.strictObject({
     bank_transaction_id: bankTransactionId,
-    amount_paise: positiveInt,
+    amount_paise: positivePaise,
   }),
   "bank.debit_seen": z.strictObject({
     bank_transaction_id: bankTransactionId,
-    amount_paise: positiveInt,
+    amount_paise: positivePaise,
   }),
-  "bank.balance_checked": z.strictObject({ balance_paise: signedInt }),
+  "bank.balance_checked": z.strictObject({ balance_paise: signedPaise }),
   "discrepancy.raised": z.strictObject({
     discrepancy_id: discrepancyId,
     bank_transaction_id: bankTransactionId,

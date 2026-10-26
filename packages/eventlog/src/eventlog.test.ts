@@ -1,5 +1,14 @@
 import { readFileSync } from "node:fs";
-import { leafHash, parseFundId, type Result, salt32, toHex } from "@yen/shared";
+import {
+  addPaise,
+  formatInr,
+  leafHash,
+  paise,
+  parseFundId,
+  type Result,
+  salt32,
+  toHex,
+} from "@yen/shared";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import * as z from "zod/mini";
@@ -17,6 +26,7 @@ import {
   genesisHash,
   makeNextEvent,
   parseEvent,
+  parseUnsignedEvent,
   payloadSchemas,
   verifyChain,
   verifyChainStream,
@@ -242,6 +252,80 @@ describe("frozen event hashes", () => {
     const { hash: _original, ...first } = event;
     const { hash: _reordered, ...second } = parsed;
     expect(await computeEventHash(first)).toBe(await computeEventHash(second));
+  });
+});
+
+describe("event money contract", () => {
+  it.each([
+    "donation.pledged",
+    "expense.submitted",
+    "bank.credit_seen",
+    "bank.debit_seen",
+  ] as const)("parses %s amounts as shared Paise without changing JSON", (type) => {
+    const template = events.find((event) => event.type === type);
+    if (template === undefined) throw new Error(`Missing ${type} fixture`);
+    for (const amount of [1, Number.MAX_SAFE_INTEGER]) {
+      const raw: unknown = JSON.parse(
+        JSON.stringify({ ...template, payload: { ...template.payload, amount_paise: amount } }),
+      );
+      const parsed = unwrap(parseEvent(raw));
+      if (!("amount_paise" in parsed.payload)) throw new Error("Missing amount");
+      expect(addPaise(parsed.payload.amount_paise, paise(0))).toBe(paise(amount));
+      expect(formatInr(parsed.payload.amount_paise)).toBe(formatInr(paise(amount)));
+      expect(parsed).toEqual(raw);
+      const { hash: _hash, ...envelope } = parsed;
+      const unsigned = unwrap(parseUnsignedEvent(envelope));
+      if (!("amount_paise" in unsigned.payload)) throw new Error("Missing unsigned amount");
+      expect(addPaise(unsigned.payload.amount_paise, paise(0))).toBe(paise(amount));
+      expect(JSON.stringify(parsed.payload)).toContain(`"amount_paise":${amount}`);
+    }
+    for (const amount of [0, -1, 0.5, Number.MAX_SAFE_INTEGER + 1, NaN, Infinity, "1"]) {
+      const raw = { ...template, payload: { ...template.payload, amount_paise: amount } };
+      expect(parseEvent(raw).ok, String(amount)).toBe(false);
+      expect(payloadSchemas[type].safeParse(raw.payload).success, String(amount)).toBe(false);
+    }
+  });
+
+  it.each([-Number.MAX_SAFE_INTEGER, -1, 0, 1, Number.MAX_SAFE_INTEGER])(
+    "accepts signed balance %s as shared Paise in parsed and constructed events",
+    async (balance) => {
+      const template = events.find((event) => event.type === "bank.balance_checked");
+      if (template === undefined) throw new Error("Missing balance fixture");
+      const raw: unknown = JSON.parse(
+        JSON.stringify({ ...template, payload: { balance_paise: balance } }),
+      );
+      const parsed = unwrap(parseEvent(raw));
+      if (parsed.type !== "bank.balance_checked") throw new Error("Wrong event type");
+      expect(addPaise(parsed.payload.balance_paise, paise(0))).toBe(paise(balance));
+      expect(formatInr(parsed.payload.balance_paise)).toBe(formatInr(paise(balance)));
+      expect(parsed).toEqual(raw);
+      const { seq: _seq, hash: _hash, prev_hash: _prevHash, ...input } = parsed;
+      const next = await makeNextEvent(null, {
+        ...input,
+        payload: { balance_paise: paise(balance) },
+      });
+      expect(next.payload).toEqual({ balance_paise: balance });
+      expect(JSON.stringify(next.payload)).toBe(`{"balance_paise":${balance}}`);
+    },
+  );
+
+  it("rejects fractional, unsafe, nonnumeric and nonfinite balances", () => {
+    const template = events.find((event) => event.type === "bank.balance_checked");
+    if (template === undefined) throw new Error("Missing balance fixture");
+    for (const balance of [
+      -Number.MAX_SAFE_INTEGER - 1,
+      Number.MAX_SAFE_INTEGER + 1,
+      -0.5,
+      0.5,
+      NaN,
+      -Infinity,
+      Infinity,
+      "0",
+    ]) {
+      const raw = { ...template, payload: { balance_paise: balance } };
+      expect(parseEvent(raw).ok, String(balance)).toBe(false);
+      expect(payloadSchemas["bank.balance_checked"].safeParse(raw.payload).success).toBe(false);
+    }
   });
 });
 
