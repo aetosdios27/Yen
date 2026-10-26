@@ -1,10 +1,8 @@
 declare const hash32Brand: unique symbol;
 declare const salt32Brand: unique symbol;
 
-/** A 32-byte SHA-256 digest. */
 export type Hash32 = Uint8Array & { readonly [hash32Brand]: "Hash32" };
 
-/** 32 secret random bytes mixed into an event leaf so published roots reveal nothing guessable. */
 export type Salt32 = Uint8Array & { readonly [salt32Brand]: "Salt32" };
 
 function copy32(bytes: Uint8Array, name: string): Uint8Array {
@@ -24,7 +22,7 @@ export function salt32(bytes: Uint8Array): Salt32 {
 
 const lowercaseHex = /^(?:[0-9a-f]{2})*$/;
 
-/** Decodes lowercase hex. Uppercase is rejected so every value has exactly one spelling. */
+// Rejecting uppercase gives each byte sequence exactly one hex spelling.
 export function fromHex(hex: string): Uint8Array {
   if (!lowercaseHex.test(hex)) {
     throw new RangeError("Expected lowercase hex with an even number of digits");
@@ -51,5 +49,5 @@ export async function sha256(...parts: readonly Uint8Array[]): Promise<Hash32> {
     input.set(part, offset);
     offset += part.length;
   }
-  return new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", input)) as Hash32;
+  return hash32(new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", input)));
 }
