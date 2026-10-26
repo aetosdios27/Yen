@@ -4,11 +4,11 @@ import { canonicalize } from "./canonical.js";
 
 const uuid = z.string().check(z.regex(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/));
 const orgId = uuid.brand<"OrgId">();
-const actorId = z
+export const pseudonymIdSchema = z
   .string()
-  .check(z.regex(/^psn_[0-9a-f]{32}$/))
-  .brand<"ActorPseudonymId">();
-const memberId = uuid.brand<"MemberPseudonymId">();
+  .check(z.regex(/^psn_[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/))
+  .brand<"PseudonymId">();
+export type PseudonymId = z.infer<typeof pseudonymIdSchema>;
 const donationId = uuid.brand<"DonationId">();
 const expenseId = uuid.brand<"ExpenseId">();
 const evidenceId = uuid.brand<"EvidenceId">();
@@ -32,8 +32,8 @@ function isUtcMillisecondInstant(value: string): boolean {
 export const occurredAtSchema = z.string().check(z.refine(isUtcMillisecondInstant));
 export const hashHexSchema = hex32.brand<"EventHashHex">();
 export type EventHashHex = z.infer<typeof hashHexSchema>;
-export const actorPseudonymSchema = actorId;
-export type ActorPseudonymId = z.infer<typeof actorId>;
+export const actorPseudonymSchema = pseudonymIdSchema;
+export type ActorPseudonymId = PseudonymId;
 
 export const payloadSchemas = {
   "fund.created": z.strictObject({
@@ -48,10 +48,10 @@ export const payloadSchemas = {
     visibility: z.enum(["private", "members", "public"]),
   }),
   "member.added": z.strictObject({
-    member_id: memberId,
+    member_id: pseudonymIdSchema,
     role: z.enum(["member", "approver", "treasurer"]),
   }),
-  "member.removed": z.strictObject({ member_id: memberId }),
+  "member.removed": z.strictObject({ member_id: pseudonymIdSchema }),
   "donation.pledged": z.strictObject({ donation_id: donationId, amount_paise: positiveInt }),
   "donation.verified": z.strictObject({
     donation_id: donationId,
@@ -113,7 +113,7 @@ const envelope = {
   fund_id: fundIdSchema,
   seq: positiveInt,
   version: z.literal(1),
-  actor: actorId,
+  actor: pseudonymIdSchema,
   occurred_at: occurredAtSchema,
   prev_hash: hashHexSchema,
   hash: hashHexSchema,
@@ -246,7 +246,48 @@ export type Event = z.infer<typeof eventSchema>;
 type WithoutChain<T> = T extends Event ? Omit<T, "seq" | "prev_hash" | "hash"> : never;
 type WithoutHash<T> = T extends Event ? Omit<T, "hash"> : never;
 export type EventInput = WithoutChain<Event>;
-export type EventEnvelope = WithoutHash<Event>;
+export type UnsignedEvent = WithoutHash<Event>;
+
+const unsignedEventSchema = z.strictObject({
+  fund_id: fundIdSchema,
+  seq: positiveInt,
+  type: z.string(),
+  version: z.literal(1),
+  actor: pseudonymIdSchema,
+  occurred_at: occurredAtSchema,
+  payload: z.unknown(),
+  prev_hash: hashHexSchema,
+});
+const unsignedEventKeys = new Set([
+  "fund_id",
+  "seq",
+  "type",
+  "version",
+  "actor",
+  "occurred_at",
+  "payload",
+  "prev_hash",
+]);
+
+export function parseUnsignedEvent(input: unknown): Result<UnsignedEvent> {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    return { ok: false, error: "Invalid unsigned event envelope: exactly eight fields required" };
+  }
+  const keys = Reflect.ownKeys(input);
+  if (
+    keys.length !== unsignedEventKeys.size ||
+    keys.some((key) => typeof key !== "string" || !unsignedEventKeys.has(key))
+  ) {
+    return { ok: false, error: "Invalid unsigned event envelope: exactly eight fields required" };
+  }
+  const parsed = unsignedEventSchema.safeParse(input);
+  if (!parsed.success)
+    return { ok: false, error: "Invalid unsigned event envelope: exactly eight fields required" };
+  const event = parseEvent({ ...parsed.data, hash: "0".repeat(64) });
+  if (!event.ok) return { ok: false, error: `Invalid unsigned event envelope: ${event.error}` };
+  const { hash: _hash, ...unsigned } = event.value;
+  return { ok: true, value: unsigned };
+}
 
 export function parseEvent(input: unknown): Result<Event> {
   const parsed = eventSchema.safeParse(input);

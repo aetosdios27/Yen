@@ -30,6 +30,26 @@ export function canonicalize(value: unknown): string {
     active.add(input);
     try {
       if (Array.isArray(input)) {
+        if (Object.getPrototypeOf(input) !== Array.prototype) {
+          throw new TypeError("Canonical JSON requires plain arrays");
+        }
+        if (Object.getOwnPropertySymbols(input).length !== 0) {
+          throw new TypeError("Canonical JSON rejects array symbol keys");
+        }
+        if (Object.hasOwn(input, "toJSON")) {
+          throw new TypeError("Canonical JSON rejects array toJSON");
+        }
+        for (const key of Object.keys(input)) {
+          const index = Number(key);
+          if (
+            !Number.isSafeInteger(index) ||
+            index < 0 ||
+            index >= input.length ||
+            `${index}` !== key
+          ) {
+            throw new TypeError("Canonical JSON rejects annotated arrays");
+          }
+        }
         const parts: string[] = [];
         for (let i = 0; i < input.length; i++) {
           if (!Object.hasOwn(input, i)) throw new TypeError("Canonical JSON rejects sparse arrays");

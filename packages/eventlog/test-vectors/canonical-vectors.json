@@ -51,5 +51,15 @@
       "A": 3
     },
     "canonical": "{\"A\":3,\"𐀀\":2,\"\":1}"
+  },
+  {
+    "name": "surrogate_pair",
+    "input": "😀",
+    "canonical": "\"😀\""
+  },
+  {
+    "name": "lone_surrogate",
+    "input": "\ud800",
+    "error": "lone surrogate"
   }
 ]

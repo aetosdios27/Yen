@@ -1,22 +1,26 @@
 import { fromHex, type Hash32, hash32, leafHash, type Salt32, sha256, toHex } from "@yen/shared";
+import * as z from "zod/mini";
 import { canonicalize } from "./canonical.js";
 import {
   type Event,
-  type EventEnvelope,
   type EventHashHex,
   type EventInput,
   hashHexSchema,
   isUtcEventTime,
   parseEvent,
+  parseUnsignedEvent,
   payloadSchemas,
+  type UnsignedEvent,
 } from "./model.js";
 
 export const eventHashDomain = "yen/eventlog/event/v1\u0000";
 const domainBytes = new TextEncoder().encode(eventHashDomain);
 export const genesisHash: EventHashHex = hashHexSchema.parse("0".repeat(64));
 
-export async function computeEventHash(envelope: EventEnvelope): Promise<EventHashHex> {
-  const bytes = new TextEncoder().encode(canonicalize(envelope));
+export async function computeEventHash(envelope: UnsignedEvent): Promise<EventHashHex> {
+  const parsed = parseUnsignedEvent(envelope);
+  if (!parsed.ok) throw new TypeError(parsed.error);
+  const bytes = new TextEncoder().encode(canonicalize(parsed.value));
   return hashHexSchema.parse(toHex(await sha256(domainBytes, bytes)));
 }
 
@@ -60,27 +64,39 @@ export type ChainBreakReason =
   | "unknown type/version"
   | "bad envelope"
   | "non-monotonic time"
-  | "non-UTC time";
+  | "non-UTC time"
+  | "truncation"
+  | "unexpected events";
+
+export const chainHeadSchema = z
+  .strictObject({
+    count: z.int().check(z.minimum(0), z.maximum(Number.MAX_SAFE_INTEGER)),
+    latestHash: hashHexSchema,
+  })
+  .brand<"ChainHead">();
+export type ChainHead = z.infer<typeof chainHeadSchema>;
+
+type ChainBreak = {
+  readonly ok: false;
+  readonly index: number;
+  readonly seq: number | null;
+  readonly reason: ChainBreakReason;
+};
 
 export type ChainVerification =
   | { readonly ok: true; readonly count: number; readonly latestHash: EventHashHex }
-  | {
-      readonly ok: false;
-      readonly index: number;
-      readonly seq: number | null;
-      readonly reason: ChainBreakReason;
-    };
-
-export type ExpectedHead = { readonly count: number; readonly latestHash: EventHashHex };
+  | ChainBreak;
+export type ChainStructureCheck =
+  | { readonly ok: true; readonly kind: "structure-only"; readonly head: ChainHead }
+  | ChainBreak;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export async function verifyChainStream(
+export async function checkChainStructureStream(
   events: AsyncIterable<unknown>,
-  expectedHead?: ExpectedHead,
-): Promise<ChainVerification> {
+): Promise<ChainStructureCheck> {
   let count = 0;
   let previous: Event | null = null;
   for await (const raw of events) {
@@ -89,7 +105,7 @@ export async function verifyChainStream(
       isRecord(raw) && typeof raw.seq === "number" && Number.isSafeInteger(raw.seq)
         ? raw.seq
         : null;
-    const broken = (reason: ChainBreakReason): ChainVerification => ({
+    const broken = (reason: ChainBreakReason): ChainBreak => ({
       ok: false,
       index,
       seq: rawSeq,
@@ -119,10 +135,30 @@ export async function verifyChainStream(
     count++;
   }
   const latestHash = previous === null ? genesisHash : previous.hash;
-  if (expectedHead !== undefined && count !== expectedHead.count) {
-    return { ok: false, index: count, seq: count + 1, reason: "gap" };
+  return { ok: true, kind: "structure-only", head: chainHeadSchema.parse({ count, latestHash }) };
+}
+
+export async function checkChainStructure(events: Iterable<unknown>): Promise<ChainStructureCheck> {
+  async function* stream(): AsyncIterable<unknown> {
+    yield* events;
   }
-  if (expectedHead !== undefined && latestHash !== expectedHead.latestHash) {
+  return checkChainStructureStream(stream());
+}
+
+export async function verifyChainStream(
+  events: AsyncIterable<unknown>,
+  expected: ChainHead,
+): Promise<ChainVerification> {
+  const result = await checkChainStructureStream(events);
+  if (!result.ok) return result;
+  const { count, latestHash } = result.head;
+  if (count < expected.count || (count === 0 && latestHash !== expected.latestHash)) {
+    return { ok: false, index: count, seq: count + 1, reason: "truncation" };
+  }
+  if (count > expected.count) {
+    return { ok: false, index: count, seq: count + 1, reason: "unexpected events" };
+  }
+  if (latestHash !== expected.latestHash) {
     return { ok: false, index: count, seq: count, reason: "wrong hash" };
   }
   return { ok: true, count, latestHash };
@@ -130,10 +166,10 @@ export async function verifyChainStream(
 
 export async function verifyChain(
   events: Iterable<unknown>,
-  expectedHead?: ExpectedHead,
+  expected: ChainHead,
 ): Promise<ChainVerification> {
   async function* stream(): AsyncIterable<unknown> {
     yield* events;
   }
-  return verifyChainStream(stream(), expectedHead);
+  return verifyChainStream(stream(), expected);
 }

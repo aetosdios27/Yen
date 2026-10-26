@@ -12,15 +12,24 @@ GENESIS = "00" * 32
 WIDTH = 100
 
 
-def valid_string(value):
-    for index, char in enumerate(value):
+def normalized_string(value):
+    characters = []
+    index = 0
+    while index < len(value):
+        char = value[index]
         unit = ord(char)
         if 0xD800 <= unit <= 0xDBFF:
             if index + 1 >= len(value) or not 0xDC00 <= ord(value[index + 1]) <= 0xDFFF:
                 raise ValueError("lone surrogate")
+            low = ord(value[index + 1])
+            characters.append(chr(0x10000 + ((unit - 0xD800) << 10) + low - 0xDC00))
+            index += 2
         elif 0xDC00 <= unit <= 0xDFFF:
-            if index == 0 or not 0xD800 <= ord(value[index - 1]) <= 0xDBFF:
-                raise ValueError("lone surrogate")
+            raise ValueError("lone surrogate")
+        else:
+            characters.append(char)
+            index += 1
+    return "".join(characters)
 
 
 def js_number(value):
@@ -47,15 +56,17 @@ def canonical(value):
     if value is False:
         return "false"
     if isinstance(value, str):
-        valid_string(value)
-        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        return json.dumps(normalized_string(value), ensure_ascii=False, separators=(",", ":"))
     if isinstance(value, (int, float)):
         return js_number(float(value))
     if isinstance(value, list):
         return "[" + ",".join(canonical(item) for item in value) + "]"
     if isinstance(value, dict):
-        keys = sorted(value, key=lambda key: key.encode("utf-16-be"))
-        return "{" + ",".join(canonical(key) + ":" + canonical(value[key]) for key in keys) + "}"
+        normalized = [(normalized_string(key), item) for key, item in value.items()]
+        if len({key for key, _ in normalized}) != len(normalized):
+            raise ValueError("duplicate normalized key")
+        entries = sorted(normalized, key=lambda entry: entry[0].encode("utf-16-be"))
+        return "{" + ",".join(canonical(key) + ":" + canonical(item) for key, item in entries) + "}"
     raise ValueError("not JSON")
 
 
@@ -75,8 +86,8 @@ def payloads():
         ("fund.created", {"org_id": uid("org"), "visibility": "private"}),
         ("fund.policy_changed", {"approval_quorum": 2, "objection_window_hours": 48}),
         ("fund.visibility_changed", {"visibility": "members"}),
-        ("member.added", {"member_id": uid("member"), "role": "approver"}),
-        ("member.removed", {"member_id": uid("member")}),
+        ("member.added", {"member_id": "psn_" + uid("member"), "role": "approver"}),
+        ("member.removed", {"member_id": "psn_" + uid("member")}),
         ("donation.pledged", {"donation_id": donation, "amount_paise": 12345}),
         ("donation.verified", {"donation_id": donation, "bank_transaction_id": bank}),
         ("donation.rejected", {"donation_id": donation, "reason": "unmatched"}),
@@ -108,7 +119,7 @@ def golden_events():
             "seq": index + 1,
             "type": event_type,
             "version": 1,
-            "actor": "psn_" + hashlib.sha256(b"yen/eventlog/vector/actor-pseudonym").hexdigest()[:32],
+            "actor": "psn_" + derive_uuid("actor-pseudonym"),
             "occurred_at": f"2026-01-01T00:{index:02d}:00.000Z",
             "payload": payload,
             "prev_hash": previous,
@@ -117,7 +128,7 @@ def golden_events():
         event_hash = hashlib.sha256(DOMAIN + encoded.encode("utf-8")).hexdigest()
         events.append({"event": {**envelope, "hash": event_hash}, "canonical": encoded})
         previous = event_hash
-    return {"domain_utf8": DOMAIN.decode("utf-8"), "genesis_hash": GENESIS, "events": events}
+    return {"domain_utf8": DOMAIN.decode("utf-8"), "genesis_hash": GENESIS, "latest_hash": previous, "events": events}
 
 
 def canonical_vectors():
@@ -128,14 +139,28 @@ def canonical_vectors():
         ("numbers_edges", [1e21, 1e-7, -0.0, 0.1 + 0.2, 1e-6, 1e20]),
         ("escapes", "\b\t\n\f\r\x00\x1f/\\\""),
         ("utf16_sort", {"\ue000": 1, "𐀀": 2, "A": 3}),
+        ("surrogate_pair", "\ud83d\ude00"),
     ]
-    return [{"name": name, "input": value, "canonical": canonical(value)} for name, value in cases]
+    result = [{"name": name, "input": value, "canonical": canonical(value)} for name, value in cases]
+    lone_surrogate = "\ud800"
+    try:
+        canonical(lone_surrogate)
+    except ValueError as error:
+        result.append({"name": "lone_surrogate", "input": lone_surrogate, "error": str(error)})
+    else:
+        raise AssertionError("lone surrogate was accepted")
+    return result
 
 
 def display_scalar(value):
     if isinstance(value, float) and "e" in repr(value):
         mantissa, exponent = repr(value).split("e")
         return f"{mantissa}e{int(exponent)}"
+    if isinstance(value, str):
+        try:
+            return json.dumps(normalized_string(value), ensure_ascii=False)
+        except ValueError:
+            return json.dumps(value, ensure_ascii=True)
     return json.dumps(value, ensure_ascii=False)
 
 
@@ -147,7 +172,7 @@ def emit(value, indent=0, column=0):
             return "{}"
         entries = []
         for key, item in value.items():
-            prefix = f"{json.dumps(key, ensure_ascii=False)}: "
+            prefix = f"{display_scalar(key)}: "
             entries.append(f"{inner}{prefix}{emit(item, indent + 2, indent + 2 + len(prefix))}")
         return "{\n" + ",\n".join(entries) + f"\n{pad}}}"
     if isinstance(value, list):

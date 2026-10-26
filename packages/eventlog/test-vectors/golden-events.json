@@ -1,6 +1,7 @@
 {
   "domain_utf8": "yen/eventlog/event/v1\u0000",
   "genesis_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "latest_hash": "c15ddb6e14f5cc19846bb3fdd360485590951c372fe474293cfd9f046123c906",
   "events": [
     {
       "event": {
@@ -8,16 +9,16 @@
         "seq": 1,
         "type": "fund.created",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:00:00.000Z",
         "payload": {
           "org_id": "07c53d46-f34c-367a-b9b3-215dd1b00c29",
           "visibility": "private"
         },
         "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-        "hash": "7c2b448915198bd294861e96a5ee73b89d9fc928ce8095682e33efb69ae547ea"
+        "hash": "b5e74d4d5ae8891f811d9cca8998e7415457da2fe065efacb39095ef90948835"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:00:00.000Z\",\"payload\":{\"org_id\":\"07c53d46-f34c-367a-b9b3-215dd1b00c29\",\"visibility\":\"private\"},\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":1,\"type\":\"fund.created\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:00:00.000Z\",\"payload\":{\"org_id\":\"07c53d46-f34c-367a-b9b3-215dd1b00c29\",\"visibility\":\"private\"},\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":1,\"type\":\"fund.created\",\"version\":1}"
     },
     {
       "event": {
@@ -25,16 +26,16 @@
         "seq": 2,
         "type": "fund.policy_changed",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:01:00.000Z",
         "payload": {
           "approval_quorum": 2,
           "objection_window_hours": 48
         },
-        "prev_hash": "7c2b448915198bd294861e96a5ee73b89d9fc928ce8095682e33efb69ae547ea",
-        "hash": "b50e36cf7e7288806f7ac2de5c776fe6aee368abcb0e54bb703eb57cc2ea3cf1"
+        "prev_hash": "b5e74d4d5ae8891f811d9cca8998e7415457da2fe065efacb39095ef90948835",
+        "hash": "fdd85062744ec859b8919e10c26487286f69638d2ca715eea2d6083f907ba04d"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:01:00.000Z\",\"payload\":{\"approval_quorum\":2,\"objection_window_hours\":48},\"prev_hash\":\"7c2b448915198bd294861e96a5ee73b89d9fc928ce8095682e33efb69ae547ea\",\"seq\":2,\"type\":\"fund.policy_changed\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:01:00.000Z\",\"payload\":{\"approval_quorum\":2,\"objection_window_hours\":48},\"prev_hash\":\"b5e74d4d5ae8891f811d9cca8998e7415457da2fe065efacb39095ef90948835\",\"seq\":2,\"type\":\"fund.policy_changed\",\"version\":1}"
     },
     {
       "event": {
@@ -42,15 +43,15 @@
         "seq": 3,
         "type": "fund.visibility_changed",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:02:00.000Z",
         "payload": {
           "visibility": "members"
         },
-        "prev_hash": "b50e36cf7e7288806f7ac2de5c776fe6aee368abcb0e54bb703eb57cc2ea3cf1",
-        "hash": "dc4f5ebf29c2f438c915622fd1bd6968d4b921a298012445417616da06480edc"
+        "prev_hash": "fdd85062744ec859b8919e10c26487286f69638d2ca715eea2d6083f907ba04d",
+        "hash": "c4772087c8c045cba6a409791f055e029d844d5cbb969375d5a780695dc5fb94"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:02:00.000Z\",\"payload\":{\"visibility\":\"members\"},\"prev_hash\":\"b50e36cf7e7288806f7ac2de5c776fe6aee368abcb0e54bb703eb57cc2ea3cf1\",\"seq\":3,\"type\":\"fund.visibility_changed\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:02:00.000Z\",\"payload\":{\"visibility\":\"members\"},\"prev_hash\":\"fdd85062744ec859b8919e10c26487286f69638d2ca715eea2d6083f907ba04d\",\"seq\":3,\"type\":\"fund.visibility_changed\",\"version\":1}"
     },
     {
       "event": {
@@ -58,16 +59,16 @@
         "seq": 4,
         "type": "member.added",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:03:00.000Z",
         "payload": {
-          "member_id": "fe1f5b3f-eb81-6e46-907a-ad98ed7d00c6",
+          "member_id": "psn_fe1f5b3f-eb81-6e46-907a-ad98ed7d00c6",
           "role": "approver"
         },
-        "prev_hash": "dc4f5ebf29c2f438c915622fd1bd6968d4b921a298012445417616da06480edc",
-        "hash": "f7e29bc6d3536ffabf55304f8438a3c075794b2c7e310d701927fe7a82b4c744"
+        "prev_hash": "c4772087c8c045cba6a409791f055e029d844d5cbb969375d5a780695dc5fb94",
+        "hash": "b256b3a3e30ba4cf3c06c97c6e324b9d9de814ee4fdf8651fc61b8cca39f5c05"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:03:00.000Z\",\"payload\":{\"member_id\":\"fe1f5b3f-eb81-6e46-907a-ad98ed7d00c6\",\"role\":\"approver\"},\"prev_hash\":\"dc4f5ebf29c2f438c915622fd1bd6968d4b921a298012445417616da06480edc\",\"seq\":4,\"type\":\"member.added\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:03:00.000Z\",\"payload\":{\"member_id\":\"psn_fe1f5b3f-eb81-6e46-907a-ad98ed7d00c6\",\"role\":\"approver\"},\"prev_hash\":\"c4772087c8c045cba6a409791f055e029d844d5cbb969375d5a780695dc5fb94\",\"seq\":4,\"type\":\"member.added\",\"version\":1}"
     },
     {
       "event": {
@@ -75,15 +76,15 @@
         "seq": 5,
         "type": "member.removed",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:04:00.000Z",
         "payload": {
-          "member_id": "fe1f5b3f-eb81-6e46-907a-ad98ed7d00c6"
+          "member_id": "psn_fe1f5b3f-eb81-6e46-907a-ad98ed7d00c6"
         },
-        "prev_hash": "f7e29bc6d3536ffabf55304f8438a3c075794b2c7e310d701927fe7a82b4c744",
-        "hash": "d7bd7f2f00aeef0391a25dddd90e9b04ae83e26a2edef2843d0887f536ca2de9"
+        "prev_hash": "b256b3a3e30ba4cf3c06c97c6e324b9d9de814ee4fdf8651fc61b8cca39f5c05",
+        "hash": "850597b032b1682628fd4ed591ccbd7693c3f1ba837c7faf86f80b5a191e9e70"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:04:00.000Z\",\"payload\":{\"member_id\":\"fe1f5b3f-eb81-6e46-907a-ad98ed7d00c6\"},\"prev_hash\":\"f7e29bc6d3536ffabf55304f8438a3c075794b2c7e310d701927fe7a82b4c744\",\"seq\":5,\"type\":\"member.removed\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:04:00.000Z\",\"payload\":{\"member_id\":\"psn_fe1f5b3f-eb81-6e46-907a-ad98ed7d00c6\"},\"prev_hash\":\"b256b3a3e30ba4cf3c06c97c6e324b9d9de814ee4fdf8651fc61b8cca39f5c05\",\"seq\":5,\"type\":\"member.removed\",\"version\":1}"
     },
     {
       "event": {
@@ -91,16 +92,16 @@
         "seq": 6,
         "type": "donation.pledged",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:05:00.000Z",
         "payload": {
           "donation_id": "e91b57c3-3b5a-3967-4a00-0df9a49ddef7",
           "amount_paise": 12345
         },
-        "prev_hash": "d7bd7f2f00aeef0391a25dddd90e9b04ae83e26a2edef2843d0887f536ca2de9",
-        "hash": "fa1371dabac3adb2044222f8657da45aabeff0981e24c4dec81e79623226baf8"
+        "prev_hash": "850597b032b1682628fd4ed591ccbd7693c3f1ba837c7faf86f80b5a191e9e70",
+        "hash": "db279c503133301f0484621989ff62305ead7c7c360e74ed78a80db0289989a6"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:05:00.000Z\",\"payload\":{\"amount_paise\":12345,\"donation_id\":\"e91b57c3-3b5a-3967-4a00-0df9a49ddef7\"},\"prev_hash\":\"d7bd7f2f00aeef0391a25dddd90e9b04ae83e26a2edef2843d0887f536ca2de9\",\"seq\":6,\"type\":\"donation.pledged\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:05:00.000Z\",\"payload\":{\"amount_paise\":12345,\"donation_id\":\"e91b57c3-3b5a-3967-4a00-0df9a49ddef7\"},\"prev_hash\":\"850597b032b1682628fd4ed591ccbd7693c3f1ba837c7faf86f80b5a191e9e70\",\"seq\":6,\"type\":\"donation.pledged\",\"version\":1}"
     },
     {
       "event": {
@@ -108,16 +109,16 @@
         "seq": 7,
         "type": "donation.verified",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:06:00.000Z",
         "payload": {
           "donation_id": "e91b57c3-3b5a-3967-4a00-0df9a49ddef7",
           "bank_transaction_id": "f50a8b54-9892-602c-9ceb-529c2bdac516"
         },
-        "prev_hash": "fa1371dabac3adb2044222f8657da45aabeff0981e24c4dec81e79623226baf8",
-        "hash": "1fb9345695f53775427e3e05b48eb2c5fd5c895ebd9eae180fc7ab90fd81bb66"
+        "prev_hash": "db279c503133301f0484621989ff62305ead7c7c360e74ed78a80db0289989a6",
+        "hash": "2f2cb409423752fcf4c98c7a0ea8a6ee10372d5c9eff6ebc08d186415df63c80"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:06:00.000Z\",\"payload\":{\"bank_transaction_id\":\"f50a8b54-9892-602c-9ceb-529c2bdac516\",\"donation_id\":\"e91b57c3-3b5a-3967-4a00-0df9a49ddef7\"},\"prev_hash\":\"fa1371dabac3adb2044222f8657da45aabeff0981e24c4dec81e79623226baf8\",\"seq\":7,\"type\":\"donation.verified\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:06:00.000Z\",\"payload\":{\"bank_transaction_id\":\"f50a8b54-9892-602c-9ceb-529c2bdac516\",\"donation_id\":\"e91b57c3-3b5a-3967-4a00-0df9a49ddef7\"},\"prev_hash\":\"db279c503133301f0484621989ff62305ead7c7c360e74ed78a80db0289989a6\",\"seq\":7,\"type\":\"donation.verified\",\"version\":1}"
     },
     {
       "event": {
@@ -125,16 +126,16 @@
         "seq": 8,
         "type": "donation.rejected",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:07:00.000Z",
         "payload": {
           "donation_id": "e91b57c3-3b5a-3967-4a00-0df9a49ddef7",
           "reason": "unmatched"
         },
-        "prev_hash": "1fb9345695f53775427e3e05b48eb2c5fd5c895ebd9eae180fc7ab90fd81bb66",
-        "hash": "6012129c8240467309606f55c07edca340d769fa27027065de58ff531653f67f"
+        "prev_hash": "2f2cb409423752fcf4c98c7a0ea8a6ee10372d5c9eff6ebc08d186415df63c80",
+        "hash": "5d8ee4a3438b0f32bc976b5db06d454f1e20c19ad371004d3a1f05f92a7932e9"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:07:00.000Z\",\"payload\":{\"donation_id\":\"e91b57c3-3b5a-3967-4a00-0df9a49ddef7\",\"reason\":\"unmatched\"},\"prev_hash\":\"1fb9345695f53775427e3e05b48eb2c5fd5c895ebd9eae180fc7ab90fd81bb66\",\"seq\":8,\"type\":\"donation.rejected\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:07:00.000Z\",\"payload\":{\"donation_id\":\"e91b57c3-3b5a-3967-4a00-0df9a49ddef7\",\"reason\":\"unmatched\"},\"prev_hash\":\"2f2cb409423752fcf4c98c7a0ea8a6ee10372d5c9eff6ebc08d186415df63c80\",\"seq\":8,\"type\":\"donation.rejected\",\"version\":1}"
     },
     {
       "event": {
@@ -142,16 +143,16 @@
         "seq": 9,
         "type": "expense.submitted",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:08:00.000Z",
         "payload": {
           "expense_id": "efc4f4d1-0804-fe94-a7b7-8fb9194e9845",
           "amount_paise": 6500
         },
-        "prev_hash": "6012129c8240467309606f55c07edca340d769fa27027065de58ff531653f67f",
-        "hash": "7f006ea7b2fbfea948b74c44fe7eac58f845b7c470e32ccad5ff5746721b8e36"
+        "prev_hash": "5d8ee4a3438b0f32bc976b5db06d454f1e20c19ad371004d3a1f05f92a7932e9",
+        "hash": "e2993df49b15658971ea5e28dccb93bdb03582c0c5dc47f681d3de725e938ca6"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:08:00.000Z\",\"payload\":{\"amount_paise\":6500,\"expense_id\":\"efc4f4d1-0804-fe94-a7b7-8fb9194e9845\"},\"prev_hash\":\"6012129c8240467309606f55c07edca340d769fa27027065de58ff531653f67f\",\"seq\":9,\"type\":\"expense.submitted\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:08:00.000Z\",\"payload\":{\"amount_paise\":6500,\"expense_id\":\"efc4f4d1-0804-fe94-a7b7-8fb9194e9845\"},\"prev_hash\":\"5d8ee4a3438b0f32bc976b5db06d454f1e20c19ad371004d3a1f05f92a7932e9\",\"seq\":9,\"type\":\"expense.submitted\",\"version\":1}"
     },
     {
       "event": {
@@ -159,17 +160,17 @@
         "seq": 10,
         "type": "expense.evidence_added",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:09:00.000Z",
         "payload": {
           "expense_id": "efc4f4d1-0804-fe94-a7b7-8fb9194e9845",
           "evidence_id": "fcbc3c0f-6f7a-f9dc-4266-cce005137645",
           "content_sha256": "abababababababababababababababababababababababababababababababab"
         },
-        "prev_hash": "7f006ea7b2fbfea948b74c44fe7eac58f845b7c470e32ccad5ff5746721b8e36",
-        "hash": "4f7fe7778f2779aa10bec5da52a75cb301d2c41d7b73bb92d49849217a596461"
+        "prev_hash": "e2993df49b15658971ea5e28dccb93bdb03582c0c5dc47f681d3de725e938ca6",
+        "hash": "f1c4400c10e15ea9060951f99adb41c147b732dc5adc899d74f0de202f08a0d7"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:09:00.000Z\",\"payload\":{\"content_sha256\":\"abababababababababababababababababababababababababababababababab\",\"evidence_id\":\"fcbc3c0f-6f7a-f9dc-4266-cce005137645\",\"expense_id\":\"efc4f4d1-0804-fe94-a7b7-8fb9194e9845\"},\"prev_hash\":\"7f006ea7b2fbfea948b74c44fe7eac58f845b7c470e32ccad5ff5746721b8e36\",\"seq\":10,\"type\":\"expense.evidence_added\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:09:00.000Z\",\"payload\":{\"content_sha256\":\"abababababababababababababababababababababababababababababababab\",\"evidence_id\":\"fcbc3c0f-6f7a-f9dc-4266-cce005137645\",\"expense_id\":\"efc4f4d1-0804-fe94-a7b7-8fb9194e9845\"},\"prev_hash\":\"e2993df49b15658971ea5e28dccb93bdb03582c0c5dc47f681d3de725e938ca6\",\"seq\":10,\"type\":\"expense.evidence_added\",\"version\":1}"
     },
     {
       "event": {
@@ -177,16 +178,16 @@
         "seq": 11,
         "type": "expense.flagged",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:10:00.000Z",
         "payload": {
           "expense_id": "efc4f4d1-0804-fe94-a7b7-8fb9194e9845",
           "reason": "missing_evidence"
         },
-        "prev_hash": "4f7fe7778f2779aa10bec5da52a75cb301d2c41d7b73bb92d49849217a596461",
-        "hash": "608bf6091eb67d736ae2e2cc6c07b0f8a792fa019a412cc5a2a60375226af806"
+        "prev_hash": "f1c4400c10e15ea9060951f99adb41c147b732dc5adc899d74f0de202f08a0d7",
+        "hash": "24fa56c2f4effb1b2aa634a3ba693b681275c37983d2ee0fea20e06c7b835aa5"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:10:00.000Z\",\"payload\":{\"expense_id\":\"efc4f4d1-0804-fe94-a7b7-8fb9194e9845\",\"reason\":\"missing_evidence\"},\"prev_hash\":\"4f7fe7778f2779aa10bec5da52a75cb301d2c41d7b73bb92d49849217a596461\",\"seq\":11,\"type\":\"expense.flagged\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:10:00.000Z\",\"payload\":{\"expense_id\":\"efc4f4d1-0804-fe94-a7b7-8fb9194e9845\",\"reason\":\"missing_evidence\"},\"prev_hash\":\"f1c4400c10e15ea9060951f99adb41c147b732dc5adc899d74f0de202f08a0d7\",\"seq\":11,\"type\":\"expense.flagged\",\"version\":1}"
     },
     {
       "event": {
@@ -194,16 +195,16 @@
         "seq": 12,
         "type": "expense.objection_raised",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:11:00.000Z",
         "payload": {
           "expense_id": "efc4f4d1-0804-fe94-a7b7-8fb9194e9845",
           "objection_id": "d76b0a2d-6f74-2b8e-3383-bf23a8261699"
         },
-        "prev_hash": "608bf6091eb67d736ae2e2cc6c07b0f8a792fa019a412cc5a2a60375226af806",
-        "hash": "9c102ca5dbef07a6fe6ac2f652ff5e38ea14122db367b818f2ac53b2cb035a50"
+        "prev_hash": "24fa56c2f4effb1b2aa634a3ba693b681275c37983d2ee0fea20e06c7b835aa5",
+        "hash": "8a76f4654aa40d30677736434daa0c2aa62ef3be374e68263bca084632405eed"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:11:00.000Z\",\"payload\":{\"expense_id\":\"efc4f4d1-0804-fe94-a7b7-8fb9194e9845\",\"objection_id\":\"d76b0a2d-6f74-2b8e-3383-bf23a8261699\"},\"prev_hash\":\"608bf6091eb67d736ae2e2cc6c07b0f8a792fa019a412cc5a2a60375226af806\",\"seq\":12,\"type\":\"expense.objection_raised\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:11:00.000Z\",\"payload\":{\"expense_id\":\"efc4f4d1-0804-fe94-a7b7-8fb9194e9845\",\"objection_id\":\"d76b0a2d-6f74-2b8e-3383-bf23a8261699\"},\"prev_hash\":\"24fa56c2f4effb1b2aa634a3ba693b681275c37983d2ee0fea20e06c7b835aa5\",\"seq\":12,\"type\":\"expense.objection_raised\",\"version\":1}"
     },
     {
       "event": {
@@ -211,17 +212,17 @@
         "seq": 13,
         "type": "expense.objection_resolved",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:12:00.000Z",
         "payload": {
           "expense_id": "efc4f4d1-0804-fe94-a7b7-8fb9194e9845",
           "objection_id": "d76b0a2d-6f74-2b8e-3383-bf23a8261699",
           "resolution": "dismissed"
         },
-        "prev_hash": "9c102ca5dbef07a6fe6ac2f652ff5e38ea14122db367b818f2ac53b2cb035a50",
-        "hash": "efbea609f46f55f185639953a8e438f2b82f1431096c63f72b8323b932d55208"
+        "prev_hash": "8a76f4654aa40d30677736434daa0c2aa62ef3be374e68263bca084632405eed",
+        "hash": "cd52837f57e9ba4eee37897bc3644479b7aa4eb12dd8e880831fda16aa5cf1e5"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:12:00.000Z\",\"payload\":{\"expense_id\":\"efc4f4d1-0804-fe94-a7b7-8fb9194e9845\",\"objection_id\":\"d76b0a2d-6f74-2b8e-3383-bf23a8261699\",\"resolution\":\"dismissed\"},\"prev_hash\":\"9c102ca5dbef07a6fe6ac2f652ff5e38ea14122db367b818f2ac53b2cb035a50\",\"seq\":13,\"type\":\"expense.objection_resolved\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:12:00.000Z\",\"payload\":{\"expense_id\":\"efc4f4d1-0804-fe94-a7b7-8fb9194e9845\",\"objection_id\":\"d76b0a2d-6f74-2b8e-3383-bf23a8261699\",\"resolution\":\"dismissed\"},\"prev_hash\":\"8a76f4654aa40d30677736434daa0c2aa62ef3be374e68263bca084632405eed\",\"seq\":13,\"type\":\"expense.objection_resolved\",\"version\":1}"
     },
     {
       "event": {
@@ -229,15 +230,15 @@
         "seq": 14,
         "type": "expense.approved",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:13:00.000Z",
         "payload": {
           "expense_id": "efc4f4d1-0804-fe94-a7b7-8fb9194e9845"
         },
-        "prev_hash": "efbea609f46f55f185639953a8e438f2b82f1431096c63f72b8323b932d55208",
-        "hash": "a32c9603dc9edf4803dde2459e0d13d37b7bbda6cf44f3f248814327b8ba9cf1"
+        "prev_hash": "cd52837f57e9ba4eee37897bc3644479b7aa4eb12dd8e880831fda16aa5cf1e5",
+        "hash": "4cdb92042db7c90871c3c21a72fe4a49a4b0caa19c13b011850ec015ae5162c7"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:13:00.000Z\",\"payload\":{\"expense_id\":\"efc4f4d1-0804-fe94-a7b7-8fb9194e9845\"},\"prev_hash\":\"efbea609f46f55f185639953a8e438f2b82f1431096c63f72b8323b932d55208\",\"seq\":14,\"type\":\"expense.approved\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:13:00.000Z\",\"payload\":{\"expense_id\":\"efc4f4d1-0804-fe94-a7b7-8fb9194e9845\"},\"prev_hash\":\"cd52837f57e9ba4eee37897bc3644479b7aa4eb12dd8e880831fda16aa5cf1e5\",\"seq\":14,\"type\":\"expense.approved\",\"version\":1}"
     },
     {
       "event": {
@@ -245,16 +246,16 @@
         "seq": 15,
         "type": "expense.rejected",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:14:00.000Z",
         "payload": {
           "expense_id": "efc4f4d1-0804-fe94-a7b7-8fb9194e9845",
           "reason": "policy"
         },
-        "prev_hash": "a32c9603dc9edf4803dde2459e0d13d37b7bbda6cf44f3f248814327b8ba9cf1",
-        "hash": "774a8608a9f14ed968925c2ef4437eff1b34d9e9fce77e0ec2546e5c5cfd41e4"
+        "prev_hash": "4cdb92042db7c90871c3c21a72fe4a49a4b0caa19c13b011850ec015ae5162c7",
+        "hash": "92b5e8801ff1361e52376fb3f87fcf803c899bcf0f42f82c7dd410fdee56db3e"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:14:00.000Z\",\"payload\":{\"expense_id\":\"efc4f4d1-0804-fe94-a7b7-8fb9194e9845\",\"reason\":\"policy\"},\"prev_hash\":\"a32c9603dc9edf4803dde2459e0d13d37b7bbda6cf44f3f248814327b8ba9cf1\",\"seq\":15,\"type\":\"expense.rejected\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:14:00.000Z\",\"payload\":{\"expense_id\":\"efc4f4d1-0804-fe94-a7b7-8fb9194e9845\",\"reason\":\"policy\"},\"prev_hash\":\"4cdb92042db7c90871c3c21a72fe4a49a4b0caa19c13b011850ec015ae5162c7\",\"seq\":15,\"type\":\"expense.rejected\",\"version\":1}"
     },
     {
       "event": {
@@ -262,15 +263,15 @@
         "seq": 16,
         "type": "expense.expired",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:15:00.000Z",
         "payload": {
           "expense_id": "efc4f4d1-0804-fe94-a7b7-8fb9194e9845"
         },
-        "prev_hash": "774a8608a9f14ed968925c2ef4437eff1b34d9e9fce77e0ec2546e5c5cfd41e4",
-        "hash": "e4d69ed2c2ec5474b04d9000dadbf67f72b12253de4a3688029c23ad0e29d5f3"
+        "prev_hash": "92b5e8801ff1361e52376fb3f87fcf803c899bcf0f42f82c7dd410fdee56db3e",
+        "hash": "2dcdbd2c472df86d005901f99f3a907860b3256f2ec626e676505ada56d4d19c"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:15:00.000Z\",\"payload\":{\"expense_id\":\"efc4f4d1-0804-fe94-a7b7-8fb9194e9845\"},\"prev_hash\":\"774a8608a9f14ed968925c2ef4437eff1b34d9e9fce77e0ec2546e5c5cfd41e4\",\"seq\":16,\"type\":\"expense.expired\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:15:00.000Z\",\"payload\":{\"expense_id\":\"efc4f4d1-0804-fe94-a7b7-8fb9194e9845\"},\"prev_hash\":\"92b5e8801ff1361e52376fb3f87fcf803c899bcf0f42f82c7dd410fdee56db3e\",\"seq\":16,\"type\":\"expense.expired\",\"version\":1}"
     },
     {
       "event": {
@@ -278,16 +279,16 @@
         "seq": 17,
         "type": "expense.paid",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:16:00.000Z",
         "payload": {
           "expense_id": "efc4f4d1-0804-fe94-a7b7-8fb9194e9845",
           "bank_transaction_id": "f50a8b54-9892-602c-9ceb-529c2bdac516"
         },
-        "prev_hash": "e4d69ed2c2ec5474b04d9000dadbf67f72b12253de4a3688029c23ad0e29d5f3",
-        "hash": "d2b77d07b53ad8c3f6ae85ce32af7995deffbba4f99d93303ebca7792b0cc076"
+        "prev_hash": "2dcdbd2c472df86d005901f99f3a907860b3256f2ec626e676505ada56d4d19c",
+        "hash": "6214fbfa36ad1f83d8de40e42ee00bee622da45a464a4c28f319a0303552485d"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:16:00.000Z\",\"payload\":{\"bank_transaction_id\":\"f50a8b54-9892-602c-9ceb-529c2bdac516\",\"expense_id\":\"efc4f4d1-0804-fe94-a7b7-8fb9194e9845\"},\"prev_hash\":\"e4d69ed2c2ec5474b04d9000dadbf67f72b12253de4a3688029c23ad0e29d5f3\",\"seq\":17,\"type\":\"expense.paid\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:16:00.000Z\",\"payload\":{\"bank_transaction_id\":\"f50a8b54-9892-602c-9ceb-529c2bdac516\",\"expense_id\":\"efc4f4d1-0804-fe94-a7b7-8fb9194e9845\"},\"prev_hash\":\"2dcdbd2c472df86d005901f99f3a907860b3256f2ec626e676505ada56d4d19c\",\"seq\":17,\"type\":\"expense.paid\",\"version\":1}"
     },
     {
       "event": {
@@ -295,16 +296,16 @@
         "seq": 18,
         "type": "expense.reversed",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:17:00.000Z",
         "payload": {
           "expense_id": "efc4f4d1-0804-fe94-a7b7-8fb9194e9845",
           "bank_transaction_id": "f50a8b54-9892-602c-9ceb-529c2bdac516"
         },
-        "prev_hash": "d2b77d07b53ad8c3f6ae85ce32af7995deffbba4f99d93303ebca7792b0cc076",
-        "hash": "ba110e6dd4d304cad5eecd53c02262af1cff5a59daecd5f4ba622b0feed110f9"
+        "prev_hash": "6214fbfa36ad1f83d8de40e42ee00bee622da45a464a4c28f319a0303552485d",
+        "hash": "f8851e75c931e9dace2b373f14eb89164cf9b999b957d2ac3beda0f0b482ce8d"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:17:00.000Z\",\"payload\":{\"bank_transaction_id\":\"f50a8b54-9892-602c-9ceb-529c2bdac516\",\"expense_id\":\"efc4f4d1-0804-fe94-a7b7-8fb9194e9845\"},\"prev_hash\":\"d2b77d07b53ad8c3f6ae85ce32af7995deffbba4f99d93303ebca7792b0cc076\",\"seq\":18,\"type\":\"expense.reversed\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:17:00.000Z\",\"payload\":{\"bank_transaction_id\":\"f50a8b54-9892-602c-9ceb-529c2bdac516\",\"expense_id\":\"efc4f4d1-0804-fe94-a7b7-8fb9194e9845\"},\"prev_hash\":\"6214fbfa36ad1f83d8de40e42ee00bee622da45a464a4c28f319a0303552485d\",\"seq\":18,\"type\":\"expense.reversed\",\"version\":1}"
     },
     {
       "event": {
@@ -312,16 +313,16 @@
         "seq": 19,
         "type": "bank.credit_seen",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:18:00.000Z",
         "payload": {
           "bank_transaction_id": "f50a8b54-9892-602c-9ceb-529c2bdac516",
           "amount_paise": 12345
         },
-        "prev_hash": "ba110e6dd4d304cad5eecd53c02262af1cff5a59daecd5f4ba622b0feed110f9",
-        "hash": "e02409a6b2403b974ad5830e445e131f07c2c63abbeb366c0aff1cf416617188"
+        "prev_hash": "f8851e75c931e9dace2b373f14eb89164cf9b999b957d2ac3beda0f0b482ce8d",
+        "hash": "7e1c06673144f6eea891805b3bba88610fd39151afc14671dca77919bebe1203"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:18:00.000Z\",\"payload\":{\"amount_paise\":12345,\"bank_transaction_id\":\"f50a8b54-9892-602c-9ceb-529c2bdac516\"},\"prev_hash\":\"ba110e6dd4d304cad5eecd53c02262af1cff5a59daecd5f4ba622b0feed110f9\",\"seq\":19,\"type\":\"bank.credit_seen\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:18:00.000Z\",\"payload\":{\"amount_paise\":12345,\"bank_transaction_id\":\"f50a8b54-9892-602c-9ceb-529c2bdac516\"},\"prev_hash\":\"f8851e75c931e9dace2b373f14eb89164cf9b999b957d2ac3beda0f0b482ce8d\",\"seq\":19,\"type\":\"bank.credit_seen\",\"version\":1}"
     },
     {
       "event": {
@@ -329,16 +330,16 @@
         "seq": 20,
         "type": "bank.debit_seen",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:19:00.000Z",
         "payload": {
           "bank_transaction_id": "f50a8b54-9892-602c-9ceb-529c2bdac516",
           "amount_paise": 6500
         },
-        "prev_hash": "e02409a6b2403b974ad5830e445e131f07c2c63abbeb366c0aff1cf416617188",
-        "hash": "9f2452b17461cdeae7ce62c9a0b02a06e779ab2c0fb0ec72e7d41ee007b9db48"
+        "prev_hash": "7e1c06673144f6eea891805b3bba88610fd39151afc14671dca77919bebe1203",
+        "hash": "c1b3cce1dea104fb196c194de62d104f3ea099fe22190ece3bb33b1169bca0d9"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:19:00.000Z\",\"payload\":{\"amount_paise\":6500,\"bank_transaction_id\":\"f50a8b54-9892-602c-9ceb-529c2bdac516\"},\"prev_hash\":\"e02409a6b2403b974ad5830e445e131f07c2c63abbeb366c0aff1cf416617188\",\"seq\":20,\"type\":\"bank.debit_seen\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:19:00.000Z\",\"payload\":{\"amount_paise\":6500,\"bank_transaction_id\":\"f50a8b54-9892-602c-9ceb-529c2bdac516\"},\"prev_hash\":\"7e1c06673144f6eea891805b3bba88610fd39151afc14671dca77919bebe1203\",\"seq\":20,\"type\":\"bank.debit_seen\",\"version\":1}"
     },
     {
       "event": {
@@ -346,15 +347,15 @@
         "seq": 21,
         "type": "bank.balance_checked",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:20:00.000Z",
         "payload": {
           "balance_paise": -125
         },
-        "prev_hash": "9f2452b17461cdeae7ce62c9a0b02a06e779ab2c0fb0ec72e7d41ee007b9db48",
-        "hash": "6f79f13e73c476e621caf7ee581f52f2549571b115dd06a9c65edb496f188b15"
+        "prev_hash": "c1b3cce1dea104fb196c194de62d104f3ea099fe22190ece3bb33b1169bca0d9",
+        "hash": "b5d34399270b9ed2cc7a2dc4244298afce91164aed269e3070496a479137aafa"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:20:00.000Z\",\"payload\":{\"balance_paise\":-125},\"prev_hash\":\"9f2452b17461cdeae7ce62c9a0b02a06e779ab2c0fb0ec72e7d41ee007b9db48\",\"seq\":21,\"type\":\"bank.balance_checked\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:20:00.000Z\",\"payload\":{\"balance_paise\":-125},\"prev_hash\":\"c1b3cce1dea104fb196c194de62d104f3ea099fe22190ece3bb33b1169bca0d9\",\"seq\":21,\"type\":\"bank.balance_checked\",\"version\":1}"
     },
     {
       "event": {
@@ -362,17 +363,17 @@
         "seq": 22,
         "type": "discrepancy.raised",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:21:00.000Z",
         "payload": {
           "discrepancy_id": "442a29ac-bcee-5072-21de-e3c7b6c506fc",
           "bank_transaction_id": "f50a8b54-9892-602c-9ceb-529c2bdac516",
           "kind": "balance_mismatch"
         },
-        "prev_hash": "6f79f13e73c476e621caf7ee581f52f2549571b115dd06a9c65edb496f188b15",
-        "hash": "c00fa6454c68717785c5cf9aa9fa5ce83cd68cc7ff98d2e17fad8d3f7084419c"
+        "prev_hash": "b5d34399270b9ed2cc7a2dc4244298afce91164aed269e3070496a479137aafa",
+        "hash": "6116d91e034b55cbb997553d238c722a0ef14a03bd877a4ecbec0a9d1c6a7f9c"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:21:00.000Z\",\"payload\":{\"bank_transaction_id\":\"f50a8b54-9892-602c-9ceb-529c2bdac516\",\"discrepancy_id\":\"442a29ac-bcee-5072-21de-e3c7b6c506fc\",\"kind\":\"balance_mismatch\"},\"prev_hash\":\"6f79f13e73c476e621caf7ee581f52f2549571b115dd06a9c65edb496f188b15\",\"seq\":22,\"type\":\"discrepancy.raised\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:21:00.000Z\",\"payload\":{\"bank_transaction_id\":\"f50a8b54-9892-602c-9ceb-529c2bdac516\",\"discrepancy_id\":\"442a29ac-bcee-5072-21de-e3c7b6c506fc\",\"kind\":\"balance_mismatch\"},\"prev_hash\":\"b5d34399270b9ed2cc7a2dc4244298afce91164aed269e3070496a479137aafa\",\"seq\":22,\"type\":\"discrepancy.raised\",\"version\":1}"
     },
     {
       "event": {
@@ -380,16 +381,16 @@
         "seq": 23,
         "type": "discrepancy.resolved",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:22:00.000Z",
         "payload": {
           "discrepancy_id": "442a29ac-bcee-5072-21de-e3c7b6c506fc",
           "resolution": "corrected"
         },
-        "prev_hash": "c00fa6454c68717785c5cf9aa9fa5ce83cd68cc7ff98d2e17fad8d3f7084419c",
-        "hash": "4b83c84bd16960ac03f0d98c8330d29b5db83e8b4e8ad4a991f44b86de14edf1"
+        "prev_hash": "6116d91e034b55cbb997553d238c722a0ef14a03bd877a4ecbec0a9d1c6a7f9c",
+        "hash": "d94e44c3ab6585cd836e3fee064acf44fdac1eba985db61b16457500d8ebf257"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:22:00.000Z\",\"payload\":{\"discrepancy_id\":\"442a29ac-bcee-5072-21de-e3c7b6c506fc\",\"resolution\":\"corrected\"},\"prev_hash\":\"c00fa6454c68717785c5cf9aa9fa5ce83cd68cc7ff98d2e17fad8d3f7084419c\",\"seq\":23,\"type\":\"discrepancy.resolved\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:22:00.000Z\",\"payload\":{\"discrepancy_id\":\"442a29ac-bcee-5072-21de-e3c7b6c506fc\",\"resolution\":\"corrected\"},\"prev_hash\":\"6116d91e034b55cbb997553d238c722a0ef14a03bd877a4ecbec0a9d1c6a7f9c\",\"seq\":23,\"type\":\"discrepancy.resolved\",\"version\":1}"
     },
     {
       "event": {
@@ -397,16 +398,16 @@
         "seq": 24,
         "type": "anchor.published",
         "version": 1,
-        "actor": "psn_918b37f53b70e315a7539362a01396f7",
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
         "occurred_at": "2026-01-01T00:23:00.000Z",
         "payload": {
           "anchor_id": "22346efb-31e8-ad19-c458-69e99f00f890",
           "global_root": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
         },
-        "prev_hash": "4b83c84bd16960ac03f0d98c8330d29b5db83e8b4e8ad4a991f44b86de14edf1",
-        "hash": "46c951754c0e24e3c8a9d6e3d789028b9db2a24f621129009bb67346c9df0d72"
+        "prev_hash": "d94e44c3ab6585cd836e3fee064acf44fdac1eba985db61b16457500d8ebf257",
+        "hash": "c15ddb6e14f5cc19846bb3fdd360485590951c372fe474293cfd9f046123c906"
       },
-      "canonical": "{\"actor\":\"psn_918b37f53b70e315a7539362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:23:00.000Z\",\"payload\":{\"anchor_id\":\"22346efb-31e8-ad19-c458-69e99f00f890\",\"global_root\":\"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"},\"prev_hash\":\"4b83c84bd16960ac03f0d98c8330d29b5db83e8b4e8ad4a991f44b86de14edf1\",\"seq\":24,\"type\":\"anchor.published\",\"version\":1}"
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:23:00.000Z\",\"payload\":{\"anchor_id\":\"22346efb-31e8-ad19-c458-69e99f00f890\",\"global_root\":\"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"},\"prev_hash\":\"d94e44c3ab6585cd836e3fee064acf44fdac1eba985db61b16457500d8ebf257\",\"seq\":24,\"type\":\"anchor.published\",\"version\":1}"
     }
   ]
 }
