@@ -1,7 +1,9 @@
 import * as z from "zod";
 
 const schema = z.object({
-  NEXT_PUBLIC_API_URL: z.url({ protocol: /^https?$/, error: "must be an absolute HTTP(S) URL" }),
+  NEXT_PUBLIC_API_URL: z
+    .url({ protocol: /^https?$/, error: "must be an absolute HTTP(S) URL" })
+    .transform((url) => url.replace(/\/+$/, "")),
 });
 
 const parsed = schema.safeParse({ NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL });
