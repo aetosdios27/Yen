@@ -150,8 +150,13 @@ def interval_vector(name: str, event_counts: list[int]) -> dict:
             {
                 "fundId": fund["fundId"],
                 "latestEventHash": fund["latest"].hex(),
-                "events": [{"salt": s.hex(), "eventHash": e.hex()} for s, e in fund["events"]],
+                "events": [
+                    {"seq": 10 + j * 3, "salt": s.hex(), "eventHash": e.hex()}
+                    for j, (s, e) in reversed(list(enumerate(fund["events"])))
+                ],
                 "fundRoot": roots[fund["fundId"]],
+                "fingerprint": fingerprint(fund["fundId"], fund["latest"]).hex(),
+                "fundLeaf": sha256(b"\x02", bytes.fromhex(roots[fund["fundId"]]), fingerprint(fund["fundId"], fund["latest"])).hex(),
             }
             for fund in funds
         ],

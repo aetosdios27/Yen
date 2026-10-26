@@ -1,4 +1,4 @@
-import { equalBytes, type Hash32, type Salt32, sha256 } from "./hash.js";
+import { equalBytes, type Hash32, hash32, type Salt32, sha256 } from "./hash.js";
 
 const leafPrefix = Uint8Array.of(0x00);
 const nodePrefix = Uint8Array.of(0x01);
@@ -26,7 +26,7 @@ function largestPowerOfTwoBelow(n: number): number {
 export async function merkleRoot(leaves: readonly Hash32[]): Promise<Hash32> {
   const [first] = leaves;
   if (first === undefined) return sha256();
-  if (leaves.length === 1) return first;
+  if (leaves.length === 1) return hash32(first);
   const k = largestPowerOfTwoBelow(leaves.length);
   return nodeHash(await merkleRoot(leaves.slice(0, k)), await merkleRoot(leaves.slice(k)));
 }
@@ -46,7 +46,7 @@ export async function proveInclusion(
   if (!Number.isSafeInteger(index) || index < 0 || index >= leaves.length) {
     throw new RangeError(`Index ${index} is outside a tree of ${leaves.length} leaves`);
   }
-  return { index, size: leaves.length, path: await auditPath(index, leaves) };
+  return { index, size: leaves.length, path: (await auditPath(index, leaves)).map(hash32) };
 }
 
 // Division preserves exact sizes above 2^31; JavaScript bit shifts truncate to 32 bits.
