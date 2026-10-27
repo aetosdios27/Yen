@@ -19,7 +19,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 
 - **Source:** Ben Laurie, Adam Langley and Emilia Kasper; RFC 6962, 2013.
 - **URL:** https://www.rfc-editor.org/rfc/rfc6962.html
-- **What we use it for:** The Merkle split and leaf/node domains inform inclusion proofs. Yen adds salted event leaves and nested count commitments; plain RFC-style paths do not always authenticate exact size.
+- **What we use it for:** The Merkle split and leaf/node domains inform inclusion proofs. RFC signed tree heads authenticate size separately; Yen adds salted event leaves and commits counts in its nested root because a plain inclusion path alone can be ambiguous.
 - **Where in this repo:** packages/shared/src/merkle/README.md
 
 <a id="rfc-9162"></a>
@@ -29,6 +29,22 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **URL:** https://www.rfc-editor.org/rfc/rfc9162.html
 - **What we use it for:** Independent monitoring, consistency proofs and comparison of tree heads address misbehaving logs. Yen does not implement CT or gossip; a root alone cannot establish completeness or prevent split views.
 - **Where in this repo:** packages/shared/src/merkle/README.md; contracts/README.md
+
+<a id="coniks"></a>
+### CONIKS: Bringing Key Transparency to End Users
+
+- **Source:** Marcela S. Melara, Aaron Blankstein, Joseph Bonneau, Edward W. Felten and Michael J. Freedman; USENIX Security, 2015.
+- **URL:** https://www.usenix.org/conference/usenixsecurity15/technical-sessions/presentation/melara
+- **What we use it for:** Clients and providers can collectively audit key-directory equivocation while protecting user privacy. Yen is not a key directory and does not implement CONIKS monitoring.
+- **Where in this repo:** packages/shared/src/merkle/README.md
+
+<a id="cox-tlog"></a>
+### Transparent Logs for Skeptical Clients
+
+- **Source:** Russ Cox; research!rsc, 2019.
+- **URL:** https://research.swtch.com/tlog
+- **What we use it for:** Merkle trees allow skeptical clients to check inclusion and append-only growth. Yen currently provides inclusion proofs, not append-only consistency proofs.
+- **Where in this repo:** packages/shared/src/merkle/README.md
 
 ## Canonical serialization
 
@@ -57,6 +73,14 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **URL:** https://developer.squareup.com/reference/square/objects/Money
 - **What we use it for:** Square represents amounts as integer smallest currency units. Yen uses paise and uses decimal strings on the API wire to preserve large integers.
 - **Where in this repo:** apps/api/README.md; packages/db/README.md
+
+<a id="fowler-money"></a>
+### Money
+
+- **Source:** Martin Fowler; Patterns of Enterprise Application Architecture catalog, 2003.
+- **URL:** https://www.martinfowler.com/eaaCatalog/money.html
+- **What we use it for:** A money type can prevent currency and rounding mistakes. Yen currently models paise for a single currency rather than carrying currency in each amount.
+- **Where in this repo:** packages/shared/src; apps/api/README.md
 
 ## Idempotency and retries
 
@@ -148,6 +172,22 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **What we use it for:** Burn-rate alerts connect error-budget consumption to actionable alerting. This is guidance, not an implemented alert.
 - **Where in this repo:** apps/api/README.md
 
+<a id="otel-overview"></a>
+### Overview
+
+- **Source:** OpenTelemetry; OpenTelemetry Specification, undated (accessed 2026).
+- **URL:** https://opentelemetry.io/docs/specs/otel/overview/
+- **What we use it for:** The specification describes telemetry APIs, SDKs and collectors. Yen’s structured request logs are not an OpenTelemetry implementation.
+- **Where in this repo:** apps/api/src/logging.ts
+
+<a id="sre-monitoring"></a>
+### Monitoring Distributed Systems
+
+- **Source:** Rob Ewaschuk; Google, Site Reliability Engineering, 2016.
+- **URL:** https://sre.google/sre-book/monitoring-distributed-systems/
+- **What we use it for:** Monitoring should support actionable alerts and visibility into system behavior. Yen’s current request logs are a foundation, not a complete monitoring system.
+- **Where in this repo:** apps/api/README.md
+
 ## PostgreSQL
 
 <a id="pg-isolation"></a>
@@ -208,6 +248,30 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **What we use it for:** Relying parties generate random challenges and verify returned assertions. The current API reserves an authentication contract; passkey verification and transaction approval are future work.
 - **Where in this repo:** apps/api/README.md; YEN-22
 
+<a id="webauthn-3"></a>
+### Web Authentication: An API for accessing Public Key Credentials Level 3
+
+- **Source:** W3C; W3C Recommendation, 2026.
+- **URL:** https://www.w3.org/TR/webauthn-3/
+- **What we use it for:** Relying parties use random challenges and verify returned values to resist replay. Yen does not yet implement passkeys or transaction approvals.
+- **Where in this repo:** apps/api/README.md; YEN-22
+
+<a id="owasp-api"></a>
+### OWASP Top 10 API Security Risks – 2023
+
+- **Source:** OWASP API Security Project; OWASP, 2023.
+- **URL:** https://api-security.owasp.org/editions/2023/en/0x11-t10/
+- **What we use it for:** Object-level and property-level authorization failures are API risks. Yen’s stub fund routes use policy and redaction hooks; production policy remains future work.
+- **Where in this repo:** apps/api/README.md
+
+<a id="owasp-transaction"></a>
+### Transaction Authorization
+
+- **Source:** OWASP; OWASP Cheat Sheet Series, undated (accessed 2026).
+- **URL:** https://cheatsheetseries.owasp.org/cheatsheets/Transaction_Authorization_Cheat_Sheet.html
+- **What we use it for:** Users should identify significant transaction data such as amount and target before authorizing. Yen’s approval flow is not implemented yet.
+- **Where in this repo:** YEN-26
+
 ## Blockchain anchoring
 
 <a id="opentimestamps"></a>
@@ -235,6 +299,14 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **URL:** https://www.meity.gov.in/static/uploads/2025/11/c56ceae6c383460ca69577428d36828b.pdf
 - **What we use it for:** Different provisions commence on different dates; assess the current commencement and rules when making compliance decisions.
 - **Where in this repo:** packages/db/README.md
+
+<a id="slsa"></a>
+### SLSA specification
+
+- **Source:** SLSA; Linux Foundation, version 1.2, undated (accessed 2026).
+- **URL:** https://slsa.dev/spec/v1.2/
+- **What we use it for:** SLSA defines security levels and provenance for supply chains. Yen’s pinned actions do not by themselves establish a SLSA level.
+- **Where in this repo:** .github/workflows/ci.yml
 
 ## Supply chain and CI
 

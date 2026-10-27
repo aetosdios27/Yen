@@ -1,14 +1,7 @@
 {
   "strictness": 2,
-  "commentTypes": [
-    "logic",
-    "syntax",
-    "style"
-  ],
-  "autoReview": [
-    "open",
-    "push"
-  ],
+  "commentTypes": ["logic", "syntax", "style"],
+  "autoReview": ["open", "push"],
   "statusCheck": true,
   "fixWithAI": true,
   "ignorePatterns": "pnpm-lock.yaml\n**/dist/**\n**/.next/**\n**/.turbo/**\ncontracts/lib/**\ncontracts/out/**\ncontracts/cache/**",
@@ -17,10 +10,7 @@
     {
       "id": "money-is-paise",
       "rule": "Money amounts must be integer paise using the Paise branded type from @yen/shared. Flag floating-point arithmetic, parseFloat, or plain number/string used for amounts.",
-      "scope": [
-        "apps/**",
-        "packages/**"
-      ],
+      "scope": ["apps/**", "packages/**"],
       "severity": "high"
     },
     {
@@ -31,19 +21,13 @@
     {
       "id": "ledger-and-event-same-transaction",
       "rule": "Any code that posts to the ledger must append the matching event in the same database transaction. Flag ledger writes and event appends in separate transactions.",
-      "scope": [
-        "apps/api/**",
-        "packages/ledger/**",
-        "packages/eventlog/**"
-      ],
+      "scope": ["apps/api/**", "packages/ledger/**", "packages/eventlog/**"],
       "severity": "high"
     },
     {
       "id": "authz-through-can-and-redact",
       "rule": "Every API route that reads or changes fund data must authorize through can() and shape output through redact(). Flag routes that query fund data directly and return it.",
-      "scope": [
-        "apps/api/**"
-      ],
+      "scope": ["apps/api/**"],
       "severity": "high"
     },
     {
@@ -54,10 +38,7 @@
     {
       "id": "idempotent-money-handlers",
       "rule": "Money-affecting POST handlers, webhook consumers and background jobs must be idempotent (idempotency key, unique constraint, or dedupe key) and safe to retry or replay.",
-      "scope": [
-        "apps/api/**",
-        "packages/**"
-      ],
+      "scope": ["apps/api/**", "packages/**"],
       "severity": "high"
     },
     {
@@ -68,17 +49,13 @@
     {
       "id": "migrations-forward-only",
       "rule": "Database migrations must be forward-only, safe on tables with data (no long locks, no destructive drops without a prior release), and must not touch immutable event or ledger tables except to add constraints.",
-      "scope": [
-        "**/migrations/**"
-      ],
+      "scope": ["**/migrations/**"],
       "severity": "medium"
     },
     {
       "id": "plain-language-ui",
       "rule": "User-facing strings must be translatable (EN and HI) and avoid jargon such as hash, block, ledger, wallet, on-chain. Use plain words like record, proof, account book.",
-      "scope": [
-        "apps/web/**"
-      ],
+      "scope": ["apps/web/**"],
       "severity": "medium"
     },
     {
@@ -89,12 +66,7 @@
     {
       "id": "design-claims-need-sources",
       "rule": "Design rationale that claims industry practice or security properties must cite a source in docs/REFERENCES.md; flag unsourced \u201cindustry standard\u201d or \u201cbest practice\u201d claims in ADRs, READMEs and PR descriptions for design changes.",
-      "scope": [
-        "docs/**",
-        "**/README.md",
-        "**/*ADR*",
-        ".github/PULL_REQUEST_TEMPLATE*"
-      ],
+      "scope": ["docs/**", "**/README.md", "**/*ADR*", ".github/PULL_REQUEST_TEMPLATE*"],
       "severity": "medium"
     }
   ]
