@@ -147,11 +147,14 @@ interface Bucket {
   readonly tokens: number;
   readonly updatedAt: number;
   readonly fullAt: number;
+  index: number;
+  readonly key: string;
 }
 
 export class MemoryRateLimitStore implements RateLimitStore {
   private readonly buckets = new Map<string, Bucket>();
   private readonly maxEntries: number;
+  private readonly heap: Bucket[] = [];
 
   constructor(options: { readonly maxEntries?: number } = {}) {
     this.maxEntries = options.maxEntries ?? 100_000;
@@ -162,13 +165,10 @@ export class MemoryRateLimitStore implements RateLimitStore {
   }
 
   async consume(key: string, limit: RateLimit, now: number) {
-    for (const [bucketKey, bucket] of this.buckets) {
-      if (bucket.fullAt <= now) this.buckets.delete(bucketKey);
-    }
+    while (this.heap[0] && this.heap[0].fullAt <= now) this.remove(this.heap[0]);
     const previous = this.buckets.get(key);
     if (!previous && this.buckets.size >= this.maxEntries) {
-      let oldest = Infinity;
-      for (const bucket of this.buckets.values()) oldest = Math.min(oldest, bucket.fullAt);
+      const oldest = this.heap[0]?.fullAt ?? Infinity;
       return {
         allowed: false,
         overloaded: true,
@@ -184,14 +184,19 @@ export class MemoryRateLimitStore implements RateLimitStore {
               (Math.max(0, now - previous.updatedAt) * limit.capacity) / limit.refillMs,
           )
       : limit.capacity;
-    this.buckets.delete(key);
+    if (previous) this.remove(previous);
     const remaining = tokens >= 1 ? tokens - 1 : tokens;
-    this.buckets.set(key, {
+    const bucket: Bucket = {
+      key,
+      index: this.heap.length,
       tokens: remaining,
       updatedAt: now,
       fullAt:
         limit.expiresAt ?? now + ((limit.capacity - remaining) * limit.refillMs) / limit.capacity,
-    });
+    };
+    this.buckets.set(key, bucket);
+    this.heap.push(bucket);
+    this.up(bucket.index);
     if (tokens >= 1) return { allowed: true } as const;
     return {
       allowed: false,
@@ -200,5 +205,51 @@ export class MemoryRateLimitStore implements RateLimitStore {
         Math.ceil(((1 - tokens) * limit.refillMs) / limit.capacity / 1000),
       ),
     } as const;
+  }
+
+  private swap(a: number, b: number): void {
+    const first = this.heap[a];
+    const second = this.heap[b];
+    if (!first || !second) return;
+    this.heap[a] = second;
+    this.heap[b] = first;
+    first.index = b;
+    second.index = a;
+  }
+
+  private up(index: number): void {
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2);
+      const childBucket = this.heap[index];
+      const parentBucket = this.heap[parent];
+      if (!childBucket || !parentBucket || parentBucket.fullAt <= childBucket.fullAt) return;
+      this.swap(index, parent);
+      index = parent;
+    }
+  }
+
+  private remove(bucket: Bucket): void {
+    const index = bucket.index;
+    const last = this.heap.pop();
+    this.buckets.delete(bucket.key);
+    if (!last || last === bucket) return;
+    this.heap[index] = last;
+    last.index = index;
+    this.up(index);
+    for (let current = last.index; ; ) {
+      const left = current * 2 + 1;
+      const right = left + 1;
+      let smallest = current;
+      const currentBucket = this.heap[smallest];
+      const leftBucket = this.heap[left];
+      if (currentBucket && leftBucket && leftBucket.fullAt < currentBucket.fullAt) smallest = left;
+      const smallestBucket = this.heap[smallest];
+      const rightBucket = this.heap[right];
+      if (smallestBucket && rightBucket && rightBucket.fullAt < smallestBucket.fullAt)
+        smallest = right;
+      if (smallest === current) break;
+      this.swap(current, smallest);
+      current = smallest;
+    }
   }
 }

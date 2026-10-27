@@ -120,3 +120,36 @@ it("evicts full idle buckets and caps active buckets", async () => {
   await store.consume("d", limit, 10);
   expect(store.entryCount).toBe(1);
 });
+
+it("does not visit live buckets when admitting a request", async () => {
+  const store = new MemoryRateLimitStore({ maxEntries: 100_000 });
+  const buckets: unknown = Reflect.get(store, "buckets");
+  if (!(buckets instanceof Map)) throw new Error("Expected buckets map");
+  for (let i = 0; i < 100_000; i++) {
+    await store.consume(String(i), { capacity: 1, refillMs: 3_600_000 }, 0);
+  }
+  let visited = 0;
+  const original = buckets[Symbol.iterator].bind(buckets);
+  Object.defineProperty(buckets, Symbol.iterator, {
+    value: function* () {
+      for (const entry of original()) {
+        visited++;
+        yield entry;
+      }
+    },
+  });
+  const originalValues = buckets.values.bind(buckets);
+  Object.defineProperty(buckets, "values", {
+    value: function* () {
+      for (const entry of originalValues()) {
+        visited++;
+        yield entry;
+      }
+    },
+  });
+  await store.consume("0", { capacity: 1, refillMs: 3_600_000 }, 0);
+  expect(await store.consume("new", { capacity: 1, refillMs: 3_600_000 }, 0)).toMatchObject({
+    overloaded: true,
+  });
+  expect(visited).toBeLessThan(10);
+});
