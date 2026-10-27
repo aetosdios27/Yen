@@ -66,10 +66,10 @@ databaseSuite("waitlist Unicode database bounds", (sql) => {
 
 databaseSuite("database readiness", (sql) => {
   it("reports a missing table and recovers after migration", async () => {
-    const { databaseReady } = await import("./database-ready.js");
+    const { createDatabaseReady } = await import("./database-ready.js");
     const { createApp } = await import("./app.js");
     const app = createApp({
-      readiness: () => databaseReady(sql),
+      readiness: createDatabaseReady(sql, { cacheMs: 0 }),
       logger: { log: () => undefined },
     });
     expect((await app.request("/ready")).status).toBe(503);
@@ -77,5 +77,65 @@ databaseSuite("database readiness", (sql) => {
     expect((await app.request("/ready")).status).toBe(200);
     await sql`DROP TABLE waitlist_entries`;
     expect((await app.request("/ready")).status).toBe(503);
+  });
+});
+
+databaseSuite("bounded readiness", (sql, url) => {
+  it("cancels a stalled single-flight probe and recovers", async () => {
+    const { createSql } = await import("@yen/db");
+    const { createDatabaseReady } = await import("./database-ready.js");
+    const { createApp } = await import("./app.js");
+    await migrate(sql);
+    const probeSql = createSql(url, { max: 1 });
+    const readiness = createDatabaseReady(probeSql, { cacheMs: 0 });
+    const app = createApp({ readiness, logger: { log: () => undefined } });
+    let unlock = () => {};
+    let locked = () => {};
+    const released = new Promise<void>((resolve) => {
+      unlock = resolve;
+    });
+    const acquired = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+    const lock = sql.begin(async (tx) => {
+      await tx`LOCK TABLE waitlist_entries IN ACCESS EXCLUSIVE MODE`;
+      locked();
+      await released;
+    });
+    try {
+      await acquired;
+      const started = Date.now();
+      const requests = Array.from({ length: 50 }, () => app.request("/ready"));
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const active =
+        await sql`SELECT pid FROM pg_stat_activity WHERE datname = current_database() AND query LIKE 'SELECT 1 FROM waitlist_entries%' AND state = 'active'`;
+      expect(active).toHaveLength(1);
+      const responses = await Promise.all(requests);
+      expect(responses.every((response) => response.status === 503)).toBe(true);
+      expect(Date.now() - started).toBeLessThan(3000);
+      const remaining =
+        await sql`SELECT pid FROM pg_stat_activity WHERE datname = current_database() AND query LIKE 'SELECT 1 FROM waitlist_entries%' AND state = 'active'`;
+      expect(remaining).toHaveLength(0);
+      unlock();
+      await lock;
+      expect((await app.request("/ready")).status).toBe(200);
+    } finally {
+      unlock();
+      await lock;
+      await probeSql.end({ timeout: 2 });
+    }
+  }, 10000);
+});
+
+databaseSuite("readiness cache", (sql) => {
+  it("caches the result for the configured interval", async () => {
+    const { createDatabaseReady } = await import("./database-ready.js");
+    await migrate(sql);
+    const ready = createDatabaseReady(sql, { cacheMs: 200 });
+    expect(await ready()).toBe(true);
+    await sql`DROP TABLE waitlist_entries`;
+    expect(await ready()).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(await ready()).toBe(false);
   });
 });

@@ -182,6 +182,11 @@ The waitlist response floor (`WAITLIST_MIN_RESPONSE_MS`, default 75 ms) hides di
 The `RATE_LIMIT_MAX_KEYS` setting (1,000–1,000,000, default 100,000) is a deliberate
 global admission limit that protects process memory. When active fixed windows fill
 the store, new keys receive 503 with `Retry-After`; existing keys remain enforced.
-Each key retains its string and a bucket with three numbers and a boolean, plus Map
+Each key retains its string and a bucket with three numbers, plus Map
 and JavaScript object overhead; memory varies with key length and runtime (budget
 roughly hundreds of bytes per key). A shared store is the long-term fix (YEN-55).
+
+Readiness uses a dedicated database connection, a two-second deadline and a
+server-side statement timeout. `READINESS_CACHE_MS` controls result caching
+(default 1,000 ms, range 0–60,000; 0 disables caching). Concurrent probes share
+one check.

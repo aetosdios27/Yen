@@ -105,3 +105,9 @@ it.each(["999", "1000001", "1.5", "invalid"])(
     await expect(import("./env.js")).rejects.toThrow("RATE_LIMIT_MAX_KEYS");
   },
 );
+
+it.each(["-1", "60001", "1.5", "invalid"])("rejects invalid readiness cache %s", async (value) => {
+  vi.stubEnv("PORT", "3001");
+  vi.stubEnv("READINESS_CACHE_MS", value);
+  await expect(import("./env.js")).rejects.toThrow("READINESS_CACHE_MS");
+});

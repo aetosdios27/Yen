@@ -4,7 +4,7 @@ import { createSql } from "@yen/db";
 import { createApp } from "./app.js";
 import { clientIp } from "./client-ip.js";
 import { rateLimits } from "./config.js";
-import { databaseReady } from "./database-ready.js";
+import { createDatabaseReady } from "./database-ready.js";
 import { env } from "./env.js";
 import { useMemoryStore } from "./server-config.js";
 import { MemoryRateLimitStore } from "./stores.js";
@@ -16,9 +16,13 @@ if (memory)
   process.stderr.write(
     "WARNING: waitlist uses volatile in-memory storage; data will be lost on restart\n",
   );
-const readiness = () => (sql ? databaseReady(sql) : Promise.resolve(memory));
+const probeSql = env.DATABASE_URL ? createSql(env.DATABASE_URL, { max: 1 }) : undefined;
+const readiness = probeSql
+  ? createDatabaseReady(probeSql, { cacheMs: env.READINESS_CACHE_MS })
+  : () => Promise.resolve(memory);
 if (!(await readiness())) {
   await sql?.end({ timeout: 1 });
+  await probeSql?.end({ timeout: 1 });
   throw new Error("DATABASE_URL connection failed or waitlist_entries table is unavailable");
 }
 
