@@ -1,6 +1,6 @@
 # ADR 0001: Event Log Storage Layout, Append Contention, and Retention at Scale
 
-- **Status:** Proposed
+- **Status:** Proposed. Needs a maintainer decision on partitioning (Decision 1, item 5) before the migration changes. Reviewed and corrected after the first draft: the dynamic-SQL decision, the isolation guarantee and the archival strategy were wrong or overstated.
 - **Date:** 2026-10-27
 - **Issue:** [YEN-58](https://linear.app/yen-pbl/issue/YEN-58)
 - **Deciders:** Design Sub-Agent, Core Database Engineering
@@ -113,7 +113,7 @@ To test whether a viral campaign on Fund A can cause head-of-line blocking or de
 | **Max Latency** | 41.14 ms | **4.23 ms** | **5.24 ms** |
 
 > [!IMPORTANT]
-> **Stated Isolation Bound:** Unrelated funds are cryptographically and transactionally isolated. While Fund A experiences heavy contention ($p99 = 34.06\text{ ms}$, $\max = 41.14\text{ ms}$), Fund B's append latency is guaranteed strictly bounded with **$p99 < 5.0\text{ ms}$** (measured **4.20 ms** unpartitioned, **4.80 ms** hash-partitioned). Advisory locks keyed by fund ID introduce **zero** cross-fund blocking ([PostgreSQL Explicit Locking](../../docs/REFERENCES.md#pg-locking)).
+> **Measured, not guaranteed.** While Fund A ran at p99 34.06 ms (max 41.14 ms), Fund B's append latency was p99 4.20 ms unpartitioned and 4.80 ms hash-partitioned, with a partitioned max of 5.24 ms. A different fund does not wait on Fund A's advisory lock, which is keyed by fund ID ([PostgreSQL Explicit Locking](../../docs/REFERENCES.md#pg-locking)). The latency figures are one run of 100 probe appends each, taken on a developer machine that was also running other builds and databases, and the partitioned run used 16 partitions, not the 32 decided in Decision 1. A p99 below 5 ms is what was observed, not a bound. Before relying on any latency target, rerun on a quiet machine with more samples and the 32-partition layout.
 
 ---
 
@@ -200,17 +200,12 @@ We decide to define `fund_events` as a **declarative hash-partitioned table by `
    - Split $p{r}$ rows into two new tables: `fund_events_p{r}_new` (`MODULUS 64, REMAINDER r`) and `fund_events_p{r+32}` (`MODULUS 64, REMAINDER r+32`).
    - Attach both partitions: `ALTER TABLE fund_events ATTACH PARTITION ...`
    - **Crucially:** The other 31 partitions remain 100% online for live reads and appends with zero downtime and zero data rewrite.
+5. **What the measurements do and do not support:** Partitioning did not make appends faster. Fund B p99 was 4.20 ms unpartitioned and 4.80 ms partitioned, within the noise of one run. The case for partitioning is capacity and maintenance (smaller indexes, per-partition autovacuum, a path to archiving), not speed. A single table with `PRIMARY KEY (fund_id, seq)` would serve the measured workload; the cost of choosing it is that moving to partitions later means rewriting a table that anchored roots already refer to. The maintainers should decide this knowingly.
+6. **Immutability must be re-applied per partition.** A statement-level `BEFORE TRUNCATE` trigger on the partitioned parent does not fire for `TRUNCATE` run directly on a child partition. This was verified on PostgreSQL 16: `TRUNCATE parent` was blocked, `TRUNCATE parent_p0` succeeded and removed rows. The migration therefore has to create the `no_truncate` trigger on every partition (see section 5), and the tests must truncate a partition directly as the application role and as the table owner.
 
-### Decision 2: Trigger Dynamic Partition Targeting (`TG_TABLE_NAME`)
+### Decision 2: The insert trigger reads the head from the parent table
 
-In PostgreSQL 16, a `BEFORE INSERT FOR EACH ROW` trigger attached to a partitioned table fires *after* PostgreSQL routes the tuple to its target child partition. In our empirical tests, querying a hardcoded `FROM fund_events` within the trigger function caused sequence verification failures because the root table view had not yet committed the tuple.
-We decide that `yen_fund_events_before_insert()` must dynamically query the routed child partition via `TG_TABLE_NAME`:
-```sql
-EXECUTE format('SELECT seq, hash, occurred_at FROM %I WHERE fund_id = $1 ORDER BY seq DESC LIMIT 1', TG_TABLE_NAME)
-INTO v_prev_seq, v_prev_hash, v_prev_occurred_at
-USING NEW.fund_id;
-```
-This restricts the head lookup to the single child partition where the fund lives, eliminating root catalog overhead and guaranteeing correct trigger-level gapless sequence verification.
+A `BEFORE INSERT ... FOR EACH ROW` trigger on a partitioned table fires after the row has been routed to its partition. An earlier draft of this ADR claimed that querying `fund_events` inside the trigger failed because the tuple was not visible, and so required dynamic SQL on `TG_TABLE_NAME`. That claim was wrong. It was checked directly on PostgreSQL 16 with a hash-partitioned table: three inserts for one fund in a single transaction, each reading `SELECT seq FROM parent WHERE fund_id = NEW.fund_id ORDER BY seq DESC LIMIT 1` in the trigger, were sequenced correctly, and a later insert with a gap was rejected. Partition pruning limits the lookup to the one partition that holds the fund. The trigger function therefore stays as written in migration 0003, with no dynamic SQL.
 
 ### Decision 3: Index Plan Standardized on `PRIMARY KEY (fund_id, seq)`
 
@@ -240,7 +235,7 @@ We decide that anchoring must never perform whole-table timestamp scans. Instead
 
 Yen is a public transparency ledger:
 1. **Zero Deletion Policy:** Direct `UPDATE`, `DELETE`, and `TRUNCATE` operations are rejected by database triggers and revoked from all application roles ([PostgreSQL CREATE TRIGGER](../../docs/REFERENCES.md#pg-trigger); [PostgreSQL Privileges](../../docs/REFERENCES.md#pg-privileges)).
-2. **Cold Storage Strategy:** Inactive or closed funds older than 365 days can be archived by detaching their partition (`ALTER TABLE fund_events DETACH PARTITION ... CONCURRENTLY`), exporting rows to Parquet/JSONL on S3/Cloud Storage, and enabling S3 Object Lock (WORM compliance).
+2. **Cold Storage Strategy (not decided here):** Under hash partitioning a partition holds many funds, so detaching one partition would archive a slice of every fund, including active ones. Whole-partition detach is therefore not an archival tool for closed funds. Archiving closed funds needs either a copy of their rows to object storage with the original rows kept (nothing is deleted), or a different partitioning key. Decide this when retention is first needed, and keep it out of the migration for now. Object storage with a retention lock is the likely home for copies, to be confirmed against the provider chosen.
 3. **Verification Decoupling:** Verification against on-chain checkpoints only requires streaming raw event envelopes. Because `verifyChainStream` operates on any `AsyncIterable`, auditors can verify cold-storage files directly in Node or the browser without placing any query load on PostgreSQL.
 4. **Online Operational State:** PostgreSQL only needs to retain active fund events and the current `ChainHead` checkpoint state.
 
@@ -275,16 +270,11 @@ BEGIN
 END;
 $$;
 
--- 3. In yen_fund_events_before_insert(): Use TG_TABLE_NAME for head lookup
--- Change:
---   SELECT seq, hash, occurred_at INTO v_prev_seq, v_prev_hash, v_prev_occurred_at
---   FROM fund_events WHERE fund_id = NEW.fund_id ORDER BY seq DESC LIMIT 1;
--- To:
-  EXECUTE format('SELECT seq, hash, occurred_at FROM %I WHERE fund_id = $1 ORDER BY seq DESC LIMIT 1', TG_TABLE_NAME)
-  INTO v_prev_seq, v_prev_hash, v_prev_occurred_at
-  USING NEW.fund_id;
+-- 3. yen_fund_events_before_insert() is unchanged: it reads the head from the parent table
+--    (see Decision 2).
 
--- 4. Attach triggers to root partitioned table (automatically inherited by child partitions)
+-- 4. Row-level triggers on the parent are cloned to every partition. The statement-level
+--    TRUNCATE trigger is NOT, so it is also created on each partition below.
 CREATE TRIGGER fund_events_before_insert
 BEFORE INSERT ON fund_events
 FOR EACH ROW
@@ -305,6 +295,17 @@ BEFORE TRUNCATE ON fund_events
 FOR EACH STATEMENT
 EXECUTE FUNCTION yen_fund_events_no_truncate();
 
+-- 5. Re-apply the TRUNCATE guard on every partition (statement triggers are not cloned).
+DO $$
+BEGIN
+  FOR r IN 0..31 LOOP
+    EXECUTE format(
+      'CREATE TRIGGER fund_events_no_truncate BEFORE TRUNCATE ON fund_events_p%s FOR EACH STATEMENT EXECUTE FUNCTION yen_fund_events_no_truncate();', r);
+    EXECUTE format('REVOKE UPDATE, DELETE, TRUNCATE ON fund_events_p%s FROM PUBLIC;', r);
+  END LOOP;
+END;
+$$;
+
 REVOKE UPDATE, DELETE, TRUNCATE ON fund_events FROM PUBLIC;
 ```
 
@@ -314,13 +315,14 @@ REVOKE UPDATE, DELETE, TRUNCATE ON fund_events FROM PUBLIC;
 
 ### Positive
 - **High Concurrency Scalability:** Multi-fund append throughput scales to 2,210+ appends/sec under group commit.
-- **Strict Isolation:** Hot-fund traffic spikes cannot degrade unrelated funds (p99 latency strictly < 5.0ms).
+- **Isolation (measured):** In one run, hot-fund traffic did not slow an unrelated fund beyond about 5 ms at p99; see the caveats in section 3.2.
 - **Partition Maintenance:** Autovacuum, index bloat, and cache locality are partitioned into manageable ~750MB chunks.
-- **Guaranteed Integrity:** Triggers, canonical serialization, and SHA-256 verification are enforced inside the database transaction before commit.
+- **Integrity enforced in the database:** Triggers, canonical serialization, and SHA-256 verification run inside the insert transaction. With partitioning, the TRUNCATE guard has to be re-applied on each partition.
 - **Client Auditability:** Donors and third-party auditors can stream 1,000,000 events in ~3 minutes with flat $O(1)$ memory consumption (< 35MB heap).
 
 ### Negative / Trade-offs
 - **Single Hot Fund Throughput Ceiling:** A single viral fund cannot exceed ~400–500 appends/sec due to advisory lock serialization and synchronous WAL flush. Applications handling viral donation drives must use client-side aggregation or batching if a single fund requires thousands of donations per second.
+- **No speed gain from partitioning:** the measured append latency is the same or slightly worse; see Decision 1, item 5.
 - **Multi-Partition Catalog:** 32 child partitions increase PostgreSQL catalog entry count and require partition pruning for query efficiency. Cross-partition global queries must be avoided.
 
 ---
