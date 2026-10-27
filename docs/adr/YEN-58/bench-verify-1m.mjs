@@ -1,11 +1,10 @@
-import {
-  makeNextEvent,
-  verifyChainStream,
-  chainHead,
-  genesisHash,
-  computeEventHash,
-} from "../../../packages/eventlog/dist/index.js";
 import v8 from "node:v8";
+import {
+  chainHead,
+  computeEventHash,
+  genesisHash,
+  verifyChainStream,
+} from "../../../packages/eventlog/dist/index.js";
 
 const FUND_ID = "00000000-0000-7000-8000-000000000001";
 const ACTOR = "psn_00000000-0000-7000-8000-000000000002";
@@ -81,13 +80,17 @@ async function runBenchmark(totalEvents) {
   }
 
   const initialMemory = process.memoryUsage();
-  console.log(`Initial RSS: ${formatBytes(initialMemory.rss)}, HeapUsed: ${formatBytes(initialMemory.heapUsed)}`);
+  console.log(
+    `Initial RSS: ${formatBytes(initialMemory.rss)}, HeapUsed: ${formatBytes(initialMemory.heapUsed)}`,
+  );
 
   console.log(`Precomputing authentic target head for ${totalEvents.toLocaleString()} events...`);
   const tPre0 = performance.now();
   const expectedHead = await computeTargetHead(totalEvents);
   const tPre1 = performance.now();
-  console.log(`Target head computed in ${((tPre1 - tPre0) / 1000).toFixed(2)}s: ${expectedHead.latestHash}`);
+  console.log(
+    `Target head computed in ${((tPre1 - tPre0) / 1000).toFixed(2)}s: ${expectedHead.latestHash}`,
+  );
 
   if (globalThis.gc) {
     globalThis.gc();
@@ -127,7 +130,9 @@ async function runBenchmark(totalEvents) {
   console.log(`Duration: ${durationSec.toFixed(3)} s (${durationMs.toFixed(1)} ms)`);
   console.log(`Throughput: ${eventsPerSec.toFixed(1)} events/sec`);
   console.log(`Latency per event: ${usPerEvent.toFixed(2)} µs/event`);
-  console.log(`Peak HeapUsed: ${formatBytes(peakHeapUsed)} (Delta: ${formatBytes(peakHeapUsed - streamStartMemory.heapUsed)})`);
+  console.log(
+    `Peak HeapUsed: ${formatBytes(peakHeapUsed)} (Delta: ${formatBytes(peakHeapUsed - streamStartMemory.heapUsed)})`,
+  );
   console.log(`Peak RSS: ${formatBytes(peakRss)}`);
 
   return {
@@ -144,7 +149,9 @@ async function runBenchmark(totalEvents) {
 
 async function main() {
   console.log(`Node.js version: ${process.version}`);
-  console.log(`V8 heap limit: ${(v8.getHeapStatistics().heap_size_limit / 1024 / 1024).toFixed(0)} MB`);
+  console.log(
+    `V8 heap limit: ${(v8.getHeapStatistics().heap_size_limit / 1024 / 1024).toFixed(0)} MB`,
+  );
 
   // Warmup with 1k
   await runBenchmark(1000);

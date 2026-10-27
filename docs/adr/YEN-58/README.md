@@ -5,6 +5,7 @@ This directory contains rerunnable benchmark scripts evaluating PostgreSQL layou
 ## Benchmark Scripts
 
 ### 1. `bench-verify-1m.mjs`
+
 Evaluates the memory footprint and verification throughput of `verifyChainStream` from `@yen/eventlog` on synthetic event chains from 1,000 to 1,000,000 events.
 
 ```sh
@@ -18,6 +19,7 @@ node docs/adr/YEN-58/bench-verify-1m.mjs
 - 1,000,000 events: 188.884s (5,294 ev/s), Peak Heap 34.97 MB ($O(1)$ memory streaming)
 
 ### 2. `bench-postgres.mjs`
+
 Compares PostgreSQL unpartitioned vs 16-partition vs 32-partition hash layouts under varying concurrency ($c \in \{1, 4, 8, 16\}$). Tests hot fund contention, multi-fund scaling, hot-fund isolation (measuring Fund B during Fund A saturation), and query plans.
 
 **Prerequisites:**
@@ -40,7 +42,9 @@ node docs/adr/YEN-58/bench-postgres.mjs
 - Read Shapes: B-tree primary key `(fund_id, seq)` serves latest event (0.017ms), sequence range (0.036ms), and verification stream (0.433ms).
 
 ### 3. `bench-charts.html`
+
 Self-contained HTML visual containing SVG charts and metric tables for append throughput, hot-fund isolation, and streaming verification scaling.
 
 ## References
+
 Citations follow [docs/REFERENCES.md](../../REFERENCES.md). See [ADR 0001](../0001-event-log-at-scale.md) for full architectural analysis and DDL recommendations.

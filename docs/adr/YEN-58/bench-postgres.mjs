@@ -1,11 +1,11 @@
 import postgres from "../../../packages/db/node_modules/postgres/src/index.js";
 import {
-  makeNextEvent,
+  canonicalize,
   computeEventHash,
   genesisHash,
-  canonicalize,
 } from "../../../packages/eventlog/dist/index.js";
 
+// biome-ignore lint/suspicious/noUndeclaredEnvVars: benchmark script run manually outside turbo
 const PG_URL = process.env.DATABASE_URL || "postgres://postgres:pw@127.0.0.1:55444/postgres";
 
 // Connect with connection pool sized for concurrency tests
@@ -179,13 +179,16 @@ async function appendToTable(tableName, fundId, payloadInput, actor) {
     await tx`SELECT pg_advisory_xact_lock(${lockKey});`;
 
     // 2. Read latest head event for this fund
-    const headRows = await tx.unsafe(`
+    const headRows = await tx.unsafe(
+      `
       SELECT seq, hash, occurred_at
       FROM ${tableName}
       WHERE fund_id = $1::uuid
       ORDER BY seq DESC
       LIMIT 1;
-    `, [fundId]);
+    `,
+      [fundId],
+    );
 
     const prevSeq = headRows.length > 0 ? Number(headRows[0].seq) : 0;
     const prevHash = headRows.length > 0 ? headRows[0].hash : genesisHash;
@@ -207,22 +210,25 @@ async function appendToTable(tableName, fundId, payloadInput, actor) {
     const hash = await computeEventHash(unsigned);
 
     // 4. Insert into the target table
-    await tx.unsafe(`
+    await tx.unsafe(
+      `
       INSERT INTO ${tableName} (
         fund_id, seq, type, version, actor, occurred_at, payload, prev_hash, hash, canonical_envelope
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
-    `, [
-      fundId,
-      seq,
-      unsigned.type,
-      unsigned.version,
-      unsigned.actor,
-      unsigned.occurred_at,
-      sql.json(unsigned.payload),
-      unsigned.prev_hash,
-      hash,
-      canonicalEnvelope,
-    ]);
+    `,
+      [
+        fundId,
+        seq,
+        unsigned.type,
+        unsigned.version,
+        unsigned.actor,
+        unsigned.occurred_at,
+        sql.json(unsigned.payload),
+        unsigned.prev_hash,
+        hash,
+        canonicalEnvelope,
+      ],
+    );
 
     return { fundId, seq, hash };
   });
@@ -262,12 +268,14 @@ async function benchmarkAppends({
   const workers = Array.from({ length: concurrency }, () => worker());
   await Promise.all(workers);
   const totalDurationMs = performance.now() - startT;
-  const throughput = (totalAppends / (totalDurationMs / 1000));
+  const throughput = totalAppends / (totalDurationMs / 1000);
   const stats = summarizeLatencies(latencies);
 
   console.log(`[${description}] Concurrency: ${concurrency}, Table: ${tableName}`);
   console.log(`  Throughput: ${throughput.toFixed(1)} appends/sec`);
-  console.log(`  p50: ${stats.p50.toFixed(2)}ms, p90: ${stats.p90.toFixed(2)}ms, p99: ${stats.p99.toFixed(2)}ms, max: ${stats.max.toFixed(2)}ms`);
+  console.log(
+    `  p50: ${stats.p50.toFixed(2)}ms, p90: ${stats.p90.toFixed(2)}ms, p99: ${stats.p99.toFixed(2)}ms, max: ${stats.max.toFixed(2)}ms`,
+  );
 
   return {
     description,
@@ -300,12 +308,17 @@ async function benchmarkHotFundIsolation(tableName) {
   const hammerWorkers = Array.from({ length: 8 }, async () => {
     while (hammerActive) {
       try {
-        await appendToTable(tableName, fundA, {
-          donation_id: "00000000-0000-7000-8000-000000000004",
-          amount_paise: 1000,
-        }, actor);
+        await appendToTable(
+          tableName,
+          fundA,
+          {
+            donation_id: "00000000-0000-7000-8000-000000000004",
+            amount_paise: 1000,
+          },
+          actor,
+        );
         hammerCount++;
-      } catch (err) {
+      } catch {
         if (!hammerActive) break;
       }
     }
@@ -320,10 +333,15 @@ async function benchmarkHotFundIsolation(tableName) {
   const PROBE_COUNT = 100;
   for (let i = 0; i < PROBE_COUNT; i++) {
     const t0 = performance.now();
-    await appendToTable(tableName, fundB, {
-      donation_id: "00000000-0000-7000-8000-000000000005",
-      amount_paise: 2000,
-    }, actor);
+    await appendToTable(
+      tableName,
+      fundB,
+      {
+        donation_id: "00000000-0000-7000-8000-000000000005",
+        amount_paise: 2000,
+      },
+      actor,
+    );
     probeLatencies.push(performance.now() - t0);
   }
   const probeDurationMs = performance.now() - probeStart;
@@ -333,9 +351,13 @@ async function benchmarkHotFundIsolation(tableName) {
   const statsB = summarizeLatencies(probeLatencies);
   const throughputB = PROBE_COUNT / (probeDurationMs / 1000);
 
-  console.log(`Fund B Probe Results during Fund A Saturation (Hammer completed ${hammerCount} appends on Fund A):`);
+  console.log(
+    `Fund B Probe Results during Fund A Saturation (Hammer completed ${hammerCount} appends on Fund A):`,
+  );
   console.log(`  Throughput: ${throughputB.toFixed(1)} appends/sec`);
-  console.log(`  p50: ${statsB.p50.toFixed(2)}ms, p90: ${statsB.p90.toFixed(2)}ms, p99: ${statsB.p99.toFixed(2)}ms, max: ${statsB.max.toFixed(2)}ms`);
+  console.log(
+    `  p50: ${statsB.p50.toFixed(2)}ms, p90: ${statsB.p90.toFixed(2)}ms, p99: ${statsB.p99.toFixed(2)}ms, max: ${statsB.max.toFixed(2)}ms`,
+  );
 
   return {
     tableName,
@@ -357,41 +379,53 @@ async function benchmarkReadShapes(tableName) {
   const fund1 = "00000000-0000-7000-8000-000000000001";
 
   // Shape 1: Latest event per fund
-  const q1 = await sql.unsafe(`
+  const q1 = await sql.unsafe(
+    `
     EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
     SELECT * FROM ${tableName}
     WHERE fund_id = $1::uuid
     ORDER BY seq DESC
     LIMIT 1;
-  `, [fund1]);
+  `,
+    [fund1],
+  );
   const plan1 = q1[0]["QUERY PLAN"][0];
 
   // Shape 2: Range by sequence (e.g. seq 50 to 150)
-  const q2 = await sql.unsafe(`
+  const q2 = await sql.unsafe(
+    `
     EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
     SELECT * FROM ${tableName}
     WHERE fund_id = $1::uuid AND seq BETWEEN 50 AND 150
     ORDER BY seq ASC;
-  `, [fund1]);
+  `,
+    [fund1],
+  );
   const plan2 = q2[0]["QUERY PLAN"][0];
 
   // Shape 3: Full chain scan for verification
-  const q3 = await sql.unsafe(`
+  const q3 = await sql.unsafe(
+    `
     EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
     SELECT * FROM ${tableName}
     WHERE fund_id = $1::uuid
     ORDER BY seq ASC;
-  `, [fund1]);
+  `,
+    [fund1],
+  );
   const plan3 = q3[0]["QUERY PLAN"][0];
 
   // Shape 4a: Anchoring batch read (per-fund checkpoint: events since last anchor)
-  const q4a = await sql.unsafe(`
+  const q4a = await sql.unsafe(
+    `
     EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
     SELECT * FROM ${tableName}
     WHERE fund_id = $1::uuid AND seq > 50
     ORDER BY seq ASC
     LIMIT 100;
-  `, [fund1]);
+  `,
+    [fund1],
+  );
   const plan4a = q4a[0]["QUERY PLAN"][0];
 
   // Shape 4b: Global timestamp scan without index
@@ -404,11 +438,21 @@ async function benchmarkReadShapes(tableName) {
   `);
   const plan4b = q4b[0]["QUERY PLAN"][0];
 
-  console.log(`Shape 1 (Latest Event): Node: ${plan1.Plan["Node Type"]}, Time: ${plan1["Execution Time"].toFixed(3)}ms, Buffers: hit=${plan1.Plan["Shared Hit Blocks"] || 0}, read=${plan1.Plan["Shared Read Blocks"] || 0}`);
-  console.log(`Shape 2 (Range by seq): Node: ${plan2.Plan["Node Type"]}, Time: ${plan2["Execution Time"].toFixed(3)}ms, Buffers: hit=${plan2.Plan["Shared Hit Blocks"] || 0}, read=${plan2.Plan["Shared Read Blocks"] || 0}`);
-  console.log(`Shape 3 (Full chain):   Node: ${plan3.Plan["Node Type"]}, Time: ${plan3["Execution Time"].toFixed(3)}ms, Buffers: hit=${plan3.Plan["Shared Hit Blocks"] || 0}, read=${plan3.Plan["Shared Read Blocks"] || 0}`);
-  console.log(`Shape 4a (Anchor/Fund): Node: ${plan4a.Plan["Node Type"]}, Time: ${plan4a["Execution Time"].toFixed(3)}ms, Buffers: hit=${plan4a.Plan["Shared Hit Blocks"] || 0}, read=${plan4a.Plan["Shared Read Blocks"] || 0}`);
-  console.log(`Shape 4b (Global Scan): Node: ${plan4b.Plan["Node Type"]}, Time: ${plan4b["Execution Time"].toFixed(3)}ms, Buffers: hit=${plan4b.Plan["Shared Hit Blocks"] || 0}, read=${plan4b.Plan["Shared Read Blocks"] || 0}`);
+  console.log(
+    `Shape 1 (Latest Event): Node: ${plan1.Plan["Node Type"]}, Time: ${plan1["Execution Time"].toFixed(3)}ms, Buffers: hit=${plan1.Plan["Shared Hit Blocks"] || 0}, read=${plan1.Plan["Shared Read Blocks"] || 0}`,
+  );
+  console.log(
+    `Shape 2 (Range by seq): Node: ${plan2.Plan["Node Type"]}, Time: ${plan2["Execution Time"].toFixed(3)}ms, Buffers: hit=${plan2.Plan["Shared Hit Blocks"] || 0}, read=${plan2.Plan["Shared Read Blocks"] || 0}`,
+  );
+  console.log(
+    `Shape 3 (Full chain):   Node: ${plan3.Plan["Node Type"]}, Time: ${plan3["Execution Time"].toFixed(3)}ms, Buffers: hit=${plan3.Plan["Shared Hit Blocks"] || 0}, read=${plan3.Plan["Shared Read Blocks"] || 0}`,
+  );
+  console.log(
+    `Shape 4a (Anchor/Fund): Node: ${plan4a.Plan["Node Type"]}, Time: ${plan4a["Execution Time"].toFixed(3)}ms, Buffers: hit=${plan4a.Plan["Shared Hit Blocks"] || 0}, read=${plan4a.Plan["Shared Read Blocks"] || 0}`,
+  );
+  console.log(
+    `Shape 4b (Global Scan): Node: ${plan4b.Plan["Node Type"]}, Time: ${plan4b["Execution Time"].toFixed(3)}ms, Buffers: hit=${plan4b.Plan["Shared Hit Blocks"] || 0}, read=${plan4b.Plan["Shared Read Blocks"] || 0}`,
+  );
 
   return {
     tableName,
@@ -440,9 +484,24 @@ async function main() {
   for (let f = 1; f <= 50; f++) {
     const fundId = `00000000-0000-7000-8000-${f.toString().padStart(12, "0")}`;
     for (let s = 0; s < 5; s++) {
-      await appendToTable("fund_events_unpart", fundId, { donation_id: "00000000-0000-7000-8000-000000000004", amount_paise: 1000 }, "psn_00000000-0000-7000-8000-000000000003");
-      await appendToTable("fund_events_hash16", fundId, { donation_id: "00000000-0000-7000-8000-000000000004", amount_paise: 1000 }, "psn_00000000-0000-7000-8000-000000000003");
-      await appendToTable("fund_events_hash32", fundId, { donation_id: "00000000-0000-7000-8000-000000000004", amount_paise: 1000 }, "psn_00000000-0000-7000-8000-000000000003");
+      await appendToTable(
+        "fund_events_unpart",
+        fundId,
+        { donation_id: "00000000-0000-7000-8000-000000000004", amount_paise: 1000 },
+        "psn_00000000-0000-7000-8000-000000000003",
+      );
+      await appendToTable(
+        "fund_events_hash16",
+        fundId,
+        { donation_id: "00000000-0000-7000-8000-000000000004", amount_paise: 1000 },
+        "psn_00000000-0000-7000-8000-000000000003",
+      );
+      await appendToTable(
+        "fund_events_hash32",
+        fundId,
+        { donation_id: "00000000-0000-7000-8000-000000000004", amount_paise: 1000 },
+        "psn_00000000-0000-7000-8000-000000000003",
+      );
     }
   }
 

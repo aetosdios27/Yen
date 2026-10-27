@@ -69,29 +69,30 @@ We tested concurrency levels $C \in \{1, 4, 8, 16\}$ for:
 - **Hot Fund Workload:** All $C$ concurrent workers repeatedly append to the same single fund.
 - **Spread Funds Workload:** Workers distribute appends randomly across 50 distinct funds.
 
-| Workload | Concurrency | Table Layout | Throughput (appends/sec) | p50 Latency (ms) | p90 Latency (ms) | p99 Latency (ms) | Max Latency (ms) |
-| :--- | :---: | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Hot Fund** | $c=1$ | Unpartitioned | **513.7** | 1.74 | 2.51 | 4.41 | 4.77 |
-| **Hot Fund** | $c=1$ | Hash (16 part) | 474.7 | 1.81 | 2.90 | 4.77 | 6.58 |
-| **Hot Fund** | $c=1$ | Hash (32 part) | 462.6 | 1.75 | 3.03 | 6.42 | 8.22 |
-| **Hot Fund** | $c=4$ | Unpartitioned | 482.8 | 6.87 | 10.35 | 31.29 | 40.97 |
-| **Hot Fund** | $c=4$ | Hash (16 part) | 537.8 | 6.90 | 9.18 | 11.56 | 12.03 |
-| **Hot Fund** | $c=4$ | Hash (32 part) | 390.5 | 10.03 | 12.16 | 14.02 | 15.02 |
-| **Hot Fund** | $c=8$ | Unpartitioned | 381.2 | 20.41 | 25.22 | 34.06 | 41.14 |
-| **Hot Fund** | $c=8$ | Hash (16 part) | 366.8 | 20.88 | 24.21 | 41.16 | 41.41 |
-| **Hot Fund** | $c=8$ | Hash (32 part) | 412.1 | 19.15 | 22.84 | 25.85 | 27.51 |
-| **Hot Fund** | $c=16$ | Unpartitioned | 387.2 | 36.93 | 58.40 | 71.69 | 80.17 |
-| **Hot Fund** | $c=16$ | Hash (16 part) | 384.2 | 40.16 | 43.90 | 51.65 | 53.58 |
-| **Hot Fund** | $c=16$ | Hash (32 part) | 425.1 | 36.67 | 40.24 | 46.71 | 46.90 |
-| **Spread Funds** | $c=1$ | Unpartitioned | 396.1 | 2.32 | 3.08 | 4.49 | 36.78 |
-| **Spread Funds** | $c=4$ | Unpartitioned | **1,487.8** | 2.49 | 3.49 | 5.08 | 6.58 |
-| **Spread Funds** | $c=4$ | Hash (16 part) | 1,445.8 | 2.63 | 3.42 | 6.70 | 9.62 |
-| **Spread Funds** | $c=8$ | Unpartitioned | **2,059.9** | 3.71 | 4.97 | 6.92 | 9.12 |
-| **Spread Funds** | $c=8$ | Hash (32 part) | 2,016.8 | 3.83 | 4.97 | 7.43 | 9.32 |
-| **Spread Funds** | $c=16$ | Unpartitioned | **2,127.5** | 6.94 | 10.47 | 15.02 | 17.03 |
-| **Spread Funds** | $c=16$ | Hash (32 part) | **2,210.4** | 6.51 | 9.50 | 14.60 | 16.65 |
+| Workload         | Concurrency | Table Layout   | Throughput (appends/sec) | p50 Latency (ms) | p90 Latency (ms) | p99 Latency (ms) | Max Latency (ms) |
+| :--------------- | :---------: | :------------- | :----------------------: | :--------------: | :--------------: | :--------------: | :--------------: |
+| **Hot Fund**     |    $c=1$    | Unpartitioned  |        **513.7**         |       1.74       |       2.51       |       4.41       |       4.77       |
+| **Hot Fund**     |    $c=1$    | Hash (16 part) |          474.7           |       1.81       |       2.90       |       4.77       |       6.58       |
+| **Hot Fund**     |    $c=1$    | Hash (32 part) |          462.6           |       1.75       |       3.03       |       6.42       |       8.22       |
+| **Hot Fund**     |    $c=4$    | Unpartitioned  |          482.8           |       6.87       |      10.35       |      31.29       |      40.97       |
+| **Hot Fund**     |    $c=4$    | Hash (16 part) |          537.8           |       6.90       |       9.18       |      11.56       |      12.03       |
+| **Hot Fund**     |    $c=4$    | Hash (32 part) |          390.5           |      10.03       |      12.16       |      14.02       |      15.02       |
+| **Hot Fund**     |    $c=8$    | Unpartitioned  |          381.2           |      20.41       |      25.22       |      34.06       |      41.14       |
+| **Hot Fund**     |    $c=8$    | Hash (16 part) |          366.8           |      20.88       |      24.21       |      41.16       |      41.41       |
+| **Hot Fund**     |    $c=8$    | Hash (32 part) |          412.1           |      19.15       |      22.84       |      25.85       |      27.51       |
+| **Hot Fund**     |   $c=16$    | Unpartitioned  |          387.2           |      36.93       |      58.40       |      71.69       |      80.17       |
+| **Hot Fund**     |   $c=16$    | Hash (16 part) |          384.2           |      40.16       |      43.90       |      51.65       |      53.58       |
+| **Hot Fund**     |   $c=16$    | Hash (32 part) |          425.1           |      36.67       |      40.24       |      46.71       |      46.90       |
+| **Spread Funds** |    $c=1$    | Unpartitioned  |          396.1           |       2.32       |       3.08       |       4.49       |      36.78       |
+| **Spread Funds** |    $c=4$    | Unpartitioned  |       **1,487.8**        |       2.49       |       3.49       |       5.08       |       6.58       |
+| **Spread Funds** |    $c=4$    | Hash (16 part) |         1,445.8          |       2.63       |       3.42       |       6.70       |       9.62       |
+| **Spread Funds** |    $c=8$    | Unpartitioned  |       **2,059.9**        |       3.71       |       4.97       |       6.92       |       9.12       |
+| **Spread Funds** |    $c=8$    | Hash (32 part) |         2,016.8          |       3.83       |       4.97       |       7.43       |       9.32       |
+| **Spread Funds** |   $c=16$    | Unpartitioned  |       **2,127.5**        |       6.94       |      10.47       |      15.02       |      17.03       |
+| **Spread Funds** |   $c=16$    | Hash (32 part) |       **2,210.4**        |       6.51       |       9.50       |      14.60       |      16.65       |
 
 #### What limits these numbers:
+
 1. **Single Hot Fund Throughput Bound:** Throughput for a single fund is strictly capped between **380 and 514 appends/sec**, regardless of client concurrency ($c=1$ through $c=16$). Under advisory locking, concurrent requests must wait in FIFO lock queue. Each append transaction holds the lock for ~1.8 ms to read the head, compute the next event, insert, and synchronously flush WAL on commit ($1 / 0.002\text{s} \approx 500\text{ appends/sec}$). Increasing concurrency merely increases queue wait time ($p50$ increases proportionally from 1.74ms at $c=1$ to 36.9ms at $c=16$). This serialization is essential to prevent sequence forks.
 2. **Aggregate Multi-Fund Scaling:** When appends occur across independent funds, transactions acquire distinct 64-bit advisory lock keys and execute in parallel. Throughput scales linearly from **396 appends/sec at $c=1$** to **2,210 appends/sec at $c=16$** (5.6x throughput increase), enabled by PostgreSQL WAL group commit.
 
@@ -103,14 +104,14 @@ To test whether a viral campaign on Fund A can cause head-of-line blocking or de
 - **Background load:** 8 concurrent worker connections continuously hammered Fund A under maximum advisory lock contention.
 - **Probe load:** An independent client executed 100 appends to Fund B.
 
-| Metric | Saturated Fund A (8 Workers) | Probed Fund B (Unpartitioned) | Probed Fund B (Hash-16 Partitioned) |
-| :--- | :---: | :---: | :---: |
-| **Appends Completed** | 203–204 appends | 100 appends | 100 appends |
-| **Throughput** | 381.2 appends/sec | **395.2 appends/sec** | **368.7 appends/sec** |
-| **p50 Latency** | 20.41 ms | **2.40 ms** | **2.57 ms** |
-| **p90 Latency** | 25.22 ms | **3.22 ms** | **3.52 ms** |
-| **p99 Latency** | 34.06 ms | **4.20 ms** | **4.80 ms** |
-| **Max Latency** | 41.14 ms | **4.23 ms** | **5.24 ms** |
+| Metric                | Saturated Fund A (8 Workers) | Probed Fund B (Unpartitioned) | Probed Fund B (Hash-16 Partitioned) |
+| :-------------------- | :--------------------------: | :---------------------------: | :---------------------------------: |
+| **Appends Completed** |       203–204 appends        |          100 appends          |             100 appends             |
+| **Throughput**        |      381.2 appends/sec       |     **395.2 appends/sec**     |        **368.7 appends/sec**        |
+| **p50 Latency**       |           20.41 ms           |          **2.40 ms**          |             **2.57 ms**             |
+| **p90 Latency**       |           25.22 ms           |          **3.22 ms**          |             **3.52 ms**             |
+| **p99 Latency**       |           34.06 ms           |          **4.20 ms**          |             **4.80 ms**             |
+| **Max Latency**       |           41.14 ms           |          **4.23 ms**          |             **5.24 ms**             |
 
 > [!IMPORTANT]
 > **Measured, not guaranteed.** While Fund A ran at p99 34.06 ms (max 41.14 ms), Fund B's append latency was p99 4.20 ms unpartitioned and 4.80 ms hash-partitioned, with a partitioned max of 5.24 ms. A different fund does not wait on Fund A's advisory lock, which is keyed by fund ID ([PostgreSQL Explicit Locking](../../docs/REFERENCES.md#pg-locking)). The latency figures are one run of 100 probe appends each, taken on a developer machine that was also running other builds and databases, and the partitioned run used 16 partitions, not the 32 decided in Decision 1. A p99 below 5 ms is what was observed, not a bound. Before relying on any latency target, rerun on a quiet machine with more samples and the 32-partition layout.
@@ -122,44 +123,55 @@ To test whether a viral campaign on Fund A can cause head-of-line blocking or de
 We evaluated `EXPLAIN (ANALYZE, BUFFERS)` ([PostgreSQL EXPLAIN](../../docs/REFERENCES.md#pg-explain)) across the unpartitioned, 16-partition, and 32-partition hash layouts for the core access patterns:
 
 #### Shape 1: Latest Event per Fund
+
 ```sql
 SELECT * FROM fund_events WHERE fund_id = $1 ORDER BY seq DESC LIMIT 1;
 ```
+
 - **Plan:** `Limit -> Index Scan Backward using fund_events_pkey on fund_events` (or target child partition).
 - **Execution Time:** **0.017 ms** (Hash-32), **0.020 ms** (Hash-16), **0.024 ms** (Unpartitioned).
 - **Buffer Hits:** Exactly **3 shared buffer hits**, 0 disk reads.
 - **Finding:** PostgreSQL B-tree indexes support bidirectional traversal with equal efficiency. A separate descending index `(fund_id, seq DESC)` is completely redundant ([PostgreSQL CREATE INDEX](../../docs/REFERENCES.md#pg-index)).
 
 #### Shape 2: Range by Sequence
+
 ```sql
 SELECT * FROM fund_events WHERE fund_id = $1 AND seq BETWEEN 50 AND 150 ORDER BY seq ASC;
 ```
+
 - **Plan:** `Index Scan using fund_events_pkey`.
 - **Execution Time:** **0.036 ms** (Hash-32), **0.037 ms** (Hash-16), **0.049 ms** (Unpartitioned).
 - **Buffer Hits:** **15–16 shared buffer hits**, 0 disk reads.
 - **Finding:** Exact B-tree slice scan on the composite primary key.
 
 #### Shape 3: Full Chain Scan for Verification
+
 ```sql
 SELECT * FROM fund_events WHERE fund_id = $1 ORDER BY seq ASC;
 ```
+
 - **Plan:** `Index Scan using fund_events_pkey`.
 - **Execution Time:** **0.433 ms** (Hash-32), **0.677 ms** (Unpartitioned), **1.179 ms** (Hash-16).
 - **Buffer Hits:** **73–129 shared buffer hits**.
 - **Finding:** Streaming cursor reads directly from the B-tree in indexed sequence without sorting overhead.
 
 #### Shape 4: Anchoring Batch Reads
+
 - **Approach 4a (Per-Fund Checkpoint):**
+
   ```sql
   SELECT * FROM fund_events WHERE fund_id = $1 AND seq > $last_seq ORDER BY seq ASC LIMIT 100;
   ```
+
   - **Plan:** `Limit -> Index Scan using fund_events_pkey`.
   - **Execution Time:** **0.215 ms** (Hash-32), **0.297 ms** (Unpartitioned).
   - **Buffer Hits:** 71–130 buffer hits.
 - **Approach 4b (Global Scan Across All Funds by Timestamp without Index):**
+
   ```sql
   SELECT * FROM fund_events WHERE occurred_at > $ts ORDER BY occurred_at ASC LIMIT 100;
   ```
+
   - **Execution Time:** **0.818 ms** (Unpartitioned), **1.466 ms** (Hash-16).
   - **Buffer Hits:** **226 to 317 buffer hits**.
   - **Critical Architectural Warning:** On a hash-partitioned table, any query lacking `fund_id` cannot perform partition pruning. It must scan **all 32 partitions** and execute an `Append` / `Merge Append` across child partition indexes.
@@ -170,14 +182,15 @@ SELECT * FROM fund_events WHERE fund_id = $1 ORDER BY seq ASC;
 
 Using `verifyChainStream` from `@yen/eventlog` with synthetic events generated by `makeNextEvent`:
 
-| Total Events | Duration (s) | Throughput (ev/s) | Latency per Event (µs) | Peak HeapUsed (MB) | Heap Delta (MB) | Peak RSS (MB) | Verification Status |
-| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **1,000** | 0.165 s | 6,052.5 | 165.2 µs | 11.60 MB | +0.50 MB | 83.82 MB | `ok: true` |
-| **10,000** | 1.713 s | 5,838.6 | 171.3 µs | 14.98 MB | +0.00 MB | 84.22 MB | `ok: true` |
-| **100,000** | 16.190 s | 6,176.8 | 161.9 µs | 22.18 MB | +10.52 MB | 97.68 MB | `ok: true` |
-| **1,000,000** | **188.884 s** | **5,294.3** | **188.9 µs** | **34.97 MB** | **+19.14 MB** | **122.71 MB** | **`ok: true`** |
+| Total Events  | Duration (s)  | Throughput (ev/s) | Latency per Event (µs) | Peak HeapUsed (MB) | Heap Delta (MB) | Peak RSS (MB) | Verification Status |
+| :-----------: | :-----------: | :---------------: | :--------------------: | :----------------: | :-------------: | :-----------: | :-----------------: |
+|   **1,000**   |    0.165 s    |      6,052.5      |        165.2 µs        |      11.60 MB      |    +0.50 MB     |   83.82 MB    |     `ok: true`      |
+|  **10,000**   |    1.713 s    |      5,838.6      |        171.3 µs        |      14.98 MB      |    +0.00 MB     |   84.22 MB    |     `ok: true`      |
+|  **100,000**  |   16.190 s    |      6,176.8      |        161.9 µs        |      22.18 MB      |    +10.52 MB    |   97.68 MB    |     `ok: true`      |
+| **1,000,000** | **188.884 s** |    **5,294.3**    |      **188.9 µs**      |    **34.97 MB**    |  **+19.14 MB**  | **122.71 MB** |   **`ok: true`**    |
 
 #### Limiting factors:
+
 1. **$O(1)$ Memory Consumption:** Because `verifyChainStream` consumes an `AsyncIterable`, only the active event and previous head are resident in memory. V8 garbage collection continuously reclaims envelopes. Peak heap used at 1,000,000 events was only **34.97 MB** (heap delta of just +19.14 MB over baseline), proving that multi-gigabyte event chains can be audited on resource-constrained client machines or browsers without out-of-memory crashes.
 2. **Compute Bottleneck:** Throughput is consistently ~5,300 to 6,200 events/sec (~188 µs/event). Profiling confirms 100% single-thread CPU saturation split between:
    - RFC 8785 canonical JSON sorting and character escaping (~45% CPU) ([RFC 8785](../../docs/REFERENCES.md#rfc-8785)).
@@ -222,6 +235,7 @@ Because hash partitioning distributes rows by `fund_id`, any query filtering by 
 We decide that anchoring must never perform whole-table timestamp scans. Instead, anchoring must use either:
 1. **Per-fund checkpointing:** `WHERE fund_id = $1 AND seq > $last_anchored_seq ORDER BY seq ASC LIMIT $batch`, which uses the primary key index scan on exactly 1 partition (0.215 ms, 71 buffer hits).
 2. **Transactional Outbox / Pending Anchor Table:** Staged in the same transaction as `appendEvent` ([Transactionally Staged Job Drains in Postgres](../../docs/REFERENCES.md#brandur-job-drain); YEN-62):
+
    ```sql
    CREATE TABLE fund_anchor_pending (
      fund_id uuid PRIMARY KEY REFERENCES funds(id),
@@ -229,6 +243,7 @@ We decide that anchoring must never perform whole-table timestamp scans. Instead
      updated_at timestamptz NOT NULL
    );
    ```
+
    An anchor worker queries `SELECT fund_id, last_seq FROM fund_anchor_pending WHERE last_seq > anchored_seq`, completely avoiding table scans over `fund_events`.
 
 ### Decision 5: Retention and Cold-Storage Archival
@@ -314,6 +329,7 @@ REVOKE UPDATE, DELETE, TRUNCATE ON fund_events FROM PUBLIC;
 ## 6. Consequences
 
 ### Positive
+
 - **High Concurrency Scalability:** Multi-fund append throughput scales to 2,210+ appends/sec under group commit.
 - **Isolation (measured):** In one run, hot-fund traffic did not slow an unrelated fund beyond about 5 ms at p99; see the caveats in section 3.2.
 - **Partition Maintenance:** Autovacuum, index bloat, and cache locality are partitioned into manageable ~750MB chunks.
@@ -321,6 +337,7 @@ REVOKE UPDATE, DELETE, TRUNCATE ON fund_events FROM PUBLIC;
 - **Client Auditability:** Donors and third-party auditors can stream 1,000,000 events in ~3 minutes with flat $O(1)$ memory consumption (< 35MB heap).
 
 ### Negative / Trade-offs
+
 - **Single Hot Fund Throughput Ceiling:** A single viral fund cannot exceed ~400–500 appends/sec due to advisory lock serialization and synchronous WAL flush. Applications handling viral donation drives must use client-side aggregation or batching if a single fund requires thousands of donations per second.
 - **No speed gain from partitioning:** the measured append latency is the same or slightly worse; see Decision 1, item 5.
 - **Multi-Partition Catalog:** 32 child partitions increase PostgreSQL catalog entry count and require partition pruning for query efficiency. Cross-partition global queries must be avoided.
