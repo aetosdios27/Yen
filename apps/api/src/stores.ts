@@ -129,6 +129,7 @@ export class MemoryIdempotencyStore implements IdempotencyStore {
 export interface RateLimit {
   readonly capacity: number;
   readonly refillMs: number;
+  readonly expiresAt?: number;
 }
 
 export interface RateLimitStore {
@@ -145,6 +146,7 @@ interface Bucket {
   readonly tokens: number;
   readonly updatedAt: number;
   readonly fullAt: number;
+  readonly fixed: boolean;
 }
 
 export class MemoryRateLimitStore implements RateLimitStore {
@@ -164,19 +166,35 @@ export class MemoryRateLimitStore implements RateLimitStore {
       if (bucket.fullAt <= now) this.buckets.delete(bucketKey);
     }
     const previous = this.buckets.get(key);
+    if (!previous && this.buckets.size >= this.maxEntries) {
+      const evictable = [...this.buckets].find(([, bucket]) => !bucket.fixed);
+      if (evictable) this.buckets.delete(evictable[0]);
+      else
+        return {
+          allowed: false,
+          retryAfterSeconds: Math.max(
+            1,
+            Math.ceil(((limit.expiresAt ?? now + limit.refillMs) - now) / 1000),
+          ),
+        } as const;
+    }
     const tokens = previous
-      ? Math.min(
-          limit.capacity,
-          previous.tokens +
-            (Math.max(0, now - previous.updatedAt) * limit.capacity) / limit.refillMs,
-        )
+      ? limit.expiresAt !== undefined
+        ? previous.tokens
+        : Math.min(
+            limit.capacity,
+            previous.tokens +
+              (Math.max(0, now - previous.updatedAt) * limit.capacity) / limit.refillMs,
+          )
       : limit.capacity;
     this.buckets.delete(key);
     const remaining = tokens >= 1 ? tokens - 1 : tokens;
     this.buckets.set(key, {
       tokens: remaining,
       updatedAt: now,
-      fullAt: now + ((limit.capacity - remaining) * limit.refillMs) / limit.capacity,
+      fullAt:
+        limit.expiresAt ?? now + ((limit.capacity - remaining) * limit.refillMs) / limit.capacity,
+      fixed: limit.expiresAt !== undefined,
     });
     while (this.buckets.size > this.maxEntries) {
       const oldest = this.buckets.keys().next().value;

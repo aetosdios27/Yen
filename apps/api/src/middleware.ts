@@ -61,7 +61,12 @@ export function rateLimit(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
               deps.clientIp(c),
               Math.floor(now / deps.waitlistLimit.refillMs),
             ]),
-            limit: { capacity: deps.waitlistLimit.capacity, refillMs: Number.MAX_SAFE_INTEGER },
+            limit: {
+              capacity: deps.waitlistLimit.capacity,
+              refillMs: deps.waitlistLimit.refillMs,
+              expiresAt:
+                (Math.floor(now / deps.waitlistLimit.refillMs) + 1) * deps.waitlistLimit.refillMs,
+            },
           },
         ]
       : [

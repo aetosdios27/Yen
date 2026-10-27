@@ -143,3 +143,16 @@ it("rejects controls and lone surrogates while counting Unicode code points", as
     (await app.request("/v1/waitlist", post({ ...input, name: "😀".repeat(200) }))).status,
   ).toBe(201);
 });
+
+it("retains an active waitlist bucket at capacity", async () => {
+  let ip = "first";
+  const app = createApp({ logger: silent, clock: () => 1000, clientIp: () => ip });
+  for (let i = 0; i < 5; i++)
+    expect((await app.request("/v1/waitlist", post(input))).status).toBe(201);
+  for (let i = 0; i < 10000; i++) {
+    ip = `other-${i}`;
+    await app.request("/v1/waitlist", post(input));
+  }
+  ip = "first";
+  expect((await app.request("/v1/waitlist", post(input))).status).toBe(429);
+});
