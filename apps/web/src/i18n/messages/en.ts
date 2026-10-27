@@ -139,7 +139,7 @@ export const en = {
         "Yen uses no third-party tracking cookies, no advertising cookies and no analytics scripts.",
       rightsTitle: "Your choices",
       rightsBody:
-        "You can ask us to correct or delete your personal data at any time, and you may raise a complaint with the Data Protection Board of India.",
+        "You can ask us to correct or delete your personal data, or withdraw your consent, by writing to privacy@yen.org.in at any time. You may also raise a complaint with the Data Protection Board of India.",
       changesTitle: "Changes to this notice",
       changesBody:
         "When this notice changes, the updated version appears on this page with a new date.",
