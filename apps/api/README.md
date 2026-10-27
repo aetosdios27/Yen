@@ -69,13 +69,14 @@ Unknown exceptions return the fixed internal error message, with no stack or cau
 | `idempotency_conflict` | 409    |
 | `rate_limited`         | 429    |
 | `payload_too_large`    | 413    |
+| `overloaded`           | 503    |
 | `internal`             | 500    |
 
 `src/errors.ts` owns the closed error-code schema and status table.
 Every response carries `x-request-id`. A UUID-shaped inbound ID with a valid
 version and variant is accepted; otherwise the server generates one.
 Readiness defaults to success. Inject `readiness: async () => boolean` to check
-dependencies; false or a thrown exception returns `internal`.
+dependencies; false or a thrown exception returns `internal` (503 for readiness).
 
 ## Idempotency storage contract
 
@@ -208,3 +209,52 @@ Readiness uses a dedicated database connection, a two-second deadline and a
 server-side statement timeout. `READINESS_CACHE_MS` controls result caching
 (default 1,000 ms, range 0–60,000; 0 disables caching). Concurrent probes share
 one check.
+
+## API Runtime Hardening (YEN-56)
+
+### Stateless Process Audit and Known Exceptions
+
+The API server process is strictly stateless; nothing required to survive a restart or maintain correctness across instances lives in process memory. The following are known exceptions:
+1. **Idempotency store (`MemoryIdempotencyStore`)**: Process-memory store by default; being migrated to Postgres in YEN-55.
+2. **Rate limit store (`MemoryRateLimitStore`)**: Process-memory store by default; being migrated to Postgres in YEN-55.
+3. **Funds resource (`funds` Map)**: In-memory foundation stub from YEN-15; domain persistence in Postgres in YEN-26/31.
+4. **Waitlist memory store (`MemoryWaitlistStore`)**: Permitted only in development when `YEN_ALLOW_MEMORY_STORES=true` is explicitly set; forbidden in production.
+
+### Postgres Connection Pool and PgBouncer Settings
+
+Database connection pool parameters are validated in `env.ts` with explicit defaults:
+- `DATABASE_POOL_MAX`: Maximum active connections (default `10`, range `1–100`).
+- `DATABASE_POOL_IDLE_TIMEOUT_SECONDS`: Idle connection reap timeout (default `20`, range `1–300`).
+- `DATABASE_POOL_ACQUIRE_TIMEOUT_SECONDS`: Connection acquisition timeout (default `10`, range `1–60`).
+
+PgBouncer transaction-mode considerations:
+- Startup parameters enforce UTC sessions without runtime `SET` leaks.
+- Named prepared statements are disabled by passing `prepare: false` to `createSql` when connecting through PgBouncer without `max_prepared_statements` enabled.
+- Locks: Transaction-scoped advisory locks (`pg_advisory_xact_lock`) are safe in transaction pooling mode; session-scoped advisory locks are not.
+
+### HTTP Limits, Timeouts, and Slow-Client Protection
+
+Node HTTP server settings tuned to mitigate slow-client attacks (Slowloris):
+- `SERVER_HEADERS_TIMEOUT_MS`: Time allowed to receive complete request headers (default `25000` ms, must exceed `SERVER_KEEP_ALIVE_TIMEOUT_MS`).
+- `SERVER_REQUEST_TIMEOUT_MS`: Maximum duration for entire HTTP request receipt (default `18000` ms).
+- `SERVER_KEEP_ALIVE_TIMEOUT_MS`: Inactivity timeout before closing idle keep-alive sockets (default `5000` ms).
+- `SERVER_MAX_HEADER_SIZE_BYTES`: Maximum HTTP request header size (default `32768` bytes / 32 KiB).
+- Request body limits: 64 KiB default body limit on `/v1/*` routes; configurable `WAITLIST_BODY_LIMIT_BYTES` (default 8,192 bytes) for waitlist.
+- Per-request execution timeout: `REQUEST_TIMEOUT_MS` (default `15000` ms); aborts long-running requests with 500 Internal Server Error.
+
+### Backpressure and Load Shedding
+
+- `CONCURRENCY_LIMIT`: Maximum concurrent in-flight requests (default `100`, range `1–10000`).
+- When concurrency limit is reached, incoming requests immediately receive HTTP `503 Service Unavailable` with `Retry-After: 1` header before memory or event loop saturation occurs.
+- `/health` and `/ready` are excluded from the concurrency limit so health probes stay responsive during overload.
+
+### Graceful Shutdown Lifecycle
+
+Lifecycle management is handled by `createServerLifecycle` in `lifecycle.ts`:
+- Listens for `SIGTERM` and `SIGINT`.
+- Closes the HTTP server (`server.close()`) to refuse new incoming connections.
+- Closes existing idle sockets (`server.closeIdleConnections()`).
+- Drains active in-flight requests with polling, bounded by `SHUTDOWN_TIMEOUT_MS` (default `10000` ms).
+- Force-closes remaining sockets (`server.closeAllConnections()`) if the shutdown deadline expires.
+- Closes the Postgres pool (`sql.end({ timeout })`) with bounded timeout.
+- Cleanly terminates the process with exit code 0.

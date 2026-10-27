@@ -22,10 +22,12 @@ import { type ApiEnv, type AppDependencies, defaultDependencies } from "./depend
 import { ApiError, errorBody, errorStatus, ReadinessError, StoreError } from "./errors.js";
 import { logMethod } from "./logging.js";
 import {
+  concurrencyLimit,
   idempotency,
   isWaitlistRoute,
   rateLimit,
   requestContext,
+  requestTimeout,
   requireAuth,
 } from "./middleware.js";
 import type { FundAction, FundResource } from "./policy.js";
@@ -52,6 +54,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     },
   });
   app.use("*", requestContext(deps));
+  app.use("*", concurrencyLimit(deps));
+  app.use("*", requestTimeout(deps));
   if (deps.corsOrigins.length > 0) {
     app.use(
       "*",
@@ -109,8 +113,14 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       throw new ApiError("payload_too_large");
     },
   });
+  const defaultBodyLimit = bodyLimit({
+    maxSize: 65536,
+    onError: () => {
+      throw new ApiError("payload_too_large");
+    },
+  });
   app.use("/v1/*", (c, next) =>
-    isWaitlistRoute(c.req.path) ? waitlistBodyLimit(c, next) : next(),
+    isWaitlistRoute(c.req.path) ? waitlistBodyLimit(c, next) : defaultBodyLimit(c, next),
   );
   app.use("/v1/*", idempotency(deps));
   app.use("/v1/me", requireAuth);

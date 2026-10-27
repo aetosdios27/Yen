@@ -9,6 +9,11 @@ export function isWaitlistRoute(path: string): boolean {
   return path.replace(/\/$/, "") === "/v1/waitlist";
 }
 
+export function isHealthRoute(path: string): boolean {
+  const normalized = path.replace(/\/$/, "");
+  return normalized === "/health" || normalized === "/ready";
+}
+
 async function storeCall<T>(operation: () => Promise<T>): Promise<T> {
   try {
     return await operation();
@@ -29,26 +34,73 @@ const method = z.enum(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS
 
 export function requestContext(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
   return async (c, next) => {
+    deps.inFlightTracker.inc();
     const inbound = requestId.safeParse(c.req.header("x-request-id"));
     c.set("requestId", inbound.success ? inbound.data : requestId.parse(deps.idGenerator()));
     c.set("principal", deps.principal);
     c.header("x-request-id", c.get("requestId"));
     const started = deps.clock();
-    await next();
-    if (isWaitlistRoute(c.req.path)) {
-      const remaining = deps.waitlistMinResponseMs - (deps.clock() - started);
-      if (remaining > 0) await deps.sleep(remaining);
+    try {
+      await next();
+      if (isWaitlistRoute(c.req.path)) {
+        const remaining = deps.waitlistMinResponseMs - (deps.clock() - started);
+        if (remaining > 0) await deps.sleep(remaining);
+      }
+      c.header("x-request-id", c.get("requestId"));
+      const parsedMethod = method.safeParse(c.req.method);
+      deps.logger.log({
+        event: "http_request",
+        requestId: c.get("requestId"),
+        method: parsedMethod.success ? parsedMethod.data : "OTHER",
+        route: routePath(c, -1) || "unmatched",
+        status: c.res.status,
+        durationMs: Math.max(0, deps.clock() - started),
+      });
+    } finally {
+      deps.inFlightTracker.dec();
     }
-    c.header("x-request-id", c.get("requestId"));
-    const parsedMethod = method.safeParse(c.req.method);
-    deps.logger.log({
-      event: "http_request",
-      requestId: c.get("requestId"),
-      method: parsedMethod.success ? parsedMethod.data : "OTHER",
-      route: routePath(c, -1) || "unmatched",
-      status: c.res.status,
-      durationMs: Math.max(0, deps.clock() - started),
+  };
+}
+
+// Backpressure and load shedding middleware:
+// Returns 503 Service Unavailable with Retry-After: 1 header when concurrent
+// non-health requests exceed the concurrency limit.
+// Primary doc: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/503
+export function concurrencyLimit(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
+  return async (c, next) => {
+    if (isHealthRoute(c.req.path)) {
+      return next();
+    }
+    // inFlightTracker.inc() has already incremented in requestContext.
+    // If current count exceeds the concurrency limit, shed load immediately.
+    if (deps.inFlightTracker.count > deps.concurrencyLimit) {
+      c.header("retry-after", "1");
+      throw new ApiError("overloaded");
+    }
+    return next();
+  };
+}
+
+// Per-request timeout middleware:
+// Aborts request execution if it exceeds deps.requestTimeoutMs.
+// Health checks are excluded to avoid marking a server unready/unhealthy solely due to internal load.
+// Primary doc: https://hono.dev/docs/middleware/builtin/timeout
+export function requestTimeout(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
+  return async (c, next) => {
+    if (isHealthRoute(c.req.path) || deps.requestTimeoutMs <= 0) {
+      return next();
+    }
+    let timer: NodeJS.Timeout | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new ApiError("internal"));
+      }, deps.requestTimeoutMs);
     });
+    try {
+      await Promise.race([next(), timeoutPromise]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   };
 }
 

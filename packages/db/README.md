@@ -14,7 +14,19 @@ The five fund roles are `owner`, `treasurer`, `approver`, `auditor`, and `member
 
 ## Use typed rows
 
-`createSql(url)` returns a postgres.js client with at most 10 connections, prepared statements, a 10-second connection timeout, a 20-second idle timeout, quiet notices, and UTC sessions. Close the client with `await sql.end()`.
+`createSql(url, options)` returns a postgres.js client with configurable pool settings:
+- `max`: maximum connection pool size (default: 10 connections).
+- `idleTimeout`: idle connection timeout in seconds before reaping (default: 20 seconds).
+- `connectTimeout`: connection acquisition timeout in seconds (default: 10 seconds).
+- `prepare`: boolean to enable or disable named prepared statements (default: `true`).
+
+Close the client with `await sql.end({ timeout })`.
+
+### PgBouncer compatibility and pooling caveats
+
+- **Session state**: Connections are established with startup parameters (`TimeZone: "UTC"`) to avoid runtime `SET` commands that leak across pooled transactions.
+- **Advisory locks**: In PgBouncer transaction mode, connections are recycled across transactions. Session-level advisory locks (`pg_advisory_lock` / `pg_advisory_unlock`) are unsafe in transaction mode because release calls can hit a different backend connection. Transaction-scoped advisory locks (`pg_advisory_xact_lock`) must be used for transaction-level synchronization (such as event log appends); they release automatically on commit or rollback. Migration runs require a session advisory lock and therefore must run against direct Postgres or session pooling.
+- **Prepared statements**: Named prepared statements are tied to backend connection state. In PgBouncer transaction mode without `max_prepared_statements` (PgBouncer 1.21.0+), named prepared statements cause collisions or cache errors across clients. Pass `prepare: false` to `createSql` when using transaction pooling without named prepared statement support.
 
 Parse query results with the exported `userRowSchema`, `orgRowSchema`, `fundRowSchema`, `membershipRowSchema`, `pseudonymRowSchema`, `idempotencyKeyRowSchema`, `fundEventRowSchema`, or `rateLimitRowSchema`. Each schema has a corresponding inferred `*Row` type. ID parsing uses `@yen/shared`'s branded `UserId`, `OrgId`, and `FundId` parsers.
 
@@ -116,7 +128,7 @@ One session advisory lock covers history validation and all migrations. Each pen
 
 The runner forces `standard_conforming_strings = on` and forbids migrations from changing it. A `set_config` call is allowed only when its first argument is one ordinary or `E''` string literal naming another setting. Dynamic setting names are rejected.
 
-The preflight deliberately rejects a few valid SQL forms: an ordinary string ending in a backslash before its closing quote (for example `SELECT '\';`) is rejected even though PostgreSQL accepts it with `standard_conforming_strings = on`, so the lexer and server cannot disagree if the session setting changes. Write such strings with `E''` escapes. Any use of the identifier `standard_conforming_strings`, even as a table or column name, is also rejected; rename that identifier.
+The preflight deliberately rejects a few valid SQL forms: an ordinary string ending in a backslash before its closing quote (for example `SELECT '\\';`) is rejected even though PostgreSQL accepts it with `standard_conforming_strings = on`, so the lexer and server cannot disagree if the session setting changes. Write such strings with `E''` escapes. Any use of the identifier `standard_conforming_strings`, even as a table or column name, is also rejected; rename that identifier.
 
 Applied files are immutable. An edited checksum, missing file, renamed file, version gap, duplicate version, or out-of-order history fails the run. A second run leaves application data and migration history unchanged. There are no down migrations. Run the runner through a direct Postgres connection or session-pooling proxy because transaction-pooling proxies cannot preserve its session advisory lock.
 
