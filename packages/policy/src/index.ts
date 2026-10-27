@@ -5,6 +5,7 @@ export {
 export {
   can,
   isExpenseFullyApproved,
+  roleMayPerform,
 } from "./engine.js";
 export {
   applyPolicyEvent,

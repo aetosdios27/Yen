@@ -6,6 +6,17 @@ import type { ApprovalRecord, Resource } from "./resources.js";
 import { type Actor, type FundRole, hasRole, isStaffRole } from "./roles.js";
 
 /**
+ * Role-only check: does any of the actor's roles grant this action in the declared matrix?
+ * This is necessary but never sufficient. Routes must call `can`, which also needs the resource,
+ * so a missing resource can no longer turn a role grant into an unconditional allow.
+ */
+export function roleMayPerform(actor: Actor, action: Action): boolean {
+  const candidateRoles: readonly FundRole[] =
+    actor.roles && actor.roles.length > 0 ? actor.roles : [actor.role];
+  return candidateRoles.some((role) => isActionAllowedForRole(role, action));
+}
+
+/**
  * Checks whether an actor has permission to perform an action on a given resource.
  *
  * Core Guarantees:
@@ -25,20 +36,12 @@ import { type Actor, type FundRole, hasRole, isStaffRole } from "./roles.js";
  * 4. Evidence tamper resistance:
  *    - Evidence cannot be added or swapped once an expense is approved (Threat E4).
  */
-export function can(actor: Actor, action: Action, resource?: Resource): boolean {
-  // 1. Base Role Matrix Check (Deny by default)
-  const candidateRoles: readonly FundRole[] =
-    actor.roles && actor.roles.length > 0 ? actor.roles : [actor.role];
-
-  const hasBasePermission = candidateRoles.some((role) => isActionAllowedForRole(role, action));
-  if (!hasBasePermission) {
+export function can(actor: Actor, action: Action, resource: Resource): boolean {
+  if (!roleMayPerform(actor, action)) {
     return false;
   }
-
-  // If no resource provided, base matrix permission determines access
-  if (!resource) {
-    return true;
-  }
+  const candidateRoles: readonly FundRole[] =
+    actor.roles && actor.roles.length > 0 ? actor.roles : [actor.role];
 
   // 2. Resource-Specific & Contextual Policy Checks
   switch (resource.kind) {
@@ -62,11 +65,8 @@ export function can(actor: Actor, action: Action, resource?: Resource): boolean 
       if (action === "expense:approve") {
         // Rule 1: The requester cannot approve their own request
         // https://cheatsheetseries.owasp.org/cheatsheets/Transaction_Authorization_Cheat_Sheet.html
-        if (
-          actor.id !== undefined &&
-          expense.requesterId !== undefined &&
-          actor.id === expense.requesterId
-        ) {
+        // An actor without an id cannot be shown to differ from the requester, so deny.
+        if (actor.id === undefined || actor.id === expense.requesterId) {
           return false;
         }
 
@@ -160,7 +160,7 @@ export function can(actor: Actor, action: Action, resource?: Resource): boolean 
       if (action === "fund:add_member" || action === "fund:remove_member") {
         const isOwner = hasRole(actor, "owner");
         if (!isOwner) return false;
-        if (actor.id !== undefined && actor.id === resource.member.memberId) {
+        if (actor.id === undefined || actor.id === resource.member.memberId) {
           return false; // Cannot modify own membership to prevent privilege confusion
         }
         return true;

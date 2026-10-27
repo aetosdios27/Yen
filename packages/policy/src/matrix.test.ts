@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { ACTIONS, type Action } from "./actions.js";
-import { can } from "./engine.js";
+import { roleMayPerform } from "./engine.js";
 import { isActionAllowedForRole, ROLE_ACTION_MATRIX, type RoleActionMatrix } from "./matrix.js";
 import { FUND_ROLES, type FundRole } from "./roles.js";
 
@@ -54,9 +54,7 @@ describe("Table-driven role x action permission tests", () => {
       // isActionAllowedForRole checks the lookup table
       expect(isActionAllowedForRole(role, action)).toBe(expected);
 
-      // can() without specific resource context must match base matrix
-      const actor = { role };
-      expect(can(actor, action)).toBe(expected);
+      expect(roleMayPerform({ role }, action)).toBe(expected);
     },
   );
 });

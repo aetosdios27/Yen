@@ -1,5 +1,6 @@
 import { type FundId, type PseudonymId, paise, parseFundId, parsePseudonymId } from "@yen/shared";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import type { Action } from "./actions.js";
 import { can, isExpenseFullyApproved } from "./engine.js";
 import { DEFAULT_FUND_POLICY, type FundPolicy, requiredQuorumForExpense } from "./policy.js";
 import type { Resource } from "./resources.js";
@@ -38,6 +39,54 @@ describe("Separation of duties: expense approval", () => {
       },
     },
   };
+
+  it("denies a payout unless the approvals on record satisfy the policy", () => {
+    const treasurer: Actor = { id: treasurerId, role: "treasurer" };
+    const submitted = (approvals: readonly { approverId: string; roleAtApproval: "approver" }[]) =>
+      ({
+        kind: "expense",
+        expense: { ...baseExpenseResource.expense, status: "submitted", approvals },
+      }) as const satisfies Resource;
+    expect(can(treasurer, "expense:payout", baseExpenseResource)).toBe(false);
+    expect(can(treasurer, "expense:payout", submitted([]))).toBe(false);
+    expect(
+      can(
+        treasurer,
+        "expense:payout",
+        submitted([{ approverId: approver1Id, roleAtApproval: "approver" }]),
+      ),
+    ).toBe(false);
+    expect(
+      can(
+        treasurer,
+        "expense:payout",
+        submitted([
+          { approverId: approver1Id, roleAtApproval: "approver" },
+          { approverId: approver2Id, roleAtApproval: "approver" },
+        ]),
+      ),
+    ).toBe(true);
+  });
+
+  it("denies approval when the actor has no id, because self-approval cannot be ruled out", () => {
+    const anonymousApprover: Actor = { role: "approver" };
+    expect(can(anonymousApprover, "expense:approve", baseExpenseResource)).toBe(false);
+    const anonymousOwner: Actor = { role: "owner" };
+    expect(can(anonymousOwner, "expense:approve", baseExpenseResource)).toBe(false);
+  });
+
+  it("denies membership changes when the actor has no id", () => {
+    const resource: Resource = {
+      kind: "member",
+      member: { fundId, memberId: approver1Id, targetRole: "approver" },
+    };
+    expect(can({ role: "owner" }, "fund:add_member", resource)).toBe(false);
+    expect(can({ id: ownerId, role: "owner" }, "fund:add_member", resource)).toBe(true);
+  });
+
+  it("requires a resource, so a role grant alone cannot authorise a resource-bound action", () => {
+    expectTypeOf(can).parameters.toEqualTypeOf<[Actor, Action, Resource]>();
+  });
 
   it("denies approval when the approver is the requester (Rule 1: no self-approval)", () => {
     // Requester has 'approver' role
@@ -310,7 +359,7 @@ describe("Member management (Threat X4)", () => {
       },
     };
 
-    expect(can({ role: "owner" }, "fund:add_member", res)).toBe(true);
+    expect(can({ id: ownerId, role: "owner" }, "fund:add_member", res)).toBe(true);
     expect(can({ role: "treasurer" }, "fund:add_member", res)).toBe(false);
     expect(can({ role: "approver" }, "fund:add_member", res)).toBe(false);
     expect(can({ role: "donor" }, "fund:add_member", res)).toBe(false);
