@@ -45,7 +45,7 @@ export function checkReferences(document, readmes) {
   return errors;
 }
 
-function collectReadmes(dir, result = {}) {
+export function collectReadmes(dir, result = {}) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (
       entry.isDirectory() &&

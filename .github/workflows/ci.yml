@@ -65,7 +65,7 @@ jobs:
           pnpm --filter @yen/api-client generate:check
 
       - name: Governance guard
-        run: node --test .github/scripts/governance.test.mjs .github/scripts/references.test.mjs
+        run: node --test .github/scripts/governance.test.mjs .github/scripts/references.test.mjs .github/scripts/trust-claims.test.mjs
 
       - name: Typecheck, test, build
         env:
