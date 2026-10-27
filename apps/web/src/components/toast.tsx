@@ -44,10 +44,6 @@ export function Toast({ title, description, tone = "info", open = true, onClose 
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [open, onClose]);
 
-  if (!open) {
-    return <div role="status" aria-live="polite" aria-atomic="true" className="sr-only" />;
-  }
-
   function handleEscape(event: KeyboardEvent<HTMLButtonElement>) {
     if (event.key === "Escape" && onClose !== undefined) {
       event.stopPropagation();
@@ -56,20 +52,30 @@ export function Toast({ title, description, tone = "info", open = true, onClose 
   }
 
   return (
-    <div className={cn("flex items-start gap-2 rounded-card border-2 p-3", TONE_STYLES[tone])}>
+    <div
+      className={
+        open ? cn("flex items-start gap-2 rounded-card border-2 p-3", TONE_STYLES[tone]) : "sr-only"
+      }
+    >
       <div
         role="status"
         aria-live="polite"
         aria-atomic="true"
         className="flex min-w-0 flex-1 items-start gap-2"
       >
-        {TONE_ICONS[tone]}
-        <div className="min-w-0 break-words">
-          <p className="text-body font-semibold">{title}</p>
-          {description === undefined ? null : <p className="mt-0.5 text-small">{description}</p>}
-        </div>
+        {open ? (
+          <>
+            {TONE_ICONS[tone]}
+            <div className="min-w-0 break-words">
+              <p className="text-body font-semibold">{title}</p>
+              {description === undefined ? null : (
+                <p className="mt-0.5 text-small">{description}</p>
+              )}
+            </div>
+          </>
+        ) : null}
       </div>
-      {onClose === undefined ? null : (
+      {!open || onClose === undefined ? null : (
         <button
           type="button"
           onClick={onClose}
