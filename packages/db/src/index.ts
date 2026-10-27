@@ -11,6 +11,7 @@ export { migrate } from "./migrate.js";
 export {
   assertAllRegisteredQueryPlans,
   explainQuery,
+  getTableEstimatedRowCounts,
   type PlanExplanation,
   type PlanNode,
   type PlanVerificationResult,

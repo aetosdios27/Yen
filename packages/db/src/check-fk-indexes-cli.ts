@@ -35,10 +35,12 @@ async function main() {
     const sql = createSql(dbUrl);
     try {
       process.stdout.write(
-        `Checking foreign-key indexing on database "${new URL(dbUrl).pathname.slice(1)}" at ${new URL(dbUrl).host}...\n`,
+        `Checking foreign-key indexing across all application schemas on database "${new URL(dbUrl).pathname.slice(1)}" at ${new URL(dbUrl).host}...\n`,
       );
       await assertForeignKeyIndexes(sql);
-      process.stdout.write(`✓ All foreign keys in database have supporting indexes.\n`);
+      process.stdout.write(
+        `✓ All foreign keys across application schemas have supporting indexes.\n`,
+      );
     } finally {
       await sql.end({ timeout: 5 });
     }

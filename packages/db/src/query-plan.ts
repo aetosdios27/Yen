@@ -41,7 +41,13 @@ export type PlanNode = {
 
 export type PlanViolation = {
   queryId: string;
-  kind: "cost_budget" | "seq_scan_forbidden" | "seq_scan_large_table" | "missing_expected_index";
+  kind:
+    | "cost_budget"
+    | "seq_scan_forbidden"
+    | "seq_scan_large_table"
+    | "missing_expected_index"
+    | "missing_table_row_count"
+    | "disallowed_scan_type";
   message: string;
   actualCost?: number | undefined;
   maxCostBudget?: number | undefined;
@@ -115,11 +121,62 @@ export async function explainQuery(
 }
 
 /**
+ * Reads estimated row counts from pg_class.reltuples for all user tables in the database.
+ * Requires ANALYZE to have been executed so reltuples reflects table sizes.
+ */
+export async function getTableEstimatedRowCounts(
+  sql: Sql,
+  options: { schema?: string | undefined; schemas?: string[] | undefined } = {},
+): Promise<Record<string, number>> {
+  const rows = options.schema
+    ? await sql`
+        SELECT c.relname, n.nspname, c.reltuples::bigint AS row_count
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relkind = 'r'
+          AND n.nspname = ${options.schema}
+      `
+    : options.schemas
+      ? await sql`
+        SELECT c.relname, n.nspname, c.reltuples::bigint AS row_count
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relkind = 'r'
+          AND n.nspname = ANY(${options.schemas})
+      `
+      : await sql`
+        SELECT c.relname, n.nspname, c.reltuples::bigint AS row_count
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relkind = 'r'
+          AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+          AND n.nspname NOT LIKE 'pg_toast%'
+          AND n.nspname NOT LIKE 'pg_temp%'
+      `;
+
+  const rowCountsSchema = z.array(
+    z.object({
+      relname: z.string(),
+      nspname: z.string(),
+      row_count: z.union([z.number(), z.string(), z.bigint()]),
+    }),
+  );
+  const parsedRows = rowCountsSchema.parse(rows);
+  const counts: Record<string, number> = {};
+  for (const row of parsedRows) {
+    const count = Math.max(0, Number(row.row_count));
+    counts[row.relname] = count;
+    counts[`${row.nspname}.${row.relname}`] = count;
+  }
+  return counts;
+}
+
+/**
  * Verifies a query's plan against its expected plan shape and table size thresholds.
  */
 export function verifyPlanNode(
   planExplanation: PlanExplanation,
-  tableRowCounts: Record<string, number> = {},
+  tableRowCounts: Record<string, number>,
 ): PlanVerificationResult {
   const { query, rootPlan, allNodes } = planExplanation;
   const violations: PlanViolation[] = [];
@@ -140,7 +197,7 @@ export function verifyPlanNode(
   for (const node of allNodes) {
     if (node["Node Type"] === "Seq Scan") {
       const relation = node["Relation Name"] ?? "unknown";
-      const rows = tableRowCounts[relation] ?? 0;
+      const rows = tableRowCounts[relation];
 
       // Disallow on target table if query forbids seq scan
       if (relation === query.expectedPlan.targetTable && query.expectedPlan.disallowSeqScan) {
@@ -154,8 +211,15 @@ export function verifyPlanNode(
         });
       }
 
-      // Hard check: No registered hot-path query does a sequential scan on a table over 100k rows
-      if (rows > 100000) {
+      // If tableRowCounts does not provide row count for this scanned relation, fail with violation
+      if (rows === undefined) {
+        violations.push({
+          queryId: query.id,
+          kind: "missing_table_row_count",
+          message: `Query "${query.id}" performed a Sequential Scan on table "${relation}", but no row count was provided in tableRowCounts for "${relation}".`,
+        });
+      } else if (rows > 100000) {
+        // Hard check: No registered hot-path query does a sequential scan on a table over 100k rows
         violations.push({
           queryId: query.id,
           kind: "seq_scan_large_table",
@@ -165,7 +229,7 @@ export function verifyPlanNode(
     }
   }
 
-  // 3. Expected index check
+  // 3. Expected index check (exact equality, not substring matching)
   let indexUsed: string | undefined;
   if (query.expectedPlan.expectedIndex) {
     const expected = Array.isArray(query.expectedPlan.expectedIndex)
@@ -173,9 +237,7 @@ export function verifyPlanNode(
       : [query.expectedPlan.expectedIndex];
 
     const matchingIndexNode = allNodes.find(
-      (node) =>
-        node["Index Name"] &&
-        expected.some((exp) => node["Index Name"] === exp || node["Index Name"]?.includes(exp)),
+      (node) => node["Index Name"] !== undefined && expected.includes(node["Index Name"]),
     );
 
     if (matchingIndexNode) {
@@ -196,6 +258,26 @@ export function verifyPlanNode(
     indexUsed = allNodes.find((n) => n["Index Name"])?.["Index Name"];
   }
 
+  // 4. Allowed scan types check on target relation
+  if (query.expectedPlan.allowedScanTypes && query.expectedPlan.allowedScanTypes.length > 0) {
+    const allowed = query.expectedPlan.allowedScanTypes;
+    for (const node of allNodes) {
+      const relation = node["Relation Name"];
+      const nodeType = node["Node Type"];
+      if (relation === query.expectedPlan.targetTable && nodeType.includes("Scan")) {
+        if (!allowed.includes(nodeType)) {
+          violations.push({
+            queryId: query.id,
+            kind: "disallowed_scan_type",
+            message: `Query "${query.id}" executed scan type "${nodeType}" on target table "${relation}", which is not in allowedScanTypes: [${allowed.join(
+              ", ",
+            )}].`,
+          });
+        }
+      }
+    }
+  }
+
   return {
     queryId: query.id,
     passed: violations.length === 0,
@@ -213,7 +295,7 @@ export function verifyPlanNode(
 export async function assertAllRegisteredQueryPlans(
   sql: Sql,
   ctx: SampleQueryContext,
-  tableRowCounts: Record<string, number> = {},
+  tableRowCounts: Record<string, number>,
 ): Promise<PlanVerificationResult[]> {
   const queries = getRegisteredHotPathQueries();
   const results: PlanVerificationResult[] = [];

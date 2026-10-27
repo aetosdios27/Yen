@@ -1,6 +1,12 @@
 import { beforeAll, expect, it } from "vitest";
 import { migrate } from "./migrate.js";
-import { assertAllRegisteredQueryPlans, explainQuery, verifyPlanNode } from "./query-plan.js";
+import {
+  assertAllRegisteredQueryPlans,
+  explainQuery,
+  getTableEstimatedRowCounts,
+  type PlanExplanation,
+  verifyPlanNode,
+} from "./query-plan.js";
 import {
   getRegisteredHotPathQueries,
   type RegisteredHotPathQuery,
@@ -130,5 +136,143 @@ databaseSuite("query-plan discipline and EXPLAIN budgets", (sql) => {
     const costViolation = result.violations.find((v) => v.kind === "cost_budget");
     expect(costViolation).toBeDefined();
     expect(costViolation?.actualCost).toBeGreaterThan(0.1);
+  });
+
+  it("rejects backup-named or substring-matching index when query expects exact index name", () => {
+    const query: RegisteredHotPathQuery = {
+      id: "funds_exact_index_check",
+      name: "Funds exact index check",
+      category: "fund_reads",
+      sqlTemplate: "SELECT * FROM funds WHERE org_id = $1",
+      explain: (s) => s`EXPLAIN (FORMAT JSON) SELECT 1`,
+      expectedPlan: {
+        targetTable: "funds",
+        expectedIndex: "funds_org_id_idx",
+        disallowSeqScan: true,
+        maxCost: 100.0,
+      },
+    };
+
+    const mockExplanation: PlanExplanation = {
+      query,
+      rootPlan: {
+        "Node Type": "Index Scan",
+        "Relation Name": "funds",
+        "Index Name": "funds_org_id_idx_backup",
+        "Total Cost": 5.0,
+        "Startup Cost": 0.0,
+        "Plan Rows": 1,
+      },
+      allNodes: [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "funds",
+          "Index Name": "funds_org_id_idx_backup",
+          "Total Cost": 5.0,
+          "Startup Cost": 0.0,
+          "Plan Rows": 1,
+        },
+      ],
+    };
+
+    const result = verifyPlanNode(mockExplanation, tableRowCounts);
+    expect(result.passed).toBe(false);
+    const violation = result.violations.find((v) => v.kind === "missing_expected_index");
+    expect(violation).toBeDefined();
+    expect(violation?.actualIndex).toContain("funds_org_id_idx_backup");
+  });
+
+  it("fails verification with missing_table_row_count when scanned relation row count is omitted", () => {
+    const query: RegisteredHotPathQuery = {
+      id: "scan_without_count",
+      name: "Scan without provided count",
+      category: "user_lookups",
+      sqlTemplate: "SELECT * FROM users",
+      explain: (s) => s`EXPLAIN (FORMAT JSON) SELECT 1`,
+      expectedPlan: {
+        targetTable: "users",
+        disallowSeqScan: false,
+        maxCost: 1000.0,
+      },
+    };
+
+    const mockExplanation: PlanExplanation = {
+      query,
+      rootPlan: {
+        "Node Type": "Seq Scan",
+        "Relation Name": "users",
+        "Total Cost": 10.0,
+        "Startup Cost": 0.0,
+        "Plan Rows": 50,
+      },
+      allNodes: [
+        {
+          "Node Type": "Seq Scan",
+          "Relation Name": "users",
+          "Total Cost": 10.0,
+          "Startup Cost": 0.0,
+          "Plan Rows": 50,
+        },
+      ],
+    };
+
+    const result = verifyPlanNode(mockExplanation, {});
+    expect(result.passed).toBe(false);
+    const violation = result.violations.find((v) => v.kind === "missing_table_row_count");
+    expect(violation).toBeDefined();
+    expect(violation?.message).toContain("no row count was provided in tableRowCounts");
+  });
+
+  it("reads realistic row counts from pg_class.reltuples via getTableEstimatedRowCounts", async () => {
+    const counts = await getTableEstimatedRowCounts(sql);
+    expect(counts.users).toBeGreaterThanOrEqual(100000);
+    expect(counts["public.users"]).toBeGreaterThanOrEqual(100000);
+    expect(counts.funds).toBeGreaterThanOrEqual(2000);
+  });
+
+  it("enforces allowedScanTypes on target table and rejects disallowed scan types", () => {
+    const query: RegisteredHotPathQuery = {
+      id: "scan_type_restricted_query",
+      name: "Query requiring Index Only Scan",
+      category: "fund_reads",
+      sqlTemplate: "SELECT id FROM funds WHERE id = $1",
+      explain: (s) => s`EXPLAIN (FORMAT JSON) SELECT 1`,
+      expectedPlan: {
+        targetTable: "funds",
+        expectedIndex: "funds_pkey",
+        disallowSeqScan: true,
+        allowedScanTypes: ["Index Only Scan"],
+        maxCost: 100.0,
+      },
+    };
+
+    const mockExplanation: PlanExplanation = {
+      query,
+      rootPlan: {
+        "Node Type": "Index Scan",
+        "Relation Name": "funds",
+        "Index Name": "funds_pkey",
+        "Total Cost": 5.0,
+        "Startup Cost": 0.0,
+        "Plan Rows": 1,
+      },
+      allNodes: [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "funds",
+          "Index Name": "funds_pkey",
+          "Total Cost": 5.0,
+          "Startup Cost": 0.0,
+          "Plan Rows": 1,
+        },
+      ],
+    };
+
+    const result = verifyPlanNode(mockExplanation, tableRowCounts);
+    expect(result.passed).toBe(false);
+    const violation = result.violations.find((v) => v.kind === "disallowed_scan_type");
+    expect(violation).toBeDefined();
+    expect(violation?.message).toContain("Index Scan");
+    expect(violation?.message).toContain("Index Only Scan");
   });
 });

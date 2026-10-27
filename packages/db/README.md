@@ -101,12 +101,12 @@ Backups and any other copies also need an operational deletion and retention pol
 
 ## Query-plan discipline and hot-path registry
 
-All hot-path database queries in Yen (fund reads, membership lookups, event append, donation and expense lists) are registered in a single central registry in [`src/query-registry.ts`](file:///home/aetos/.t3-app/worktrees/Yen/t3-7dd54381/packages/db/src/query-registry.ts).
+All hot-path database queries in Yen (fund reads, membership lookups, event append, donation and expense lists) are registered in a single central registry in [`src/query-registry.ts`](src/query-registry.ts).
 
 ### Contract for future feature PRs
 
 Every future pull request that introduces or modifies a hot-path database query must adhere to the following contract:
-1. **Register the query**: Add an entry to `INITIAL_HOT_PATH_QUERIES` in [`src/query-registry.ts`](file:///home/aetos/.t3-app/worktrees/Yen/t3-7dd54381/packages/db/src/query-registry.ts) or call `registerHotPathQuery()`.
+1. **Register the query**: Add an entry to `INITIAL_HOT_PATH_QUERIES` in [`src/query-registry.ts`](src/query-registry.ts) or call `registerHotPathQuery()`.
    - Specify `id`, `name`, `category` (`fund_reads`, `membership_lookups`, `event_append`, `donation_lists`, `expense_lists`, etc.).
    - Define `sqlTemplate` and `explain` function using tagged template literals (`sql\`EXPLAIN (FORMAT JSON) ...\``).
    - Set `expectedPlan`:
@@ -141,50 +141,51 @@ In PostgreSQL, foreign key constraints (`REFERENCES`) enforce referential integr
 - **Verification**: CI runs `pnpm --filter @yen/db check:fk-indexes` against every migration from scratch.
   - The check inspects [`pg_constraint`](https://www.postgresql.org/docs/16/catalog-pg-constraint.html) (`contype = 'f'`) against [`pg_index`](https://www.postgresql.org/docs/16/catalog-pg-index.html) (`indrelid = conrelid`, `indisvalid = true`, `indpred IS NULL`).
   - Leading index columns (`indkey[1:cardinality(conkey)]`) must cover the foreign key constraint columns.
-- **Allowlist policy**: If a foreign key is deliberately unindexed, it must be declared with an explicit technical justification in the allowlist in [`src/foreign-keys.ts`](file:///home/aetos/.t3-app/worktrees/Yen/t3-7dd54381/packages/db/src/foreign-keys.ts).
+- **Allowlist policy**: If a foreign key is deliberately unindexed, it must be declared with an explicit technical justification in the allowlist in [`src/foreign-keys.ts`](src/foreign-keys.ts).
 
-## Slow-query logging configuration (Staging & Production)
+## Slow-query logging and privacy discipline (Staging & Production)
 
-To maintain visibility into query performance without introducing unacceptable logging overhead, configure the following PostgreSQL 16 parameters in `postgresql.conf`:
+To maintain visibility into query performance without leaking sensitive personal data (names, phone numbers, UPI IDs, OTPs) to disk in PostgreSQL server logs, configure PostgreSQL 16 parameters according to the repository privacy rule: **Event payloads, Merkle leaves, logs, error reports, and on-chain data must not contain phone numbers, names, UPI IDs, bank account numbers, or OTPs.**
 
-### 1. `log_min_duration_statement`
+When query statement logging is enabled, PostgreSQL can record client bind parameter values (such as names and contact numbers passed to waitlist submissions or user lookups) unless explicitly suppressed. The following configuration disables parameter value logging while preserving query durations and statement diagnostics:
 
-Logs the complete SQL statement and duration for any execution exceeding the configured threshold in milliseconds ([PostgreSQL 16 Error Reporting and Logging](https://www.postgresql.org/docs/16/runtime-config-logging.html#GUC-LOG-MIN-DURATION-STATEMENT)).
+### 1. Bind parameter suppression (`log_parameter_max_length` & `log_parameter_max_length_on_error`)
+
+By default, PostgreSQL allows bind parameter values to be logged in full (`-1`). To ensure sensitive query parameters never enter server logs:
+- Set `log_parameter_max_length = 0` to completely disable logging of bind parameter values for non-error statement logs ([PostgreSQL 16 What to Log](https://www.postgresql.org/docs/16/runtime-config-logging.html#GUC-LOG-PARAMETER-MAX-LENGTH)).
+- Set `log_parameter_max_length_on_error = 0` to disable logging of bind parameter values when statement errors occur ([PostgreSQL 16 What to Log](https://www.postgresql.org/docs/16/runtime-config-logging.html#GUC-LOG-PARAMETER-MAX-LENGTH-ON-ERROR)).
+
+```ini
+# Suppress all bind parameter values from statement and error logs
+log_parameter_max_length = 0
+log_parameter_max_length_on_error = 0
+```
+
+### 2. `log_min_duration_statement`
+
+Logs the SQL statement text and elapsed wall-clock duration for any execution exceeding the configured threshold in milliseconds ([PostgreSQL 16 Error Reporting and Logging](https://www.postgresql.org/docs/16/runtime-config-logging.html#GUC-LOG-MIN-DURATION-STATEMENT)). Because bind parameters are suppressed via `log_parameter_max_length = 0`, only the query template and execution duration are recorded.
 - **Staging**: `log_min_duration_statement = 250` (250ms) to detect slow or unindexed query patterns during integration testing and QA.
 - **Production**: `log_min_duration_statement = 1000` (1000ms / 1s) to capture query regressions while avoiding excessive I/O log volume under high transactions per second.
 
-### 2. `auto_explain`
+### 3. `auto_explain` privacy policy
 
 The `auto_explain` extension automatically logs query execution plans of slow statements directly to the PostgreSQL log ([PostgreSQL 16 auto_explain Documentation](https://www.postgresql.org/docs/16/auto-explain.html)).
-- Configuration in `postgresql.conf`:
+- **Production Policy: Keep `auto_explain` disabled.** Execution plans and plan node filters can print literal parameter values and scan keys into log files, creating a personal data leak risk. In production environments, `pg_stat_statements` must be used instead.
+- **Staging Policy: Enable only on scrubbed synthetic datasets.** If execution plan profiling is required during testing, `auto_explain` may only be enabled in environments running scrubbed or synthetic data:
 
   ```ini
-  shared_preload_libraries = 'auto_explain,pg_stat_statements'
-  ```
-- **Staging**:
-
-  ```ini
+  shared_preload_libraries = 'pg_stat_statements,auto_explain'
   auto_explain.log_min_duration = 250ms
-  auto_explain.log_analyze = on         # Records actual run times and row counts per node
-  auto_explain.log_buffers = on         # Includes shared buffer cache hit/miss statistics
-  auto_explain.log_timing = on          # Per-node event timing
-  auto_explain.log_nested_statements = on
-  auto_explain.sample_rate = 1.0        # Explain 100% of statements exceeding duration
-  ```
-- **Production**:
-
-  ```ini
-  auto_explain.log_min_duration = 1000ms
-  auto_explain.log_analyze = off        # CAUTION: per-node timing introduces gettimeofday() overhead
-  auto_explain.log_buffers = on         # Low overhead, reveals disk cache misses
+  auto_explain.log_analyze = off        # Avoid per-node timing overhead
+  auto_explain.log_buffers = on         # Shared buffer cache statistics
   auto_explain.log_timing = off
   auto_explain.log_nested_statements = on
-  auto_explain.sample_rate = 0.1        # 10% sample rate on high-throughput workloads (or 1.0 if threshold >= 2s)
+  auto_explain.sample_rate = 1.0        # Explain 100% of slow statements on scrubbed staging
   ```
 
-### 3. `pg_stat_statements`
+### 4. `pg_stat_statements` (Preferred Production Profiling)
 
-The `pg_stat_statements` module tracks execution statistics (call count, total time, min/max/mean times, buffer reads) across all normalized query patterns ([PostgreSQL 16 pg_stat_statements Documentation](https://www.postgresql.org/docs/16/pgstatstatements.html)).
+The `pg_stat_statements` module tracks aggregate execution statistics across all query patterns ([PostgreSQL 16 pg_stat_statements Documentation](https://www.postgresql.org/docs/16/pgstatstatements.html)). Unlike raw plan logging, `pg_stat_statements` normalizes statements by replacing constant literals with query parameter symbols (`$1`, `$2`), inherently preventing personal data exposure while tracking execution counts, total times, mean times, and buffer statistics.
 - Installation:
 
   ```sql
@@ -193,6 +194,7 @@ The `pg_stat_statements` module tracks execution statistics (call count, total t
 - **Staging & Production Settings**:
 
   ```ini
+  shared_preload_libraries = 'pg_stat_statements'
   pg_stat_statements.max = 10000        # Number of distinct query statements tracked (default 5000)
   pg_stat_statements.track = top        # Tracks all top-level statements submitted by clients
   pg_stat_statements.track_utility = on # Tracks DDL, ANALYZE, and VACUUM execution statistics
