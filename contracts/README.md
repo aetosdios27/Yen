@@ -228,3 +228,9 @@ Its [JSON schema](deployments/amoy.schema.json) requires those values for a
 
 If a broadcast is interrupted, check its transaction hash and receipt before any
 retry. Creating another contract is a new deployment with separate empty history.
+
+## Prior art
+
+- [OpenTimestamps](../docs/REFERENCES.md#opentimestamps) illustrates independent timestamp verification; Yen uses an authorized Polygon registry and a different proof format.
+- [RFC 9162](../docs/REFERENCES.md#rfc-9162) describes log monitoring and conflicting views; the registry alone cannot prove off-chain completeness.
+- [RFC 6962](../docs/REFERENCES.md#rfc-6962) informs the underlying tree; Yen publishes nested, size-committing roots rather than certificate-tree heads.

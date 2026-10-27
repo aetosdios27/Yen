@@ -77,3 +77,10 @@ YEN_TEST_DATABASE_URL=postgres://postgres:pw@localhost:55432/postgres pnpm verif
 `YEN_TEST_DATABASE_URL` must permit `CREATE DATABASE` and `DROP DATABASE`. Each database test file creates a unique `yen_test_<random UUID>` database and drops it after the suite, including failed tests. Test DDL and migrations run only inside those throwaway databases. The admin database is used only to create and drop them. An interrupted process can leave its throwaway database behind.
 
 Without this variable, database suites skip with a message when `CI` is unset, `false`, or `0`. `CI=true` and `CI=1` make a missing variable a hard failure. These CI values are case-sensitive; other values, including an empty string, are rejected. An explicitly empty or invalid test URL fails in both local and CI modes. `packages/db/turbo.json` passes the variable and `CI` through Turbo's environment filter and disables test caching so database checks always execute.
+
+## Prior art
+
+- [PostgreSQL lexical structure](../../docs/REFERENCES.md#pg-lexical) informs migration preflight; the scanner is not a complete SQL parser.
+- [PostgreSQL string compatibility](../../docs/REFERENCES.md#pg-strings) explains why string interpretation depends on server settings.
+- [Square Money](../../docs/REFERENCES.md#square-money) uses integer minor units; Yen stores paise as bigint and checks range at number boundaries.
+- [DPDP Act](../../docs/REFERENCES.md#dpdp-act) provides context for limiting personal data; an erasable mapping alone does not prove compliance.

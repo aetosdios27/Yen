@@ -151,3 +151,10 @@ Fastify offers an established Node plugin ecosystem, but switching would add a m
 without improving this contract. Runtime-specific peer address lookup and server startup
 stay in the Node entrypoints. `createApp(deps)` accepts the clock, ID generator, stores,
 logger, principal, readiness check, and peer address resolver.
+
+## Prior art
+
+- [Stripe idempotency](../../docs/REFERENCES.md#stripe-idempotency) motivates safe retries; Yen scopes keys to principals and hashes exact request bytes, and its in-memory store is not durable.
+- [Stripe rate limiters](../../docs/REFERENCES.md#stripe-rate-limiters) describes token buckets; Yen’s default buckets are per process.
+- [Square Money](../../docs/REFERENCES.md#square-money) uses minor units; Yen encodes paise as decimal strings to preserve large integers.
+- [WebAuthn Level 2](../../docs/REFERENCES.md#webauthn-2) is relevant to planned authentication, which the current bearer contract does not implement.
