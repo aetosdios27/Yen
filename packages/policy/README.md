@@ -1,6 +1,6 @@
 # @yen/policy
 
-A pure, zero-I/O, deterministic authorization and field-level redaction engine for Yen.
+A pure, zero-I/O, deterministic authorization and field-level redaction engine for Yen. It is not wired into the API yet; the API uses its separate development policy.
 
 ## Overview
 
@@ -70,10 +70,10 @@ Calls to `redact(viewer, record)` return a branded `Redacted<T>` view:
 - **Public Masking**:
   - **Names**: Converted to uppercase initials separated by periods (e.g., `"Jane Doe"` $\rightarrow$ `"J. D."`, `"Aarav Sharma"` $\rightarrow$ `"A. S."`).
   - **Donors**: Completely pseudonymous. Real names, phone numbers, email addresses, and bank transaction IDs are stripped. Only `donorPseudonymId` (`psn_<uuid>`) is retained.
-  - **Evidence/Bills**: Hash-only. File URLs, filenames, and MIME types are stripped; only cryptographic SHA-256 content hashes (`contentSha256`) and evidence IDs are exposed.
+  - **Evidence/Bills**: Hash-only. File URLs, filenames, and MIME types are stripped; only cryptographic SHA-256 content hashes (`contentSha256`) are exposed.
   - **Notes**: Internal administrative notes are removed for unauthenticated/public viewers.
-- **Donors**: Can view their own contribution details and public-masked details for others.
-- **Staff**: Internal administrative roles (`owner`, `treasurer`, `approver`, `auditor`) retain access to operational data.
+- **Donors**: Receive the same masked names, pseudonymous donations, and hash-only evidence as public viewers. Notes are omitted.
+- **Staff**: Internal administrative roles (`owner`, `treasurer`, `approver`, `auditor`) receive allowlisted operational fields. Unknown fields are dropped for every viewer; unsupported shapes throw `RedactionError`. Expense and donation amounts use `Paise`.
 
 Primary references:
 - [OWASP API Security Top 10 (2023) - API1 Broken Object Level Authorization & API3 Broken Object Property Level Authorization](https://api-security.owasp.org/editions/2023/en/0x11-t10/)
@@ -89,3 +89,5 @@ Policy mutations are recorded as events. In terms of `packages/eventlog` v1 prov
   - _Missing in v1_: `"donors"` tier (`visibility` enum omits `"donors"`).
 - `member.added`: Supports `"member" | "approver" | "treasurer"`.
   - _Missing in v1_: `"owner"` and `"auditor"` roles (`role` enum omits `"owner"` and `"auditor"`).
+
+The API route redaction test is a static tripwire, not a proof that all data paths are safe.

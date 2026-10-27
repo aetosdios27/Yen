@@ -32,6 +32,55 @@ const policyArbitrary = fc.record({
 const uuidArbitrary = fc.uuid();
 const pseudonymArbitrary = uuidArbitrary.map((u) => `psn_${u}`);
 
+const requesterArbitrary = fc.constantFrom(
+  "psn_00000000-0000-4000-8000-0000000000a1",
+  "psn_00000000-0000-4000-8000-0000000000a2",
+  "",
+);
+
+/** Ids drawn from a small pool so duplicates, padded copies and empty ids all occur. */
+const approverIdArbitrary = fc.constantFrom(
+  "psn_00000000-0000-4000-8000-0000000000a1",
+  "psn_00000000-0000-4000-8000-0000000000a2",
+  "psn_00000000-0000-4000-8000-0000000000a3",
+  " psn_00000000-0000-4000-8000-0000000000a2 ",
+  "",
+  "   ",
+);
+
+const approvalArbitrary: fc.Arbitrary<ApprovalRecord> = fc.record({
+  approverId: approverIdArbitrary,
+  roleAtApproval: fundRoleArbitrary,
+  rolesAtApproval: fc.array(fundRoleArbitrary, { maxLength: 2 }),
+});
+
+/**
+ * Independent oracle for the approval rule: an approval counts when its id is non-empty after
+ * trimming, is not the requester, has owner or approver among its recorded roles, and is the
+ * first such record for that id. Returns the count and whether one counted approver is not a
+ * treasurer.
+ */
+function eligibleApprovalOracle(
+  approvals: readonly ApprovalRecord[],
+  requesterId: string,
+): { count: number; hasNonTreasurer: boolean } {
+  const requester = requesterId.trim();
+  const seen = new Set<string>();
+  let count = 0;
+  let hasNonTreasurer = false;
+  for (const approval of approvals) {
+    const id = approval.approverId.trim();
+    if (id === "" || id === requester) continue;
+    const roles: readonly string[] = [approval.roleAtApproval, ...(approval.rolesAtApproval ?? [])];
+    if (!roles.includes("owner") && !roles.includes("approver")) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    count++;
+    if (!roles.includes("treasurer")) hasNonTreasurer = true;
+  }
+  return { count, hasNonTreasurer };
+}
+
 describe("Property-based fuzz tests (fast-check)", () => {
   it("Invariant 1: No actor can ever approve their own expense request", () => {
     fc.assert(
@@ -56,6 +105,8 @@ describe("Property-based fuzz tests (fast-check)", () => {
               requesterId,
               amountPaise,
               policy,
+              status: "submitted",
+              approvals: [],
             },
           };
 
@@ -131,17 +182,11 @@ describe("Property-based fuzz tests (fast-check)", () => {
     );
   });
 
-  it("Invariant 3: Full approval requires meeting quorum without requester and with at least one non-treasurer", () => {
-    const approvalArbitrary = fc.record({
-      approverId: pseudonymArbitrary,
-      roleAtApproval: fundRoleArbitrary,
-      rolesAtApproval: fc.array(fundRoleArbitrary, { maxLength: 2 }),
-    });
-
+  it("Invariant 3: isExpenseFullyApproved agrees with an independent oracle over eligible approvals", () => {
     fc.assert(
       fc.property(
         policyArbitrary,
-        pseudonymArbitrary,
+        requesterArbitrary,
         fc.integer({ min: 1, max: 500_000_000 }),
         fc.array(approvalArbitrary, { minLength: 0, maxLength: 10 }),
         (
@@ -152,30 +197,132 @@ describe("Property-based fuzz tests (fast-check)", () => {
         ) => {
           const amountPaise = paise(amountRaw);
           const isApproved = isExpenseFullyApproved(approvals, policy, amountPaise, requesterId);
+          const oracle = eligibleApprovalOracle(approvals, requesterId);
+          const required = requiredQuorumForExpense(policy, amountPaise);
+          return (
+            isApproved ===
+            (requesterId.trim() !== "" && oracle.count >= required && oracle.hasNonTreasurer)
+          );
+        },
+      ),
+      { numRuns: 500 },
+    );
+  });
 
-          if (isApproved) {
-            const required = requiredQuorumForExpense(policy, amountPaise);
+  it("Invariant 4: an actor without a usable id can never approve an expense", () => {
+    fc.assert(
+      fc.property(
+        policyArbitrary,
+        requesterArbitrary,
+        fc.integer({ min: 1, max: 500_000_000 }),
+        fundRoleArbitrary,
+        fc.array(fundRoleArbitrary, { maxLength: 3 }),
+        fc.constantFrom<string | undefined>(undefined, "", "   ", "\t"),
+        fc.array(approvalArbitrary, { maxLength: 4 }),
+        (
+          policy: FundPolicy,
+          requesterId: string,
+          amountRaw: number,
+          primaryRole: FundRole,
+          extraRoles: FundRole[],
+          noId: string | undefined,
+          approvals: ApprovalRecord[],
+        ) => {
+          const actor: Actor = { id: noId, role: primaryRole, roles: [primaryRole, ...extraRoles] };
+          const resource: Resource = {
+            kind: "expense",
+            expense: {
+              fundId,
+              requesterId,
+              amountPaise: paise(amountRaw),
+              policy,
+              status: "submitted",
+              approvals,
+            },
+          };
+          return can(actor, "expense:approve", resource) === false;
+        },
+      ),
+      { numRuns: 500 },
+    );
+  });
 
-            // 1. Must have at least required quorum
-            const distinctNonRequesterIds = new Set(
-              approvals.filter((a) => a.approverId !== requesterId).map((a) => a.approverId),
-            );
-            if (distinctNonRequesterIds.size < required) return false;
+  it("Invariant 5: payout is never allowed for paid or rejected expenses, whatever the approvals", () => {
+    fc.assert(
+      fc.property(
+        policyArbitrary,
+        requesterArbitrary,
+        fc.integer({ min: 1, max: 500_000_000 }),
+        fc.constantFrom("paid", "rejected"),
+        fundRoleArbitrary,
+        fc.array(approvalArbitrary, { maxLength: 6 }),
+        (
+          policy: FundPolicy,
+          requesterId: string,
+          amountRaw: number,
+          status: "paid" | "rejected",
+          role: FundRole,
+          approvals: ApprovalRecord[],
+        ) => {
+          const resource: Resource = {
+            kind: "expense",
+            expense: {
+              fundId,
+              requesterId,
+              amountPaise: paise(amountRaw),
+              policy,
+              status,
+              approvals,
+            },
+          };
+          return (
+            can(
+              { id: "psn_00000000-0000-4000-8000-0000000000ff", role },
+              "expense:payout",
+              resource,
+            ) === false
+          );
+        },
+      ),
+      { numRuns: 500 },
+    );
+  });
 
-            // 2. Requester cannot be an approver
-            if (distinctNonRequesterIds.has(requesterId)) return false;
-
-            // 3. Must have at least one non-treasurer approver
-            const hasNonTreasurer = approvals.some(
-              (a) =>
-                a.approverId !== requesterId &&
-                a.roleAtApproval !== "treasurer" &&
-                !a.rolesAtApproval?.includes("treasurer"),
-            );
-            if (!hasNonTreasurer) return false;
-          }
-
-          return true;
+  it("Invariant 6: payout is never allowed with fewer than quorum eligible approvals", () => {
+    fc.assert(
+      fc.property(
+        policyArbitrary,
+        requesterArbitrary,
+        fc.integer({ min: 1, max: 500_000_000 }),
+        fc.constantFrom<"submitted" | "approved">("submitted", "approved"),
+        fc.array(approvalArbitrary, { maxLength: 8 }),
+        (
+          policy: FundPolicy,
+          requesterId: string,
+          amountRaw: number,
+          status: "submitted" | "approved",
+          approvals: ApprovalRecord[],
+        ) => {
+          const resource: Resource = {
+            kind: "expense",
+            expense: {
+              fundId,
+              requesterId,
+              amountPaise: paise(amountRaw),
+              policy,
+              status,
+              approvals,
+            },
+          };
+          const allowed = can(
+            { id: "psn_00000000-0000-4000-8000-0000000000ff", role: "owner" },
+            "expense:payout",
+            resource,
+          );
+          if (!allowed) return true;
+          const required = requiredQuorumForExpense(policy, paise(amountRaw));
+          const oracle = eligibleApprovalOracle(approvals, requesterId);
+          return oracle.count >= required && oracle.hasNonTreasurer;
         },
       ),
       { numRuns: 500 },

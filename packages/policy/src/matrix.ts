@@ -1,5 +1,5 @@
-import type { Action } from "./actions.js";
-import type { FundRole } from "./roles.js";
+import { type Action, isValidAction } from "./actions.js";
+import { type FundRole, isValidRole } from "./roles.js";
 
 /**
  * Compile-time exhaustiveness: every Action MUST have an entry for every FundRole.
@@ -192,5 +192,15 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
 } as const;
 
 export function isActionAllowedForRole(role: FundRole, action: Action): boolean {
-  return ROLE_ACTION_MATRIX[action][role];
+  if (!isValidRole(role) || !isValidAction(action)) {
+    return false;
+  }
+  if (!Object.hasOwn(ROLE_ACTION_MATRIX, action)) {
+    return false;
+  }
+  const actionRow = ROLE_ACTION_MATRIX[action];
+  if (!Object.hasOwn(actionRow, role)) {
+    return false;
+  }
+  return actionRow[role] === true;
 }

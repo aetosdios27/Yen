@@ -59,6 +59,23 @@ describe("Table-driven role x action permission tests", () => {
   );
 });
 
+describe("Prototype pollution and unknown role defense (R10)", () => {
+  it("denies access for runtime roles from Object prototype (e.g. toString, constructor)", () => {
+    expect(isActionAllowedForRole("toString" as FundRole, "bank:reconcile")).toBe(false);
+    expect(isActionAllowedForRole("constructor" as FundRole, "fund:read")).toBe(false);
+    expect(isActionAllowedForRole("valueOf" as FundRole, "expense:approve")).toBe(false);
+    expect(isActionAllowedForRole("owner", "toString" as Action)).toBe(false);
+
+    expect(roleMayPerform({ role: "toString" as FundRole }, "bank:reconcile")).toBe(false);
+    expect(
+      roleMayPerform(
+        { role: "public", roles: ["toString" as unknown as FundRole] },
+        "bank:reconcile",
+      ),
+    ).toBe(false);
+  });
+});
+
 describe("Matrix Markdown documentation generator / verifier", () => {
   it("produces a valid markdown table representing the role x action matrix", () => {
     const header = `| Action | ${FUND_ROLES.join(" | ")} |`;

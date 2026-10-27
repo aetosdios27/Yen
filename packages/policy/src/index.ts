@@ -1,6 +1,10 @@
 export {
+  ACTION_RESOURCE_MAP,
   ACTIONS,
   type Action,
+  expectedResourceKind,
+  isValidAction,
+  type ResourceKind,
 } from "./actions.js";
 export {
   can,
@@ -26,6 +30,9 @@ export {
 export {
   DEFAULT_FUND_POLICY,
   type FundPolicy,
+  isValidFundPolicy,
+  isValidQuorum,
+  isValidVisibilityTier,
   requiredQuorumForExpense,
   type SpendThresholdRule,
   VISIBILITY_TIERS,
@@ -35,10 +42,11 @@ export {
   type DonationRecord,
   type EvidenceRecord,
   type ExpenseRecord,
-  markRedacted,
   maskNameToInitials,
   type Redacted,
+  RedactionError,
   redact,
+  unsafeMarkRedactedForDevPolicy,
   type ViewerContext,
 } from "./redact.js";
 export type {
@@ -58,4 +66,5 @@ export {
   hasRole,
   isMemberRole,
   isStaffRole,
+  isValidRole,
 } from "./roles.js";

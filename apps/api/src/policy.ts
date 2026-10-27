@@ -1,5 +1,5 @@
 import type { z } from "@hono/zod-openapi";
-import { markRedacted, type Redacted } from "@yen/policy";
+import { type Redacted, unsafeMarkRedactedForDevPolicy } from "@yen/policy";
 import type { fundSchema } from "./contract.js";
 import type { Principal } from "./dependencies.js";
 
@@ -29,5 +29,5 @@ export const devPolicy: Policy = {
     resource.fund === undefined
       ? action === "fund:create"
       : action === "fund:read" && resource.fund.owner === principal.id,
-  redact: (_viewer, resource) => markRedacted(resource.fund.fund),
+  redact: (_viewer, resource) => unsafeMarkRedactedForDevPolicy(resource.fund.fund),
 };

@@ -1,16 +1,42 @@
-import type { PseudonymId } from "@yen/shared";
-import type { Actor, FundRole } from "./roles.js";
+import { type Paise, type PseudonymId, paiseWire, parsePseudonymId } from "@yen/shared";
+import { isValidPaiseAmount } from "./policy.js";
+import { type Actor, type FundRole, isStaffRole, isValidRole } from "./roles.js";
 
 declare const RedactedSymbol: unique symbol;
 
 /**
- * A branded type indicating that a data structure has passed through field-level redaction
- * before leaving the API boundary.
+ * A value that has passed through redaction before leaving the API boundary.
+ * The brand is required: a raw, unredacted record is not assignable to `Redacted<T>`.
+ * Only `redact(...)` produces it, plus `unsafeMarkRedactedForDevPolicy` for the dev policy.
  */
-export type Redacted<T> = T & { readonly [RedactedSymbol]?: true };
+export type Redacted<T> = T & { readonly [RedactedSymbol]: true };
 
-export function markRedacted<T>(value: T): Redacted<T> {
+function markRedacted<T>(value: T): Redacted<T> {
   return value as Redacted<T>;
+}
+
+/**
+ * Narrow hook for `apps/api`'s dev-only policy (`devPolicy`), which has no redaction engine.
+ * Do not call it from production code: it skips field allowlisting entirely.
+ */
+export function unsafeMarkRedactedForDevPolicy<T>(value: T): Redacted<T> {
+  return markRedacted(value);
+}
+
+export type RedactionErrorCode = "UNSUPPORTED_RECORD_SHAPE" | "INVALID_AMOUNT";
+
+/** Thrown instead of returning a partially understood or malformed record. */
+export class RedactionError extends Error {
+  readonly code: RedactionErrorCode;
+
+  constructor(
+    message = "Unsupported record shape for redaction",
+    code: RedactionErrorCode = "UNSUPPORTED_RECORD_SHAPE",
+  ) {
+    super(message);
+    this.name = "RedactionError";
+    this.code = code;
+  }
 }
 
 /**
@@ -36,7 +62,7 @@ export interface ViewerContext {
 }
 
 export interface EvidenceRecord {
-  readonly evidenceId: string;
+  readonly evidenceId?: string | undefined;
   readonly contentSha256: string;
   readonly fileUrl?: string | undefined;
   readonly filename?: string | undefined;
@@ -46,7 +72,7 @@ export interface EvidenceRecord {
 export interface ExpenseRecord {
   readonly expenseId: string;
   readonly fundId: string;
-  readonly amountPaise: string | bigint | number;
+  readonly amountPaise: Paise;
   readonly payeeName?: string | undefined;
   readonly requesterDisplayName?: string | undefined;
   readonly requesterPseudonymId?: PseudonymId | undefined;
@@ -58,7 +84,7 @@ export interface ExpenseRecord {
 export interface DonationRecord {
   readonly donationId: string;
   readonly fundId: string;
-  readonly amountPaise: string | bigint | number;
+  readonly amountPaise: Paise;
   readonly donorDisplayName?: string | undefined;
   readonly donorPhone?: string | undefined;
   readonly donorEmail?: string | undefined;
@@ -67,117 +93,282 @@ export interface DonationRecord {
   readonly createdAt: string;
 }
 
+interface FundViewShape {
+  readonly id: string;
+  readonly name: string;
+  readonly targetPaise?: string | undefined;
+  readonly createdAt?: string | undefined;
+}
+
+function isFundView(value: unknown): value is FundViewShape {
+  if (!value || typeof value !== "object") return false;
+  const obj = value as Record<string, unknown>;
+  return typeof obj.id === "string" && typeof obj.name === "string";
+}
+
+/** Fund view allowlist: id, name, target and creation time. Everything else is dropped. */
+function redactFundView(fund: FundViewShape): FundViewShape {
+  const result: { id: string; name: string; targetPaise?: string; createdAt?: string } = {
+    id: fund.id,
+    name: fund.name,
+  };
+  if (fund.targetPaise !== undefined) {
+    if (!paiseWire.safeParse(fund.targetPaise).success) {
+      throw new RedactionError(
+        "targetPaise must be a canonical non-negative integer string",
+        "INVALID_AMOUNT",
+      );
+    }
+    result.targetPaise = fund.targetPaise;
+  }
+  if (fund.createdAt !== undefined) {
+    result.createdAt = str(fund.createdAt);
+  }
+  return result;
+}
+
+function isExpenseRecord(value: unknown): value is ExpenseRecord {
+  if (!value || typeof value !== "object") return false;
+  const obj = value as Record<string, unknown>;
+  return (
+    typeof obj.expenseId === "string" &&
+    typeof obj.fundId === "string" &&
+    "amountPaise" in obj &&
+    typeof obj.createdAt === "string"
+  );
+}
+
+function isDonationRecord(value: unknown): value is DonationRecord {
+  if (!value || typeof value !== "object") return false;
+  const obj = value as Record<string, unknown>;
+  return (
+    typeof obj.donationId === "string" &&
+    typeof obj.fundId === "string" &&
+    "donorPseudonymId" in obj &&
+    "amountPaise" in obj &&
+    typeof obj.createdAt === "string"
+  );
+}
+
+function str(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new RedactionError("Expected a string field in record");
+  }
+  return value;
+}
+
+function optionalStr(value: unknown): string | undefined {
+  return value === undefined ? undefined : str(value);
+}
+
+function requirePaise(amount: unknown): Paise {
+  if (!isValidPaiseAmount(amount)) {
+    throw new RedactionError("amountPaise must be a safe non-negative integer", "INVALID_AMOUNT");
+  }
+  return amount;
+}
+
+function pseudonym(value: unknown): PseudonymId {
+  const result = parsePseudonymId(str(value));
+  if (!result.ok) throw new RedactionError("Invalid pseudonym id");
+  return result.value;
+}
+
+function optionalPseudonym(value: unknown): PseudonymId | undefined {
+  return value === undefined ? undefined : pseudonym(value);
+}
+
+function maskedName(value: unknown): string | undefined {
+  return value === undefined ? undefined : maskNameToInitials(str(value));
+}
+
+/** Non-staff evidence contains only the content hash. Staff also get file details. */
+function evidenceFor(evidence: unknown, staff: boolean): EvidenceRecord[] | undefined {
+  if (evidence === undefined) return undefined;
+  if (!Array.isArray(evidence)) {
+    throw new RedactionError("evidence must be an array");
+  }
+  return evidence.map((entry: unknown): EvidenceRecord => {
+    if (!entry || typeof entry !== "object") {
+      throw new RedactionError("Invalid evidence entry");
+    }
+    const ev = entry as Record<string, unknown>;
+    const hashOnly = { contentSha256: str(ev.contentSha256) };
+    if (!staff) return hashOnly;
+    return {
+      ...hashOnly,
+      evidenceId: str(ev.evidenceId),
+      fileUrl: optionalStr(ev.fileUrl),
+      filename: optionalStr(ev.filename),
+      mimeType: optionalStr(ev.mimeType),
+    };
+  });
+}
+
 /**
  * Pure field-level redaction engine.
- * Applies public masking rules based on viewer role:
+ * Every viewer gets a freshly built object containing only the fields listed for that viewer:
  * - Public: names appear as initials, donors are pseudonymous (PII stripped),
  *   bills/evidence are hash-only (contentSha256 only; URLs & filenames removed).
- * - Donors: can see donor-level information, but other donors remain pseudonymous.
- * - Staff (owner/treasurer/approver/auditor): view full internal record.
+ * - Donors: names are masked, donations pseudonymous, and evidence hash-only.
+ * - Staff (owner/treasurer/approver/auditor): view the full internal record.
+ * Unknown fields are dropped. Unsupported or malformed records are rejected with a
+ * RedactionError instead of being returned.
  *
  * OWASP Top 10 API Security Risks 2023 - API3:2023 Broken Object Property Level Authorization:
  * https://api-security.owasp.org/editions/2023/en/0x11-t10/
  */
-export function redact<T>(viewer: Actor | ViewerContext, record: T): Redacted<T> {
-  const role: FundRole = viewer.role ?? "public";
-  const isPublic = role === "public";
-  const isDonor = role === "donor";
+export function redact(
+  viewer: Actor | ViewerContext,
+  record: ExpenseRecord,
+): Redacted<ExpenseRecord>;
+export function redact(
+  viewer: Actor | ViewerContext,
+  record: DonationRecord,
+): Redacted<DonationRecord>;
+export function redact(
+  viewer: Actor | ViewerContext,
+  record: { readonly kind: "fund"; readonly fund: object },
+): Redacted<FundViewShape>;
+export function redact(
+  viewer: Actor | ViewerContext,
+  record: FundViewShape,
+): Redacted<FundViewShape>;
+export function redact(
+  viewer: Actor | ViewerContext,
+  record: unknown,
+): Redacted<ExpenseRecord | DonationRecord | FundViewShape>;
+export function redact(
+  viewer: Actor | ViewerContext,
+  record: unknown,
+): Redacted<ExpenseRecord | DonationRecord | FundViewShape> {
+  // Unknown or missing viewer roles are treated as public (least privilege).
+  const viewerRole: FundRole =
+    viewer && typeof viewer === "object" && isValidRole(viewer.role) ? viewer.role : "public";
+  const isPublic = viewerRole === "public";
+  const isDonor = viewerRole === "donor";
+  const isStaff = isStaffRole(viewerRole);
 
   if (typeof record !== "object" || record === null) {
-    return markRedacted(record);
+    throw new RedactionError("Unsupported primitive record for redaction");
   }
 
-  // Handle wrapped API resource: { kind: "fund", fund: { owner: string, fund: FundView } }
   const recordObj = record as Record<string, unknown>;
+
+  // 1. Wrapped API resource: { kind: "fund", fund: { owner: string, fund: FundView } } or { kind: "fund", fund: FundView }
   if (recordObj.kind === "fund" && recordObj.fund && typeof recordObj.fund === "object") {
-    const wrappedFund = recordObj.fund as Record<string, unknown>;
-    if (wrappedFund.fund && typeof wrappedFund.fund === "object") {
-      const innerFund = wrappedFund.fund as Record<string, unknown>;
-      return markRedacted(innerFund as T);
+    const wrapper = recordObj.fund as Record<string, unknown>;
+    const inner =
+      wrapper.fund && typeof wrapper.fund === "object"
+        ? (wrapper.fund as Record<string, unknown>)
+        : wrapper;
+
+    if (!isFundView(inner)) {
+      throw new RedactionError("Wrapped fund resource missing valid fund view");
     }
-    return markRedacted(wrappedFund as T);
+    return markRedacted(redactFundView(inner));
   }
 
-  // Handle ExpenseRecord
-  if ("expenseId" in recordObj && "amountPaise" in recordObj) {
-    const exp = recordObj as unknown as ExpenseRecord;
-    if (isPublic) {
-      const redactedEvidence = exp.evidence?.map((ev) => ({
-        evidenceId: ev.evidenceId,
-        contentSha256: ev.contentSha256,
-      }));
+  // 2. Direct FundView
+  if (isFundView(recordObj) && !("expenseId" in recordObj) && !("donationId" in recordObj)) {
+    return markRedacted(redactFundView(recordObj));
+  }
 
+  // 3. ExpenseRecord
+  if (isExpenseRecord(recordObj)) {
+    const exp = recordObj;
+    const amountPaise = requirePaise(exp.amountPaise);
+
+    if (isPublic) {
       const result: ExpenseRecord = {
-        expenseId: exp.expenseId,
-        fundId: exp.fundId,
-        amountPaise: exp.amountPaise,
-        payeeName: exp.payeeName ? maskNameToInitials(exp.payeeName) : undefined,
-        requesterDisplayName: exp.requesterDisplayName
-          ? maskNameToInitials(exp.requesterDisplayName)
-          : undefined,
-        requesterPseudonymId: exp.requesterPseudonymId,
-        evidence: redactedEvidence,
-        notes: undefined, // internal notes redacted for public
-        createdAt: exp.createdAt,
+        expenseId: str(exp.expenseId),
+        fundId: str(exp.fundId),
+        amountPaise,
+        payeeName: maskedName(exp.payeeName),
+        requesterDisplayName: maskedName(exp.requesterDisplayName),
+        requesterPseudonymId: optionalPseudonym(exp.requesterPseudonymId),
+        evidence: evidenceFor(exp.evidence, false),
+        createdAt: str(exp.createdAt),
       };
-      return markRedacted(result as T);
+      return markRedacted(result);
     }
 
     if (isDonor) {
-      // Donors see notes and hash-only evidence
-      const redactedEvidence = exp.evidence?.map((ev) => ({
-        evidenceId: ev.evidenceId,
-        contentSha256: ev.contentSha256,
-      }));
+      const requesterPseudonymId = optionalPseudonym(exp.requesterPseudonymId);
+
       const result: ExpenseRecord = {
-        ...exp,
-        payeeName: exp.payeeName ? maskNameToInitials(exp.payeeName) : undefined,
-        evidence: redactedEvidence,
+        expenseId: str(exp.expenseId),
+        fundId: str(exp.fundId),
+        amountPaise,
+        payeeName: maskedName(exp.payeeName),
+        requesterDisplayName: maskedName(exp.requesterDisplayName),
+        requesterPseudonymId,
+        evidence: evidenceFor(exp.evidence, false),
+        createdAt: str(exp.createdAt),
       };
-      return markRedacted(result as T);
+      return markRedacted(result);
     }
 
-    return markRedacted({ ...exp } as T);
+    if (isStaff) {
+      const result: ExpenseRecord = {
+        expenseId: str(exp.expenseId),
+        fundId: str(exp.fundId),
+        amountPaise,
+        payeeName: optionalStr(exp.payeeName),
+        requesterDisplayName: optionalStr(exp.requesterDisplayName),
+        requesterPseudonymId: optionalPseudonym(exp.requesterPseudonymId),
+        evidence: evidenceFor(exp.evidence, true),
+        notes: optionalStr(exp.notes),
+        createdAt: str(exp.createdAt),
+      };
+      return markRedacted(result);
+    }
   }
 
-  // Handle DonationRecord
-  if ("donationId" in recordObj && "donorPseudonymId" in recordObj) {
-    const don = recordObj as unknown as DonationRecord;
+  // 4. DonationRecord
+  if (isDonationRecord(recordObj)) {
+    const don = recordObj;
+    const amountPaise = requirePaise(don.amountPaise);
+    const donorPseudonymId = pseudonym(don.donorPseudonymId);
+
     if (isPublic) {
-      // Donors are strictly pseudonymous to the public:
-      // Strip displayName, phone, email, bankTransactionId
       const result: DonationRecord = {
-        donationId: don.donationId,
-        fundId: don.fundId,
-        amountPaise: don.amountPaise,
-        donorPseudonymId: don.donorPseudonymId,
-        donorDisplayName: undefined,
-        donorPhone: undefined,
-        donorEmail: undefined,
-        bankTransactionId: undefined,
-        createdAt: don.createdAt,
+        donationId: str(don.donationId),
+        fundId: str(don.fundId),
+        amountPaise,
+        donorPseudonymId,
+        createdAt: str(don.createdAt),
       };
-      return markRedacted(result as T);
+      return markRedacted(result);
     }
 
     if (isDonor) {
-      // If the viewer is the donor themselves, they can see their details, otherwise pseudonymous
-      const isSelf = viewer.id !== undefined && don.donorPseudonymId === viewer.id;
-      if (!isSelf) {
-        const result: DonationRecord = {
-          ...don,
-          donorDisplayName: undefined,
-          donorPhone: undefined,
-          donorEmail: undefined,
-          bankTransactionId: undefined,
-        };
-        return markRedacted(result as T);
-      }
+      const result: DonationRecord = {
+        donationId: str(don.donationId),
+        fundId: str(don.fundId),
+        amountPaise,
+        donorPseudonymId,
+        createdAt: str(don.createdAt),
+      };
+      return markRedacted(result);
     }
 
-    return markRedacted({ ...don } as T);
+    if (isStaff) {
+      const result: DonationRecord = {
+        donationId: str(don.donationId),
+        fundId: str(don.fundId),
+        amountPaise,
+        donorPseudonymId,
+        donorDisplayName: optionalStr(don.donorDisplayName),
+        donorPhone: optionalStr(don.donorPhone),
+        donorEmail: optionalStr(don.donorEmail),
+        bankTransactionId: optionalStr(don.bankTransactionId),
+        createdAt: str(don.createdAt),
+      };
+      return markRedacted(result);
+    }
   }
 
-  // Default passthrough for other records marked as redacted
-  return markRedacted({ ...record });
+  // 5. Unsupported record shape: fail closed
+  throw new RedactionError("Unsupported record shape for redaction");
 }

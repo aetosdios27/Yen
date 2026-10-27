@@ -1,26 +1,82 @@
 import type { Paise } from "@yen/shared";
-import type { Action } from "./actions.js";
+import { ACTION_RESOURCE_MAP, type Action, isValidAction } from "./actions.js";
 import { isActionAllowedForRole } from "./matrix.js";
-import { type FundPolicy, requiredQuorumForExpense, type VisibilityTier } from "./policy.js";
-import type { ApprovalRecord, Resource } from "./resources.js";
-import { type Actor, type FundRole, hasRole, isStaffRole } from "./roles.js";
+import {
+  type FundPolicy,
+  isValidFundPolicy,
+  isValidPaiseAmount,
+  isValidVisibilityTier,
+  requiredQuorumForExpense,
+  type VisibilityTier,
+} from "./policy.js";
+import {
+  type ApprovalRecord,
+  type ExpenseResourceData,
+  isValidExpenseStatus,
+  type Resource,
+} from "./resources.js";
+import {
+  type Actor,
+  actorRoles,
+  type FundRole,
+  hasRole,
+  isStaffRole,
+  isValidRole,
+} from "./roles.js";
 
-/**
- * Role-only check: does any of the actor's roles grant this action in the declared matrix?
- * This is necessary but never sufficient. Routes must call `can`, which also needs the resource,
- * so a missing resource can no longer turn a role grant into an unconditional allow.
- */
-export function roleMayPerform(actor: Actor, action: Action): boolean {
-  const candidateRoles: readonly FundRole[] =
-    actor.roles && actor.roles.length > 0 ? actor.roles : [actor.role];
-  return candidateRoles.some((role) => isActionAllowedForRole(role, action));
+/** Trimmed identity string, or "" for anything that is not a string. */
+function normalizeId(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function isWellFormedActor(actor: unknown): actor is Actor {
+  if (!actor || typeof actor !== "object") return false;
+  const a = actor as Partial<Actor>;
+  return (
+    isValidRole(a.role) &&
+    (a.roles === undefined || (Array.isArray(a.roles) && a.roles.every(isValidRole)))
+  );
+}
+
+function isWellFormedFund(fund: unknown): boolean {
+  return (
+    !!fund && typeof fund === "object" && isValidFundPolicy((fund as { policy?: unknown }).policy)
+  );
+}
+
+function isWellFormedExpense(expense: unknown): expense is ExpenseResourceData {
+  if (!expense || typeof expense !== "object") return false;
+  const e = expense as Partial<ExpenseResourceData>;
+  return (
+    isValidFundPolicy(e.policy) &&
+    isValidPaiseAmount(e.amountPaise) &&
+    normalizeId(e.requesterId) !== "" &&
+    (e.status === undefined || isValidExpenseStatus(e.status)) &&
+    (e.approvals === undefined || Array.isArray(e.approvals)) &&
+    (e.objectionWindowOpen === undefined || typeof e.objectionWindowOpen === "boolean")
+  );
 }
 
 /**
- * Checks whether an actor has permission to perform an action on a given resource.
+ * Validates whether an actor may perform an action based purely on role assignments.
+ * Deny by default: If neither the actor's primary role nor any secondary roles allow
+ * the action, this returns false immediately.
+ */
+export function roleMayPerform(actor: Actor, action: Action): boolean {
+  if (!isWellFormedActor(actor) || !isValidAction(action)) {
+    return false;
+  }
+  return actorRoles(actor).some((role) => isActionAllowedForRole(role, action));
+}
+
+/**
+ * Pure authorization policy evaluation engine:
+ * Evaluates whether an actor can perform an action on a specific resource.
  *
- * Core Guarantees:
+ * Core security principles:
  * 1. Deny by default: Any action/role pair not explicitly granted returns false.
+ *    Malformed, missing or inconsistent input (unknown role, action/resource mismatch,
+ *    invalid policy or amount, unknown expense status) also returns false.
  * 2. Separation of duties:
  *    - The requester cannot approve their own request (OWASP Transaction Authorization Cheat Sheet).
  *      https://cheatsheetseries.owasp.org/cheatsheets/Transaction_Authorization_Cheat_Sheet.html
@@ -34,57 +90,75 @@ export function roleMayPerform(actor: Actor, action: Action): boolean {
  *      OWASP Top 10 API Security Risks 2023 - API1:2023 Broken Object Level Authorization
  *      https://api-security.owasp.org/editions/2023/en/0x11-t10/
  * 4. Evidence tamper resistance:
- *    - Evidence cannot be added or swapped once an expense is approved (Threat E4).
+ *    - Evidence cannot be added once the recorded approvals satisfy the policy (Threat E4).
  */
 export function can(actor: Actor, action: Action, resource: Resource): boolean {
+  if (
+    !isWellFormedActor(actor) ||
+    !isValidAction(action) ||
+    !resource ||
+    typeof resource !== "object"
+  ) {
+    return false;
+  }
+
+  // Each action belongs to exactly one resource kind (see ACTION_RESOURCE_MAP).
+  if (resource.kind !== ACTION_RESOURCE_MAP[action]) {
+    return false;
+  }
+
   if (!roleMayPerform(actor, action)) {
     return false;
   }
-  const candidateRoles: readonly FundRole[] =
-    actor.roles && actor.roles.length > 0 ? actor.roles : [actor.role];
 
-  // 2. Resource-Specific & Contextual Policy Checks
+  const roles = actorRoles(actor);
+
   switch (resource.kind) {
     case "fund": {
-      if (action === "fund:read" && resource.fund?.policy) {
-        return canViewFundByVisibility(candidateRoles, resource.fund.policy.visibilityTier);
+      // Only fund:create may omit fund data; every other fund action needs the fund.
+      if (resource.fund === undefined) {
+        return action === "fund:create";
+      }
+      if (!isWellFormedFund(resource.fund)) {
+        return false;
+      }
+      if (action === "fund:read") {
+        return canViewFundByVisibility(roles, resource.fund.policy.visibilityTier);
       }
       return true;
     }
 
     case "expense": {
       const expense = resource.expense;
+      if (!isWellFormedExpense(expense)) {
+        return false;
+      }
       const policy = expense.policy;
 
-      // Visibility check for reading expenses
       if (action === "expense:read") {
-        return canViewFundByVisibility(candidateRoles, policy.visibilityTier);
+        return canViewFundByVisibility(roles, policy.visibilityTier);
       }
 
-      // Separation of Duties: Approving expenses
       if (action === "expense:approve") {
-        // Rule 1: The requester cannot approve their own request
+        // Only an open (submitted) expense with a recorded approval list can be approved.
+        if (expense.status !== "submitted" || !Array.isArray(expense.approvals)) {
+          return false;
+        }
+        const requesterId = normalizeId(expense.requesterId);
+        // Rule 1: The requester cannot approve their own request. An actor without an id
+        // cannot be shown to differ from the requester, so it is denied.
         // https://cheatsheetseries.owasp.org/cheatsheets/Transaction_Authorization_Cheat_Sheet.html
-        // An actor without an id cannot be shown to differ from the requester, so deny.
-        if (actor.id === undefined || actor.id === expense.requesterId) {
+        const actorId = normalizeId(actor.id);
+        if (!actorId || actorId === requesterId) {
           return false;
         }
-
-        // Must hold approver or owner role to approve
-        const canApproveRole = hasRole(actor, "approver") || hasRole(actor, "owner");
-        if (!canApproveRole) {
+        if (!hasRole(actor, "approver") && !hasRole(actor, "owner")) {
           return false;
         }
-
         // Duplicate approval prevention
-        if (
-          expense.approvals &&
-          actor.id !== undefined &&
-          expense.approvals.some((a) => a.approverId === actor.id)
-        ) {
+        if (expense.approvals.some((a) => approverKey(a) === actorId)) {
           return false;
         }
-
         // Rule 2: The treasurer cannot be the sole approver
         // https://cheatsheetseries.owasp.org/cheatsheets/Transaction_Authorization_Cheat_Sheet.html
         if (hasRole(actor, "treasurer")) {
@@ -93,74 +167,87 @@ export function can(actor: Actor, action: Action, resource: Resource): boolean {
           if (requiredQuorum === 1) {
             return false;
           }
-
-          // If all existing approvals were from treasurers, this approval would leave only treasurers
-          const existingApprovals = expense.approvals ?? [];
-          const nonTreasurerApprovals = existingApprovals.filter((a) => !isTreasurerApproval(a));
-          if (
-            nonTreasurerApprovals.length === 0 &&
-            existingApprovals.length + 1 >= requiredQuorum
-          ) {
+          // Existing approvals are filtered first (eligibility, requester exclusion, dedupe),
+          // so an ineligible or requester approval cannot supply the independent approver.
+          const existing = filterValidApprovals(expense.approvals, requesterId, actorId);
+          const hasIndependentNonTreasurer = existing.some((a) => !isTreasurerApproval(a));
+          if (!hasIndependentNonTreasurer && existing.length + 1 >= requiredQuorum) {
             return false;
           }
         }
-
         return true;
       }
 
-      // Evidence tamper resistance (Threat E4)
+      // Evidence tamper resistance (Threat E4 & R6): evidence is locked once the
+      // recorded approvals satisfy the policy, and whenever the approval state is unknown.
       if (action === "expense:add_evidence") {
-        if (expense.status === "approved" || expense.status === "paid") {
-          return false;
-        }
-        return true;
-      }
-
-      // Objections must be within the objection window
-      if (action === "expense:raise_objection") {
-        if (expense.objectionWindowOpen === false) {
-          return false;
-        }
-        return true;
-      }
-
-      // Payouts require verified approval
-      if (action === "expense:payout") {
-        if (expense.status === "approved") {
-          return true;
-        }
         if (
-          expense.approvals &&
-          expense.amountPaise !== undefined &&
-          expense.requesterId !== undefined
+          expense.status !== "submitted" ||
+          !Array.isArray(expense.approvals) ||
+          !expense.approvals.every(isWellFormedApproval)
         ) {
-          return isExpenseFullyApproved(
-            expense.approvals,
-            policy,
-            expense.amountPaise,
-            expense.requesterId,
-          );
+          return false;
         }
-        return false;
+        return !isExpenseFullyApproved(
+          expense.approvals,
+          policy,
+          expense.amountPaise,
+          expense.requesterId,
+        );
+      }
+
+      // Objections must be within the objection window; an unknown window is closed (R9)
+      if (action === "expense:raise_objection") {
+        return expense.objectionWindowOpen === true;
+      }
+
+      // Payouts require verified approval (R2). Paid, rejected and unknown states never pay out.
+      if (action === "expense:payout") {
+        if (expense.status !== "submitted" && expense.status !== "approved") {
+          return false;
+        }
+        if (!Array.isArray(expense.approvals)) {
+          return false;
+        }
+        return isExpenseFullyApproved(
+          expense.approvals,
+          policy,
+          expense.amountPaise,
+          expense.requesterId,
+        );
       }
 
       return true;
     }
 
     case "donation": {
+      const donation = resource.donation;
+      if (!donation || typeof donation !== "object" || !isValidFundPolicy(donation.policy)) {
+        return false;
+      }
+      if (donation.amountPaise !== undefined && !isValidPaiseAmount(donation.amountPaise)) {
+        return false;
+      }
       if (action === "donation:read") {
-        return canViewFundByVisibility(candidateRoles, resource.donation.policy.visibilityTier);
+        return canViewFundByVisibility(roles, donation.policy.visibilityTier);
       }
       return true;
     }
 
     case "member": {
+      const member = resource.member;
+      if (!member || typeof member !== "object") {
+        return false;
+      }
       // Threat X4: Member grants self a role
-      // Only owner can add or remove members, and cannot grant roles to themselves if already owner
+      // Only owner can add or remove members, and cannot modify their own membership
       if (action === "fund:add_member" || action === "fund:remove_member") {
-        const isOwner = hasRole(actor, "owner");
-        if (!isOwner) return false;
-        if (actor.id === undefined || actor.id === resource.member.memberId) {
+        if (!isValidRole(member.targetRole) || !hasRole(actor, "owner")) {
+          return false;
+        }
+        const actorId = normalizeId(actor.id);
+        const memberId = normalizeId(member.memberId);
+        if (!actorId || !memberId || actorId === memberId) {
           return false; // Cannot modify own membership to prevent privilege confusion
         }
         return true;
@@ -169,28 +256,96 @@ export function can(actor: Actor, action: Action, resource: Resource): boolean {
     }
 
     case "audit": {
+      const audit = resource.audit;
+      if (!audit || typeof audit !== "object" || !isValidFundPolicy(audit.policy)) {
+        return false;
+      }
       if (action === "audit:read_log") {
-        return canViewFundByVisibility(candidateRoles, resource.audit.policy.visibilityTier);
+        return canViewFundByVisibility(roles, audit.policy.visibilityTier);
       }
       return true;
     }
 
     case "bank": {
+      const bank = resource.bank;
+      if (!bank || typeof bank !== "object") {
+        return false;
+      }
+      if (bank.policy !== undefined && !isValidFundPolicy(bank.policy)) {
+        return false;
+      }
       return true;
     }
 
-    default: {
-      const exhaustive: never = resource;
-      return exhaustive;
-    }
+    default:
+      // Unreachable: the kind check above only passes for the six known kinds.
+      return false;
   }
+}
+
+function approverKey(approval: ApprovalRecord): string {
+  return approval && typeof approval === "object" ? normalizeId(approval.approverId) : "";
+}
+
+function isWellFormedApproval(value: unknown): value is ApprovalRecord {
+  if (!value || typeof value !== "object") return false;
+  const approval = value as Partial<ApprovalRecord>;
+  return (
+    normalizeId(approval.approverId) !== "" &&
+    isValidRole(approval.roleAtApproval) &&
+    (approval.rolesAtApproval === undefined ||
+      (Array.isArray(approval.rolesAtApproval) && approval.rolesAtApproval.every(isValidRole)))
+  );
+}
+
+/** Only approvals recorded as owner or approver count toward quorum (R4). */
+function isEligibleApproverRole(approval: ApprovalRecord): boolean {
+  if (approval.roleAtApproval === "owner" || approval.roleAtApproval === "approver") {
+    return true;
+  }
+  return (
+    Array.isArray(approval.rolesAtApproval) &&
+    approval.rolesAtApproval.some((r) => r === "owner" || r === "approver")
+  );
+}
+
+function isTreasurerApproval(approval: ApprovalRecord): boolean {
+  if (approval.roleAtApproval === "treasurer") return true;
+  return Array.isArray(approval.rolesAtApproval) && approval.rolesAtApproval.includes("treasurer");
+}
+
+/**
+ * Keeps the approvals that can count toward quorum: a non-empty approver id, not the requester,
+ * not the excluded approver, an eligible owner/approver role, and at most one per approver.
+ */
+function filterValidApprovals(
+  approvals: readonly ApprovalRecord[],
+  requesterId: string,
+  excludeApproverId?: string,
+): ApprovalRecord[] {
+  const seenApproverIds = new Set<string>();
+  const valid: ApprovalRecord[] = [];
+
+  for (const approval of approvals) {
+    if (!approval || typeof approval !== "object") continue;
+    const id = normalizeId(approval.approverId);
+    if (!id) continue;
+    if (id === requesterId) continue;
+    if (excludeApproverId !== undefined && id === excludeApproverId) continue;
+    if (!isEligibleApproverRole(approval)) continue;
+    if (seenApproverIds.has(id)) continue;
+    seenApproverIds.add(id);
+    valid.push(approval);
+  }
+  return valid;
 }
 
 /**
  * Validates whether a set of approvals satisfies the M-of-N policy and separation of duties:
- * 1. Count of distinct valid approvals >= required quorum for the expense amount.
- * 2. Requester is NOT in the approval set.
- * 3. The set of approvers is NOT solely treasurers (at least one non-treasurer approver required).
+ * 1. Count of distinct eligible approvals >= required quorum for the expense amount.
+ * 2. Requester is NOT counted, and approver ids must be non-empty.
+ * 3. Approvers must have been recorded as owner or approver.
+ * 4. At least one counted approver is not a treasurer (treasurers cannot be the sole approvers).
  */
 export function isExpenseFullyApproved(
   approvals: readonly ApprovalRecord[],
@@ -198,48 +353,31 @@ export function isExpenseFullyApproved(
   amountPaise: Paise,
   requesterId: string,
 ): boolean {
-  const requiredQuorum = requiredQuorumForExpense(policy, amountPaise);
-
-  // Distinct approvers only
-  const seenApproverIds = new Set<string>();
-  const validApprovals: ApprovalRecord[] = [];
-
-  for (const approval of approvals) {
-    const id = String(approval.approverId);
-    // Requester cannot approve own request
-    if (id === requesterId) {
-      continue;
-    }
-    if (!seenApproverIds.has(id)) {
-      seenApproverIds.add(id);
-      validApprovals.push(approval);
-    }
+  if (!isValidFundPolicy(policy) || !isValidPaiseAmount(amountPaise)) {
+    return false;
   }
+  const reqId = normalizeId(requesterId);
+  if (!reqId || !Array.isArray(approvals)) {
+    return false;
+  }
+
+  const requiredQuorum = requiredQuorumForExpense(policy, amountPaise);
+  const validApprovals = filterValidApprovals(approvals, reqId);
 
   if (validApprovals.length < requiredQuorum) {
     return false;
   }
 
-  // Treasurer cannot be the sole approver:
-  // If all valid approvers are treasurers, approval is invalid
-  const hasNonTreasurerApprover = validApprovals.some((a) => !isTreasurerApproval(a));
-  if (!hasNonTreasurerApprover) {
-    return false;
-  }
-
-  return true;
-}
-
-function isTreasurerApproval(approval: ApprovalRecord): boolean {
-  if (approval.roleAtApproval === "treasurer") return true;
-  if (approval.rolesAtApproval?.includes("treasurer")) return true;
-  return false;
+  return validApprovals.some((a) => !isTreasurerApproval(a));
 }
 
 /**
  * Evaluates visibility tier access based on viewer's roles.
  */
 function canViewFundByVisibility(viewerRoles: readonly FundRole[], tier: VisibilityTier): boolean {
+  if (!isValidVisibilityTier(tier)) {
+    return false;
+  }
   switch (tier) {
     case "public":
       return true;
@@ -253,9 +391,7 @@ function canViewFundByVisibility(viewerRoles: readonly FundRole[], tier: Visibil
     case "private":
       return viewerRoles.some((role) => isStaffRole(role));
 
-    default: {
-      const exhaustive: never = tier;
-      return exhaustive;
-    }
+    default:
+      return false;
   }
 }

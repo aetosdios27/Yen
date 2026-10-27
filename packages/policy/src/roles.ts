@@ -13,16 +13,29 @@ export const FUND_ROLES = ["owner", "treasurer", "approver", "auditor", "donor",
 
 export type FundRole = (typeof FUND_ROLES)[number];
 
+const FUND_ROLES_SET = new Set<string>(FUND_ROLES);
+
+export function isValidRole(role: unknown): role is FundRole {
+  return typeof role === "string" && FUND_ROLES_SET.has(role);
+}
+
 export interface Actor {
   readonly id?: PseudonymId | UserId | string | undefined;
   readonly role: FundRole;
   readonly roles?: readonly FundRole[] | undefined;
 }
 
+/**
+ * The actor's primary role plus any valid secondary roles. Unknown runtime values
+ * (for example "toString" or "__proto__") are dropped, never treated as roles.
+ */
+export function actorRoles(actor: Actor): readonly FundRole[] {
+  const secondary = Array.isArray(actor.roles) ? actor.roles.filter(isValidRole) : [];
+  return isValidRole(actor.role) ? [actor.role, ...secondary] : secondary;
+}
+
 export function hasRole(actor: Actor, role: FundRole): boolean {
-  if (actor.role === role) return true;
-  if (actor.roles?.includes(role)) return true;
-  return false;
+  return actorRoles(actor).includes(role);
 }
 
 export function isStaffRole(role: FundRole): boolean {
