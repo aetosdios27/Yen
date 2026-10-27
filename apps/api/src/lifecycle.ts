@@ -5,16 +5,24 @@ import type { Logger } from "./logging.js";
 export interface ServerLifecycleOptions {
   readonly server: Server;
   readonly sql?: Sql | undefined;
+  readonly cleanup?: { stop(): Promise<void> } | undefined;
   readonly getInFlight: () => number;
   readonly shutdownTimeoutMs: number;
   readonly drainPollMs?: number;
   readonly logger?: Logger;
-  readonly onShutdownComplete?: () => void;
 }
 
 export interface ServerLifecycle {
   readonly isShuttingDown: boolean;
+  // Resolves when cleanup succeeded. Rejects with ShutdownError when cleanup failed.
   shutdown(signal?: string): Promise<void>;
+}
+
+export class ShutdownError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "ShutdownError";
+  }
 }
 
 // Graceful shutdown lifecycle manager:
@@ -36,6 +44,15 @@ export function createServerLifecycle(options: ServerLifecycleOptions): ServerLi
     isShuttingDown = true;
 
     shutdownPromise = (async () => {
+      // 0. Stop periodic cleanup before closing server connections
+      if (options.cleanup) {
+        try {
+          await options.cleanup.stop();
+        } catch (error) {
+          throw new ShutdownError("Cleanup scheduler failed to stop", { cause: error });
+        }
+      }
+
       // 1. Stop accepting new connections
       const serverClosed = new Promise<void>((resolve) => {
         options.server.close(() => {
@@ -83,17 +100,15 @@ export function createServerLifecycle(options: ServerLifecycleOptions): ServerLi
         if (closeTimeout) clearTimeout(closeTimeout);
       }
 
-      // 5. Close database pool with bounded timeout
+      // 5. Close database pool with bounded timeout. A failure is reported, never swallowed.
       if (options.sql) {
         const poolTimeoutSec = Math.max(1, Math.floor(options.shutdownTimeoutMs / 1000));
         try {
           await options.sql.end({ timeout: poolTimeoutSec });
-        } catch {
-          // Handled quietly during shutdown
+        } catch (error) {
+          throw new ShutdownError("Database pool failed to close", { cause: error });
         }
       }
-
-      options.onShutdownComplete?.();
     })();
 
     return shutdownPromise;
@@ -105,4 +120,24 @@ export function createServerLifecycle(options: ServerLifecycleOptions): ServerLi
     },
     shutdown,
   };
+}
+
+// Runs a signal-triggered shutdown and sets the process outcome: exit 0 when cleanup
+// succeeded; otherwise one line on stderr and exit 1. The stderr line names only the
+// fixed ShutdownError message, never the underlying error, so connection details stay out of logs.
+export async function shutdownOnSignal(
+  lifecycle: ServerLifecycle,
+  signal: string,
+  exit: (code: number) => void,
+): Promise<void> {
+  try {
+    await lifecycle.shutdown(signal);
+  } catch (error) {
+    const reason =
+      error instanceof ShutdownError ? error.message : "unexpected error during cleanup";
+    process.stderr.write(`Error during ${signal} shutdown: ${reason}\n`);
+    exit(1);
+    return;
+  }
+  exit(0);
 }

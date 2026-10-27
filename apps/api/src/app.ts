@@ -54,8 +54,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     },
   });
   app.use("*", requestContext(deps));
-  app.use("*", concurrencyLimit(deps));
-  app.use("*", requestTimeout(deps));
+  // CORS wraps the timeout and load-shedding middleware so that their 503 and 504 responses
+  // carry the same headers as any other response and browsers can read Retry-After.
   if (deps.corsOrigins.length > 0) {
     app.use(
       "*",
@@ -67,23 +67,27 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       }),
     );
   }
+  app.use("*", requestTimeout(deps));
+  app.use("*", concurrencyLimit(deps));
   app.onError((error, c) => {
     const errorKind =
       error instanceof ApiError && error.code === "overloaded"
         ? "rate_limit_store_full"
-        : error instanceof ReadinessError
-          ? "readiness"
-          : error instanceof StoreError
-            ? "store"
-            : error instanceof ApiError && error.code === "validation_failed"
-              ? "validation"
-              : error instanceof HTTPException
-                ? error.status === 400
-                  ? "validation"
-                  : "unknown"
-                : error instanceof Error
-                  ? "handler"
-                  : "unknown";
+        : error instanceof ApiError && error.code === "gateway_timeout"
+          ? "timeout"
+          : error instanceof ReadinessError
+            ? "readiness"
+            : error instanceof StoreError
+              ? "store"
+              : error instanceof ApiError && error.code === "validation_failed"
+                ? "validation"
+                : error instanceof HTTPException
+                  ? error.status === 400
+                    ? "validation"
+                    : "unknown"
+                  : error instanceof Error
+                    ? "handler"
+                    : "unknown";
     deps.logger.log({
       event: "http_failure",
       requestId: c.get("requestId"),
@@ -153,8 +157,9 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   });
   app.openapi(healthRoute, (c) => c.json({ status: "ok" as const }, 200));
   app.openapi(readyRoute, async (c) => {
+    if (deps.isShuttingDown()) throw new ReadinessError();
     try {
-      if (!(await deps.readiness())) throw new ReadinessError();
+      if (!(await deps.readiness()) || deps.isShuttingDown()) throw new ReadinessError();
     } catch {
       throw new ReadinessError();
     }

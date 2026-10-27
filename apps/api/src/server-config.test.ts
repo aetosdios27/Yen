@@ -26,6 +26,7 @@ it("applies Node HTTP server timeout and slow-client settings", async () => {
     DATABASE_URL: undefined,
     READINESS_CACHE_MS: 1000,
     TRUSTED_PROXY_HOPS: 0,
+    CLEANUP_INTERVAL_MS: 60000,
     WAITLIST_MIN_RESPONSE_MS: 75,
     WAITLIST_RATE_LIMIT_CAPACITY: 5,
     WAITLIST_RATE_LIMIT_REFILL_MS: 3600000,

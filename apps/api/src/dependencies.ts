@@ -74,6 +74,7 @@ export interface AppDependencies {
   readonly concurrencyLimit: number;
   readonly requestTimeoutMs: number;
   readonly inFlightTracker: InFlightTracker;
+  readonly isShuttingDown: () => boolean;
 }
 
 export function defaultDependencies(clock: () => number = Date.now): AppDependencies {
@@ -97,5 +98,6 @@ export function defaultDependencies(clock: () => number = Date.now): AppDependen
     concurrencyLimit: 100,
     requestTimeoutMs: 15000,
     inFlightTracker: new DefaultInFlightTracker(),
+    isShuttingDown: () => false,
   };
 }

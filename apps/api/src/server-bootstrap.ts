@@ -2,11 +2,12 @@ import type { Server } from "node:http";
 import { serve } from "@hono/node-server";
 import { createSql, type Sql } from "@yen/db";
 import { createApp } from "./app.js";
+import { startCleanupScheduler, type CleanupScheduler } from "./cleanup-scheduler.js";
 import { createClientIpResolver } from "./client-ip.js";
 import { rateLimits } from "./config.js";
 import { createDatabaseReady } from "./database-ready.js";
 import { DefaultInFlightTracker } from "./dependencies.js";
-import { createServerLifecycle, type ServerLifecycle } from "./lifecycle.js";
+import { createServerLifecycle, type ServerLifecycle, shutdownOnSignal } from "./lifecycle.js";
 import { useMemoryStore } from "./server-config.js";
 import {
   MemoryRateLimitStore,
@@ -22,6 +23,7 @@ export interface ServerConfig {
   readonly YEN_ALLOW_MEMORY_STORES?: "true" | "false" | undefined;
   readonly READINESS_CACHE_MS: number;
   readonly TRUSTED_PROXY_HOPS: number;
+  readonly CLEANUP_INTERVAL_MS: number;
   readonly WAITLIST_MIN_RESPONSE_MS: number;
   readonly WAITLIST_RATE_LIMIT_CAPACITY: number;
   readonly WAITLIST_RATE_LIMIT_REFILL_MS: number;
@@ -43,8 +45,10 @@ export interface ServerConfig {
 }
 
 export interface StartedServer {
+  readonly app: ReturnType<typeof createApp>;
   readonly server: Server;
   readonly sql?: Sql | undefined;
+  readonly cleanup?: CleanupScheduler | undefined;
   readonly lifecycle: ServerLifecycle;
   readonly inFlightTracker: DefaultInFlightTracker;
   readonly port: number;
@@ -89,21 +93,45 @@ export async function startServer(
   }
 
   const inFlightTracker = new DefaultInFlightTracker();
+  let lifecycleInstance: ServerLifecycle | undefined;
+
+  const postgresStores = sql
+    ? {
+        waitlistStore: new PostgresWaitlistStore(sql),
+        idempotencyStore: new PostgresIdempotencyStore(sql),
+        rateLimitStore: new PostgresRateLimitStore(sql, {
+          maxEntries: resolvedConfig.RATE_LIMIT_MAX_KEYS,
+        }),
+      }
+    : undefined;
+
+  // Memory stores reclaim expired entries themselves; only the shared Postgres tables grow.
+  const cleanup = postgresStores
+    ? startCleanupScheduler(
+        [
+          {
+            name: "idempotency_keys",
+            run: (now, limit) => postgresStores.idempotencyStore.sweep(now, limit),
+          },
+          {
+            name: "rate_limits",
+            run: (now, limit) => postgresStores.rateLimitStore.prune(now, limit),
+          },
+        ],
+        {
+          intervalMs: resolvedConfig.CLEANUP_INTERVAL_MS,
+          onFailure: (failure) => process.stderr.write(`${JSON.stringify(failure)}\n`),
+        },
+      )
+    : undefined;
 
   const app = createApp({
-    ...(sql
-      ? {
-          waitlistStore: new PostgresWaitlistStore(sql),
-          idempotencyStore: new PostgresIdempotencyStore(sql),
-          rateLimitStore: new PostgresRateLimitStore(sql, {
-            maxEntries: resolvedConfig.RATE_LIMIT_MAX_KEYS,
-          }),
-        }
-      : {
-          rateLimitStore: new MemoryRateLimitStore({
-            maxEntries: resolvedConfig.RATE_LIMIT_MAX_KEYS,
-          }),
-        }),
+    isShuttingDown: () => lifecycleInstance?.isShuttingDown ?? false,
+    ...(postgresStores ?? {
+      rateLimitStore: new MemoryRateLimitStore({
+        maxEntries: resolvedConfig.RATE_LIMIT_MAX_KEYS,
+      }),
+    }),
     waitlistLimit: {
       capacity: resolvedConfig.WAITLIST_RATE_LIMIT_CAPACITY,
       refillMs: resolvedConfig.WAITLIST_RATE_LIMIT_REFILL_MS,
@@ -144,14 +172,11 @@ export async function startServer(
   const lifecycle = createServerLifecycle({
     server,
     sql,
+    cleanup,
     getInFlight: () => inFlightTracker.count,
     shutdownTimeoutMs: resolvedConfig.SHUTDOWN_TIMEOUT_MS,
-    onShutdownComplete: () => {
-      if (options.registerSignals ?? true) {
-        process.exit(0);
-      }
-    },
   });
+  lifecycleInstance = lifecycle;
 
   if (options.registerSignals ?? true) {
     let shuttingDown = false;
@@ -160,10 +185,7 @@ export async function startServer(
         process.exit(1);
       }
       shuttingDown = true;
-      lifecycle.shutdown(signal).catch((err) => {
-        process.stderr.write(`Error during ${signal} shutdown: ${err}\n`);
-        process.exit(1);
-      });
+      void shutdownOnSignal(lifecycle, signal, (code) => process.exit(code));
     };
     process.on("SIGTERM", () => handleSignal("SIGTERM"));
     process.on("SIGINT", () => handleSignal("SIGINT"));
@@ -173,8 +195,10 @@ export async function startServer(
   const actualPort = typeof addr === "object" && addr !== null ? addr.port : resolvedConfig.PORT;
 
   return {
+    app,
     server,
     sql,
+    cleanup,
     lifecycle,
     inFlightTracker,
     port: actualPort,

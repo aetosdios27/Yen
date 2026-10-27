@@ -223,9 +223,9 @@ The API server process is strictly stateless; nothing required to survive a rest
 ### Postgres Connection Pool and PgBouncer Settings
 
 Database connection pool parameters are validated in `env.ts` with explicit defaults:
-- `DATABASE_POOL_MAX`: Maximum active connections (default `10`, range `1–100`).
-- `DATABASE_POOL_IDLE_TIMEOUT_SECONDS`: Idle connection reap timeout (default `20`, range `1–300`).
-- `DATABASE_POOL_ACQUIRE_TIMEOUT_SECONDS`: Connection acquisition timeout (default `10`, range `1–60`).
+- `DATABASE_POOL_MAX`: Maximum active connections (default `10`, range `1–1000`).
+- `DATABASE_POOL_IDLE_TIMEOUT_SECONDS`: Idle connection reap timeout (default `20`, range `0–86400`).
+- `DATABASE_POOL_ACQUIRE_TIMEOUT_SECONDS`: Connection acquisition timeout (default `10`, range `1–300`).
 
 PgBouncer transaction-mode considerations:
 - Startup parameters enforce UTC sessions without runtime `SET` leaks.
@@ -235,26 +235,28 @@ PgBouncer transaction-mode considerations:
 ### HTTP Limits, Timeouts, and Slow-Client Protection
 
 Node HTTP server settings tuned to mitigate slow-client attacks (Slowloris):
-- `SERVER_HEADERS_TIMEOUT_MS`: Time allowed to receive complete request headers (default `25000` ms, must exceed `SERVER_KEEP_ALIVE_TIMEOUT_MS`).
-- `SERVER_REQUEST_TIMEOUT_MS`: Maximum duration for entire HTTP request receipt (default `18000` ms).
-- `SERVER_KEEP_ALIVE_TIMEOUT_MS`: Inactivity timeout before closing idle keep-alive sockets (default `5000` ms).
-- `SERVER_MAX_HEADER_SIZE_BYTES`: Maximum HTTP request header size (default `32768` bytes / 32 KiB).
+- `SERVER_HEADERS_TIMEOUT_MS`: Time allowed to receive complete request headers (default `20000` ms, range `1000–300000`, must exceed `SERVER_KEEP_ALIVE_TIMEOUT_MS`).
+- `SERVER_REQUEST_TIMEOUT_MS`: Maximum duration for entire HTTP request receipt (default `15000` ms, range `1000–600000`).
+- `SERVER_KEEP_ALIVE_TIMEOUT_MS`: Inactivity timeout before closing idle keep-alive sockets (default `5000` ms, range `0–60000`).
+- `SERVER_MAX_HEADER_SIZE_BYTES`: Maximum HTTP request header size (default `16384` bytes / 16 KiB, range `1024–1048576`).
 - Request body limits: 64 KiB default body limit on `/v1/*` routes; configurable `WAITLIST_BODY_LIMIT_BYTES` (default 8,192 bytes) for waitlist.
-- Per-request execution timeout: `REQUEST_TIMEOUT_MS` (default `15000` ms); aborts long-running requests with 500 Internal Server Error.
+- Per-request execution timeout: `REQUEST_TIMEOUT_MS` (default `15000` ms, range `100–300000`). A request that runs longer receives `504 Gateway Timeout` with error code `gateway_timeout`. A timed-out handler is not cancelled: it keeps running until it settles, and it keeps its in-flight slot until then, so graceful shutdown waits for it instead of closing the database pool underneath it. Because the handler can still commit after the client received `504`, handlers that write must be idempotent; clients retry writes with the same `Idempotency-Key`.
 
 ### Backpressure and Load Shedding
 
 - `CONCURRENCY_LIMIT`: Maximum concurrent in-flight requests (default `100`, range `1–10000`).
-- When concurrency limit is reached, incoming requests immediately receive HTTP `503 Service Unavailable` with `Retry-After: 1` header before memory or event loop saturation occurs.
-- `/health` and `/ready` are excluded from the concurrency limit so health probes stay responsive during overload.
+- When the limit is reached, incoming requests immediately receive HTTP `503 Service Unavailable` with `Retry-After: 1` header before memory or event loop saturation occurs. Rejected requests never take an in-flight slot, so a burst of rejections does not keep the service rejecting once admitted work completes. Each rejection is logged as a warning with reason `overloaded` and the in-flight count.
+- `/health` and `/ready` are neither counted nor limited, so probes stay responsive during overload and never take capacity from ordinary requests.
+- `503` and `504` responses carry the same CORS headers as other responses, and `Retry-After` is exposed to browsers.
 
 ### Graceful Shutdown Lifecycle
 
 Lifecycle management is handled by `createServerLifecycle` in `lifecycle.ts`:
 - Listens for `SIGTERM` and `SIGINT`.
+- Sets the shutdown flag immediately: `/ready` returns `503` from that moment, while `/health` stays `200`.
 - Closes the HTTP server (`server.close()`) to refuse new incoming connections.
 - Closes existing idle sockets (`server.closeIdleConnections()`).
 - Drains active in-flight requests with polling, bounded by `SHUTDOWN_TIMEOUT_MS` (default `10000` ms).
 - Force-closes remaining sockets (`server.closeAllConnections()`) if the shutdown deadline expires.
 - Closes the Postgres pool (`sql.end({ timeout })`) with bounded timeout.
-- Cleanly terminates the process with exit code 0.
+- Exits with code 0 when cleanup succeeded. If closing the pool fails, writes one line to stderr (`Error during <signal> shutdown: Database pool failed to close`) and exits with code 1. The error details are not printed.
