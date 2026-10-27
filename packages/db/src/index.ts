@@ -22,6 +22,8 @@ export {
   orgRowSchema,
   type PseudonymRow,
   pseudonymRowSchema,
+  type RateLimitRow,
+  rateLimitRowSchema,
   type UserRow,
   userRowSchema,
 } from "./rows.js";

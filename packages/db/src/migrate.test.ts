@@ -57,6 +57,7 @@ databaseSuite("migration runner", (sql, url) => {
       "memberships",
       "orgs",
       "pseudonyms",
+      "rate_limits",
       "schema_migrations",
       "users",
       "waitlist_entries",
@@ -64,6 +65,7 @@ databaseSuite("migration runner", (sql, url) => {
     const source = await readFile(join(defaultDir, "0001_app_tables.sql"));
     const waitlistSource = await readFile(join(defaultDir, "0002_waitlist.sql"));
     const fundEventsSource = await readFile(join(defaultDir, "0003_fund_events.sql"));
+    const sharedStoresSource = await readFile(join(defaultDir, "0004_shared_stores.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -82,6 +84,12 @@ databaseSuite("migration runner", (sql, url) => {
         version: 3,
         name: "0003_fund_events.sql",
         checksum: createHash("sha256").update(fundEventsSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
+      {
+        version: 4,
+        name: "0004_shared_stores.sql",
+        checksum: createHash("sha256").update(sharedStoresSource).digest("hex"),
         applied_at: expect.any(Date),
       },
     ]);
