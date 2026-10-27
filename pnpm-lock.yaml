@@ -190,6 +190,9 @@ importers:
       '@hono/zod-openapi':
         specifier: 1.6.3
         version: 1.6.3(hono@4.13.14)(zod@4.6.7)
+      '@yen/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@yen/shared':
         specifier: workspace:*
         version: link:../../packages/shared
