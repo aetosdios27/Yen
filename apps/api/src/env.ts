@@ -7,6 +7,7 @@ const schema = z
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     ...rateLimitEnv.shape,
     DATABASE_URL: z.string().optional(),
+    YEN_ALLOW_MEMORY_STORES: z.enum(["true", "false"]).optional(),
     PORT: z.coerce.number().int().min(1).max(65535),
   })
   .superRefine((value, ctx) => {

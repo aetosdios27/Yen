@@ -77,7 +77,11 @@ export const readyRoute = createRoute({
   path: "/ready",
   operationId: "ready",
   summary: "Readiness",
-  responses: { 200: jsonResponse(statusSchema, "Dependencies are ready"), 500: internalResponse },
+  responses: {
+    200: jsonResponse(statusSchema, "Dependencies are ready"),
+    503: jsonResponse(errorEnvelope, "Dependency unavailable"),
+    500: internalResponse,
+  },
 });
 export const meRoute = createRoute({
   method: "get",

@@ -60,7 +60,7 @@ it("runs injected readiness independently of liveness", async () => {
   expect((await app.request("/health")).status).toBe(200);
   expect(readiness).not.toHaveBeenCalled();
   const response = await app.request("/ready");
-  expect(response.status).toBe(500);
+  expect(response.status).toBe(503);
   expect(errorEnvelope.parse(await response.json()).error.code).toBe("internal");
 });
 

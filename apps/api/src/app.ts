@@ -92,7 +92,10 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         : error instanceof HTTPException && error.status === 400
           ? new ApiError("validation_failed")
           : new ApiError("internal");
-    return c.json(errorBody(failure, c.get("requestId")), errorStatus[failure.code]);
+    return c.json(
+      errorBody(failure, c.get("requestId")),
+      error instanceof ReadinessError ? 503 : errorStatus[failure.code],
+    );
   });
   app.notFound((c) =>
     c.json(errorBody(new ApiError("not_found"), c.get("requestId")), errorStatus.not_found),
