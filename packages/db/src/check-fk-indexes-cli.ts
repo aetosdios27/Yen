@@ -34,7 +34,9 @@ async function main() {
     const dbUrl = parseDatabaseUrl(standardUrl, "DATABASE_URL");
     const sql = createSql(dbUrl);
     try {
-      process.stdout.write(`Checking foreign-key indexing on database at ${standardUrl}...\n`);
+      process.stdout.write(
+        `Checking foreign-key indexing on database "${new URL(dbUrl).pathname.slice(1)}" at ${new URL(dbUrl).host}...\n`,
+      );
       await assertForeignKeyIndexes(sql);
       process.stdout.write(`✓ All foreign keys in database have supporting indexes.\n`);
     } finally {
