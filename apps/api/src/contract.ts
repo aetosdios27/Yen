@@ -152,12 +152,38 @@ export const openapiRoute = createRoute({
   },
 });
 
-const bounded = (max: number) => z.string().trim().min(1).max(max);
+const validCharacters = (value: string, multiline = false) =>
+  Array.from(value).every((character) => {
+    const code = character.codePointAt(0);
+    if (code === undefined) return false;
+    if (multiline && (code === 9 || code === 10)) return true;
+    return code > 31 && !(code >= 127 && code <= 159) && !(code >= 0xd800 && code <= 0xdfff);
+  });
+const bounded = (max: number, multiline = false) =>
+  z
+    .string()
+    .refine(
+      (value) => validCharacters(value, multiline),
+      "Control characters and lone surrogates are not allowed",
+    )
+    .trim()
+    .refine(
+      (value) => Array.from(value).length >= 1 && Array.from(value).length <= max,
+      `Expected 1–${max} characters`,
+    )
+    .openapi({ minLength: 1, maxLength: max });
 const contact = z
   .string()
+  .refine(
+    (value) => validCharacters(value),
+    "Control characters and lone surrogates are not allowed",
+  )
   .trim()
-  .min(3)
-  .max(254)
+  .refine(
+    (value) => Array.from(value).length >= 3 && Array.from(value).length <= 254,
+    "Expected 3–254 characters",
+  )
+  .openapi({ minLength: 3, maxLength: 254 })
   .refine((value) => {
     if (value.includes("@")) return z.email().safeParse(value).success;
     return (
@@ -172,7 +198,7 @@ export const waitlistInput = z
     org: bounded(200),
     locale: z.enum(["en", "hi"]),
     consent: z
-      .object({ accepted: z.literal(true), text: bounded(1000), version: bounded(40) })
+      .object({ accepted: z.literal(true), text: bounded(1000, true), version: bounded(40) })
       .strict(),
   })
   .strict()

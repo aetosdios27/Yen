@@ -127,3 +127,19 @@ it.each(["/v1/waitlist", "/v1/waitlist/"])("applies waitlist middleware to %s", 
   for (let i = 0; i < 4; i++) expect((await app.request(path, post(input))).status).toBe(201);
   expect((await app.request(path, post(input))).status).toBe(429);
 });
+
+it("rejects controls and lone surrogates while counting Unicode code points", async () => {
+  const app = createApp({ logger: silent });
+  for (const name of ["A\u0000B", "A\u0085B", "A\ud800B", "A\nB"]) {
+    const response = await app.request("/v1/waitlist", post({ ...input, name }));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: {
+        details: expect.arrayContaining([expect.objectContaining({ path: ["json", "name"] })]),
+      },
+    });
+  }
+  expect(
+    (await app.request("/v1/waitlist", post({ ...input, name: "😀".repeat(200) }))).status,
+  ).toBe(201);
+});
