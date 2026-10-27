@@ -30,3 +30,36 @@ databaseSuite("Postgres waitlist store", (sql) => {
     ).toHaveLength(1);
   });
 });
+
+databaseSuite("waitlist Unicode database bounds", (sql) => {
+  beforeAll(async () => {
+    await migrate(sql);
+  });
+  it("accepts 200 astral characters and rejects 201 at both API and database boundaries", async () => {
+    const { createApp } = await import("./app.js");
+    const app = createApp({
+      waitlistStore: new PostgresWaitlistStore(sql),
+      logger: { log: () => undefined },
+      waitlistMinResponseMs: 0,
+    });
+    const body = {
+      name: "😀".repeat(200),
+      contact: "emoji@example.com",
+      org: "Club",
+      locale: "en",
+      consent: { accepted: true, text: "Yes", version: "1" },
+    };
+    const post = (value: unknown) => ({
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(value),
+    });
+    expect((await app.request("/v1/waitlist", post(body))).status).toBe(201);
+    expect(
+      (await app.request("/v1/waitlist", post({ ...body, name: "😀".repeat(201) }))).status,
+    ).toBe(400);
+    await expect(
+      sql`UPDATE waitlist_entries SET name = ${"😀".repeat(201)} WHERE contact = 'emoji@example.com'`,
+    ).rejects.toMatchObject({ code: "23514" });
+  });
+});

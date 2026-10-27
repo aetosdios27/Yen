@@ -82,3 +82,16 @@ it("accepts a PostgreSQL URL in production and rejects invalid URLs without expo
   await expect(import("./env.js")).rejects.toThrow("DATABASE_URL");
   await expect(import("./env.js")).rejects.not.toThrow("private-invalid-value");
 });
+
+it.each([
+  ["TRUSTED_PROXY_HOPS", "-1"],
+  ["TRUSTED_PROXY_HOPS", "6"],
+  ["TRUSTED_PROXY_HOPS", "1.5"],
+  ["WAITLIST_MIN_RESPONSE_MS", "-1"],
+  ["WAITLIST_MIN_RESPONSE_MS", "2001"],
+  ["WAITLIST_MIN_RESPONSE_MS", "1.5"],
+])("rejects out of range %s=%s", async (key, value) => {
+  vi.stubEnv("PORT", "3001");
+  vi.stubEnv(key, value);
+  await expect(import("./env.js")).rejects.toThrow(key);
+});
