@@ -247,3 +247,20 @@ it("validates every documented status and sent header against the committed Open
   );
   expect(checkedStatuses).toEqual(documentedStatuses);
 });
+
+it("documents accepted phone spellings and rejects invalid contacts", async () => {
+  const document = documentSpec.parse(
+    JSON.parse(await readFile(new URL("../openapi/openapi.json", import.meta.url), "utf8")),
+  );
+  const validate = new Ajv2020({ strict: false }).compile(
+    document.components.schemas.WaitlistInput,
+  );
+  const input = {
+    name: "A",
+    org: "Club",
+    locale: "en",
+    consent: { accepted: true, text: "Yes", version: "1" },
+  };
+  expect(validate({ ...input, contact: "9876543210-" })).toBe(true);
+  expect(validate({ ...input, contact: "abc" })).toBe(false);
+});

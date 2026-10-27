@@ -190,7 +190,7 @@ const contact = z
   .openapi({
     minLength: 3,
     maxLength: 254,
-    pattern: `(?:${z.regexes.email.source})|(?:^\\+[1-9][0-9]{7,14}$)|(?:^[6-9](?:[ -]*[0-9]){9}$)`,
+    pattern: `(?:${z.regexes.email.source})|(?:^\\+[1-9][0-9]{7,14}$)|(?:^(?=.{10,19}$)[6-9](?:[ -]*[0-9]){9}[ -]*$)`,
     description:
       "Email address, international phone in + digits form, or Indian 10-digit mobile number with optional spaces or hyphens.",
   })
