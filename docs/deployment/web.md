@@ -75,6 +75,8 @@ Scope rules:
 - Any future server-only secret uses Production scope only, has no
   `NEXT_PUBLIC_` prefix, and stays out of preview builds. There is no use for a
   production secret in this app today.
+- The web app does not read `NEXT_PUBLIC_API_URL` yet, but setting it now ensures
+  future API routes have it inlined at build time.
 - `.env` files are local only and gitignored. `vercel env pull` is convenient
   for local development but must be pulled from the Development environment.
 
