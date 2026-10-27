@@ -82,6 +82,14 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **What we use it for:** A money type can prevent currency and rounding mistakes. Yen currently models paise for a single currency rather than carrying currency in each amount.
 - **Where in this repo:** packages/shared/src; apps/api/README.md
 
+<a id="tigerbeetle-account"></a>
+### Account
+
+- **Source:** TigerBeetle; TigerBeetle documentation, undated (accessed 2026).
+- **URL:** https://docs.tigerbeetle.com/reference/account/
+- **What we use it for:** TigerBeetle guarantees equal sums of posted debits and credits. Yen plans a Konto ledger; this is a reference for its invariants, not evidence those guarantees have shipped.
+- **Where in this repo:** YEN-18
+
 ## Idempotency and retries
 
 <a id="stripe-idempotency"></a>
@@ -98,6 +106,14 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Source:** Amazon Web Services; AWS Builders’ Library, undated (accessed 2026).
 - **URL:** https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/
 - **What we use it for:** Timeouts, bounded retries and jitter limit retry amplification and synchronized bursts. This is guidance for clients and future integrations, not a claim that the API implements retry logic.
+- **Where in this repo:** apps/api/README.md
+
+<a id="ietf-idempotency"></a>
+### The Idempotency-Key HTTP Header Field
+
+- **Source:** Jayadeba Jena, Sanjay Dalal and Dmitrii Tishkin; IETF Internet-Draft 08, 2026 (work in progress).
+- **URL:** https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-idempotency-key-header-08
+- **What we use it for:** The draft describes fingerprints, retries and conflicts for concurrent requests. Its structured-header string syntax differs from Yen’s current unquoted restricted header values; Yen does not claim conformance.
 - **Where in this repo:** apps/api/README.md
 
 ## Rate limiting and load shedding
@@ -300,6 +316,8 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **What we use it for:** Different provisions commence on different dates; assess the current commencement and rules when making compliance decisions.
 - **Where in this repo:** packages/db/README.md
 
+## Supply chain and CI
+
 <a id="slsa"></a>
 ### SLSA specification
 
@@ -307,8 +325,6 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **URL:** https://slsa.dev/spec/v1.2/
 - **What we use it for:** SLSA defines security levels and provenance for supply chains. Yen’s pinned actions do not by themselves establish a SLSA level.
 - **Where in this repo:** .github/workflows/ci.yml
-
-## Supply chain and CI
 
 <a id="github-actions"></a>
 ### Secure use reference
