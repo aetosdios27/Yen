@@ -27,7 +27,7 @@ No threat in this model is fully mitigated today. Most money paths have no code.
 | E2  | Replayed request or approval action                   | R, T   | medium   | Only HTTP-level idempotency exists, not domain-level                                                 | partial |
 | E3  | Treasurer approves own request                        | E      | high     | Memberships allow several roles, and no rule separates them                                          | none    |
 | E4  | Evidence swapped after approval                       | T      | high     | The event carries a hash field, but nothing stores or checks the bytes                               | none    |
-| E5  | Objection suppressed or resolved silently             | R, D   | medium   | Objection events exist without a resolver identity, and no window is built                           | none    |
+| E5  | Objection suppressed or resolved silently             | R, D   | medium   | The envelope actor names who resolves, but nothing checks who may, and no window is built            | none    |
 | P1  | Payout without an approved request                    | S, E   | high     | `expense.paid` links to no approval, and no payout code exists                                       | none    |
 | P2  | Payout amount or payee differs from approval          | T      | high     | `expense.paid` carries neither amount nor payee                                                      | none    |
 | P3  | Duplicate or hidden payout                            | R, T   | medium   | No idempotency covers bank calls, and reversal is only a planned event                               | none    |
@@ -36,7 +36,7 @@ No threat in this model is fully mitigated today. Most money paths have no code.
 | R3  | Backdated event                                       | T, R   | medium   | Monotonic time is checked, and any monotonic time passes                                             | partial |
 | R4  | Unapproved debit matched to an approved request       | S, T   | high     | No reconciliation exists, and `packages/ledger` is empty                                             | none    |
 | V1  | Split view: different roots shown to different people | T, R   | high     | The registry rejects overwrites, but no monitor or consistency proof exists                          | partial |
-| V2  | Publisher key compromise                              | S, E   | high     | One key, with no rotation, timelock, or multisig                                                     | partial |
+| V2  | Publisher key compromise                              | S, E   | high     | One key with a two-step transfer, but no timelock, multisig, or key policy                           | partial |
 | V3  | PII or sensitive linkage on chain                     | I      | high     | Payloads are strict, and leaves are salted, but disclosed proofs and public roots still leak linkage | partial |
 | V4  | Verify page shows an unqualified "verified" badge     | T      | medium   | The rule is written, but no verify page exists                                                       | planned |
 | X1  | Phone or waitlist enumeration                         | I      | medium   | A uniqueness constraint exists, but no lookup endpoint exists yet                                    | none    |
@@ -191,7 +191,7 @@ Stages: submit with evidence, approve by quorum, objection window, and final sta
 
 - **STRIDE.** Repudiation, denial of service.
 - **Abuse case.** A donor objects, and the objection is never recorded, or it is resolved without a visible resolver.
-- **Exists today.** None. `expense.objection_raised` and `expense.objection_resolved` are provisional payloads (`packages/eventlog/README.md`). `expense.objection_resolved` carries no resolver identity. No objection window exists in code.
+- **Exists today.** None. `expense.objection_raised` and `expense.objection_resolved` are provisional payloads (`packages/eventlog/README.md`). The envelope `actor` records who resolved an objection, but nothing checks that the actor may resolve it or ties the resolution to a credential. No objection window exists in code.
 - **Planned.** The objection window is named in the root README as part of the product flow. No Linear id is named, so it is untracked.
 - **Residual risk.** Once events are appended, a resolution is visible in the chain. Until then, nothing records who resolved it.
 
@@ -360,10 +360,10 @@ Stages: root computation, publication to the registry, publisher transfer, and c
 The v1 payloads are provisional. Under `packages/eventlog/README.md`, a payload changes only by defining v2 once v1 is released or persisted. So these decisions belong before YEN-18 writes a row.
 
 1. **Bind approvals to a credential.** The envelope `actor` names who appended an event, but not which passkey assertion authorised it. Decide whether `expense.approved` carries a reference to the assertion, and whether `expense.objection_resolved` and `discrepancy.resolved` carry a resolver reference beyond the envelope actor. This closes part of E1 and E5.
-2. **Record what was paid.** Add `amount_paise` and a payee reference, or the hash of the approved event, to `expense.paid`. This closes P2.
+2. **Record what was paid.** Require `expense.paid` to record the actual amount and payee, or link it to a checked bank record containing both. Compare those details with the approved amount and payee. An approved-event hash can identify the approval, but cannot replace the actual payment details. This closes P2.
 3. **Separate submitter from approver.** Decide whether a treasurer may approve. Then enforce the rule in the approval path (YEN-26). This closes E3 and part of X4.
 4. **Bind evidence before approval.** Require the evidence hash to be recorded before approval. Store the bytes content-addressed, and verify the hash on every read. This closes E4. The product must decide how bill replacement works.
-5. **Choose a publisher key policy.** Decide between a single key, a multisig, and a timelock. The current design has none of these. This is a product and operations decision (V2).
+5. **Choose a publisher key policy.** The registry has one publisher and a two-step transfer (`proposePublisher`, then `acceptPublisher`). It has no delayed transfer, shared control, or written key-management policy. Decide whether to add a multisig or a timelock, and write the policy. This is a product and operations decision (V2).
 6. **Name the monitors.** Decide who compares roots across clients, and how they do it. Without this, V1 and X5 stay partial.
 7. **Make rate limits and idempotency shared before scale.** The Postgres idempotency adapter is YEN-24. The shared rate-limit store has no id yet (X2, D2).
 8. **Check the identifiers.** Decide whether `bank_transaction_id` is personal data or can be linked to a person (V3).
