@@ -1,4 +1,10 @@
-import { commitHoldInTx, hold, rollbackHoldInTx, transferInTx } from "@konto-ledger/core";
+import {
+  commitHoldInTx,
+  hold,
+  KontoDuplicateTransactionError,
+  rollbackHoldInTx,
+  transferInTx,
+} from "@konto-ledger/core";
 import type { KontoQueryExecutor, KontoTransactionExecutor } from "@konto-ledger/types";
 import { uuidv7 } from "@yen/db";
 import type { Event, PseudonymId } from "@yen/eventlog";
@@ -60,22 +66,25 @@ export async function recordDonation(
     input.idempotencyKey ?? (input.reference ? `donation:${input.reference}` : undefined);
 
   if (idempotencyKey) {
-    const existing = await tx<{ id: string }[]>`
-      SELECT id FROM konto_journals
+    const existing = await tx<{ id: string; metadata: { donationId?: string } | null }[]>`
+      SELECT id, metadata FROM konto_journals
       WHERE account_id = ${accounts.bankId} AND idempotency_key = ${idempotencyKey}
       LIMIT 1
     `;
     if (existing[0]) {
+      const origDonationId = existing[0].metadata?.donationId ?? input.donationId;
       const events = await getFundEvents(tx, input.fundId);
       const verified = events.find(
         (e) =>
           e.type === "donation.verified" &&
-          (e.payload as { donation_id: string }).donation_id === donationId,
+          (!origDonationId ||
+            (e.payload as { donation_id: string }).donation_id === origDonationId),
       );
       const pledge = events.find(
         (e) =>
           e.type === "donation.pledged" &&
-          (e.payload as { donation_id: string }).donation_id === donationId,
+          (!origDonationId ||
+            (e.payload as { donation_id: string }).donation_id === origDonationId),
       );
       if (verified && pledge) {
         return {
@@ -88,20 +97,57 @@ export async function recordDonation(
     }
   }
 
-  const { journalId } = await transferInTx(tx, {
-    accountId: accounts.bankId,
-    idempotencyKey,
-    entries: [
-      { accountId: accounts.bankId, amount: amountBig },
-      { accountId: accounts.donationsId, amount: -amountBig },
-    ],
-    metadata: {
-      fundId: input.fundId,
-      reference: input.reference ?? null,
-      donorId: input.donorId ?? null,
-      donationId,
-    },
-  });
+  let journalId: string;
+  try {
+    const res = await transferInTx(tx, {
+      accountId: accounts.bankId,
+      idempotencyKey,
+      entries: [
+        { accountId: accounts.bankId, amount: amountBig },
+        { accountId: accounts.donationsId, amount: -amountBig },
+      ],
+      metadata: {
+        fundId: input.fundId,
+        reference: input.reference ?? null,
+        donorId: input.donorId ?? null,
+        donationId,
+      },
+    });
+    journalId = res.journalId;
+  } catch (err) {
+    if (err instanceof KontoDuplicateTransactionError && idempotencyKey) {
+      const existing = await tx<{ id: string; metadata: { donationId?: string } | null }[]>`
+        SELECT id, metadata FROM konto_journals
+        WHERE account_id = ${accounts.bankId} AND idempotency_key = ${idempotencyKey}
+        LIMIT 1
+      `;
+      if (existing[0]) {
+        const origDonationId = existing[0].metadata?.donationId ?? input.donationId;
+        const events = await getFundEvents(tx, input.fundId);
+        const verified = events.find(
+          (e) =>
+            e.type === "donation.verified" &&
+            (!origDonationId ||
+              (e.payload as { donation_id: string }).donation_id === origDonationId),
+        );
+        const pledge = events.find(
+          (e) =>
+            e.type === "donation.pledged" &&
+            (!origDonationId ||
+              (e.payload as { donation_id: string }).donation_id === origDonationId),
+        );
+        if (verified && pledge) {
+          return {
+            journalId: existing[0].id,
+            pledgeEvent: pledge,
+            verifiedEvent: verified,
+            duplicate: true,
+          };
+        }
+      }
+    }
+    throw err;
+  }
 
   const time1 = input.occurredAt ?? nowUtcIso();
   const pledgeEvent = await appendFundEventInTx(

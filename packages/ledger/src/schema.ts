@@ -127,6 +127,28 @@ CREATE TABLE IF NOT EXISTS konto_balance_snapshots (
 
 CREATE INDEX IF NOT EXISTS idx_balance_snapshots_account ON konto_balance_snapshots(account_id, entry_sequence DESC);
 
+CREATE OR REPLACE FUNCTION take_snapshot(p_account_id UUID) RETURNS UUID AS $$
+DECLARE
+  v_balance BIGINT;
+  v_entry_sequence BIGINT;
+  v_snapshot_id UUID;
+BEGIN
+  PERFORM 1 FROM konto_accounts WHERE id = p_account_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Konto: account not found: %', p_account_id;
+  END IF;
+
+  SELECT COALESCE(SUM(amount), 0), COALESCE(MAX(entry_sequence), 0)
+    INTO v_balance, v_entry_sequence
+    FROM konto_entries WHERE account_id = p_account_id;
+
+  INSERT INTO konto_balance_snapshots (account_id, balance, entry_sequence)
+    VALUES (p_account_id, v_balance, v_entry_sequence)
+    RETURNING id INTO v_snapshot_id;
+  RETURN v_snapshot_id;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE TABLE IF NOT EXISTS konto_staged_intents (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   intent_type     TEXT NOT NULL CHECK (intent_type IN ('TRANSFER', 'COMMIT_HOLD', 'ROLLBACK_HOLD')),
@@ -137,6 +159,9 @@ CREATE TABLE IF NOT EXISTS konto_staged_intents (
   executed_at     TIMESTAMPTZ,
   expires_at      TIMESTAMPTZ
 );
+
+CREATE INDEX IF NOT EXISTS idx_staged_intents_status
+  ON konto_staged_intents (status) WHERE status = 'PENDING';
 
 CREATE TABLE IF NOT EXISTS fund_events (
   fund_id UUID NOT NULL,
