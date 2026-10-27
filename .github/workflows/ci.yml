@@ -78,6 +78,9 @@ jobs:
             pnpm turbo run typecheck test build
           fi
 
+      - name: Accessibility (axe, zero violations)
+        run: pnpm --filter @yen/web test:a11y
+
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest
