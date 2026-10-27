@@ -126,7 +126,7 @@ describePostgres("Worker Process Crash and Exact-Once Retry", (adminUrl) => {
         migrate: false,
         queues: {
           "crash-resilient-queue": {
-            teamConcurrency: 1,
+            localConcurrency: 1,
             batchSize: 1,
             retryLimit: 1,
             expireInSeconds: 10,

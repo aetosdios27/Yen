@@ -1,7 +1,7 @@
 export type QueueName = "notifications" | "reconciliation" | "blockchain-anchoring" | (string & {});
 
 export interface QueuePolicy {
-  teamConcurrency?: number;
+  localConcurrency?: number;
   batchSize?: number;
   retryLimit?: number;
   retryDelay?: number;

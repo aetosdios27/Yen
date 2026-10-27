@@ -1,5 +1,5 @@
 import { createSql, type Sql } from "@yen/db";
-import { PgBoss } from "pg-boss";
+import { PgBoss, type Queue, type WorkOptions } from "pg-boss";
 import { DEFAULT_QUEUES, DEFAULT_SCHEMA } from "./config.js";
 import type { DeadLetterJob, Job, JobHandler, QueuePolicy, WorkerRuntimeOptions } from "./types.js";
 
@@ -25,7 +25,7 @@ export class WorkerRuntime {
   private readonly options: WorkerRuntimeOptions;
   private readonly registrations = new Map<string, HandlerRegistration>();
   private isStarted = false;
-  private isStopping = false;
+  private stopPromise?: Promise<void>;
   private signalCleanup?: (() => void) | undefined;
 
   constructor(options: WorkerRuntimeOptions) {
@@ -55,7 +55,7 @@ export class WorkerRuntime {
     }
     const defaultPolicy = this.options.queues?.[queueName] ??
       DEFAULT_QUEUES[queueName] ?? {
-        teamConcurrency: 5,
+        localConcurrency: 5,
         batchSize: 1,
         retryLimit: 3,
         retryDelay: 10,
@@ -88,7 +88,7 @@ export class WorkerRuntime {
           await this.boss.createQueue(policy.deadLetter);
         }
 
-        const queueOptions: Record<string, unknown> = {};
+        const queueOptions: Omit<Queue, "name"> = {};
         if (policy.retryLimit !== undefined) queueOptions.retryLimit = policy.retryLimit;
         if (policy.retryDelay !== undefined) queueOptions.retryDelay = policy.retryDelay;
         if (policy.retryBackoff !== undefined) queueOptions.retryBackoff = policy.retryBackoff;
@@ -96,34 +96,26 @@ export class WorkerRuntime {
           queueOptions.expireInSeconds = policy.expireInSeconds;
         if (policy.deadLetter !== undefined) queueOptions.deadLetter = policy.deadLetter;
 
-        await this.boss.createQueue(
-          queueName,
-          queueOptions as Parameters<typeof this.boss.createQueue>[1],
-        );
+        await this.boss.createQueue(queueName, queueOptions);
 
-        const batchSize = policy.batchSize ?? 1;
-        const teamConcurrency = policy.teamConcurrency ?? 5;
+        const workOptions: WorkOptions = {
+          batchSize: policy.batchSize ?? 1,
+          localConcurrency: policy.localConcurrency ?? 5,
+          pollingIntervalSeconds: 0.5,
+        };
 
-        await this.boss.work(
-          queueName,
-          {
-            batchSize,
-            teamConcurrency,
-            pollingIntervalSeconds: 0.5,
-          },
-          async (jobs) => {
-            for (const rawJob of jobs) {
-              const job: Job<unknown> = {
-                id: rawJob.id,
-                name: rawJob.name,
-                data: rawJob.data,
-                retryCount: rawJob.retryCount,
-                expireInSeconds: rawJob.expireInSeconds,
-              };
-              await handler(job);
-            }
-          },
-        );
+        await this.boss.work(queueName, workOptions, async (jobs) => {
+          for (const rawJob of jobs) {
+            const job: Job<unknown> = {
+              id: rawJob.id,
+              name: rawJob.name,
+              data: rawJob.data,
+              retryCount: rawJob.retryCount,
+              expireInSeconds: rawJob.expireInSeconds,
+            };
+            await handler(job);
+          }
+        });
       }
 
       this.setupSignalHandlers();
@@ -135,10 +127,12 @@ export class WorkerRuntime {
     }
   }
 
-  public async stop(): Promise<void> {
-    if (this.isStopping) return;
-    this.isStopping = true;
+  public stop(): Promise<void> {
+    this.stopPromise ??= this.shutdown();
+    return this.stopPromise;
+  }
 
+  private async shutdown(): Promise<void> {
     if (this.signalCleanup) {
       this.signalCleanup();
       this.signalCleanup = undefined;

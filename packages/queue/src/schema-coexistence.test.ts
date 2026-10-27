@@ -78,7 +78,7 @@ describePostgres("Queue and Migration Runner Schema Coexistence", (adminUrl) => 
       schema: unprovisionedSchema,
       migrate: false, // Production safety default: do not run DDL
       queues: {
-        "test-queue": { teamConcurrency: 1 },
+        "test-queue": { localConcurrency: 1 },
       },
     });
 

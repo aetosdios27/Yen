@@ -1,17 +1,14 @@
+import { parseDatabaseUrl } from "@yen/db";
 import { WorkerRuntime } from "./worker.js";
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) {
-  process.stderr.write("DATABASE_URL is required\n");
-  process.exit(1);
-}
+const databaseUrl = parseDatabaseUrl(process.env.DATABASE_URL, "DATABASE_URL");
 
 const worker = new WorkerRuntime({
   connectionString: databaseUrl,
   schema: "pgboss",
   queues: {
     "crash-resilient-queue": {
-      teamConcurrency: 1,
+      localConcurrency: 1,
       batchSize: 1,
       retryLimit: 1,
       retryDelay: 0,

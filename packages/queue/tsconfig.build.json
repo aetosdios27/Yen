@@ -5,6 +5,7 @@
     "outDir": "dist",
     "declaration": true,
     "rewriteRelativeImportExtensions": true,
+    "resolveJsonModule": true,
     "types": ["node"]
   },
   "include": ["src"],

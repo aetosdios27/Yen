@@ -42,8 +42,5 @@ export async function transactionalEnqueue<T extends object>(
   options: EnqueueOptions = {},
 ): Promise<string | null> {
   const db = createPostgresAdapter(tx);
-  return boss.send(queueName, data, {
-    ...options,
-    db,
-  } as Parameters<typeof boss.send>[2]);
+  return boss.send(queueName, data, { ...options, db });
 }

@@ -14,6 +14,9 @@ Notifications, reconciliation, and blockchain anchoring execute as background wo
 3. **Architecture**: Implement the worker runtime as a dedicated workspace package `@yen/queue` (`packages/queue`).
 4. **Schema Coexistence**: `pg-boss` operates in the isolated `pgboss` schema, coexisting without collision with `@yen/db`'s migration runner. Production workers execute with `migrate: false` to ensure zero untracked runtime DDL.
 5. **Exit Criteria**: Escape hatches to BullMQ (high-throughput short jobs) and Temporal (long-lived multi-step sagas) are governed by machine-readable thresholds evaluated via `evaluateExitCriteria()`.
+6. **Worker Concurrency & Queue Policy Semantics**:
+   - Worker concurrency is configured per-node via `localConcurrency` (matching pg-boss v12 `WorkConcurrencyOptions.localConcurrency`), spawning distinct worker polling loops per queue.
+   - Queue execution policies (`retryLimit`, `retryDelay`, `retryBackoff`, `expireInSeconds`, `deadLetter`) are established during queue creation via `boss.createQueue(queueName, queueOptions)` so jobs automatically inherit queue policies without duplicate overrides at enqueue time.
 
 ## Comparative Analysis of Queue Engines
 

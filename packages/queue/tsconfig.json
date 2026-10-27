@@ -3,6 +3,7 @@
   "compilerOptions": {
     "noEmit": true,
     "rewriteRelativeImportExtensions": true,
+    "resolveJsonModule": true,
     "types": ["node"]
   },
   "include": ["src", "vitest.config.ts"]

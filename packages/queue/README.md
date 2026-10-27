@@ -126,6 +126,18 @@ worker.registerHandler("notifications", async (job) => {
 await worker.start();
 ```
 
+#### Queue Policy Configuration
+
+Each queue is configured using `QueuePolicy` matching pg-boss v12 semantics:
+
+- `localConcurrency`: Number of concurrent worker loops spawned per node for this queue (maps directly to pg-boss `WorkConcurrencyOptions.localConcurrency`). Defaults to 5.
+- `batchSize`: Number of jobs fetched per batch (default: 1).
+- `retryLimit`: Number of times a failed job is retried before routing to dead-letter queue or marking failed (default: 3).
+- `retryDelay`: Delay between retries in seconds (default: 10).
+- `retryBackoff`: Boolean indicating whether exponential backoff is applied across retries (default: true).
+- `expireInSeconds`: Maximum active execution time in seconds before a job is considered expired (default: 60).
+- `deadLetter`: Name of the dead-letter queue where payloads are sent when retries are exhausted.
+
 ### Evaluating Exit Criteria
 
 ```ts
