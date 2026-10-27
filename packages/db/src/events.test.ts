@@ -2,7 +2,9 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  canonicalize,
   chainHead,
+  computeEventHash,
   type Event,
   genesisHash,
   hashHexSchema,
@@ -10,7 +12,7 @@ import {
 } from "@yen/eventlog";
 import { type FundId, fundIdSchema, orgIdSchema, userIdSchema } from "@yen/shared";
 import { beforeAll, describe, expect, it } from "vitest";
-import { createSql, type Sql } from "./client.js";
+import { createSql, type Sql, type SqlClient } from "./client.js";
 import { appendEvent, checkStoredChainStructure, verifyStoredChain } from "./events.js";
 import { migrate } from "./migrate.js";
 import { databaseSuite } from "./test/database.js";
@@ -351,6 +353,164 @@ databaseSuite("fund_events persistence layer", (sql, url) => {
           payload: { visibility: "public" },
         }),
       ).rejects.toThrow(/Event time moved backwards/);
+    });
+  });
+
+  describe("each insert-trigger guard rejects a row that is otherwise fully valid", () => {
+    // These rows carry a correct canonical envelope and a correct hash, so the only thing
+    // wrong with each is the one field under test. A guard that is removed from the trigger
+    // makes the matching test fail instead of being masked by the hash check.
+    type ForgedFields = {
+      readonly fundId: FundId;
+      readonly seq: number;
+      readonly prevHash: string;
+      readonly occurredAt: string;
+    };
+    const actor = pseudonymIdSchema.parse(`psn_${uuidv7()}`);
+
+    async function insertForged(client: SqlClient, fields: ForgedFields): Promise<string> {
+      const payload = { visibility: "public" } as const;
+      const unsigned = {
+        fund_id: fields.fundId,
+        seq: fields.seq,
+        type: "fund.visibility_changed",
+        version: 1,
+        actor,
+        occurred_at: fields.occurredAt,
+        payload,
+        prev_hash: hashHexSchema.parse(fields.prevHash),
+      } as const;
+      const hash = await computeEventHash(unsigned);
+      await client`
+        INSERT INTO fund_events (
+          fund_id, seq, type, version, actor, occurred_at, payload, prev_hash, hash, canonical_envelope
+        ) VALUES (
+          ${fields.fundId}, ${fields.seq}, ${unsigned.type}, 1, ${actor}, ${fields.occurredAt},
+          ${client.json(payload)}, ${fields.prevHash}, ${hash}, ${canonicalize(unsigned)}
+        )
+      `;
+      return hash;
+    }
+
+    async function fundWithOneEvent(): Promise<{ fundId: FundId; head: Event }> {
+      const fundId = await createTestFund(sql);
+      const head = await appendEvent(sql, {
+        fundId,
+        type: "fund.created",
+        version: 1,
+        actor,
+        occurredAt: "2026-01-01T00:00:00.000Z",
+        payload: { org_id: orgIdSchema.parse(uuidv7()), visibility: "private" },
+      });
+      return { fundId, head };
+    }
+
+    it("rejects a seq gap on a later event", async () => {
+      const { fundId, head } = await fundWithOneEvent();
+      await expect(
+        insertForged(sql, {
+          fundId,
+          seq: head.seq + 2,
+          prevHash: head.hash,
+          occurredAt: "2026-01-01T00:00:01.000Z",
+        }),
+      ).rejects.toThrow(/Event seq gap/);
+    });
+
+    it("rejects a prev_hash that does not match the previous event", async () => {
+      const { fundId, head } = await fundWithOneEvent();
+      await expect(
+        insertForged(sql, {
+          fundId,
+          seq: head.seq + 1,
+          prevHash: "f".repeat(64),
+          occurredAt: "2026-01-01T00:00:01.000Z",
+        }),
+      ).rejects.toThrow(/Event prev_hash mismatch/);
+    });
+
+    it("rejects an event dated before its predecessor", async () => {
+      const { fundId, head } = await fundWithOneEvent();
+      await expect(
+        insertForged(sql, {
+          fundId,
+          seq: head.seq + 1,
+          prevHash: head.hash,
+          occurredAt: "2025-12-31T23:59:59.000Z",
+        }),
+      ).rejects.toThrow(/occurred_at moved backwards/);
+    });
+
+    it("accepts the same row once the one wrong field is corrected", async () => {
+      const { fundId, head } = await fundWithOneEvent();
+      await expect(
+        insertForged(sql, {
+          fundId,
+          seq: head.seq + 1,
+          prevHash: head.hash,
+          occurredAt: "2026-01-01T00:00:01.000Z",
+        }),
+      ).resolves.toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it("makes a racing insert wait for the per-fund lock instead of failing on a stale head", async () => {
+      const { fundId, head } = await fundWithOneEvent();
+      const secondAt = "2026-01-01T00:00:01.000Z";
+      const second = await computeEventHash({
+        fund_id: fundId,
+        seq: head.seq + 1,
+        type: "fund.visibility_changed",
+        version: 1,
+        actor,
+        occurred_at: secondAt,
+        payload: { visibility: "public" },
+        prev_hash: head.hash,
+      });
+
+      let firstInserted!: () => void;
+      const firstDone = new Promise<void>((resolve) => {
+        firstInserted = resolve;
+      });
+      let commitFirst!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        commitFirst = resolve;
+      });
+      const first = sql.begin(async (tx) => {
+        await insertForged(tx, {
+          fundId,
+          seq: head.seq + 1,
+          prevHash: head.hash,
+          occurredAt: secondAt,
+        });
+        firstInserted();
+        await gate;
+      });
+      await firstDone;
+
+      // The second insert targets seq + 2 and links to the first, uncommitted, row.
+      const racing = sql.begin((tx) =>
+        insertForged(tx, {
+          fundId,
+          seq: head.seq + 2,
+          prevHash: second,
+          occurredAt: "2026-01-01T00:00:02.000Z",
+        }),
+      );
+
+      let waiting = false;
+      for (let attempt = 0; attempt < 50 && !waiting; attempt += 1) {
+        const rows = await sql`
+          SELECT 1 FROM pg_stat_activity
+          WHERE wait_event_type = 'Lock' AND wait_event = 'advisory'
+        `;
+        waiting = rows.length > 0;
+        if (!waiting) await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      expect(waiting).toBe(true);
+
+      commitFirst();
+      await first;
+      await expect(racing).resolves.toMatch(/^[0-9a-f]{64}$/);
     });
   });
 
