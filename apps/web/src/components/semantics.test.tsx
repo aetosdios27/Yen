@@ -75,15 +75,32 @@ it("announces a toast politely and keeps its dismiss control outside the live re
 
   rerender(
     <LocaleProvider>
-      <Toast open={true} title="Saved" onClose={() => undefined} />
+      <Toast
+        open={true}
+        title="Saved"
+        description="Your changes are saved"
+        onClose={() => undefined}
+      />
     </LocaleProvider>,
   );
 
   const status = screen.getByRole("status");
+  expect(status).toBe(initialStatus);
   expect(status.getAttribute("aria-live")).toBe("polite");
   expect(status.textContent).toContain("Saved");
+  expect(status.textContent).toContain("Your changes are saved");
   expect(status.querySelector("button")).toBeNull();
   expect(screen.getByRole("button", { name: "Dismiss" })).toBeTruthy();
+
+  rerender(
+    <LocaleProvider>
+      <Toast open={false} title="Saved" onClose={() => undefined} />
+    </LocaleProvider>,
+  );
+
+  expect(screen.getByRole("status")).toBe(initialStatus);
+  expect(initialStatus.isConnected).toBe(true);
+  expect(initialStatus.textContent).toBe("");
 });
 
 it("always renders the status word alongside a decorative icon", () => {
