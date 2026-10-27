@@ -157,7 +157,7 @@ Stages: submit with evidence, approve by quorum, objection window, and final sta
 
 - **STRIDE.** Spoofing.
 - **Abuse case.** An approval is recorded without the approver's own consent. The forger uses a stolen session, a shared device, or a write to the event table.
-- **Exists today.** None. `expense.approved` has a payload of `expense_id` only (`packages/eventlog/README.md`). It records no approver. `parseEvent` checks format, not authority. The bearer security scheme in `apps/api/src/app.ts` reserves a contract and validates nothing.
+- **Exists today.** None. `expense.approved` has a payload of `expense_id` only (`packages/eventlog/README.md`). Every event envelope carries an `actor` pseudonym (`packages/eventlog/src/model.ts`), so the approver is whoever appended the event. Nothing checks that the actor holds the approver role, that the approval is signed by a passkey, or that approvals are distinct. `parseEvent` checks format, not authority. The bearer security scheme in `apps/api/src/app.ts` reserves a contract and validates nothing.
 - **Planned.** Passkeys are YEN-22. Roles and approvals are YEN-26.
 - **Residual risk.** Passkeys bind an approval to a device and a challenge. They do not prove the approver read the request. A tricked approver can approve the wrong request. A compromised device can approve if the user confirms it.
 - **Sources.** [WebAuthn Level 3](REFERENCES.md#webauthn-3) requires relying parties to use random challenges and verify returned values. [OWASP Transaction Authorization](REFERENCES.md#owasp-transaction) says users should see significant transaction data before they authorize.
@@ -359,7 +359,7 @@ Stages: root computation, publication to the registry, publisher transfer, and c
 
 The v1 payloads are provisional. Under `packages/eventlog/README.md`, a payload changes only by defining v2 once v1 is released or persisted. So these decisions belong before YEN-18 writes a row.
 
-1. **Record who approved.** Add an approver reference to `expense.approved`, and a resolver reference to `expense.objection_resolved` and `discrepancy.resolved`. This closes part of E1 and E5.
+1. **Bind approvals to a credential.** The envelope `actor` names who appended an event, but not which passkey assertion authorised it. Decide whether `expense.approved` carries a reference to the assertion, and whether `expense.objection_resolved` and `discrepancy.resolved` carry a resolver reference beyond the envelope actor. This closes part of E1 and E5.
 2. **Record what was paid.** Add `amount_paise` and a payee reference, or the hash of the approved event, to `expense.paid`. This closes P2.
 3. **Separate submitter from approver.** Decide whether a treasurer may approve. Then enforce the rule in the approval path (YEN-26). This closes E3 and part of X4.
 4. **Bind evidence before approval.** Require the evidence hash to be recorded before approval. Store the bytes content-addressed, and verify the hash on every read. This closes E4. The product must decide how bill replacement works.
