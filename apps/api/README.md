@@ -164,8 +164,7 @@ Indian 10-digit mobile numbers with optional spaces or dashes default to `+91`.
 The database stores a UUID, name, normalized contact and kind, organization,
 locale, exact trimmed consent text and version, and creation time. It does not
 store IP addresses, request bodies, or a separate acceptance flag. No waitlist
-read or export endpoint exists. Production requires `DATABASE_URL`; without it
-in other environments the waitlist is in memory and is lost on restart. Database
+read or export endpoint exists. The real server requires `DATABASE_URL` unless `YEN_ALLOW_MEMORY_STORES=true` is explicitly set outside production. With that opt-in, waitlist data is held in memory and lost on restart. `dev:mock` uses memory automatically and is disabled in production. Database
 location must be configured by the operator; the application does not enforce India.
 
 The default limit is five requests per IP per fixed hour per process, configured
