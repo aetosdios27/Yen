@@ -223,7 +223,18 @@ it("validates every documented status and sent header against the committed Open
           await check(
             path,
             method,
-            await createApp({ ...base, readiness: async () => false }).request("/ready"),
+            path === "/ready"
+              ? await createApp({ ...base, readiness: async () => false }).request("/ready")
+              : await createApp({
+                  ...base,
+                  rateLimitStore: {
+                    consume: async () => ({
+                      allowed: false,
+                      overloaded: true,
+                      retryAfterSeconds: 1,
+                    }),
+                  },
+                }).request("/v1/me"),
           );
         } else if (status === "429") {
           await check(path, method, await rateLimited.request("/v1/me"));
