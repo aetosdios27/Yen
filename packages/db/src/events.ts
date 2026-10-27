@@ -11,7 +11,7 @@ import {
   verifyChainStream,
 } from "@yen/eventlog";
 import type { FundId } from "@yen/shared";
-import { isSql, type SqlClient } from "./client.js";
+import { isSql, type SqlClient } from "./client.ts";
 
 export type StoredFundEvent = Event & {
   readonly canonical_envelope: string;
