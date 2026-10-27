@@ -19,6 +19,7 @@ export { uuidv7 } from "./uuidv7.js";
 export {
   createWaitlistEntry,
   deleteWaitlistEntryByContact,
+  normalizeWaitlistContact,
   type WaitlistEntry,
   type WaitlistRow,
   waitlistEntrySchema,

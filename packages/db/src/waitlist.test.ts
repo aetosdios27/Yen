@@ -56,3 +56,26 @@ databaseSuite("waitlist constraints and deletion", (sql) => {
     expect(await deleteWaitlistEntryByContact(sql, entry.contact)).toBe(0);
   });
 });
+
+databaseSuite("normalized deletion", (sql) => {
+  beforeAll(async () => {
+    await migrate(sql);
+  });
+  it("deletes using equivalent contact spellings", async () => {
+    const { createWaitlistEntry, deleteWaitlistEntryByContact } = await import("./waitlist.js");
+    const entry = {
+      name: "A",
+      contactKind: "email" as const,
+      contact: "test@example.com",
+      org: "Club",
+      locale: "en" as const,
+      consentText: "Yes",
+      consentVersion: "1",
+    };
+    await createWaitlistEntry(sql, entry);
+    expect(await deleteWaitlistEntryByContact(sql, "Test@Example.com")).toBe(1);
+    await createWaitlistEntry(sql, { ...entry, contactKind: "phone", contact: "+919876543210" });
+    expect(await deleteWaitlistEntryByContact(sql, "98765 43210")).toBe(1);
+    expect(await deleteWaitlistEntryByContact(sql, "invalid")).toBe(0);
+  });
+});

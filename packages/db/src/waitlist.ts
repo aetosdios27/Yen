@@ -38,7 +38,20 @@ export async function createWaitlistEntry(
   return result.length === 0 ? "duplicate" : "created";
 }
 
+export function normalizeWaitlistContact(input: string): string | null {
+  const value = input.trim();
+  if (z.email().safeParse(value).success) return value.toLowerCase();
+  if (/^\+[1-9][0-9]{7,14}$/.test(value)) return value;
+  if (/^[6-9][0-9 -]{9,18}$/.test(value)) {
+    const digits = value.replace(/[ -]/g, "");
+    if (/^[6-9][0-9]{9}$/.test(digits)) return `+91${digits}`;
+  }
+  return null;
+}
+
 export async function deleteWaitlistEntryByContact(sql: Sql, contact: string): Promise<number> {
-  const result = await sql`DELETE FROM waitlist_entries WHERE contact = ${contact}`;
+  const normalized = normalizeWaitlistContact(contact);
+  if (normalized === null) return 0;
+  const result = await sql`DELETE FROM waitlist_entries WHERE contact = ${normalized}`;
   return result.count;
 }

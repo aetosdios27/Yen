@@ -1,4 +1,5 @@
 import { OpenAPIHono, type z } from "@hono/zod-openapi";
+import { normalizeWaitlistContact } from "@yen/db";
 import { parseFundId } from "@yen/shared";
 import type { Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -121,12 +122,9 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   };
   app.openapi(waitlistRoute, async (c) => {
     const input = c.req.valid("json");
-    const isEmail = input.contact.includes("@");
-    const contact = isEmail
-      ? input.contact.toLowerCase()
-      : input.contact.startsWith("+")
-        ? input.contact
-        : `+91${input.contact.replace(/[ -]/g, "")}`;
+    const contact = normalizeWaitlistContact(input.contact);
+    if (contact === null) throw new ApiError("validation_failed");
+    const isEmail = contact.includes("@");
     await deps.waitlistStore.add({
       name: input.name,
       contactKind: isEmail ? "email" : "phone",
