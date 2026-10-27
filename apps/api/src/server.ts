@@ -1,13 +1,16 @@
 import { serve } from "@hono/node-server";
-import { getConnInfo } from "@hono/node-server/conninfo";
 import { createSql } from "@yen/db";
 import { createApp } from "./app.js";
-import { clientIp } from "./client-ip.js";
+import { createClientIpResolver } from "./client-ip.js";
 import { rateLimits } from "./config.js";
 import { createDatabaseReady } from "./database-ready.js";
 import { env } from "./env.js";
 import { useMemoryStore } from "./server-config.js";
-import { MemoryRateLimitStore } from "./stores.js";
+import {
+  MemoryRateLimitStore,
+  PostgresIdempotencyStore,
+  PostgresRateLimitStore,
+} from "./stores.js";
 import { PostgresWaitlistStore } from "./waitlist-store.js";
 
 const memory = useMemoryStore(env);
@@ -30,7 +33,17 @@ if (!(await readiness())) {
 
 serve({
   fetch: createApp({
-    ...(sql ? { waitlistStore: new PostgresWaitlistStore(sql) } : {}),
+    ...(sql
+      ? {
+          waitlistStore: new PostgresWaitlistStore(sql),
+          idempotencyStore: new PostgresIdempotencyStore(sql),
+          rateLimitStore: new PostgresRateLimitStore(sql, {
+            maxEntries: env.RATE_LIMIT_MAX_KEYS,
+          }),
+        }
+      : {
+          rateLimitStore: new MemoryRateLimitStore({ maxEntries: env.RATE_LIMIT_MAX_KEYS }),
+        }),
     waitlistLimit: {
       capacity: env.WAITLIST_RATE_LIMIT_CAPACITY,
       refillMs: env.WAITLIST_RATE_LIMIT_REFILL_MS,
@@ -38,14 +51,8 @@ serve({
     readiness,
     waitlistMinResponseMs: env.WAITLIST_MIN_RESPONSE_MS,
     waitlistBodyLimit: env.WAITLIST_BODY_LIMIT_BYTES,
-    clientIp: (context) =>
-      clientIp(
-        getConnInfo(context).remote.address ?? "unknown",
-        context.req.header("x-forwarded-for"),
-        env.TRUSTED_PROXY_HOPS,
-      ),
+    clientIp: createClientIpResolver({ trustedHops: env.TRUSTED_PROXY_HOPS }),
     rateLimits: rateLimits(env),
-    rateLimitStore: new MemoryRateLimitStore({ maxEntries: env.RATE_LIMIT_MAX_KEYS }),
   }).fetch,
   port: env.PORT,
 });

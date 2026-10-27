@@ -35,7 +35,7 @@ type Completion = {
   readonly expiresAt: number;
 };
 
-interface IdempotencyOptions {
+export interface IdempotencyOptions {
   readonly clock?: () => number;
   readonly inProgressTtlMs?: number;
   readonly replayRetentionMs?: number;
@@ -253,3 +253,10 @@ export class MemoryRateLimitStore implements RateLimitStore {
     }
   }
 }
+
+export {
+  type PostgresIdempotencyOptions,
+  PostgresIdempotencyStore,
+  type PostgresRateLimitOptions,
+  PostgresRateLimitStore,
+} from "./postgres-stores.js";
