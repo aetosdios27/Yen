@@ -8,6 +8,7 @@ const schema = z
     ...rateLimitEnv.shape,
     DATABASE_URL: z.string().optional(),
     YEN_ALLOW_MEMORY_STORES: z.enum(["true", "false"]).optional(),
+    TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
     PORT: z.coerce.number().int().min(1).max(65535),
   })
   .superRefine((value, ctx) => {

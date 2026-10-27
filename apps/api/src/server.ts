@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import { createSql } from "@yen/db";
 import { createApp } from "./app.js";
+import { clientIp } from "./client-ip.js";
 import { rateLimits } from "./config.js";
 import { env } from "./env.js";
 import { useMemoryStore } from "./server-config.js";
@@ -45,7 +46,12 @@ serve({
     readiness: databaseReady,
     waitlistMinResponseMs: env.WAITLIST_MIN_RESPONSE_MS,
     waitlistBodyLimit: env.WAITLIST_BODY_LIMIT_BYTES,
-    clientIp: (context) => getConnInfo(context).remote.address ?? "unknown",
+    clientIp: (context) =>
+      clientIp(
+        getConnInfo(context).remote.address ?? "unknown",
+        context.req.header("x-forwarded-for"),
+        env.TRUSTED_PROXY_HOPS,
+      ),
     rateLimits: rateLimits(env),
   }).fetch,
   port: env.PORT,

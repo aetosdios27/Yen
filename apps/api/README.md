@@ -176,3 +176,5 @@ multi-process or proxied deployment. Contact uniqueness provides retry safety;
 the public route does not require an idempotency key.
 
 The waitlist response floor (`WAITLIST_MIN_RESPONSE_MS`, default 75 ms) hides differences below the floor. The per-IP limit of five requests per hour makes statistical timing attacks impractical; a slow database could still exceed the floor.
+
+`TRUSTED_PROXY_HOPS` defaults to 0 and ignores forwarded headers. Set it to the number of trusted proxy hops (1–5) only when the server is reachable exclusively through those proxies; the address is selected from the right of `X-Forwarded-For`. Malformed headers fall back to the socket address. Rate limits are process-local; the shared store is tracked by YEN-55.
