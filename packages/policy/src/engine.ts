@@ -327,7 +327,7 @@ function filterValidApprovals(
   const valid: ApprovalRecord[] = [];
 
   for (const approval of approvals) {
-    if (!approval || typeof approval !== "object") continue;
+    if (!isWellFormedApproval(approval)) continue;
     const id = normalizeId(approval.approverId);
     if (!id) continue;
     if (id === requesterId) continue;

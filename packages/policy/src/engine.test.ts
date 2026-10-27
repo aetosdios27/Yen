@@ -523,6 +523,20 @@ describe("Payout states and approval records (R2)", () => {
 });
 
 describe("Approval eligibility (R4)", () => {
+  it.each([
+    { roleAtApproval: "bogus", rolesAtApproval: ["approver"] },
+    { roleAtApproval: "approver", rolesAtApproval: ["bogus"] },
+    { roleAtApproval: "approver", rolesAtApproval: "approver" },
+  ])("does not count malformed approval roles toward payout: %j", (roles) => {
+    const approvals = [
+      { approverId: approver1Id, roleAtApproval: "approver" },
+      { approverId: approver2Id, ...roles },
+    ];
+    expect(can(treasurerApprover, "expense:payout", expenseWith(approvals, {}, "approved"))).toBe(
+      false,
+    );
+  });
+
   const donorApproval = { approverId: approver1Id, roleAtApproval: "donor" as const };
   const publicApproval = { approverId: approver2Id, roleAtApproval: "public" as const };
 
