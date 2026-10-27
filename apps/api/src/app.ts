@@ -65,19 +65,21 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   }
   app.onError((error, c) => {
     const errorKind =
-      error instanceof ReadinessError
-        ? "readiness"
-        : error instanceof StoreError
-          ? "store"
-          : error instanceof ApiError && error.code === "validation_failed"
-            ? "validation"
-            : error instanceof HTTPException
-              ? error.status === 400
-                ? "validation"
-                : "unknown"
-              : error instanceof Error
-                ? "handler"
-                : "unknown";
+      error instanceof ApiError && error.code === "overloaded"
+        ? "rate_limit_store_full"
+        : error instanceof ReadinessError
+          ? "readiness"
+          : error instanceof StoreError
+            ? "store"
+            : error instanceof ApiError && error.code === "validation_failed"
+              ? "validation"
+              : error instanceof HTTPException
+                ? error.status === 400
+                  ? "validation"
+                  : "unknown"
+                : error instanceof Error
+                  ? "handler"
+                  : "unknown";
     deps.logger.log({
       event: "http_failure",
       requestId: c.get("requestId"),

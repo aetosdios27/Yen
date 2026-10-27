@@ -178,3 +178,10 @@ the public route does not require an idempotency key.
 The waitlist response floor (`WAITLIST_MIN_RESPONSE_MS`, default 75 ms) hides differences below the floor. The per-IP limit of five requests per hour makes statistical timing attacks impractical; a slow database could still exceed the floor.
 
 `TRUSTED_PROXY_HOPS` defaults to 0 and ignores forwarded headers. Set it to the number of trusted proxy hops (1–5) only when the server is reachable exclusively through those proxies; the address is selected from the right of `X-Forwarded-For`. Malformed headers fall back to the socket address. Rate limits are process-local; the shared store is tracked by YEN-55.
+
+The `RATE_LIMIT_MAX_KEYS` setting (1,000–1,000,000, default 100,000) is a deliberate
+global admission limit that protects process memory. When active fixed windows fill
+the store, new keys receive 503 with `Retry-After`; existing keys remain enforced.
+Each key retains its string and a bucket with three numbers and a boolean, plus Map
+and JavaScript object overhead; memory varies with key length and runtime (budget
+roughly hundreds of bytes per key). A shared store is the long-term fix (YEN-55).

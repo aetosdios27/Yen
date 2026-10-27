@@ -7,6 +7,7 @@ import { rateLimits } from "./config.js";
 import { databaseReady } from "./database-ready.js";
 import { env } from "./env.js";
 import { useMemoryStore } from "./server-config.js";
+import { MemoryRateLimitStore } from "./stores.js";
 import { PostgresWaitlistStore } from "./waitlist-store.js";
 
 const memory = useMemoryStore(env);
@@ -38,6 +39,7 @@ serve({
         env.TRUSTED_PROXY_HOPS,
       ),
     rateLimits: rateLimits(env),
+    rateLimitStore: new MemoryRateLimitStore({ maxEntries: env.RATE_LIMIT_MAX_KEYS }),
   }).fetch,
   port: env.PORT,
 });

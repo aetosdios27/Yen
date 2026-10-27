@@ -200,3 +200,31 @@ it("limits requests with varying untrusted forwarded prefixes together", async (
     expect(response.status).toBe(i < 5 ? 201 : 429);
   }
 });
+
+it("reports store saturation separately from visitor limits and admits after expiry", async () => {
+  const { MemoryRateLimitStore } = await import("./stores.js");
+  let now = 0;
+  let ip = "first";
+  const logs: string[] = [];
+  const app = createApp({
+    clock: () => now,
+    sleep: async () => {},
+    clientIp: () => ip,
+    logger: { log: (entry) => logs.push(serializeRequestLog(entry)) },
+    rateLimitStore: new MemoryRateLimitStore({ maxEntries: 1 }),
+    waitlistLimit: { capacity: 1, refillMs: 10000 },
+  });
+  expect((await app.request("/v1/waitlist", post(input))).status).toBe(201);
+  ip = "other";
+  const full = await app.request("/v1/waitlist", post(input));
+  expect(full.status).toBe(503);
+  expect(full.headers.get("retry-after")).toBe("10");
+  expect(await full.json()).toMatchObject({ error: { code: "overloaded" } });
+  expect(logs.join("\n")).toContain("rate_limit_store_full");
+  expect(logs.join("\n")).not.toContain("other");
+  ip = "first";
+  expect((await app.request("/v1/waitlist", post(input))).status).toBe(429);
+  now = 10000;
+  ip = "other";
+  expect((await app.request("/v1/waitlist", post(input))).status).toBe(201);
+});

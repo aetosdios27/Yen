@@ -131,6 +131,7 @@ export interface components {
           | "conflict"
           | "idempotency_conflict"
           | "rate_limited"
+          | "overloaded"
           | "payload_too_large"
           | "internal";
         message: string;
@@ -250,6 +251,19 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
           [name: string]: unknown;
         };
         content: {
@@ -440,6 +454,19 @@ export interface operations {
           "application/json": components["schemas"]["ErrorEnvelope"];
         };
       };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
     };
   };
   createFund: {
@@ -561,6 +588,19 @@ export interface operations {
           "application/json": components["schemas"]["ErrorEnvelope"];
         };
       };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
     };
   };
   getFund: {
@@ -665,6 +705,19 @@ export interface operations {
           "application/json": components["schemas"]["ErrorEnvelope"];
         };
       };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
     };
   };
   getOpenApi: {
@@ -707,6 +760,19 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
           [name: string]: unknown;
         };
         content: {

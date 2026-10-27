@@ -41,6 +41,10 @@ const limitedResponse = {
     "retry-after": { ...retryHeader["retry-after"], required: true },
   },
 };
+const overloadedResponse = {
+  ...jsonResponse(errorEnvelope, "Rate limit store at capacity"),
+  headers: { ...responseHeaders, "retry-after": { ...retryHeader["retry-after"], required: true } },
+};
 const protectedErrors = {
   400: jsonResponse(errorEnvelope, "Validation failed; details contain field paths"),
   401: jsonResponse(errorEnvelope, "Authentication required"),
@@ -52,6 +56,7 @@ const protectedErrors = {
   ),
   429: limitedResponse,
   500: internalResponse,
+  503: overloadedResponse,
 };
 const security = [{ bearerAuth: [] }];
 
@@ -123,6 +128,7 @@ export const createFundRoute = createRoute({
     },
     429: protectedErrors[429],
     500: protectedErrors[500],
+    503: protectedErrors[503],
   },
 });
 export const getFundRoute = createRoute({
@@ -152,6 +158,7 @@ export const openapiRoute = createRoute({
   responses: {
     200: jsonResponse(openapiSchema, "OpenAPI 3.1 contract"),
     429: limitedResponse,
+    503: overloadedResponse,
     500: internalResponse,
   },
 });
@@ -224,6 +231,7 @@ export const waitlistRoute = createRoute({
     400: protectedErrors[400],
     413: jsonResponse(errorEnvelope, "Request body too large"),
     429: limitedResponse,
+    503: overloadedResponse,
     500: internalResponse,
   },
 });

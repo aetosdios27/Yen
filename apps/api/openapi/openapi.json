@@ -30,6 +30,7 @@
                   "conflict",
                   "idempotency_conflict",
                   "rate_limited",
+                  "overloaded",
                   "payload_too_large",
                   "internal"
                 ]
@@ -200,6 +201,24 @@
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
                 "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
                 "required": true
               }
             },
@@ -417,6 +436,24 @@
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
             }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
           }
         }
       }
@@ -581,6 +618,24 @@
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
             }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
           }
         }
       }
@@ -710,6 +765,24 @@
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
             }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
           }
         }
       }
@@ -755,6 +828,24 @@
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
                 "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
                 "required": true
               }
             },

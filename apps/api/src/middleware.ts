@@ -90,7 +90,7 @@ export function rateLimit(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
         c.header(
           "retry-after",
           String(
-            isWaitlist
+            isWaitlist && !result.overloaded
               ? Math.max(
                   1,
                   Math.ceil(
@@ -100,7 +100,7 @@ export function rateLimit(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
               : result.retryAfterSeconds,
           ),
         );
-        throw new ApiError("rate_limited");
+        throw new ApiError(result.overloaded ? "overloaded" : "rate_limited");
       }
     }
     await next();

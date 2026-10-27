@@ -17,6 +17,7 @@ it("exports typed env and parses it only once per startup", async () => {
   expect(env).toMatchObject({
     NODE_ENV: "test",
     PORT: 3001,
+    RATE_LIMIT_MAX_KEYS: 100000,
     RATE_LIMIT_IP_CAPACITY: 120,
     RATE_LIMIT_PRINCIPAL_CAPACITY: 60,
     RATE_LIMIT_REFILL_MS: 60000,
@@ -95,3 +96,12 @@ it.each([
   vi.stubEnv(key, value);
   await expect(import("./env.js")).rejects.toThrow(key);
 });
+
+it.each(["999", "1000001", "1.5", "invalid"])(
+  "rejects invalid rate limit key cap %s",
+  async (value) => {
+    vi.stubEnv("PORT", "3001");
+    vi.stubEnv("RATE_LIMIT_MAX_KEYS", value);
+    await expect(import("./env.js")).rejects.toThrow("RATE_LIMIT_MAX_KEYS");
+  },
+);

@@ -138,7 +138,8 @@ export interface RateLimitStore {
     limit: RateLimit,
     now: number,
   ): Promise<
-    { readonly allowed: true } | { readonly allowed: false; readonly retryAfterSeconds: number }
+    | { readonly allowed: true }
+    | { readonly allowed: false; readonly retryAfterSeconds: number; readonly overloaded?: true }
   >;
 }
 
@@ -154,7 +155,7 @@ export class MemoryRateLimitStore implements RateLimitStore {
   private readonly maxEntries: number;
 
   constructor(options: { readonly maxEntries?: number } = {}) {
-    this.maxEntries = options.maxEntries ?? 10_000;
+    this.maxEntries = options.maxEntries ?? 100_000;
   }
 
   get entryCount(): number {
@@ -169,14 +170,15 @@ export class MemoryRateLimitStore implements RateLimitStore {
     if (!previous && this.buckets.size >= this.maxEntries) {
       const evictable = [...this.buckets].find(([, bucket]) => !bucket.fixed);
       if (evictable) this.buckets.delete(evictable[0]);
-      else
+      else {
+        let oldest = Infinity;
+        for (const bucket of this.buckets.values()) oldest = Math.min(oldest, bucket.fullAt);
         return {
           allowed: false,
-          retryAfterSeconds: Math.max(
-            1,
-            Math.ceil(((limit.expiresAt ?? now + limit.refillMs) - now) / 1000),
-          ),
+          overloaded: true,
+          retryAfterSeconds: Math.min(86400, Math.max(1, Math.ceil((oldest - now) / 1000))),
         } as const;
+      }
     }
     const tokens = previous
       ? limit.expiresAt !== undefined
