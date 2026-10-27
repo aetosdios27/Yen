@@ -1,8 +1,18 @@
-export { createSql, type Sql } from "./client.js";
+export { createSql, type Sql, type SqlClient, type TransactionSql } from "./client.js";
 export { parseDatabaseUrl } from "./env.js";
+export {
+  type AppendEventInput,
+  appendEvent,
+  checkStoredChainStructure,
+  type StoredFundEvent,
+  streamFundEvents,
+  verifyStoredChain,
+} from "./events.js";
 export { migrate } from "./migrate.js";
 export {
+  type FundEventRow,
   type FundRow,
+  fundEventRowSchema,
   fundRowSchema,
   type IdempotencyKeyRow,
   idempotencyKeyRowSchema,

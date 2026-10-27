@@ -17,9 +17,11 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "migrate": "node src/cli.ts"
+    "migrate": "node src/cli.ts",
+    "verify-chain": "node src/verify-cli.ts"
   },
   "dependencies": {
+    "@yen/eventlog": "workspace:*",
     "@yen/shared": "workspace:*",
     "postgres": "^3.4.7",
     "zod": "^4.6.7"
