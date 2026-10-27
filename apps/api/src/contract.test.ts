@@ -253,7 +253,7 @@ it("documents accepted phone spellings and rejects invalid contacts", async () =
     JSON.parse(await readFile(new URL("../openapi/openapi.json", import.meta.url), "utf8")),
   );
   const validate = new Ajv2020({ strict: false }).compile(
-    document.components.schemas.WaitlistInput,
+    z.record(z.string(), z.unknown()).parse(document.components.schemas.WaitlistInput),
   );
   const input = {
     name: "A",
