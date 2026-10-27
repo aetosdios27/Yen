@@ -46,14 +46,14 @@ Each README claim that has a row carries a `<!-- claim: CLAIM-ID -->` marker. Th
 
 ### CLAIM-04 Each event links to the hash of the event before it
 
-- **Status:** partial
+- **Status:** enforced
 - **Wording:** "Later `prev_hash` values equal the preceding event's `hash`."
 - **Where:** packages/eventlog/README.md:3
 - **Mechanism:** `packages/eventlog/src/chain.ts` `makeNextEvent`, `scanChainStructureStream`
-- **Test:** `packages/eventlog/src/eventlog.test.ts` "detects removal, reordering, duplication, and insertion"
+- **Test:** `packages/eventlog/src/eventlog.test.ts` "rejects an event whose own hash is valid but that links to the wrong predecessor"
 - **Reference:** `schneier-kelsey`
-- **Mutation:** Removed the `prev_hash` comparison in `scanChainStructureStream`. All 55 eventlog tests still passed with a 60 s test timeout.
-- **Missing:** No test fails when the `prev_hash` comparison is removed. Such a test needs an event with a correct own hash and a `prev_hash` that points elsewhere. The suite has none, so this link check is untested.
+- **Mutation:** Removed the `prev_hash` comparison in `scanChainStructureStream`. At first no test failed, which showed the link check was untested. A test was added in the same change. With the comparison removed it fails, and with it restored all 56 eventlog tests pass.
+- **Missing:** Nothing for this claim in the library. Whether stored events keep the link depends on database persistence, which CLAIM-03 tracks.
 
 ### CLAIM-05 Verifiers reject other funds and report the first break
 

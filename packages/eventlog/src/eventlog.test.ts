@@ -916,6 +916,21 @@ describe("chain verification", () => {
     });
   });
 
+  it("rejects an event whose own hash is valid but that links to the wrong predecessor", async () => {
+    const original = events[2];
+    if (original === undefined) throw new Error("Missing golden event");
+    const { hash: _hash, ...unsigned } = original;
+    const relinked = { ...unsigned, prev_hash: events[0]?.hash ?? genesisHash };
+    const forged: unknown[] = [...events];
+    forged[2] = { ...relinked, hash: await computeEventHash(relinked) };
+    expect(await verifyChain(forged, head)).toEqual({
+      ok: false,
+      index: 2,
+      seq: 3,
+      reason: "wrong prev_hash",
+    });
+  });
+
   it("rejects a raw user UUID as actor and unversioned payload additions", () => {
     const first = events[0];
     if (first === undefined) throw new Error("Missing event");
