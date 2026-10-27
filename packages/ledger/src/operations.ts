@@ -301,10 +301,9 @@ export async function settleExpense(
       id: string;
       account_id: string;
       recipient_id: string;
-      metadata: { fundId?: string; expenseId?: string } | null;
     }[]
   >`
-    SELECT id, account_id, recipient_id, metadata
+    SELECT id, account_id, recipient_id
     FROM konto_holds
     WHERE id = ${input.holdId}
     LIMIT 1
@@ -313,15 +312,18 @@ export async function settleExpense(
   if (!holdRow) {
     throw new Error(`Hold ${input.holdId} not found`);
   }
-  if (
-    holdRow.account_id !== accounts.bankId ||
-    holdRow.recipient_id !== accounts.expensesId ||
-    (holdRow.metadata?.fundId && holdRow.metadata.fundId !== input.fundId) ||
-    (holdRow.metadata?.expenseId && holdRow.metadata.expenseId !== input.expenseId)
-  ) {
-    throw new Error(
-      `Hold ${input.holdId} does not belong to fund ${input.fundId} and expense ${input.expenseId}`,
-    );
+  if (holdRow.account_id !== accounts.bankId || holdRow.recipient_id !== accounts.expensesId) {
+    throw new Error(`Hold ${input.holdId} does not belong to fund ${input.fundId}`);
+  }
+
+  const events = await getFundEvents(tx, input.fundId);
+  const expenseEvent = events.find(
+    (e) =>
+      (e.type === "expense.submitted" || e.type === "expense.approved") &&
+      (e.payload as { expense_id: string }).expense_id === input.expenseId,
+  );
+  if (!expenseEvent) {
+    throw new Error(`Expense ${input.expenseId} does not belong to fund ${input.fundId}`);
   }
 
   const bankTransactionId = input.bankTransactionId ?? uuidv7();
@@ -379,10 +381,9 @@ export async function releaseExpense(
       id: string;
       account_id: string;
       recipient_id: string;
-      metadata: { fundId?: string; expenseId?: string } | null;
     }[]
   >`
-    SELECT id, account_id, recipient_id, metadata
+    SELECT id, account_id, recipient_id
     FROM konto_holds
     WHERE id = ${input.holdId}
     LIMIT 1
@@ -391,15 +392,18 @@ export async function releaseExpense(
   if (!holdRow) {
     throw new Error(`Hold ${input.holdId} not found`);
   }
-  if (
-    holdRow.account_id !== accounts.bankId ||
-    holdRow.recipient_id !== accounts.expensesId ||
-    (holdRow.metadata?.fundId && holdRow.metadata.fundId !== input.fundId) ||
-    (holdRow.metadata?.expenseId && holdRow.metadata.expenseId !== input.expenseId)
-  ) {
-    throw new Error(
-      `Hold ${input.holdId} does not belong to fund ${input.fundId} and expense ${input.expenseId}`,
-    );
+  if (holdRow.account_id !== accounts.bankId || holdRow.recipient_id !== accounts.expensesId) {
+    throw new Error(`Hold ${input.holdId} does not belong to fund ${input.fundId}`);
+  }
+
+  const events = await getFundEvents(tx, input.fundId);
+  const expenseEvent = events.find(
+    (e) =>
+      (e.type === "expense.submitted" || e.type === "expense.approved") &&
+      (e.payload as { expense_id: string }).expense_id === input.expenseId,
+  );
+  if (!expenseEvent) {
+    throw new Error(`Expense ${input.expenseId} does not belong to fund ${input.fundId}`);
   }
 
   const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
@@ -450,10 +454,9 @@ export async function expireExpense(
       id: string;
       account_id: string;
       recipient_id: string;
-      metadata: { fundId?: string; expenseId?: string } | null;
     }[]
   >`
-    SELECT id, account_id, recipient_id, metadata
+    SELECT id, account_id, recipient_id
     FROM konto_holds
     WHERE id = ${input.holdId}
     LIMIT 1
@@ -462,15 +465,18 @@ export async function expireExpense(
   if (!holdRow) {
     throw new Error(`Hold ${input.holdId} not found`);
   }
-  if (
-    holdRow.account_id !== accounts.bankId ||
-    holdRow.recipient_id !== accounts.expensesId ||
-    (holdRow.metadata?.fundId && holdRow.metadata.fundId !== input.fundId) ||
-    (holdRow.metadata?.expenseId && holdRow.metadata.expenseId !== input.expenseId)
-  ) {
-    throw new Error(
-      `Hold ${input.holdId} does not belong to fund ${input.fundId} and expense ${input.expenseId}`,
-    );
+  if (holdRow.account_id !== accounts.bankId || holdRow.recipient_id !== accounts.expensesId) {
+    throw new Error(`Hold ${input.holdId} does not belong to fund ${input.fundId}`);
+  }
+
+  const events = await getFundEvents(tx, input.fundId);
+  const expenseEvent = events.find(
+    (e) =>
+      (e.type === "expense.submitted" || e.type === "expense.approved") &&
+      (e.payload as { expense_id: string }).expense_id === input.expenseId,
+  );
+  if (!expenseEvent) {
+    throw new Error(`Expense ${input.expenseId} does not belong to fund ${input.fundId}`);
   }
 
   const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
