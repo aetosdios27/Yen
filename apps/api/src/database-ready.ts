@@ -1,6 +1,9 @@
 import type { Sql } from "@yen/db";
 
-export function createDatabaseReady(sql: Sql, options: { readonly cacheMs?: number } = {}) {
+export function createDatabaseReady(
+  createProbeSql: () => Sql,
+  options: { readonly cacheMs?: number } = {},
+) {
   const cacheMs = options.cacheMs ?? 1000;
   let cached: { readonly result: boolean; readonly expiresAt: number } | undefined;
   let inFlight: Promise<boolean> | undefined;
@@ -11,10 +14,20 @@ export function createDatabaseReady(sql: Sql, options: { readonly cacheMs?: numb
 
     let cancel = () => {};
     let expired = false;
+    let client: Sql | undefined;
     let timer: ReturnType<typeof setTimeout>;
+    const close = () => {
+      const current = client;
+      client = undefined;
+      if (current)
+        void Promise.resolve()
+          .then(() => current.end({ timeout: 0 }))
+          .catch(() => {});
+    };
     const work = Promise.resolve()
-      .then(() =>
-        sql.begin(async (tx) => {
+      .then(() => {
+        client = createProbeSql();
+        return client.begin(async (tx) => {
           const setting = tx`SET LOCAL statement_timeout = '1900ms'`;
           cancel = () => setting.cancel();
           await setting;
@@ -22,8 +35,8 @@ export function createDatabaseReady(sql: Sql, options: { readonly cacheMs?: numb
           const query = tx`SELECT 1 FROM waitlist_entries LIMIT 0`;
           cancel = () => query.cancel();
           await query;
-        }),
-      )
+        });
+      })
       .then(
         () => true,
         () => false,
@@ -34,17 +47,17 @@ export function createDatabaseReady(sql: Sql, options: { readonly cacheMs?: numb
         void Promise.resolve()
           .then(cancel)
           .catch(() => {});
+        close();
         resolve(false);
       }, 2000);
     });
     const result = Promise.race([work, deadline]);
     inFlight = result;
     void result.then((value) => {
-      cached = { result: value, expiresAt: Date.now() + cacheMs };
-    });
-    void work.then(() => {
       clearTimeout(timer);
-      inFlight = undefined;
+      close();
+      cached = { result: value, expiresAt: Date.now() + cacheMs };
+      if (inFlight === result) inFlight = undefined;
     });
     return result;
   };

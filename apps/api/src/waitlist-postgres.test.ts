@@ -1,4 +1,4 @@
-import { migrate } from "@yen/db";
+import { createSql, migrate } from "@yen/db";
 import { beforeAll, expect, it, vi } from "vitest";
 import { databaseSuite } from "../../../packages/db/src/test/database.js";
 import { PostgresWaitlistStore } from "./waitlist-store.js";
@@ -64,12 +64,14 @@ databaseSuite("waitlist Unicode database bounds", (sql) => {
   });
 });
 
-databaseSuite("database readiness", (sql) => {
+databaseSuite("database readiness", (sql, url) => {
   it("reports a missing table and recovers after migration", async () => {
     const { createDatabaseReady } = await import("./database-ready.js");
     const { createApp } = await import("./app.js");
     const app = createApp({
-      readiness: createDatabaseReady(sql, { cacheMs: 0 }),
+      readiness: createDatabaseReady(() => createSql(url, { max: 1, connectTimeout: 2 }), {
+        cacheMs: 0,
+      }),
       logger: { log: () => undefined },
     });
     expect((await app.request("/ready")).status).toBe(503);
@@ -86,8 +88,9 @@ databaseSuite("bounded readiness", (sql, url) => {
     const { createDatabaseReady } = await import("./database-ready.js");
     const { createApp } = await import("./app.js");
     await migrate(sql);
-    const probeSql = createSql(url, { max: 1 });
-    const readiness = createDatabaseReady(probeSql, { cacheMs: 0 });
+    const readiness = createDatabaseReady(() => createSql(url, { max: 1, connectTimeout: 2 }), {
+      cacheMs: 0,
+    });
     const app = createApp({ readiness, logger: { log: () => undefined } });
     let unlock = () => {};
     let locked = () => {};
@@ -113,8 +116,13 @@ databaseSuite("bounded readiness", (sql, url) => {
       const responses = await Promise.all(requests);
       expect(responses.every((response) => response.status === 503)).toBe(true);
       expect(Date.now() - started).toBeLessThan(3000);
-      const remaining =
-        await sql`SELECT pid FROM pg_stat_activity WHERE datname = current_database() AND query LIKE 'SELECT 1 FROM waitlist_entries%' AND state = 'active'`;
+      const pid = active[0]?.pid;
+      expect(pid).toBeDefined();
+      let remaining = await sql`SELECT pid FROM pg_stat_activity WHERE pid = ${pid}`;
+      for (let i = 0; i < 20 && remaining.length > 0; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        remaining = await sql`SELECT pid FROM pg_stat_activity WHERE pid = ${pid}`;
+      }
       expect(remaining).toHaveLength(0);
       unlock();
       await lock;
@@ -122,16 +130,17 @@ databaseSuite("bounded readiness", (sql, url) => {
     } finally {
       unlock();
       await lock;
-      await probeSql.end({ timeout: 2 });
     }
   }, 10000);
 });
 
-databaseSuite("readiness cache", (sql) => {
+databaseSuite("readiness cache", (sql, url) => {
   it("caches the result for the configured interval", async () => {
     const { createDatabaseReady } = await import("./database-ready.js");
     await migrate(sql);
-    const ready = createDatabaseReady(sql, { cacheMs: 200 });
+    const ready = createDatabaseReady(() => createSql(url, { max: 1, connectTimeout: 2 }), {
+      cacheMs: 200,
+    });
     expect(await ready()).toBe(true);
     await sql`DROP TABLE waitlist_entries`;
     expect(await ready()).toBe(true);
@@ -171,14 +180,13 @@ databaseSuite("readiness failure cleanup", (sql, url) => {
       await probeSql`SELECT 1`;
       const realSetTimeout = setTimeout;
       vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-      const ready = createDatabaseReady(probeSql, { cacheMs: 0 });
+      const ready = createDatabaseReady(() => probeSql, { cacheMs: 0 });
       const result = ready();
       await new Promise((resolve) => realSetTimeout(resolve, 200));
       await vi.advanceTimersByTimeAsync(2000);
       expect(await result).toBe(false);
       expect(cancel).toHaveBeenCalledOnce();
       vi.useRealTimers();
-      await probeSql.end({ timeout: 0 });
       await new Promise((resolve) => setTimeout(resolve, 50));
       expect(escaped).toEqual([]);
     } finally {
@@ -187,17 +195,17 @@ databaseSuite("readiness failure cleanup", (sql, url) => {
       process.off("unhandledRejection", onUnhandled);
       unlock();
       await lock;
-      await probeSql.end({ timeout: 2 });
     }
   }, 10000);
 });
 
-databaseSuite("readiness transaction cleanup", (sql) => {
+databaseSuite("readiness transaction cleanup", (_sql, url) => {
   it("returns false when transaction release fails", async () => {
     const { createDatabaseReady } = await import("./database-ready.js");
-    const begin = vi.spyOn(sql, "begin").mockRejectedValueOnce(new Error("release failed"));
+    const probe = createSql(url, { max: 1 });
+    const begin = vi.spyOn(probe, "begin").mockRejectedValueOnce(new Error("release failed"));
     try {
-      await expect(createDatabaseReady(sql, { cacheMs: 0 })()).resolves.toBe(false);
+      await expect(createDatabaseReady(() => probe, { cacheMs: 0 })()).resolves.toBe(false);
     } finally {
       begin.mockRestore();
     }

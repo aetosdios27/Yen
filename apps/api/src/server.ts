@@ -16,13 +16,15 @@ if (memory)
   process.stderr.write(
     "WARNING: waitlist uses volatile in-memory storage; data will be lost on restart\n",
   );
-const probeSql = env.DATABASE_URL ? createSql(env.DATABASE_URL, { max: 1 }) : undefined;
-const readiness = probeSql
-  ? createDatabaseReady(probeSql, { cacheMs: env.READINESS_CACHE_MS })
+const databaseUrl = env.DATABASE_URL;
+const readiness = databaseUrl
+  ? createDatabaseReady(
+      () => createSql(databaseUrl, { max: 1, connectTimeout: 2, idleTimeout: 2 }),
+      { cacheMs: env.READINESS_CACHE_MS },
+    )
   : () => Promise.resolve(memory);
 if (!(await readiness())) {
   await sql?.end({ timeout: 1 });
-  await probeSql?.end({ timeout: 1 });
   throw new Error("DATABASE_URL connection failed or waitlist_entries table is unavailable");
 }
 
