@@ -4,15 +4,58 @@ import {
   computeEventHash,
   genesisHash,
 } from "../../../packages/eventlog/dist/index.js";
+import { resolveBenchmarkDatabaseUrl, startAppendHammer } from "./bench-helpers.mjs";
 
-// biome-ignore lint/suspicious/noUndeclaredEnvVars: benchmark script run manually outside turbo
-const PG_URL = process.env.DATABASE_URL || "postgres://postgres:pw@127.0.0.1:55444/postgres";
+/**
+ * This script drops and rewrites `fund_events` and upserts seed rows in the database its URL names,
+ * so it accepts only a loopback host and a `yen_test_*` database. The URL is parsed with the same
+ * validator as packages/db, and no error message includes the URL.
+ */
+function resolveDatabaseUrl() {
+  // biome-ignore lint/suspicious/noUndeclaredEnvVars: benchmark script run manually outside turbo
+  return resolveBenchmarkDatabaseUrl(process.env.YEN_TEST_DATABASE_URL);
+}
 
 // Connect with connection pool sized for concurrency tests
-const sql = postgres(PG_URL, {
+const sql = postgres(resolveDatabaseUrl(), {
   max: 32,
   idle_timeout: 30,
 });
+
+// Objects this script needs from migrations 0001 and 0003 (see README, Prerequisites).
+const PREREQUISITES = {
+  "table users (0001)": "to_regclass('users')",
+  "table orgs (0001)": "to_regclass('orgs')",
+  "table pseudonyms (0001)": "to_regclass('pseudonyms')",
+  "table funds (0001)": "to_regclass('funds')",
+  "function yen_fund_lock_key(uuid) (0003)": "to_regprocedure('yen_fund_lock_key(uuid)')",
+  "function yen_fund_events_before_insert() (0003)":
+    "to_regprocedure('yen_fund_events_before_insert()')",
+};
+
+// The 0003 trigger reads the chain head from a table named fund_events, so only one layout can
+// exist at a time. Each layout is built under that name in turn.
+const TABLE = "fund_events";
+
+const LAYOUTS = [
+  { label: "Unpart", partitions: 0, isolation: true },
+  { label: "Hash16", partitions: 16, isolation: true },
+  { label: "Hash32", partitions: 32, isolation: false },
+];
+
+const EVENT_COLUMNS = `
+  fund_id uuid NOT NULL REFERENCES funds(id),
+  seq bigint NOT NULL CHECK (seq >= 1),
+  type text NOT NULL,
+  version integer NOT NULL CHECK (version = 1),
+  actor text NOT NULL CHECK (actor ~ '^psn_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'),
+  occurred_at text NOT NULL CHECK (occurred_at ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$'),
+  payload jsonb NOT NULL,
+  prev_hash text NOT NULL CHECK (prev_hash ~ '^[0-9a-f]{64}$'),
+  hash text NOT NULL CHECK (hash ~ '^[0-9a-f]{64}$'),
+  canonical_envelope text NOT NULL,
+  PRIMARY KEY (fund_id, seq)
+`;
 
 function quantile(sorted, q) {
   const pos = (sorted.length - 1) * q;
@@ -37,8 +80,21 @@ function summarizeLatencies(latencies) {
   };
 }
 
-async function setupSchema() {
-  console.log("Setting up test schemas and tables...");
+async function checkPrerequisites() {
+  const missing = [];
+  for (const [name, probe] of Object.entries(PREREQUISITES)) {
+    const [row] = await sql.unsafe(`SELECT ${probe} IS NOT NULL AS found`);
+    if (!row.found) missing.push(name);
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing prerequisites: ${missing.join("; ")}. Apply them as described in docs/adr/YEN-58/README.md, Prerequisites.`,
+    );
+  }
+}
+
+async function setupFunds() {
+  console.log("Setting up seed users, org, pseudonym and 100 funds...");
 
   // Seed user, org, pseudonym
   const userId = "00000000-0000-7000-8000-000000000001";
@@ -61,8 +117,6 @@ async function setupSchema() {
     ON CONFLICT (pseudonym_id) DO NOTHING;
   `;
 
-  // Create 100 benchmark funds
-  console.log("Creating 100 benchmark funds...");
   for (let i = 1; i <= 100; i++) {
     const fundId = `00000000-0000-7000-8000-${i.toString().padStart(12, "0")}`;
     await sql`
@@ -79,92 +133,31 @@ async function setupSchema() {
       ON CONFLICT (id) DO NOTHING;
     `;
   }
+}
 
-  // 1. Unpartitioned table: fund_events_unpart
-  await sql`DROP TABLE IF EXISTS fund_events_unpart CASCADE;`;
-  await sql`
-    CREATE TABLE fund_events_unpart (
-      fund_id uuid NOT NULL REFERENCES funds(id),
-      seq bigint NOT NULL CHECK (seq >= 1),
-      type text NOT NULL,
-      version integer NOT NULL CHECK (version = 1),
-      actor text NOT NULL CHECK (actor ~ '^psn_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'),
-      occurred_at text NOT NULL CHECK (occurred_at ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$'),
-      payload jsonb NOT NULL,
-      prev_hash text NOT NULL CHECK (prev_hash ~ '^[0-9a-f]{64}$'),
-      hash text NOT NULL CHECK (hash ~ '^[0-9a-f]{64}$'),
-      canonical_envelope text NOT NULL,
-      PRIMARY KEY (fund_id, seq)
-    );
-  `;
-  await sql`
-    CREATE TRIGGER fund_events_unpart_before_insert
-    BEFORE INSERT ON fund_events_unpart
-    FOR EACH ROW
-    EXECUTE FUNCTION yen_fund_events_before_insert();
-  `;
-
-  // 2. Hash partitioned table (16 partitions): fund_events_hash16
-  await sql`DROP TABLE IF EXISTS fund_events_hash16 CASCADE;`;
-  await sql`
-    CREATE TABLE fund_events_hash16 (
-      fund_id uuid NOT NULL REFERENCES funds(id),
-      seq bigint NOT NULL CHECK (seq >= 1),
-      type text NOT NULL,
-      version integer NOT NULL CHECK (version = 1),
-      actor text NOT NULL CHECK (actor ~ '^psn_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'),
-      occurred_at text NOT NULL CHECK (occurred_at ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$'),
-      payload jsonb NOT NULL,
-      prev_hash text NOT NULL CHECK (prev_hash ~ '^[0-9a-f]{64}$'),
-      hash text NOT NULL CHECK (hash ~ '^[0-9a-f]{64}$'),
-      canonical_envelope text NOT NULL,
-      PRIMARY KEY (fund_id, seq)
-    ) PARTITION BY HASH (fund_id);
-  `;
-  for (let r = 0; r < 16; r++) {
-    await sql.unsafe(`
-      CREATE TABLE fund_events_hash16_p${r} PARTITION OF fund_events_hash16
-      FOR VALUES WITH (MODULUS 16, REMAINDER ${r});
-    `);
+/**
+ * Drops and rebuilds fund_events for one layout (0 partitions means unpartitioned).
+ */
+async function createLayout({ partitions }) {
+  await sql.unsafe(`DROP TABLE IF EXISTS ${TABLE} CASCADE;`);
+  if (partitions === 0) {
+    await sql.unsafe(`CREATE TABLE ${TABLE} (${EVENT_COLUMNS});`);
+  } else {
+    await sql.unsafe(`CREATE TABLE ${TABLE} (${EVENT_COLUMNS}) PARTITION BY HASH (fund_id);`);
+    for (let r = 0; r < partitions; r++) {
+      await sql.unsafe(`
+        CREATE TABLE ${TABLE}_p${r} PARTITION OF ${TABLE}
+        FOR VALUES WITH (MODULUS ${partitions}, REMAINDER ${r});
+      `);
+    }
   }
-  await sql`
-    CREATE TRIGGER fund_events_hash16_before_insert
-    BEFORE INSERT ON fund_events_hash16
+  // Created after the partitions so the row trigger is cloned to each of them.
+  await sql.unsafe(`
+    CREATE TRIGGER fund_events_before_insert
+    BEFORE INSERT ON ${TABLE}
     FOR EACH ROW
     EXECUTE FUNCTION yen_fund_events_before_insert();
-  `;
-
-  // 3. Hash partitioned table (32 partitions): fund_events_hash32
-  await sql`DROP TABLE IF EXISTS fund_events_hash32 CASCADE;`;
-  await sql`
-    CREATE TABLE fund_events_hash32 (
-      fund_id uuid NOT NULL REFERENCES funds(id),
-      seq bigint NOT NULL CHECK (seq >= 1),
-      type text NOT NULL,
-      version integer NOT NULL CHECK (version = 1),
-      actor text NOT NULL CHECK (actor ~ '^psn_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'),
-      occurred_at text NOT NULL CHECK (occurred_at ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$'),
-      payload jsonb NOT NULL,
-      prev_hash text NOT NULL CHECK (prev_hash ~ '^[0-9a-f]{64}$'),
-      hash text NOT NULL CHECK (hash ~ '^[0-9a-f]{64}$'),
-      canonical_envelope text NOT NULL,
-      PRIMARY KEY (fund_id, seq)
-    ) PARTITION BY HASH (fund_id);
-  `;
-  for (let r = 0; r < 32; r++) {
-    await sql.unsafe(`
-      CREATE TABLE fund_events_hash32_p${r} PARTITION OF fund_events_hash32
-      FOR VALUES WITH (MODULUS 32, REMAINDER ${r});
-    `);
-  }
-  await sql`
-    CREATE TRIGGER fund_events_hash32_before_insert
-    BEFORE INSERT ON fund_events_hash32
-    FOR EACH ROW
-    EXECUTE FUNCTION yen_fund_events_before_insert();
-  `;
-
-  console.log("Schema setup completed successfully.");
+  `);
 }
 
 /**
@@ -291,6 +284,8 @@ async function benchmarkAppends({
 /**
  * Benchmark Hot Fund Isolation:
  * Satures Fund A with 8 workers, while an independent probe measures Fund B.
+ * A hammer append that fails stops the run, and the function throws instead of reporting a probe
+ * result that was measured without the claimed load.
  */
 async function benchmarkHotFundIsolation(tableName) {
   console.log(`\n========================================`);
@@ -301,55 +296,49 @@ async function benchmarkHotFundIsolation(tableName) {
   const fundB = "00000000-0000-7000-8000-000000000002"; // Unrelated probe fund
   const actor = "psn_00000000-0000-7000-8000-000000000003";
 
-  let hammerActive = true;
-  let hammerCount = 0;
-
   // Background workers hammering Fund A
-  const hammerWorkers = Array.from({ length: 8 }, async () => {
-    while (hammerActive) {
-      try {
-        await appendToTable(
-          tableName,
-          fundA,
-          {
-            donation_id: "00000000-0000-7000-8000-000000000004",
-            amount_paise: 1000,
-          },
-          actor,
-        );
-        hammerCount++;
-      } catch {
-        if (!hammerActive) break;
-      }
-    }
-  });
-
-  // Let hammer start
-  await new Promise((r) => setTimeout(r, 200));
-
-  // Probe Fund B with 100 appends
-  const probeLatencies = [];
-  const probeStart = performance.now();
-  const PROBE_COUNT = 100;
-  for (let i = 0; i < PROBE_COUNT; i++) {
-    const t0 = performance.now();
-    await appendToTable(
+  const hammer = startAppendHammer(8, () =>
+    appendToTable(
       tableName,
-      fundB,
+      fundA,
       {
-        donation_id: "00000000-0000-7000-8000-000000000005",
-        amount_paise: 2000,
+        donation_id: "00000000-0000-7000-8000-000000000004",
+        amount_paise: 1000,
       },
       actor,
-    );
-    probeLatencies.push(performance.now() - t0);
-  }
-  const probeDurationMs = performance.now() - probeStart;
-  hammerActive = false;
-  await Promise.all(hammerWorkers);
+    ),
+  );
 
-  const statsB = summarizeLatencies(probeLatencies);
-  const throughputB = PROBE_COUNT / (probeDurationMs / 1000);
+  let statsB;
+  let throughputB;
+  let hammerCount;
+  try {
+    // Let hammer start
+    await new Promise((r) => setTimeout(r, 200));
+
+    // Probe Fund B with 100 appends
+    const probeLatencies = [];
+    const probeStart = performance.now();
+    const PROBE_COUNT = 100;
+    for (let i = 0; i < PROBE_COUNT; i++) {
+      const t0 = performance.now();
+      await appendToTable(
+        tableName,
+        fundB,
+        {
+          donation_id: "00000000-0000-7000-8000-000000000005",
+          amount_paise: 2000,
+        },
+        actor,
+      );
+      probeLatencies.push(performance.now() - t0);
+    }
+    const probeDurationMs = performance.now() - probeStart;
+    statsB = summarizeLatencies(probeLatencies);
+    throughputB = probeLatencies.length / (probeDurationMs / 1000);
+  } finally {
+    hammerCount = await hammer.stop();
+  }
 
   console.log(
     `Fund B Probe Results during Fund A Saturation (Hammer completed ${hammerCount} appends on Fund A):`,
@@ -465,123 +454,87 @@ async function benchmarkReadShapes(tableName) {
 }
 
 async function main() {
-  console.log("Starting Postgres Benchmark Suite for YEN-58...");
-  const serverVersion = await sql`SHOW server_version;`;
-  console.log(`PostgreSQL Server Version: ${serverVersion[0].server_version}`);
+  try {
+    console.log("Starting Postgres Benchmark Suite for YEN-58...");
+    const serverVersion = await sql`SHOW server_version;`;
+    console.log(`PostgreSQL Server Version: ${serverVersion[0].server_version}`);
 
-  await setupSchema();
+    await checkPrerequisites();
+    await setupFunds();
 
-  const results = {
-    unpartitioned: {},
-    hash16: {},
-    hash32: {},
-    isolation: {},
-    queryPlans: {},
-  };
+    const results = {};
+    const concurrencies = [1, 4, 8, 16];
+    const randomFundSelector = () => {
+      const idx = Math.floor(Math.random() * 50) + 1;
+      return `00000000-0000-7000-8000-${idx.toString().padStart(12, "0")}`;
+    };
+    const hotFundId = "00000000-0000-7000-8000-000000000001";
+    const actor = "psn_00000000-0000-7000-8000-000000000003";
 
-  // Seed baseline events for funds 1..50 (5 events each)
-  console.log("Seeding initial events across funds...");
-  for (let f = 1; f <= 50; f++) {
-    const fundId = `00000000-0000-7000-8000-${f.toString().padStart(12, "0")}`;
-    for (let s = 0; s < 5; s++) {
-      await appendToTable(
-        "fund_events_unpart",
-        fundId,
-        { donation_id: "00000000-0000-7000-8000-000000000004", amount_paise: 1000 },
-        "psn_00000000-0000-7000-8000-000000000003",
+    for (const layout of LAYOUTS) {
+      const { label } = layout;
+      console.log(`\n########################################`);
+      console.log(
+        `Layout: ${label} (${layout.partitions === 0 ? "unpartitioned" : `${layout.partitions} hash partitions`})`,
       );
-      await appendToTable(
-        "fund_events_hash16",
-        fundId,
-        { donation_id: "00000000-0000-7000-8000-000000000004", amount_paise: 1000 },
-        "psn_00000000-0000-7000-8000-000000000003",
-      );
-      await appendToTable(
-        "fund_events_hash32",
-        fundId,
-        { donation_id: "00000000-0000-7000-8000-000000000004", amount_paise: 1000 },
-        "psn_00000000-0000-7000-8000-000000000003",
-      );
+      console.log(`########################################`);
+      await createLayout(layout);
+
+      // Seed baseline events for funds 1..50 (5 events each)
+      console.log("Seeding initial events across funds...");
+      for (let f = 1; f <= 50; f++) {
+        const fundId = `00000000-0000-7000-8000-${f.toString().padStart(12, "0")}`;
+        for (let s = 0; s < 5; s++) {
+          await appendToTable(
+            TABLE,
+            fundId,
+            { donation_id: "00000000-0000-7000-8000-000000000004", amount_paise: 1000 },
+            actor,
+          );
+        }
+      }
+
+      // 1. Single Hot Fund contention benchmark
+      console.log("\n========================================");
+      console.log(`TEST 1: Single Hot Fund Append Contention (${label})`);
+      console.log("========================================");
+      for (const c of concurrencies) {
+        results[`hot-${label}-c${c}`] = await benchmarkAppends({
+          tableName: TABLE,
+          concurrency: c,
+          totalAppends: 150,
+          fundSelector: () => hotFundId,
+          description: `HotFund-${label}-c${c}`,
+        });
+      }
+
+      // 2. Spread Funds benchmark
+      console.log("\n========================================");
+      console.log(`TEST 2: Spread Funds (50 Funds) Append (${label})`);
+      console.log("========================================");
+      for (const c of concurrencies) {
+        results[`spread-${label}-c${c}`] = await benchmarkAppends({
+          tableName: TABLE,
+          concurrency: c,
+          totalAppends: 300,
+          fundSelector: randomFundSelector,
+          description: `Spread-${label}-c${c}`,
+        });
+      }
+
+      // 3. Hot Fund Isolation Test (unpartitioned and 16 partitions, as recorded in the ADR)
+      if (layout.isolation) {
+        results[`isolation-${label}`] = await benchmarkHotFundIsolation(TABLE);
+      }
+
+      // 4. Query Plans
+      results[`plans-${label}`] = await benchmarkReadShapes(TABLE);
     }
+
+    console.log("\nBenchmark suite completed successfully!");
+  } finally {
+    await sql.end();
   }
-
-  const hotFundId = "00000000-0000-7000-8000-000000000001";
-  const randomFundSelector = () => {
-    const idx = Math.floor(Math.random() * 50) + 1;
-    return `00000000-0000-7000-8000-${idx.toString().padStart(12, "0")}`;
-  };
-
-  const concurrencies = [1, 4, 8, 16];
-
-  // 1. Single Hot Fund contention benchmark
-  console.log("\n========================================");
-  console.log("TEST 1: Single Hot Fund Append Contention");
-  console.log("========================================");
-  for (const c of concurrencies) {
-    const count = 150;
-    await benchmarkAppends({
-      tableName: "fund_events_unpart",
-      concurrency: c,
-      totalAppends: count,
-      fundSelector: () => hotFundId,
-      description: `HotFund-Unpart-c${c}`,
-    });
-    await benchmarkAppends({
-      tableName: "fund_events_hash16",
-      concurrency: c,
-      totalAppends: count,
-      fundSelector: () => hotFundId,
-      description: `HotFund-Hash16-c${c}`,
-    });
-    await benchmarkAppends({
-      tableName: "fund_events_hash32",
-      concurrency: c,
-      totalAppends: count,
-      fundSelector: () => hotFundId,
-      description: `HotFund-Hash32-c${c}`,
-    });
-  }
-
-  // 2. Spread Funds benchmark
-  console.log("\n========================================");
-  console.log("TEST 2: Spread Funds (50 Funds) Append");
-  console.log("========================================");
-  for (const c of concurrencies) {
-    const count = 300;
-    await benchmarkAppends({
-      tableName: "fund_events_unpart",
-      concurrency: c,
-      totalAppends: count,
-      fundSelector: randomFundSelector,
-      description: `Spread-Unpart-c${c}`,
-    });
-    await benchmarkAppends({
-      tableName: "fund_events_hash16",
-      concurrency: c,
-      totalAppends: count,
-      fundSelector: randomFundSelector,
-      description: `Spread-Hash16-c${c}`,
-    });
-    await benchmarkAppends({
-      tableName: "fund_events_hash32",
-      concurrency: c,
-      totalAppends: count,
-      fundSelector: randomFundSelector,
-      description: `Spread-Hash32-c${c}`,
-    });
-  }
-
-  // 3. Hot Fund Isolation Test
-  results.isolation.unpart = await benchmarkHotFundIsolation("fund_events_unpart");
-  results.isolation.hash16 = await benchmarkHotFundIsolation("fund_events_hash16");
-
-  // 4. Query Plans
-  results.queryPlans.unpart = await benchmarkReadShapes("fund_events_unpart");
-  results.queryPlans.hash16 = await benchmarkReadShapes("fund_events_hash16");
-  results.queryPlans.hash32 = await benchmarkReadShapes("fund_events_hash32");
-
-  console.log("\nBenchmark suite completed successfully!");
-  await sql.end();
 }
 
 main().catch((err) => {
