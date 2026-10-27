@@ -32,7 +32,7 @@ it("states the data minimisation promises of the privacy notice", () => {
   expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Privacy notice");
   expect(screen.getByRole("heading", { name: "What we collect" })).toBeDefined();
   expect(screen.getByRole("heading", { name: "No tracking" })).toBeDefined();
-  expect(screen.getByText(/privacy@yen\.org\.in/)).toBeDefined();
+  expect(screen.getByText(/raypranav718@gmail\.com/)).toBeDefined();
 });
 
 function LocaleHarness() {

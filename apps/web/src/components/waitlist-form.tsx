@@ -35,6 +35,7 @@ export function WaitlistForm() {
   const [values, setValues] = useState({ name: "", contact: "", org: "" });
   const [consent, setConsent] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [toastOpen, setToastOpen] = useState(true);
@@ -44,6 +45,7 @@ export function WaitlistForm() {
   }, [submission]);
 
   function clearError(field: FieldName) {
+    setSubmitError(null);
     setErrors((previous) => {
       if (previous[field] === undefined) return previous;
       const next = { ...previous };
@@ -52,7 +54,7 @@ export function WaitlistForm() {
     });
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const next: FieldErrors = {};
@@ -61,6 +63,7 @@ export function WaitlistForm() {
     if (values.org.trim() === "") next.org = t("waitlist.org.error");
     if (!consent) next.consent = t("waitlist.consent.error");
     setErrors(next);
+    setSubmitError(null);
 
     const refs = { name: nameRef, contact: contactRef, org: orgRef, consent: consentRef };
     const firstInvalid = FIELD_ORDER.find((field) => next[field] !== undefined);
@@ -69,16 +72,40 @@ export function WaitlistForm() {
       return;
     }
 
-    // shortcut: no waitlist endpoint exists yet, so a submission is only held in this page
     setSubmitting(true);
-    window.setTimeout(() => {
-      setSubmitting(false);
+    const apiOrigin = process.env.NEXT_PUBLIC_API_URL ?? "";
+    try {
+      const response = await fetch(`${apiOrigin}/v1/waitlist`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: values.name.trim(),
+          contact: values.contact.trim(),
+          org: values.org.trim(),
+          locale: locale === "hi" ? "hi" : "en",
+          consent: {
+            accepted: true,
+            text: t("waitlist.consent.label"),
+            version: "2026-10-27",
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        setSubmitError(t("waitlist.failed"));
+        return;
+      }
+
       setToastOpen(true);
       setSubmission({
         receivedAt: new Date().toISOString(),
         consentText: t("waitlist.consent.label"),
       });
-    }, 150);
+    } catch {
+      setSubmitError(t("waitlist.failed"));
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (submission !== null) {
@@ -183,6 +210,17 @@ export function WaitlistForm() {
           {errors.consent === undefined ? null : <p>{errors.consent}</p>}
         </div>
       </div>
+
+      {submitError !== null ? (
+        <div
+          role="alert"
+          aria-live="assertive"
+          aria-atomic="true"
+          className="rounded-card border-2 border-danger bg-surface p-3 text-small font-semibold text-danger"
+        >
+          {submitError}
+        </div>
+      ) : null}
 
       <Button type="submit" loading={submitting}>
         {t("waitlist.submit")}

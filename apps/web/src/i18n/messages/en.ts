@@ -89,6 +89,7 @@ export const en = {
       error: "Tick the box so we can contact you.",
     },
     submit: "Join the waitlist",
+    failed: "Unable to submit your registration right now. Please try again later.",
     success: {
       title: "You are on the waitlist.",
       body: "We will contact you about the pilot. You can close this page.",
@@ -133,13 +134,13 @@ export const en = {
         "Your name and contact details are never written into public records. Only club activity appears there.",
       storageTitle: "Where it is stored",
       storageBody:
-        "Personal data is stored on servers in India. We do not sell it or share it for advertising.",
+        "Personal data is handled with strict confidentiality and never sold or shared for advertising.",
       trackingTitle: "No tracking",
       trackingBody:
         "Yen uses no third-party tracking cookies, no advertising cookies and no analytics scripts.",
       rightsTitle: "Your choices",
       rightsBody:
-        "You can ask us to correct or delete your personal data, or withdraw your consent, by writing to privacy@yen.org.in at any time. You may also raise a complaint with the Data Protection Board of India.",
+        "You can ask us to correct or delete your personal data, or withdraw your consent, by writing to raypranav718@gmail.com at any time. You may also raise a complaint with the Data Protection Board of India.",
       changesTitle: "Changes to this notice",
       changesBody:
         "When this notice changes, the updated version appears on this page with a new date.",

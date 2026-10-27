@@ -1,9 +1,18 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { expect, it } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 import { LocaleProvider } from "../i18n";
 import { runAxe } from "../test/a11y";
 import { WaitlistForm } from "./waitlist-form";
+
+beforeEach(() => {
+  vi.restoreAllMocks();
+  vi.spyOn(global, "fetch").mockResolvedValue({
+    ok: true,
+    status: 201,
+    json: async () => ({ status: "received" }),
+  } as Response);
+});
 
 function renderForm(locale: "en" | "hi" = "en") {
   return render(
@@ -74,6 +83,25 @@ it("confirms a valid submission, records consent and dismisses the toast with Es
   await fillValidForm(user);
   await user.click(screen.getByRole("button", { name: SUBMIT }));
 
+  expect(global.fetch).toHaveBeenCalledWith(
+    "/v1/waitlist",
+    expect.objectContaining({
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Asha Rao",
+        contact: "9876543210",
+        org: "Green Park Residents Welfare Association",
+        locale: "en",
+        consent: {
+          accepted: true,
+          text: CONSENT,
+          version: "2026-10-27",
+        },
+      }),
+    }),
+  );
+
   const shown = await screen.findAllByText("You are on the waitlist.");
   expect(shown.length).toBe(2);
   expect(document.activeElement?.textContent).toContain("You are on the waitlist.");
@@ -84,6 +112,27 @@ it("confirms a valid submission, records consent and dismisses the toast with Es
 
   expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull();
   expect(screen.getByText("You are on the waitlist.")).toBeDefined();
+});
+
+it("displays an honest error alert when the endpoint call fails", async () => {
+  vi.spyOn(global, "fetch").mockResolvedValue({
+    ok: false,
+    status: 500,
+  } as Response);
+
+  const user = userEvent.setup();
+  const { container } = renderForm();
+
+  await fillValidForm(user);
+  await user.click(screen.getByRole("button", { name: SUBMIT }));
+
+  expect(
+    await screen.findByText(
+      "Unable to submit your registration right now. Please try again later.",
+    ),
+  ).toBeDefined();
+  expect(screen.queryByText("You are on the waitlist.")).toBeNull();
+  expect(await runAxe(container)).toHaveNoViolations();
 });
 
 it("announces the confirmation in Hindi", async () => {
