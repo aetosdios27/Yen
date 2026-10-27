@@ -63,3 +63,19 @@ databaseSuite("waitlist Unicode database bounds", (sql) => {
     ).rejects.toMatchObject({ code: "23514" });
   });
 });
+
+databaseSuite("database readiness", (sql) => {
+  it("reports a missing table and recovers after migration", async () => {
+    const { databaseReady } = await import("./database-ready.js");
+    const { createApp } = await import("./app.js");
+    const app = createApp({
+      readiness: () => databaseReady(sql),
+      logger: { log: () => undefined },
+    });
+    expect((await app.request("/ready")).status).toBe(503);
+    await migrate(sql);
+    expect((await app.request("/ready")).status).toBe(200);
+    await sql`DROP TABLE waitlist_entries`;
+    expect((await app.request("/ready")).status).toBe(503);
+  });
+});

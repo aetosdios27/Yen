@@ -4,6 +4,7 @@ import { createSql } from "@yen/db";
 import { createApp } from "./app.js";
 import { clientIp } from "./client-ip.js";
 import { rateLimits } from "./config.js";
+import { databaseReady } from "./database-ready.js";
 import { env } from "./env.js";
 import { useMemoryStore } from "./server-config.js";
 import { PostgresWaitlistStore } from "./waitlist-store.js";
@@ -14,24 +15,8 @@ if (memory)
   process.stderr.write(
     "WARNING: waitlist uses volatile in-memory storage; data will be lost on restart\n",
   );
-async function databaseReady(): Promise<boolean> {
-  if (!sql) return memory;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      sql`SELECT 1 FROM waitlist_entries LIMIT 0`.then(
-        () => true,
-        () => false,
-      ),
-      new Promise<boolean>((resolve) => {
-        timer = setTimeout(() => resolve(false), 2000);
-      }),
-    ]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-if (!(await databaseReady())) {
+const readiness = () => (sql ? databaseReady(sql) : Promise.resolve(memory));
+if (!(await readiness())) {
   await sql?.end({ timeout: 1 });
   throw new Error("DATABASE_URL connection failed or waitlist_entries table is unavailable");
 }
@@ -43,7 +28,7 @@ serve({
       capacity: env.WAITLIST_RATE_LIMIT_CAPACITY,
       refillMs: env.WAITLIST_RATE_LIMIT_REFILL_MS,
     },
-    readiness: databaseReady,
+    readiness,
     waitlistMinResponseMs: env.WAITLIST_MIN_RESPONSE_MS,
     waitlistBodyLimit: env.WAITLIST_BODY_LIMIT_BYTES,
     clientIp: (context) =>
