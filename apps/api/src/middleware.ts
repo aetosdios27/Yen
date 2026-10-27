@@ -35,6 +35,10 @@ export function requestContext(deps: AppDependencies): MiddlewareHandler<ApiEnv>
     c.header("x-request-id", c.get("requestId"));
     const started = deps.clock();
     await next();
+    if (isWaitlistRoute(c.req.path)) {
+      const remaining = deps.waitlistMinResponseMs - (deps.clock() - started);
+      if (remaining > 0) await deps.sleep(remaining);
+    }
     c.header("x-request-id", c.get("requestId"));
     const parsedMethod = method.safeParse(c.req.method);
     deps.logger.log({

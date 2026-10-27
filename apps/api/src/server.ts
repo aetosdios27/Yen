@@ -16,6 +16,7 @@ serve({
       capacity: env.WAITLIST_RATE_LIMIT_CAPACITY,
       refillMs: env.WAITLIST_RATE_LIMIT_REFILL_MS,
     },
+    waitlistMinResponseMs: env.WAITLIST_MIN_RESPONSE_MS,
     waitlistBodyLimit: env.WAITLIST_BODY_LIMIT_BYTES,
     clientIp: (context) => getConnInfo(context).remote.address ?? "unknown",
     rateLimits: rateLimits(env),

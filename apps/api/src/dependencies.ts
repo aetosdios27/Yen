@@ -40,6 +40,8 @@ export interface AppDependencies {
   readonly waitlistLimit: RateLimit;
   readonly waitlistBodyLimit: number;
   readonly clock: () => number;
+  readonly sleep: (ms: number) => Promise<void>;
+  readonly waitlistMinResponseMs: number;
   readonly idGenerator: () => string;
   readonly idempotencyStore: IdempotencyStore;
   readonly rateLimitStore: RateLimitStore;
@@ -58,6 +60,8 @@ export function defaultDependencies(clock: () => number = Date.now): AppDependen
     waitlistLimit: { capacity: 5, refillMs: 3600000 },
     waitlistBodyLimit: 8192,
     clock,
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    waitlistMinResponseMs: 75,
     idGenerator: () => crypto.randomUUID(),
     idempotencyStore: new MemoryIdempotencyStore({ clock }),
     rateLimitStore: new MemoryRateLimitStore(),

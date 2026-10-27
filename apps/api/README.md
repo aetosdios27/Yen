@@ -174,3 +174,5 @@ body limit defaults to 8192 bytes and is configured by `WAITLIST_BODY_LIMIT_BYTE
 A shared rate-limit store and trusted proxy configuration are needed for a
 multi-process or proxied deployment. Contact uniqueness provides retry safety;
 the public route does not require an idempotency key.
+
+The waitlist response floor (`WAITLIST_MIN_RESPONSE_MS`, default 75 ms) hides differences below the floor. The per-IP limit of five requests per hour makes statistical timing attacks impractical; a slow database could still exceed the floor.
