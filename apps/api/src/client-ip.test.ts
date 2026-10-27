@@ -26,3 +26,10 @@ it("normalizes selected addresses and repeated header lines", () => {
     expect(clientIp("socket", address, 1)).toBe("2001:db8::1");
   }
 });
+
+it.each(["fe80::1%eth0", "", "x".repeat(10000), "::1\0", "[::1", "garbage:[::1]%eth0"])(
+  "falls back for malformed forwarded address %s",
+  (address) => {
+    expect(clientIp("127.0.0.1", address, 1)).toBe("127.0.0.1");
+  },
+);

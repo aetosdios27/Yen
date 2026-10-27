@@ -11,6 +11,12 @@ export function clientIp(socket: string, forwarded: string | undefined, hops: nu
   const address = bracketed?.[1] ?? ipv4WithPort?.[1] ?? selected;
   const version = isIP(address);
   if (version === 4) return address;
-  if (version === 6) return new URL(`http://[${address}]/`).hostname.slice(1, -1);
+  if (version === 6) {
+    try {
+      return new URL(`http://[${address}]/`).hostname.slice(1, -1);
+    } catch {
+      return socket;
+    }
+  }
   return socket;
 }
