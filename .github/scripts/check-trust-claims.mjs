@@ -17,6 +17,20 @@ const fieldNames = [
 ];
 const sourceFile = /\.(ts|tsx|mjs|js|sol|json|sql|md)$/;
 
+// Exact declared names only: a renamed test must not satisfy a register row by substring.
+export function declaredTests(contents) {
+  const names = new Set();
+  const direct = /\b(?:it|test|describe)(?:\.\w+)*\(\s*(["'`])((?:\\.|(?!\1)[^\\])*)\1\s*,/g;
+  const each = /\.each\([\s\S]*?\)\(\s*(["'`])((?:\\.|(?!\1)[^\\])*)\1\s*,/g;
+  for (const pattern of [direct, each]) {
+    for (const match of contents.matchAll(pattern)) names.add(match[2]);
+  }
+  for (const match of contents.matchAll(/\bfunction\s+((?:test|invariant)\w*)\s*\(/g)) {
+    names.add(match[1]);
+  }
+  return names;
+}
+
 export function referenceAnchors(document) {
   return new Set([...document.matchAll(/<a id="([a-z0-9-]+)"><\/a>/g)].map((match) => match[1]));
 }
@@ -80,7 +94,7 @@ function checkClaim(id, fields, { anchors, readFile, errors }) {
   for (const [, path, name] of tests) {
     const contents = readFile(path);
     if (contents === undefined) errors.push(`${id}: test file does not exist: ${path}`);
-    else if (!contents.includes(name))
+    else if (!declaredTests(contents).has(name))
       errors.push(`${id}: test name not found in ${path}: ${name}`);
   }
 

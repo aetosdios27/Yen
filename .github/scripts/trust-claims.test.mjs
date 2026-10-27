@@ -7,6 +7,9 @@ const files = {
   "README.md": "Claim text\n",
   "packages/a/src/x.ts": "export const x = 1;\n",
   "packages/a/src/x.test.ts": 'it("does the thing", () => {});\n',
+  "packages/a/src/renamed.test.ts": 'it("does the thing differently", () => {});\n',
+  "packages/a/src/each.test.ts": 'it.each([1, 2])("rejects %s", () => {});\n',
+  "contracts/test/X.t.sol": "function testRejectsReplayAndOverwrite() public {}\n",
 };
 const anchors = new Set(["rfc-6962"]);
 const readFile = (path) => files[path];
@@ -50,6 +53,22 @@ test("accepts a well-formed enforced row and a planned row", () => {
 test("rejects a test name that does not exist in its file", () => {
   const broken = { ...valid, Test: 'packages/a/src/x.test.ts "renamed away"' };
   assert.match(check(claim("CLAIM-01", broken)).join(), /test name not found.*renamed away/);
+});
+
+test("rejects a cited name that only appears inside a longer test name", () => {
+  const broken = { ...valid, Test: 'packages/a/src/renamed.test.ts "does the thing"' };
+  assert.match(check(claim("CLAIM-01", broken)).join(), /test name not found.*does the thing/);
+});
+
+test("matches parameterized and Solidity tests by their exact names", () => {
+  const each = { ...valid, Test: 'packages/a/src/each.test.ts "rejects %s"' };
+  assert.deepEqual(check(claim("CLAIM-01", each)), []);
+  const eachPrefix = { ...valid, Test: 'packages/a/src/each.test.ts "rejects"' };
+  assert.match(check(claim("CLAIM-01", eachPrefix)).join(), /test name not found/);
+  const sol = { ...valid, Test: 'contracts/test/X.t.sol "testRejectsReplayAndOverwrite"' };
+  assert.deepEqual(check(claim("CLAIM-01", sol)), []);
+  const solPrefix = { ...valid, Test: 'contracts/test/X.t.sol "testRejectsReplay"' };
+  assert.match(check(claim("CLAIM-01", solPrefix)).join(), /test name not found/);
 });
 
 test("rejects a test file that does not exist", () => {
