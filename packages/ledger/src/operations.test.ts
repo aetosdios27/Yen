@@ -1,7 +1,7 @@
 import { KontoInsufficientFundsError } from "@konto-ledger/core";
 import { uuidv7 } from "@yen/db";
 import { chainHead, checkChainStructure, verifyChain } from "@yen/eventlog";
-import { parseFundId } from "@yen/shared";
+import { paise, parseFundId } from "@yen/shared";
 import { expect, it } from "vitest";
 import { getFundEvents } from "./eventlog.js";
 import {
@@ -28,7 +28,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
         // Record donation in Konto within tx
         await recordDonation(tx, {
           fundId,
-          amount: 50000n,
+          amount: paise(50000),
           reference: "crash-test-ref",
         });
 
@@ -62,7 +62,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
     await sql.begin(async (tx) => {
       await recordDonation(tx, {
         fundId,
-        amount: 50000n,
+        amount: paise(50000),
         reference: "seed-ref",
       });
     });
@@ -74,7 +74,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
       sql.begin(async (tx) => {
         await reserveForExpense(tx, {
           fundId,
-          amount: 50001n,
+          amount: paise(50001),
           description: "Overspend attempt",
         });
       }),
@@ -103,7 +103,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
     await sql.begin(async (tx) => {
       result1 = await recordDonation(tx, {
         fundId,
-        amount: 75000n,
+        amount: paise(75000),
         reference,
       });
     });
@@ -111,7 +111,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
     await sql.begin(async (tx) => {
       result2 = await recordDonation(tx, {
         fundId,
-        amount: 75000n,
+        amount: paise(75000),
         reference,
       });
     });
@@ -139,7 +139,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
     await sql.begin(async (tx) => {
       await recordDonation(tx, {
         fundId,
-        amount: 100000n,
+        amount: paise(100000),
         reference: "ref-donation-1",
       });
     });
@@ -153,7 +153,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
     await sql.begin(async (tx) => {
       const res = await reserveForExpense(tx, {
         fundId,
-        amount: 30000n,
+        amount: paise(30000),
         description: "Travel reimbursement",
       });
       hold1Id = res.holdId;
@@ -184,7 +184,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
     await sql.begin(async (tx) => {
       const res = await reserveForExpense(tx, {
         fundId,
-        amount: 25000n,
+        amount: paise(25000),
         description: "Conference tickets",
       });
       hold2Id = res.holdId;
@@ -213,7 +213,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
     await sql.begin(async (tx) => {
       const res = await recordDonation(tx, {
         fundId,
-        amount: 50000n,
+        amount: paise(50000),
         reference: "ref-donation-2",
       });
       donation2Id = (res.pledgeEvent.payload as { donation_id: string }).donation_id;
@@ -226,7 +226,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
     await sql.begin(async (tx) => {
       await recordRefund(tx, {
         fundId,
-        amount: 50000n,
+        amount: paise(50000),
         donationId: donation2Id,
         reason: "cancelled",
       });
@@ -268,5 +268,69 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
     expect(ledgerBalances.donationsPaise).toBe(100000n);
     expect(ledgerBalances.expensesPaise).toBe(30000n);
     expect(ledgerBalances.pendingSpendPaise).toBe(0n);
+  });
+
+  it("fund_events table is append-only and rejects UPDATE, DELETE, and TRUNCATE via triggers", async () => {
+    const fundId = uuidv7();
+    await sql.begin(async (tx) => {
+      await recordDonation(tx, {
+        fundId,
+        amount: 25000,
+        reference: "immutability-test",
+      });
+    });
+
+    // Attempt UPDATE on fund_events
+    await expect(
+      sql`UPDATE fund_events SET type = 'tampered' WHERE fund_id = ${fundId}`,
+    ).rejects.toThrow(/append-only/i);
+
+    // Attempt DELETE on fund_events
+    await expect(sql`DELETE FROM fund_events WHERE fund_id = ${fundId}`).rejects.toThrow(
+      /append-only/i,
+    );
+
+    // Attempt TRUNCATE on fund_events
+    await expect(sql`TRUNCATE TABLE fund_events`).rejects.toThrow(/append-only/i);
+  });
+
+  it("rejects cross-fund hold committal or release", async () => {
+    const fundA = uuidv7();
+    const fundB = uuidv7();
+
+    let holdAId = "";
+    let expenseAId = "";
+    await sql.begin(async (tx) => {
+      await recordDonation(tx, { fundId: fundA, amount: 50000, reference: "fund-a-seed" });
+      const res = await reserveForExpense(tx, {
+        fundId: fundA,
+        amount: 20000,
+        description: "Fund A expense",
+      });
+      holdAId = res.holdId;
+      expenseAId = res.expenseId;
+    });
+
+    // Attempting to settle Fund A's hold under Fund B must fail
+    await expect(
+      sql.begin(async (tx) => {
+        await settleExpense(tx, {
+          fundId: fundB,
+          holdId: holdAId,
+          expenseId: expenseAId,
+        });
+      }),
+    ).rejects.toThrow(/does not belong to fund/i);
+
+    // Attempting to release Fund A's hold under Fund B must fail
+    await expect(
+      sql.begin(async (tx) => {
+        await releaseExpense(tx, {
+          fundId: fundB,
+          holdId: holdAId,
+          expenseId: expenseAId,
+        });
+      }),
+    ).rejects.toThrow(/does not belong to fund/i);
   });
 });

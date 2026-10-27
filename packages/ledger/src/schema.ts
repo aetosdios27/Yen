@@ -180,6 +180,11 @@ CREATE TABLE IF NOT EXISTS fund_events (
 
 CREATE INDEX IF NOT EXISTS idx_fund_events_fund_occurred
   ON fund_events(fund_id, occurred_at);
+
+DROP TRIGGER IF EXISTS enforce_fund_events_immutable ON fund_events;
+CREATE TRIGGER enforce_fund_events_immutable
+  BEFORE UPDATE OR DELETE OR TRUNCATE ON fund_events
+  FOR EACH STATEMENT EXECUTE FUNCTION reject_ledger_mutation_fn();
 `;
 
 export async function initLedgerSchema(sql: KontoTransactionExecutor): Promise<void> {

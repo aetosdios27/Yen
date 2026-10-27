@@ -14,50 +14,48 @@ describe("input validations and executor wrapper", () => {
     await expect(
       recordDonation(dummyTx, {
         fundId: "0194ebc4-94e8-7000-8000-000000000001",
-        amount: 0n,
+        amount: 0,
       }),
     ).rejects.toThrow("Donation amount must be positive paise");
 
     await expect(
       recordDonation(dummyTx, {
         fundId: "0194ebc4-94e8-7000-8000-000000000001",
-        amount: -500n,
+        amount: -500,
       }),
     ).rejects.toThrow("Donation amount must be positive paise");
+
+    await expect(
+      recordDonation(dummyTx, {
+        fundId: "0194ebc4-94e8-7000-8000-000000000001",
+        amount: 1.5,
+      }),
+    ).rejects.toThrow("Paise must be a safe integer");
   });
 
   it("rejects zero or negative reserve amounts before ledger mutations", async () => {
     await expect(
       reserveForExpense(dummyTx, {
         fundId: "0194ebc4-94e8-7000-8000-000000000001",
-        amount: 0n,
+        amount: 0,
       }),
     ).rejects.toThrow("Reserve amount must be positive paise");
 
     await expect(
       reserveForExpense(dummyTx, {
         fundId: "0194ebc4-94e8-7000-8000-000000000001",
-        amount: -100n,
+        amount: -100,
       }),
     ).rejects.toThrow("Reserve amount must be positive paise");
   });
 
-  it("rejects zero or negative refund amounts before ledger mutations", async () => {
+  it("rejects refund when donation is not found", async () => {
     await expect(
       recordRefund(dummyTx, {
         fundId: "0194ebc4-94e8-7000-8000-000000000001",
-        amount: 0n,
         donationId: "0194ebc4-94e8-7000-8000-000000000002",
       }),
-    ).rejects.toThrow("Refund amount must be positive paise");
-
-    await expect(
-      recordRefund(dummyTx, {
-        fundId: "0194ebc4-94e8-7000-8000-000000000001",
-        amount: -50n,
-        donationId: "0194ebc4-94e8-7000-8000-000000000002",
-      }),
-    ).rejects.toThrow("Refund amount must be positive paise");
+    ).rejects.toThrow("Donation 0194ebc4-94e8-7000-8000-000000000002 not found");
   });
 
   it("asQueryExecutor wraps raw executors without begin method seamlessly", async () => {

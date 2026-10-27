@@ -289,6 +289,133 @@ describe("replayFundEvents unit tests", () => {
     expect(balances.donationsPaise).toBe(100000n);
     expect(balances.expensesPaise).toBe(0n);
   });
+
+  it("does not double-count bank credits when donation.verified and bank.credit_seen share a bank_transaction_id", async () => {
+    let prev: Event | null = null;
+    const events: Event[] = [];
+    const addEvent = async (raw: Parameters<typeof toEventInput>[0]) => {
+      const input = toEventInput(raw);
+      const ev = await makeNextEvent(prev, input);
+      events.push(ev);
+      prev = ev;
+      return ev;
+    };
+
+    const bankTxId = "0194ebc4-94e8-7000-8000-000000000099";
+
+    // 1. Donation pledged
+    await addEvent({
+      fund_id: FUND_ID,
+      actor: ACTOR,
+      occurred_at: "2027-01-01T10:00:00.000Z",
+      type: "donation.pledged",
+      payload: {
+        donation_id: "0194ebc4-94e8-7000-8000-000000000010",
+        amount_paise: 50000,
+      },
+    });
+
+    // 2. Donation verified with bankTxId
+    await addEvent({
+      fund_id: FUND_ID,
+      actor: ACTOR,
+      occurred_at: "2027-01-01T10:01:00.000Z",
+      type: "donation.verified",
+      payload: {
+        donation_id: "0194ebc4-94e8-7000-8000-000000000010",
+        bank_transaction_id: bankTxId,
+      },
+    });
+
+    // 3. Bank credit observed for the exact same transaction
+    await addEvent({
+      fund_id: FUND_ID,
+      actor: ACTOR,
+      occurred_at: "2027-01-01T10:02:00.000Z",
+      type: "bank.credit_seen",
+      payload: {
+        bank_transaction_id: bankTxId,
+        amount_paise: 50000,
+      },
+    });
+
+    // Balances must be 50,000 paise, NOT 100,000 paise
+    const balances = replayFundEvents(FUND_ID, events);
+    expect(balances.bankPaise).toBe(50000n);
+    expect(balances.donationsPaise).toBe(50000n);
+    expect(balances.availablePaise).toBe(50000n);
+  });
+
+  it("expense reversal restores bank balance and reduces expenses", async () => {
+    let prev: Event | null = null;
+    const events: Event[] = [];
+    const addEvent = async (raw: Parameters<typeof toEventInput>[0]) => {
+      const input = toEventInput(raw);
+      const ev = await makeNextEvent(prev, input);
+      events.push(ev);
+      prev = ev;
+      return ev;
+    };
+
+    // 1. Initial donation: 100,000 paise
+    await addEvent({
+      fund_id: FUND_ID,
+      actor: ACTOR,
+      occurred_at: "2027-01-01T10:00:00.000Z",
+      type: "donation.pledged",
+      payload: { donation_id: "0194ebc4-94e8-7000-8000-000000000010", amount_paise: 100000 },
+    });
+    await addEvent({
+      fund_id: FUND_ID,
+      actor: ACTOR,
+      occurred_at: "2027-01-01T10:01:00.000Z",
+      type: "donation.verified",
+      payload: {
+        donation_id: "0194ebc4-94e8-7000-8000-000000000010",
+        bank_transaction_id: "0194ebc4-94e8-7000-8000-000000000020",
+      },
+    });
+
+    // 2. Submit & pay expense: 30,000 paise
+    await addEvent({
+      fund_id: FUND_ID,
+      actor: ACTOR,
+      occurred_at: "2027-01-01T10:02:00.000Z",
+      type: "expense.submitted",
+      payload: { expense_id: "0194ebc4-94e8-7000-8000-000000000030", amount_paise: 30000 },
+    });
+    await addEvent({
+      fund_id: FUND_ID,
+      actor: ACTOR,
+      occurred_at: "2027-01-01T10:03:00.000Z",
+      type: "expense.paid",
+      payload: {
+        expense_id: "0194ebc4-94e8-7000-8000-000000000030",
+        bank_transaction_id: "0194ebc4-94e8-7000-8000-000000000040",
+      },
+    });
+
+    const midBalances = replayFundEvents(FUND_ID, events);
+    expect(midBalances.bankPaise).toBe(70000n);
+    expect(midBalances.expensesPaise).toBe(30000n);
+
+    // 3. Reverse expense
+    await addEvent({
+      fund_id: FUND_ID,
+      actor: ACTOR,
+      occurred_at: "2027-01-01T10:04:00.000Z",
+      type: "expense.reversed",
+      payload: {
+        expense_id: "0194ebc4-94e8-7000-8000-000000000030",
+        bank_transaction_id: "0194ebc4-94e8-7000-8000-000000000050",
+      },
+    });
+
+    const finalBalances = replayFundEvents(FUND_ID, events);
+    expect(finalBalances.bankPaise).toBe(100000n);
+    expect(finalBalances.expensesPaise).toBe(0n);
+    expect(finalBalances.availablePaise).toBe(100000n);
+  });
 });
 
 describe("replayFundEvents property-based tests (AC: replaying all events reproduces ledger balances)", () => {

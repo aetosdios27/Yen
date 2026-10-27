@@ -12,9 +12,18 @@ describe("deterministic accounts", () => {
   const fundA = "0194ebc4-94e8-7000-8000-000000000001";
   const fundB = "0194ebc4-94e8-7000-8000-000000000002";
 
-  it("generates valid RFC 4122 v5 UUIDs", () => {
-    const id = deterministicUuid("namespace", "test-account");
+  it("matches RFC 4122 Appendix B known-answer test vector", () => {
+    // DNS namespace UUID: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+    // Name: "python.org"
+    // Expected UUID v5: 886313e1-3b8a-5372-9b90-0c9aee199e5d
+    const dnsNs = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
+    const id = deterministicUuid(dnsNs, "python.org");
+    expect(id).toBe("886313e1-3b8a-5372-9b90-0c9aee199e5d");
     expect(id).toMatch(UUID_V5_REGEX);
+  });
+
+  it("rejects invalid non-UUID namespaces", () => {
+    expect(() => deterministicUuid("invalid-ns", "test")).toThrow(TypeError);
   });
 
   it("generates reproducible IDs for the same fund and kind", () => {

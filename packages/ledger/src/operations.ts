@@ -8,6 +8,7 @@ import {
 import type { KontoQueryExecutor, KontoTransactionExecutor } from "@konto-ledger/types";
 import { uuidv7 } from "@yen/db";
 import type { Event, PseudonymId } from "@yen/eventlog";
+import { type Paise, paise } from "@yen/shared";
 import { ensureFundAccounts, getFundAccountIds } from "./accounts.js";
 import { appendFundEventInTx, getFundEvents, nowUtcIso, toEventInput } from "./eventlog.js";
 import type { FundBalances } from "./replay.js";
@@ -32,7 +33,7 @@ export function asQueryExecutor(
 
 export interface RecordDonationInput {
   fundId: string;
-  amount: bigint | number;
+  amount: Paise | number;
   donorId?: string;
   reference?: string;
   bankTransactionId?: string;
@@ -53,10 +54,11 @@ export async function recordDonation(
   tx: KontoTransactionExecutor,
   input: RecordDonationInput,
 ): Promise<RecordDonationResult> {
-  const amountBig = BigInt(input.amount);
-  if (amountBig <= 0n) {
+  const paiseAmount = paise(typeof input.amount === "number" ? input.amount : Number(input.amount));
+  if (paiseAmount <= 0) {
     throw new RangeError("Donation amount must be positive paise");
   }
+  const amountBig = BigInt(paiseAmount);
 
   const accounts = await ensureFundAccounts(tx, input.fundId);
   const donationId = input.donationId ?? uuidv7();
@@ -190,7 +192,7 @@ export async function recordDonation(
 
 export interface ReserveForExpenseInput {
   fundId: string;
-  amount: bigint | number;
+  amount: Paise | number;
   expenseId?: string;
   approverId?: string;
   description?: string;
@@ -211,10 +213,11 @@ export async function reserveForExpense(
   tx: KontoTransactionExecutor,
   input: ReserveForExpenseInput,
 ): Promise<ReserveForExpenseResult> {
-  const amountBig = BigInt(input.amount);
-  if (amountBig <= 0n) {
+  const paiseAmount = paise(typeof input.amount === "number" ? input.amount : Number(input.amount));
+  if (paiseAmount <= 0) {
     throw new RangeError("Reserve amount must be positive paise");
   }
+  const amountBig = BigInt(paiseAmount);
 
   const accounts = await ensureFundAccounts(tx, input.fundId);
   const expenseId = input.expenseId ?? uuidv7();
@@ -292,6 +295,35 @@ export async function settleExpense(
   tx: KontoTransactionExecutor,
   input: SettleExpenseInput,
 ): Promise<SettleExpenseResult> {
+  const accounts = getFundAccountIds(input.fundId);
+  const holds = await tx<
+    {
+      id: string;
+      account_id: string;
+      recipient_id: string;
+      metadata: { fundId?: string; expenseId?: string } | null;
+    }[]
+  >`
+    SELECT id, account_id, recipient_id, metadata
+    FROM konto_holds
+    WHERE id = ${input.holdId}
+    LIMIT 1
+  `;
+  const holdRow = holds[0];
+  if (!holdRow) {
+    throw new Error(`Hold ${input.holdId} not found`);
+  }
+  if (
+    holdRow.account_id !== accounts.bankId ||
+    holdRow.recipient_id !== accounts.expensesId ||
+    (holdRow.metadata?.fundId && holdRow.metadata.fundId !== input.fundId) ||
+    (holdRow.metadata?.expenseId && holdRow.metadata.expenseId !== input.expenseId)
+  ) {
+    throw new Error(
+      `Hold ${input.holdId} does not belong to fund ${input.fundId} and expense ${input.expenseId}`,
+    );
+  }
+
   const bankTransactionId = input.bankTransactionId ?? uuidv7();
   const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
 
@@ -341,8 +373,36 @@ export async function releaseExpense(
   tx: KontoTransactionExecutor,
   input: ReleaseExpenseInput,
 ): Promise<ReleaseExpenseResult> {
-  const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
+  const accounts = getFundAccountIds(input.fundId);
+  const holds = await tx<
+    {
+      id: string;
+      account_id: string;
+      recipient_id: string;
+      metadata: { fundId?: string; expenseId?: string } | null;
+    }[]
+  >`
+    SELECT id, account_id, recipient_id, metadata
+    FROM konto_holds
+    WHERE id = ${input.holdId}
+    LIMIT 1
+  `;
+  const holdRow = holds[0];
+  if (!holdRow) {
+    throw new Error(`Hold ${input.holdId} not found`);
+  }
+  if (
+    holdRow.account_id !== accounts.bankId ||
+    holdRow.recipient_id !== accounts.expensesId ||
+    (holdRow.metadata?.fundId && holdRow.metadata.fundId !== input.fundId) ||
+    (holdRow.metadata?.expenseId && holdRow.metadata.expenseId !== input.expenseId)
+  ) {
+    throw new Error(
+      `Hold ${input.holdId} does not belong to fund ${input.fundId} and expense ${input.expenseId}`,
+    );
+  }
 
+  const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
   const res = await rollbackHoldInTx(tx, input.holdId);
 
   const time = input.occurredAt ?? nowUtcIso();
@@ -367,9 +427,79 @@ export async function releaseExpense(
   };
 }
 
+export interface ExpireExpenseInput {
+  fundId: string;
+  holdId: string;
+  expenseId: string;
+  actorPseudonym?: PseudonymId | string;
+  occurredAt?: string;
+}
+
+export interface ExpireExpenseResult {
+  success: boolean;
+  expiredEvent: Event;
+}
+
+export async function expireExpense(
+  tx: KontoTransactionExecutor,
+  input: ExpireExpenseInput,
+): Promise<ExpireExpenseResult> {
+  const accounts = getFundAccountIds(input.fundId);
+  const holds = await tx<
+    {
+      id: string;
+      account_id: string;
+      recipient_id: string;
+      metadata: { fundId?: string; expenseId?: string } | null;
+    }[]
+  >`
+    SELECT id, account_id, recipient_id, metadata
+    FROM konto_holds
+    WHERE id = ${input.holdId}
+    LIMIT 1
+  `;
+  const holdRow = holds[0];
+  if (!holdRow) {
+    throw new Error(`Hold ${input.holdId} not found`);
+  }
+  if (
+    holdRow.account_id !== accounts.bankId ||
+    holdRow.recipient_id !== accounts.expensesId ||
+    (holdRow.metadata?.fundId && holdRow.metadata.fundId !== input.fundId) ||
+    (holdRow.metadata?.expenseId && holdRow.metadata.expenseId !== input.expenseId)
+  ) {
+    throw new Error(
+      `Hold ${input.holdId} does not belong to fund ${input.fundId} and expense ${input.expenseId}`,
+    );
+  }
+
+  const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
+  const res = await rollbackHoldInTx(tx, input.holdId);
+
+  const time = input.occurredAt ?? nowUtcIso();
+  const expiredEvent = await appendFundEventInTx(
+    tx,
+    input.fundId,
+    toEventInput({
+      fund_id: input.fundId,
+      type: "expense.expired",
+      actor,
+      occurred_at: time,
+      payload: {
+        expense_id: input.expenseId,
+      },
+    }),
+  );
+
+  return {
+    success: res.success,
+    expiredEvent,
+  };
+}
+
 export interface RecordRefundInput {
   fundId: string;
-  amount: bigint | number;
+  amount?: Paise | number;
   donationId: string;
   reason?: "unmatched" | "duplicate" | "cancelled";
   actorPseudonym?: PseudonymId | string;
@@ -386,13 +516,29 @@ export async function recordRefund(
   tx: KontoTransactionExecutor,
   input: RecordRefundInput,
 ): Promise<RecordRefundResult> {
-  const amountBig = BigInt(input.amount);
-  if (amountBig <= 0n) {
-    throw new RangeError("Refund amount must be positive paise");
-  }
-
   const accounts = await ensureFundAccounts(tx, input.fundId);
   const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
+
+  // Find verified donation amount
+  const events = await getFundEvents(tx, input.fundId);
+  const pledge = events.find(
+    (e) =>
+      e.type === "donation.pledged" &&
+      (e.payload as { donation_id: string }).donation_id === input.donationId,
+  );
+  if (!pledge) {
+    throw new Error(`Donation ${input.donationId} not found`);
+  }
+  const donationAmount = (pledge.payload as { amount_paise: number }).amount_paise;
+  if (input.amount !== undefined) {
+    const requested = paise(typeof input.amount === "number" ? input.amount : Number(input.amount));
+    if (requested !== donationAmount) {
+      throw new RangeError(
+        `Partial refunds are not supported by the v1 event log contract. Expected full refund of ${donationAmount} paise.`,
+      );
+    }
+  }
+  const amountBig = BigInt(donationAmount);
 
   const { journalId } = await transferInTx(tx, {
     accountId: accounts.bankId,
@@ -461,7 +607,7 @@ export async function getBalances(
     LEFT JOIN (
       SELECT account_id, SUM(amount) AS holds_sum
       FROM konto_holds
-      WHERE status = 'PENDING' AND (expires_at IS NULL OR NOW() <= expires_at)
+      WHERE status = 'PENDING'
       GROUP BY account_id
     ) h ON h.account_id = a.id
   `;

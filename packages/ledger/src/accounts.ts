@@ -14,10 +14,15 @@ export interface FundAccounts {
 const YEN_NAMESPACE = "f71f5e2c-f985-43d8-a969-c2b6739f8dfd";
 
 /**
- * Derives a deterministic RFC 4122 v5 UUID from namespace and name.
+ * Derives a deterministic RFC 4122 v5 UUID from a 16-byte UUID namespace and name.
  */
 export function deterministicUuid(namespace: string, name: string): string {
-  const hash = createHash("sha1").update(namespace).update(name).digest();
+  const cleanNs = namespace.replace(/-/g, "");
+  if (!/^[0-9a-fA-F]{32}$/.test(cleanNs)) {
+    throw new TypeError(`Invalid namespace UUID: ${namespace}`);
+  }
+  const nsBytes = Buffer.from(cleanNs, "hex");
+  const hash = createHash("sha1").update(nsBytes).update(Buffer.from(name, "utf8")).digest();
   const byte6 = hash[6] ?? 0;
   hash[6] = (byte6 & 0x0f) | 0x50;
   const byte8 = hash[8] ?? 0;

@@ -81,6 +81,9 @@ export async function appendFundEventInTx(
   fundId: string,
   input: EventInput,
 ): Promise<Event> {
+  // Acquire transaction-scoped advisory lock keyed by fundId to serialize concurrent appends per fund
+  await tx`SELECT pg_advisory_xact_lock(hashtext(${fundId}))`;
+
   const prev = await getLatestFundEvent(tx, fundId);
   const event = await makeNextEvent(prev, input);
 
@@ -102,6 +105,8 @@ export async function appendFundEventInTx(
 
   return event;
 }
+
+export const appendEvent = appendFundEventInTx;
 
 export async function getFundEvents(
   sql: KontoTransactionExecutor,

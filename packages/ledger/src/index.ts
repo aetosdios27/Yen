@@ -16,6 +16,7 @@ export {
   getFundAccountIds,
 } from "./accounts.js";
 export {
+  appendEvent,
   appendFundEventInTx,
   getFundEvents,
   getLatestFundEvent,
@@ -26,6 +27,9 @@ export {
   asQueryExecutor,
   available,
   balance,
+  type ExpireExpenseInput,
+  type ExpireExpenseResult,
+  expireExpense,
   getBalances,
   type RecordDonationInput,
   type RecordDonationResult,
