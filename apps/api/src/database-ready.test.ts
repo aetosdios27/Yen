@@ -2,13 +2,10 @@ import type { Sql } from "@yen/db";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createDatabaseReady } from "./database-ready.js";
 
-type Pending = PromiseLike<unknown> & { cancel: () => unknown };
+type Pending = Promise<unknown> & { cancel: () => unknown };
 
 function stalledSql(cancel: () => unknown): Sql {
-  const tx = (): Pending => ({
-    then: () => new Promise(() => {}) as never,
-    cancel,
-  });
+  const tx = (): Pending => Object.assign(new Promise<unknown>(() => {}), { cancel });
   return {
     begin: (callback: (tx: unknown) => Promise<unknown>) => callback(tx),
   } as unknown as Sql;
