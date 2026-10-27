@@ -12,16 +12,18 @@ export function createDatabaseReady(sql: Sql, options: { readonly cacheMs?: numb
     let cancel = () => {};
     let expired = false;
     let timer: ReturnType<typeof setTimeout>;
-    const work = sql
-      .begin(async (tx) => {
-        const setting = tx`SET LOCAL statement_timeout = '1900ms'`;
-        cancel = () => setting.cancel();
-        await setting;
-        if (expired) throw new Error("Readiness deadline elapsed");
-        const query = tx`SELECT 1 FROM waitlist_entries LIMIT 0`;
-        cancel = () => query.cancel();
-        await query;
-      })
+    const work = Promise.resolve()
+      .then(() =>
+        sql.begin(async (tx) => {
+          const setting = tx`SET LOCAL statement_timeout = '1900ms'`;
+          cancel = () => setting.cancel();
+          await setting;
+          if (expired) throw new Error("Readiness deadline elapsed");
+          const query = tx`SELECT 1 FROM waitlist_entries LIMIT 0`;
+          cancel = () => query.cancel();
+          await query;
+        }),
+      )
       .then(
         () => true,
         () => false,
@@ -29,7 +31,9 @@ export function createDatabaseReady(sql: Sql, options: { readonly cacheMs?: numb
     const deadline = new Promise<boolean>((resolve) => {
       timer = setTimeout(() => {
         expired = true;
-        cancel();
+        void Promise.resolve()
+          .then(cancel)
+          .catch(() => {});
         resolve(false);
       }, 2000);
     });

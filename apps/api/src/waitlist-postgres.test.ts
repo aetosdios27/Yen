@@ -1,5 +1,5 @@
 import { migrate } from "@yen/db";
-import { beforeAll, expect, it } from "vitest";
+import { beforeAll, expect, it, vi } from "vitest";
 import { databaseSuite } from "../../../packages/db/src/test/database.js";
 import { PostgresWaitlistStore } from "./waitlist-store.js";
 
@@ -137,5 +137,69 @@ databaseSuite("readiness cache", (sql) => {
     expect(await ready()).toBe(true);
     await new Promise((resolve) => setTimeout(resolve, 250));
     expect(await ready()).toBe(false);
+  });
+});
+
+databaseSuite("readiness failure cleanup", (sql, url) => {
+  it("handles a rejected cancellation and a query rejected after the deadline", async () => {
+    const { createSql } = await import("@yen/db");
+    const { createDatabaseReady } = await import("./database-ready.js");
+    await migrate(sql);
+    const probeSql = createSql(url, { max: 1 });
+    const prototype: object = Object.getPrototypeOf(probeSql`SELECT 1`);
+    const original = Object.getOwnPropertyDescriptor(prototype, "cancel");
+    const escaped: unknown[] = [];
+    const onUnhandled = (error: unknown) => escaped.push(error);
+    process.on("unhandledRejection", onUnhandled);
+    let unlock = () => {};
+    let locked = () => {};
+    const released = new Promise<void>((resolve) => {
+      unlock = resolve;
+    });
+    const acquired = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+    const lock = sql.begin(async (tx) => {
+      await tx`LOCK TABLE waitlist_entries IN ACCESS EXCLUSIVE MODE`;
+      locked();
+      await released;
+    });
+    try {
+      await acquired;
+      const cancel = vi.fn(() => Promise.reject(new Error("cancel failed")));
+      Object.defineProperty(prototype, "cancel", { configurable: true, value: cancel });
+      await probeSql`SELECT 1`;
+      const realSetTimeout = setTimeout;
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      const ready = createDatabaseReady(probeSql, { cacheMs: 0 });
+      const result = ready();
+      await new Promise((resolve) => realSetTimeout(resolve, 200));
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(await result).toBe(false);
+      expect(cancel).toHaveBeenCalledOnce();
+      vi.useRealTimers();
+      await probeSql.end({ timeout: 0 });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(escaped).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+      if (original) Object.defineProperty(prototype, "cancel", original);
+      process.off("unhandledRejection", onUnhandled);
+      unlock();
+      await lock;
+      await probeSql.end({ timeout: 2 });
+    }
+  }, 10000);
+});
+
+databaseSuite("readiness transaction cleanup", (sql) => {
+  it("returns false when transaction release fails", async () => {
+    const { createDatabaseReady } = await import("./database-ready.js");
+    const begin = vi.spyOn(sql, "begin").mockRejectedValueOnce(new Error("release failed"));
+    try {
+      await expect(createDatabaseReady(sql, { cacheMs: 0 })()).resolves.toBe(false);
+    } finally {
+      begin.mockRestore();
+    }
   });
 });
