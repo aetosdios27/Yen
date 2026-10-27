@@ -184,3 +184,19 @@ it("documents the contact formats", () => {
   const schema = JSON.stringify(document.components?.schemas?.WaitlistInput);
   expect(schema).toContain("pattern");
 });
+
+it("limits requests with varying untrusted forwarded prefixes together", async () => {
+  const { clientIp } = await import("./client-ip.js");
+  const app = createApp({
+    logger: silent,
+    sleep: async () => {},
+    clientIp: (c) => clientIp("127.0.0.1", c.req.header("x-forwarded-for"), 1),
+  });
+  for (let i = 0; i < 10; i++) {
+    const response = await app.request("/v1/waitlist", {
+      ...post(input),
+      headers: { ...post(input).headers, "x-forwarded-for": `${i ? `bad${i}, ` : ""}203.0.113.7` },
+    });
+    expect(response.status).toBe(i < 5 ? 201 : 429);
+  }
+});
