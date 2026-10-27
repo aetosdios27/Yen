@@ -151,3 +151,43 @@ export const openapiRoute = createRoute({
     500: internalResponse,
   },
 });
+
+const bounded = (max: number) => z.string().trim().min(1).max(max);
+const contact = z
+  .string()
+  .trim()
+  .min(3)
+  .max(254)
+  .refine((value) => {
+    if (value.includes("@")) return z.email().safeParse(value).success;
+    return (
+      /^\+[1-9][0-9]{7,14}$/.test(value) ||
+      (/^[6-9][0-9 -]{9,18}$/.test(value) && /^[6-9][0-9]{9}$/.test(value.replace(/[ -]/g, "")))
+    );
+  }, "Expected an email or phone number");
+export const waitlistInput = z
+  .object({
+    name: bounded(200),
+    contact,
+    org: bounded(200),
+    locale: z.enum(["en", "hi"]),
+    consent: z
+      .object({ accepted: z.literal(true), text: bounded(1000), version: bounded(40) })
+      .strict(),
+  })
+  .strict()
+  .openapi("WaitlistInput");
+export const waitlistRoute = createRoute({
+  method: "post",
+  path: "/v1/waitlist",
+  operationId: "joinWaitlist",
+  tags: ["waitlist"],
+  request: { body: { required: true, content: { "application/json": { schema: waitlistInput } } } },
+  responses: {
+    201: jsonResponse(z.object({ status: z.literal("received") }), "Submission received"),
+    400: protectedErrors[400],
+    413: jsonResponse(errorEnvelope, "Request body too large"),
+    429: limitedResponse,
+    500: internalResponse,
+  },
+});

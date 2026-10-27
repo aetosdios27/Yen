@@ -47,16 +47,46 @@ export function requestContext(deps: AppDependencies): MiddlewareHandler<ApiEnv>
 export function rateLimit(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
   return async (c, next) => {
     const principal = c.get("principal");
-    const limits = [
-      { key: JSON.stringify(["ip", deps.clientIp(c)]), limit: deps.rateLimits.ip },
-      ...(principal
-        ? [{ key: JSON.stringify(["principal", principal.id]), limit: deps.rateLimits.principal }]
-        : []),
-    ];
+    const isWaitlist = c.req.path === "/v1/waitlist";
+    const now = deps.clock();
+    const limits = isWaitlist
+      ? [
+          {
+            key: JSON.stringify([
+              "waitlist",
+              deps.clientIp(c),
+              Math.floor(now / deps.waitlistLimit.refillMs),
+            ]),
+            limit: { capacity: deps.waitlistLimit.capacity, refillMs: Number.MAX_SAFE_INTEGER },
+          },
+        ]
+      : [
+          { key: JSON.stringify(["ip", deps.clientIp(c)]), limit: deps.rateLimits.ip },
+          ...(principal
+            ? [
+                {
+                  key: JSON.stringify(["principal", principal.id]),
+                  limit: deps.rateLimits.principal,
+                },
+              ]
+            : []),
+        ];
     for (const { key, limit } of limits) {
-      const result = await storeCall(() => deps.rateLimitStore.consume(key, limit, deps.clock()));
+      const result = await storeCall(() => deps.rateLimitStore.consume(key, limit, now));
       if (!result.allowed) {
-        c.header("retry-after", String(result.retryAfterSeconds));
+        c.header(
+          "retry-after",
+          String(
+            isWaitlist
+              ? Math.max(
+                  1,
+                  Math.ceil(
+                    (deps.waitlistLimit.refillMs - (now % deps.waitlistLimit.refillMs)) / 1000,
+                  ),
+                )
+              : result.retryAfterSeconds,
+          ),
+        );
         throw new ApiError("rate_limited");
       }
     }
@@ -66,7 +96,8 @@ export function rateLimit(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
 
 export function idempotency(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
   return async (c, next) => {
-    if (["GET", "HEAD", "OPTIONS"].includes(c.req.method)) return next();
+    if (["GET", "HEAD", "OPTIONS"].includes(c.req.method) || c.req.path === "/v1/waitlist")
+      return next();
     const principal = c.get("principal");
     if (!principal) throw new ApiError("unauthenticated");
     const key = idempotencyKey.safeParse(c.req.header("Idempotency-Key"));

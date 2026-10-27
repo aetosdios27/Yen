@@ -1,11 +1,26 @@
+import { parseDatabaseUrl } from "@yen/db";
 import * as z from "zod";
 import { rateLimitEnv } from "./config.js";
 
-const schema = z.object({
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  ...rateLimitEnv.shape,
-  PORT: z.coerce.number().int().min(1).max(65535),
-});
+const schema = z
+  .object({
+    NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+    ...rateLimitEnv.shape,
+    DATABASE_URL: z.string().optional(),
+    PORT: z.coerce.number().int().min(1).max(65535),
+  })
+  .superRefine((value, ctx) => {
+    if (value.DATABASE_URL === undefined && value.NODE_ENV !== "production") return;
+    try {
+      parseDatabaseUrl(value.DATABASE_URL, "DATABASE_URL");
+    } catch {
+      ctx.addIssue({
+        code: "custom",
+        path: ["DATABASE_URL"],
+        message: "Expected a valid PostgreSQL URL",
+      });
+    }
+  });
 
 const parsed = schema.safeParse(process.env);
 if (!parsed.success) {

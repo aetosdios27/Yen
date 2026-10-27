@@ -68,6 +68,7 @@ Unknown exceptions return the fixed internal error message, with no stack or cau
 | `conflict`             | 409    |
 | `idempotency_conflict` | 409    |
 | `rate_limited`         | 429    |
+| `payload_too_large`    | 413    |
 | `internal`             | 500    |
 
 `src/errors.ts` owns the closed error-code schema and status table.
@@ -78,7 +79,7 @@ dependencies; false or a thrown exception returns `internal`.
 
 ## Idempotency storage contract
 
-Unsafe `/v1` requests require `Idempotency-Key` after authentication.
+Authenticated unsafe `/v1` requests require `Idempotency-Key` after authentication.
 Keys contain 1 to 128 characters from `A-Z`, `a-z`, `0-9`, `.`, `_`, `:`, and `-`.
 The store key is the JSON tuple `[principal.id, headerValue]`.
 The SHA-256 request hash binds the method, path and query, content type, and exact body bytes.
@@ -151,3 +152,25 @@ Fastify offers an established Node plugin ecosystem, but switching would add a m
 without improving this contract. Runtime-specific peer address lookup and server startup
 stay in the Node entrypoints. `createApp(deps)` accepts the clock, ID generator, stores,
 logger, principal, readiness check, and peer address resolver.
+
+## Waitlist
+
+`POST /v1/waitlist` is public and write-only. Send `name`, `contact`, `org`,
+`locale` (`en` or `hi`), and `consent` containing `accepted: true`, `text`,
+and `version`. A new or duplicate contact receives the same `201` response.
+Email is lowercased. Canonical E.164 numbers are accepted; as a product decision,
+Indian 10-digit mobile numbers with optional spaces or dashes default to `+91`.
+
+The database stores a UUID, name, normalized contact and kind, organization,
+locale, exact trimmed consent text and version, and creation time. It does not
+store IP addresses, request bodies, or a separate acceptance flag. No waitlist
+read or export endpoint exists. Production requires `DATABASE_URL`; without it
+in other environments the waitlist is in memory and is lost on restart. Database
+location must be configured by the operator; the application does not enforce India.
+
+The default limit is five requests per IP per fixed hour per process, configured
+with `WAITLIST_RATE_LIMIT_CAPACITY` and `WAITLIST_RATE_LIMIT_REFILL_MS`. The
+body limit defaults to 8192 bytes and is configured by `WAITLIST_BODY_LIMIT_BYTES`.
+A shared rate-limit store and trusted proxy configuration are needed for a
+multi-process or proxied deployment. Contact uniqueness provides retry safety;
+the public route does not require an idempotency key.

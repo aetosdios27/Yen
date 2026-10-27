@@ -1,3 +1,4 @@
+import type { WaitlistEntry } from "@yen/db";
 import type { Context } from "hono";
 import { rateLimitEnv, rateLimits } from "./config.js";
 import { jsonLogger, type Logger } from "./logging.js";
@@ -21,7 +22,23 @@ export type ApiEnv = {
   };
 };
 
+export interface WaitlistStore {
+  add(entry: WaitlistEntry): Promise<"created" | "duplicate">;
+}
+
+export class MemoryWaitlistStore implements WaitlistStore {
+  private readonly entries = new Map<string, WaitlistEntry>();
+  async add(entry: WaitlistEntry) {
+    if (this.entries.has(entry.contact)) return "duplicate" as const;
+    this.entries.set(entry.contact, entry);
+    return "created" as const;
+  }
+}
+
 export interface AppDependencies {
+  readonly waitlistStore: WaitlistStore;
+  readonly waitlistLimit: RateLimit;
+  readonly waitlistBodyLimit: number;
   readonly clock: () => number;
   readonly idGenerator: () => string;
   readonly idempotencyStore: IdempotencyStore;
@@ -37,6 +54,9 @@ export interface AppDependencies {
 
 export function defaultDependencies(clock: () => number = Date.now): AppDependencies {
   return {
+    waitlistStore: new MemoryWaitlistStore(),
+    waitlistLimit: { capacity: 5, refillMs: 3600000 },
+    waitlistBodyLimit: 8192,
     clock,
     idGenerator: () => crypto.randomUUID(),
     idempotencyStore: new MemoryIdempotencyStore({ clock }),

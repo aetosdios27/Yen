@@ -8,6 +8,7 @@ export const errorCode = z.enum([
   "conflict",
   "idempotency_conflict",
   "rate_limited",
+  "payload_too_large",
   "internal",
 ]);
 
@@ -19,6 +20,7 @@ export const errorStatus = {
   conflict: 409,
   idempotency_conflict: 409,
   rate_limited: 429,
+  payload_too_large: 413,
   internal: 500,
 } as const satisfies Record<z.infer<typeof errorCode>, number>;
 
@@ -32,6 +34,7 @@ const messages: Record<ErrorCode, string> = {
   conflict: "Resource conflict",
   idempotency_conflict: "Idempotency key already used or in progress",
   rate_limited: "Rate limit exceeded",
+  payload_too_large: "Request body too large",
   internal: "Internal server error",
 };
 

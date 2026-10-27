@@ -1,4 +1,20 @@
 export interface paths {
+  "/v1/waitlist": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["joinWaitlist"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/health": {
     parameters: {
       query?: never;
@@ -115,6 +131,7 @@ export interface components {
           | "conflict"
           | "idempotency_conflict"
           | "rate_limited"
+          | "payload_too_large"
           | "internal";
         message: string;
         /** Format: uuid */
@@ -123,6 +140,19 @@ export interface components {
           path: (string | number)[];
           message: string;
         }[];
+      };
+    };
+    WaitlistInput: {
+      name: string;
+      contact: string;
+      org: string;
+      /** @enum {string} */
+      locale: "en" | "hi";
+      consent: {
+        /** @enum {boolean} */
+        accepted: true;
+        text: string;
+        version: string;
       };
     };
     Principal: {
@@ -152,6 +182,81 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  joinWaitlist: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["WaitlistInput"];
+      };
+    };
+    responses: {
+      /** @description Submission received */
+      201: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** @enum {string} */
+            status: "received";
+          };
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Request body too large */
+      413: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
   health: {
     parameters: {
       query?: never;

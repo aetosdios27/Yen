@@ -2,6 +2,9 @@ import { z } from "zod";
 
 const positiveInteger = z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 export const rateLimitEnv = z.object({
+  WAITLIST_RATE_LIMIT_CAPACITY: positiveInteger.default(5),
+  WAITLIST_RATE_LIMIT_REFILL_MS: positiveInteger.default(3600000),
+  WAITLIST_BODY_LIMIT_BYTES: positiveInteger.default(8192),
   RATE_LIMIT_IP_CAPACITY: positiveInteger.default(120),
   RATE_LIMIT_PRINCIPAL_CAPACITY: positiveInteger.default(60),
   RATE_LIMIT_REFILL_MS: positiveInteger.default(60000),

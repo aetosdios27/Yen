@@ -62,3 +62,23 @@ it.each(["0", "-1", "1.5", "Infinity", "private-value"])(
     await expect(import("./env.js")).rejects.not.toThrow("private-value");
   },
 );
+
+it("requires a valid database URL in production", async () => {
+  vi.stubEnv("PORT", "3001");
+  vi.stubEnv("NODE_ENV", "production");
+  vi.stubEnv("DATABASE_URL", undefined);
+  await expect(import("./env.js")).rejects.toThrow("DATABASE_URL");
+});
+
+it("accepts a PostgreSQL URL in production and rejects invalid URLs without exposing them", async () => {
+  vi.stubEnv("PORT", "3001");
+  vi.stubEnv("NODE_ENV", "production");
+  vi.stubEnv("DATABASE_URL", "postgres://postgres:pw@localhost:55432/postgres");
+  expect((await import("./env.js")).env.DATABASE_URL).toBe(
+    "postgres://postgres:pw@localhost:55432/postgres",
+  );
+  vi.resetModules();
+  vi.stubEnv("DATABASE_URL", "private-invalid-value");
+  await expect(import("./env.js")).rejects.toThrow("DATABASE_URL");
+  await expect(import("./env.js")).rejects.not.toThrow("private-invalid-value");
+});
