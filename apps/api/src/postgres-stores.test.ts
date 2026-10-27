@@ -98,6 +98,23 @@ databaseSuite("Postgres stores conformance", (sql) => {
     });
   });
 
+  describe("PostgresRateLimitStore under concurrency", () => {
+    it("never admits more than the capacity when many connections consume one key at once", async () => {
+      await sql`DELETE FROM rate_limits`;
+      const store = new PostgresRateLimitStore(sql);
+      const limit = { capacity: 10, refillMs: 3_600_000 };
+      const now = 1_000_000;
+
+      const results = await Promise.all(
+        Array.from({ length: 60 }, () => store.consume("concurrent-key", limit, now)),
+      );
+
+      // The per-key advisory lock serializes read-modify-write; without it, parallel
+      // transactions read the same token count and admit more than the bucket holds.
+      expect(results.filter((result) => result.allowed).length).toBe(10);
+    });
+  });
+
   describe("PostgresRateLimitStore conformance", () => {
     rateLimitStoreConformance(async (options) => {
       const store = new PostgresRateLimitStore(sql, options);
