@@ -20,7 +20,13 @@ import {
 import { type ApiEnv, type AppDependencies, defaultDependencies } from "./dependencies.js";
 import { ApiError, errorBody, errorStatus, ReadinessError, StoreError } from "./errors.js";
 import { logMethod } from "./logging.js";
-import { idempotency, rateLimit, requestContext, requireAuth } from "./middleware.js";
+import {
+  idempotency,
+  isWaitlistRoute,
+  rateLimit,
+  requestContext,
+  requireAuth,
+} from "./middleware.js";
 import type { FundAction, FundResource } from "./policy.js";
 
 export { devPolicy } from "./policy.js";
@@ -28,6 +34,7 @@ export { devPolicy } from "./policy.js";
 export function createApp(overrides: Partial<AppDependencies> = {}) {
   const deps = { ...defaultDependencies(overrides.clock), ...overrides };
   const app = new OpenAPIHono<ApiEnv>({
+    strict: false,
     defaultHook: (result) => {
       if (!result.success) {
         throw new ApiError(
@@ -90,14 +97,14 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     c.json(errorBody(new ApiError("not_found"), c.get("requestId")), errorStatus.not_found),
   );
   app.use("/v1/*", rateLimit(deps));
-  app.use(
-    "/v1/waitlist",
-    bodyLimit({
-      maxSize: deps.waitlistBodyLimit,
-      onError: () => {
-        throw new ApiError("payload_too_large");
-      },
-    }),
+  const waitlistBodyLimit = bodyLimit({
+    maxSize: deps.waitlistBodyLimit,
+    onError: () => {
+      throw new ApiError("payload_too_large");
+    },
+  });
+  app.use("/v1/*", (c, next) =>
+    isWaitlistRoute(c.req.path) ? waitlistBodyLimit(c, next) : next(),
   );
   app.use("/v1/*", idempotency(deps));
   app.use("/v1/me", requireAuth);

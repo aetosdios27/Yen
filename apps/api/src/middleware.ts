@@ -5,6 +5,10 @@ import { idempotencyKey } from "./contract.js";
 import type { ApiEnv, AppDependencies } from "./dependencies.js";
 import { ApiError, StoreError } from "./errors.js";
 
+export function isWaitlistRoute(path: string): boolean {
+  return path.replace(/\/$/, "") === "/v1/waitlist";
+}
+
 async function storeCall<T>(operation: () => Promise<T>): Promise<T> {
   try {
     return await operation();
@@ -47,7 +51,7 @@ export function requestContext(deps: AppDependencies): MiddlewareHandler<ApiEnv>
 export function rateLimit(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
   return async (c, next) => {
     const principal = c.get("principal");
-    const isWaitlist = c.req.path === "/v1/waitlist";
+    const isWaitlist = isWaitlistRoute(c.req.path);
     const now = deps.clock();
     const limits = isWaitlist
       ? [
@@ -96,7 +100,7 @@ export function rateLimit(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
 
 export function idempotency(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
   return async (c, next) => {
-    if (["GET", "HEAD", "OPTIONS"].includes(c.req.method) || c.req.path === "/v1/waitlist")
+    if (["GET", "HEAD", "OPTIONS"].includes(c.req.method) || isWaitlistRoute(c.req.path))
       return next();
     const principal = c.get("principal");
     if (!principal) throw new ApiError("unauthenticated");

@@ -120,3 +120,10 @@ it("never logs submitted personal data on success, validation or store failure",
   expect(logs.join("\n")).not.toContain("+919876543210");
   expect(logs.join("\n")).not.toContain("private@example.com");
 });
+
+it.each(["/v1/waitlist", "/v1/waitlist/"])("applies waitlist middleware to %s", async (path) => {
+  const app = createApp({ logger: silent, waitlistBodyLimit: 500 });
+  expect((await app.request(path, post({ ...input, name: "a".repeat(600) }))).status).toBe(413);
+  for (let i = 0; i < 4; i++) expect((await app.request(path, post(input))).status).toBe(201);
+  expect((await app.request(path, post(input))).status).toBe(429);
+});
