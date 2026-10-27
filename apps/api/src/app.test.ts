@@ -125,7 +125,7 @@ it.each([
       request,
       kind === "validation" ? { ...post(), body: "{" } : undefined,
     );
-    expect(response.status).toBe(kind === "validation" ? 400 : 500);
+    expect(response.status).toBe(kind === "validation" ? 400 : kind === "readiness" ? 503 : 500);
     expect(entries.filter((entry) => entry.event === "http_failure")).toEqual([
       {
         event: "http_failure",
