@@ -91,7 +91,7 @@ Before approving, open the preview on a phone-sized viewport and confirm:
 - the page loads over HTTPS with no console errors;
 - API requests go to the staging origin, never production or localhost;
 - `/design-system` renders at 375 px once the design-system work is merged;
-- language switching works without a reload.
+- language switching works without a reload once the language feature is merged.
 
 If a preview is missing, check the Root Directory, the monorepo change
 detection, and Deployment Protection before re-running the deployment.
