@@ -213,6 +213,14 @@ export class PostgresIdempotencyStore implements IdempotencyStore {
   }
 }
 
+/**
+ * Distinct 32-bit application namespaces for pg_advisory_xact_lock(int4, int4).
+ * Using the two-integer form isolates the rate limiter into its own lock space,
+ * preventing collisions with other subsystems (such as PR #20's 64-bit yen_fund_lock_key).
+ */
+export const RATE_LIMIT_KEY_LOCK_NAMESPACE = 0x59454e01; // "YEN\x01" (1497714177)
+export const RATE_LIMIT_ADMISSION_LOCK_NAMESPACE = 0x59454e02; // "YEN\x02" (1497714178)
+
 export interface PostgresRateLimitOptions {
   readonly maxEntries?: number;
 }
@@ -240,7 +248,8 @@ export class PostgresRateLimitStore implements RateLimitStore {
     | { readonly allowed: false; readonly retryAfterSeconds: number; readonly overloaded?: true }
   > {
     return await this.sql.begin(async (tx) => {
-      await tx`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+      // 1. Acquire per-key advisory lock using the two-int form to isolate from other subsystems.
+      await tx`SELECT pg_advisory_xact_lock(${RATE_LIMIT_KEY_LOCK_NAMESPACE}::int4, hashtext(${key}))`;
 
       const existingRows = await tx<{ tokens: number; updated_at: Date; expires_at: Date }[]>`
         SELECT tokens, updated_at, expires_at
@@ -249,17 +258,28 @@ export class PostgresRateLimitStore implements RateLimitStore {
       `;
       const existing = existingRows[0];
 
-      if (!existing && this.options.maxEntries !== undefined) {
+      // R2: Clamp effective time to max(now, stored updated_at) to ensure delayed requests
+      // cannot move updated_at backwards and grant extra refill tokens.
+      const effectiveNow = existing ? Math.max(now, existing.updated_at.getTime()) : now;
+      const isExpired = existing ? existing.expires_at.getTime() <= effectiveNow : false;
+
+      // R3: When admitting a new key or reviving an expired key, serialize admission with a single
+      // global admission lock and recheck capacity under it before activating.
+      if ((!existing || isExpired) && this.options.maxEntries !== undefined) {
+        await tx`SELECT pg_advisory_xact_lock(${RATE_LIMIT_ADMISSION_LOCK_NAMESPACE}::int4, 0)`;
+
         const [{ count }] = await tx<[{ count: bigint }]>`
           SELECT count(*)::bigint AS count
           FROM rate_limits
-          WHERE expires_at > to_timestamp(${now} / 1000.0)
+          WHERE expires_at > to_timestamp(${effectiveNow} / 1000.0)
+            AND key != ${key}
         `;
         if (Number(count) >= this.options.maxEntries) {
           const oldestRows = await tx<{ expires_at: Date }[]>`
             SELECT expires_at
             FROM rate_limits
-            WHERE expires_at > to_timestamp(${now} / 1000.0)
+            WHERE expires_at > to_timestamp(${effectiveNow} / 1000.0)
+              AND key != ${key}
             ORDER BY expires_at ASC
             LIMIT 1
           `;
@@ -267,12 +287,14 @@ export class PostgresRateLimitStore implements RateLimitStore {
           return {
             allowed: false,
             overloaded: true,
-            retryAfterSeconds: Math.min(86400, Math.max(1, Math.ceil((oldest - now) / 1000))),
+            retryAfterSeconds: Math.min(
+              86400,
+              Math.max(1, Math.ceil((oldest - effectiveNow) / 1000)),
+            ),
           };
         }
       }
 
-      const isExpired = existing ? existing.expires_at.getTime() <= now : false;
       const previousTokens = existing && !isExpired ? existing.tokens : limit.capacity;
 
       const tokens =
@@ -282,21 +304,22 @@ export class PostgresRateLimitStore implements RateLimitStore {
             : Math.min(
                 limit.capacity,
                 previousTokens +
-                  (Math.max(0, now - existing.updated_at.getTime()) * limit.capacity) /
+                  (Math.max(0, effectiveNow - existing.updated_at.getTime()) * limit.capacity) /
                     limit.refillMs,
               )
           : limit.capacity;
 
       const remaining = tokens >= 1 ? tokens - 1 : tokens;
       const fullAt =
-        limit.expiresAt ?? now + ((limit.capacity - remaining) * limit.refillMs) / limit.capacity;
+        limit.expiresAt ??
+        effectiveNow + ((limit.capacity - remaining) * limit.refillMs) / limit.capacity;
 
       await tx`
         INSERT INTO rate_limits (key, tokens, updated_at, expires_at)
         VALUES (
           ${key},
           ${remaining},
-          to_timestamp(${now} / 1000.0),
+          to_timestamp(${effectiveNow} / 1000.0),
           to_timestamp(${fullAt} / 1000.0)
         )
         ON CONFLICT (key) DO UPDATE

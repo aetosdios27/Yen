@@ -165,5 +165,48 @@ databaseSuite("Postgres stores conformance", (sql) => {
       const remaining = await sql`SELECT key FROM rate_limits`;
       expect(remaining.map((r) => r.key)).toEqual(["p3"]);
     });
+
+    it("serializes first-time key admission under maxEntries across concurrent keys", async () => {
+      await sql`DELETE FROM rate_limits`;
+      const store = new PostgresRateLimitStore(sql, { maxEntries: 5 });
+      const limit = { capacity: 1, refillMs: 60_000 };
+      const now = 1000;
+
+      const results = await Promise.all(
+        Array.from({ length: 30 }, (_, i) => store.consume(`parallel-key-${i}`, limit, now)),
+      );
+
+      const allowedCount = results.filter((r) => r.allowed).length;
+      expect(allowedCount).toBe(5);
+
+      const activeRows = await sql`
+        SELECT key FROM rate_limits WHERE expires_at > to_timestamp(${now} / 1000.0)
+      `;
+      expect(activeRows.length).toBe(5);
+    });
+
+    it("enforces maxEntries admission cap when reviving an expired key", async () => {
+      await sql`DELETE FROM rate_limits`;
+      const store = new PostgresRateLimitStore(sql, { maxEntries: 1 });
+      const limit = { capacity: 1, refillMs: 1000 };
+
+      const resA1 = await store.consume("key-A", limit, 1000);
+      expect(resA1.allowed).toBe(true);
+
+      const resB = await store.consume("key-B", limit, 3000);
+      expect(resB.allowed).toBe(true);
+
+      const resA2 = await store.consume("key-A", limit, 3500);
+      expect(resA2).toEqual({
+        allowed: false,
+        overloaded: true,
+        retryAfterSeconds: expect.any(Number),
+      });
+
+      const activeRows = await sql`
+        SELECT key FROM rate_limits WHERE expires_at > to_timestamp(3500 / 1000.0)
+      `;
+      expect(activeRows.map((r) => r.key)).toEqual(["key-B"]);
+    });
   });
 });

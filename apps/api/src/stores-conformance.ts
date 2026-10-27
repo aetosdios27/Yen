@@ -224,4 +224,18 @@ export function rateLimitStoreConformance(
       await cleanup?.();
     }
   });
+
+  it("does not refill from a delayed request that arrives with an earlier timestamp", async () => {
+    const { store, cleanup } = await createStore();
+    try {
+      const limit: RateLimit = { capacity: 1, refillMs: 1000 };
+      expect(await store.consume("delayed", limit, 1000)).toEqual({ allowed: true });
+      // Captured at t=0 before the t=1000 request, so it runs late and must not rewind the bucket.
+      expect(await store.consume("delayed", limit, 0)).toMatchObject({ allowed: false });
+      // Still no time has elapsed since the bucket was written at t=1000.
+      expect(await store.consume("delayed", limit, 1000)).toMatchObject({ allowed: false });
+    } finally {
+      await cleanup?.();
+    }
+  });
 }

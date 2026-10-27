@@ -284,15 +284,17 @@ databaseSuite("Shared stores across API instances", (sql, url) => {
 
       // 2. Poisoning attempt: Attacker tries to poison victim socket "198.51.100.5" by sending victim's IP in XFF
       const victimSocket = "198.51.100.5";
-      // Attacker sends victim's IP in XFF
+      // Attacker attempts to exhaust victim allowance through spoofed requests (more spoofed requests than capacity 2)
       requestSocket = attackerSocket;
-      await reqMe(victimSocket);
+      for (let i = 0; i < 3; i++) {
+        await reqMe(victimSocket);
+      }
 
-      // Victim makes a request from their real socket
+      // Victim makes requests from their real socket: verify full allowance remains intact
       requestSocket = victimSocket;
-      const victimRes = await reqMe();
-      // Victim is NOT rate limited; attacker's spoofed header did not poison victim's bucket!
-      expect(victimRes.status).toBe(200);
+      expect((await reqMe()).status).toBe(200);
+      expect((await reqMe()).status).toBe(200);
+      expect((await reqMe()).status).toBe(429);
     });
 
     it("RFC 7239 Forwarded header is also ignored when hops = 0", async () => {
@@ -302,13 +304,7 @@ databaseSuite("Shared stores across API instances", (sql, url) => {
       const app = createApp({
         rateLimitStore,
         logger: { log: () => {} },
-        clientIp: (context) =>
-          clientIp(
-            socket,
-            context.req.header("x-forwarded-for"),
-            0,
-            context.req.header("forwarded"),
-          ),
+        clientIp: (context) => clientIp(socket, context.req.header("forwarded"), 0, "forwarded"),
         rateLimits: {
           ip: { capacity: 1, refillMs: 60_000 },
           principal: { capacity: 100, refillMs: 60_000 },

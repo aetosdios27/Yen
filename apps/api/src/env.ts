@@ -10,6 +10,8 @@ const schema = z
     YEN_ALLOW_MEMORY_STORES: z.enum(["true", "false"]).optional(),
     READINESS_CACHE_MS: z.coerce.number().int().min(0).max(60000).default(1000),
     TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
+    TRUSTED_PROXY_HEADER: z.enum(["x-forwarded-for", "forwarded"]).default("x-forwarded-for"),
+    CLEANUP_INTERVAL_MS: z.coerce.number().int().min(1000).max(3600000).default(60000),
     PORT: z.coerce.number().int().min(1).max(65535),
   })
   .superRefine((value, ctx) => {

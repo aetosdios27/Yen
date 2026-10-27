@@ -59,8 +59,8 @@ it("ignores both XFF and RFC 7239 when trusted proxy hops is 0", () => {
   const rfc = 'for="192.0.2.1"';
 
   expect(clientIp(socket, xff, 0)).toBe(socket);
-  expect(clientIp(socket, undefined, 0, rfc)).toBe(socket);
-  expect(clientIp(socket, xff, 0, rfc)).toBe(socket);
+  expect(clientIp(socket, rfc, 0, "forwarded")).toBe(socket);
+  expect(clientIp(socket, xff, 0, "forwarded")).toBe(socket);
 
   const resolver = createClientIpResolver({ trustedHops: 0 });
   const mockContext = {
@@ -73,4 +73,80 @@ it("ignores both XFF and RFC 7239 when trusted proxy hops is 0", () => {
     },
   } as unknown as Parameters<typeof resolver>[0];
   expect(resolver(mockContext)).toBe("unknown");
+});
+
+function contextWith(headers: Record<string, string>) {
+  return {
+    req: { header: (name: string) => headers[name.toLowerCase()] },
+  } as unknown as Parameters<ReturnType<typeof createClientIpResolver>>[0];
+}
+
+it("keeps quoted commas, semicolons and escaped quotes inside one Forwarded element", () => {
+  // Unquoted splitting would leave `b"` as the rightmost element and fall back to the socket.
+  expect(parseRfc7239Forwarded('for=198.51.100.5;ext="a,b"', 1)).toBe("198.51.100.5");
+  expect(parseRfc7239Forwarded('for=198.51.100.5;ext="a\\"b,c;d"', 1)).toBe("198.51.100.5");
+  expect(parseRfc7239Forwarded('for="[2001:db8:cafe::17]:4711";ext="x;y"', 1)).toBe(
+    "2001:db8:cafe::17",
+  );
+});
+
+it("treats obfuscated, unknown and non-IP identifiers as unusable and falls back to the socket", () => {
+  const socket = "203.0.113.10";
+  for (const header of [
+    "for=_hidden",
+    'for="_hidden:8080"',
+    "for=unknown",
+    'for="unknown"',
+    "for=example.com",
+    'for="example.com:443"',
+  ]) {
+    expect(parseRfc7239Forwarded(header, 1)).toBeUndefined();
+    expect(clientIp(socket, header, 1, "forwarded")).toBe(socket);
+  }
+});
+
+it("trusts X-Forwarded-For by default even when the client also sends Forwarded", () => {
+  // Regression: a proxy that passes Forwarded through must not let the client choose the bucket.
+  const resolver = createClientIpResolver({ trustedHops: 1 });
+  expect(
+    resolver(contextWith({ "x-forwarded-for": "198.51.100.1", forwarded: "for=203.0.113.99" })),
+  ).toBe("198.51.100.1");
+});
+
+it("honors an explicit trustedHeader of x-forwarded-for and ignores Forwarded", () => {
+  const resolver = createClientIpResolver({ trustedHops: 1, trustedHeader: "x-forwarded-for" });
+  expect(
+    resolver(contextWith({ "x-forwarded-for": "198.51.100.1", forwarded: "for=203.0.113.99" })),
+  ).toBe("198.51.100.1");
+});
+
+it("createClientIpResolver never calls req.header when trustedHops is 0", () => {
+  let headerCalled = false;
+  const resolver = createClientIpResolver({ trustedHops: 0, trustedHeader: "x-forwarded-for" });
+  const mockContext = {
+    req: {
+      header: () => {
+        headerCalled = true;
+        return "1.2.3.4";
+      },
+    },
+  } as unknown as Parameters<typeof resolver>[0];
+  expect(resolver(mockContext)).toBe("unknown");
+  expect(headerCalled).toBe(false);
+});
+
+it("createClientIpResolver reads only forwarded when trustedHeader is forwarded", () => {
+  const readHeaders: string[] = [];
+  const resolver = createClientIpResolver({ trustedHops: 1, trustedHeader: "forwarded" });
+  const mockContext = {
+    req: {
+      header: (name: string) => {
+        readHeaders.push(name);
+        if (name === "forwarded") return "for=198.51.100.5";
+        return "203.0.113.1";
+      },
+    },
+  } as unknown as Parameters<typeof resolver>[0];
+  expect(resolver(mockContext)).toBe("198.51.100.5");
+  expect(readHeaders).toEqual(["forwarded"]);
 });
