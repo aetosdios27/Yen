@@ -56,7 +56,7 @@ One session advisory lock covers history validation and all migrations. Each pen
 
 The runner forces `standard_conforming_strings = on` and forbids migrations from changing it. A `set_config` call is allowed only when its first argument is one ordinary or `E''` string literal naming another setting. Dynamic setting names are rejected.
 
-The preflight deliberately rejects a few valid SQL forms: an ordinary string ending in a backslash before its closing quote (for example `SELECT '\';`) is rejected even though PostgreSQL accepts it with `standard_conforming_strings = on`, so the lexer and server cannot disagree if the session setting changes. Write such strings with `E''` escapes. Any use of the identifier `standard_conforming_strings`, even as a table or column name, is also rejected; rename that identifier.
+The preflight deliberately rejects a few valid SQL forms: an ordinary string ending in a backslash before its closing quote (for example `SELECT '\\';`) is rejected even though PostgreSQL accepts it with `standard_conforming_strings = on`, so the lexer and server cannot disagree if the session setting changes. Write such strings with `E''` escapes. Any use of the identifier `standard_conforming_strings`, even as a table or column name, is also rejected; rename that identifier.
 
 Applied files are immutable. An edited checksum, missing file, renamed file, version gap, duplicate version, or out-of-order history fails the run. A second run leaves application data and migration history unchanged. There are no down migrations. Run the runner through a direct Postgres connection or session-pooling proxy because transaction-pooling proxies cannot preserve its session advisory lock.
 
@@ -98,3 +98,118 @@ try {
 ```
 
 Backups and any other copies also need an operational deletion and retention policy.
+
+## Query-plan discipline and hot-path registry
+
+All hot-path database queries in Yen (fund reads, membership lookups, event append, donation and expense lists) are registered in a single central registry in [`src/query-registry.ts`](file:///home/aetos/.t3-app/worktrees/Yen/t3-7dd54381/packages/db/src/query-registry.ts).
+
+### Contract for future feature PRs
+
+Every future pull request that introduces or modifies a hot-path database query must adhere to the following contract:
+1. **Register the query**: Add an entry to `INITIAL_HOT_PATH_QUERIES` in [`src/query-registry.ts`](file:///home/aetos/.t3-app/worktrees/Yen/t3-7dd54381/packages/db/src/query-registry.ts) or call `registerHotPathQuery()`.
+   - Specify `id`, `name`, `category` (`fund_reads`, `membership_lookups`, `event_append`, `donation_lists`, `expense_lists`, etc.).
+   - Define `sqlTemplate` and `explain` function using tagged template literals (`sql\`EXPLAIN (FORMAT JSON) ...\``).
+   - Set `expectedPlan`:
+     - `targetTable`: relation name.
+     - `expectedIndex`: the specific B-tree index expected to serve the lookup (e.g. `funds_pkey`, `funds_org_id_idx`).
+     - `disallowSeqScan: true`: forbids sequential scans on the target table.
+     - `maxCost`: total estimated cost ceiling derived from `EXPLAIN (FORMAT JSON)` on realistic data.
+2. **Automated CI enforcement**:
+   - `packages/db/src/query-plan.test.ts` seeds a realistic dataset (>100k rows across tables, thousands of funds) and runs `ANALYZE`.
+   - CI executes `EXPLAIN (FORMAT JSON)` on every registered query, asserting that no sequential scan occurs on any table over 100,000 rows and that estimated cost does not exceed `maxCost`.
+   - If an index is dropped, unindexed columns are queried, or a plan regresses, the test suite immediately fails.
+
+### Why estimated-cost budgets are used and their limits
+
+- **Why used**:
+  - **Deterministic CI evaluation**: As detailed in [PostgreSQL 16 Documentation: Using EXPLAIN](https://www.postgresql.org/docs/16/using-explain.html), the optimizer computes total estimated cost representing the disk page fetches and CPU operations required to execute a plan node to completion. Running `EXPLAIN (FORMAT JSON)` is instantaneous, side-effect free, and deterministic across CI runners, avoiding the false positives and flakiness of wall-clock benchmarking on shared CPU/IO runners.
+  - **Plan regression guard**: Cost ceilings immediately detect when the planner abandons an index scan in favor of an expensive sequential scan, hash join, or unindexed nested loop.
+- **Limits and caveats**:
+  - **Synthetic metric, not wall-clock time**: Costs are expressed in arbitrary units of single page fetches (`seq_page_cost = 1.0`, `random_page_cost = 4.0`, `cpu_tuple_cost = 0.01`). They do not measure physical disk latency, OS page cache warmth, buffer pool locks, or network serialization to the client ([PostgreSQL 16 Caveats](https://www.postgresql.org/docs/16/using-explain.html#USING-EXPLAIN-CAVEATS)).
+  - **Data volume dependency**: On toy-sized tables occupying only 1 or 2 pages, PostgreSQL almost always chooses a sequential scan regardless of indexes because reading 1 page sequentially is cheaper than reading an index page plus a heap page ([PostgreSQL 16 Caveats](https://www.postgresql.org/docs/16/using-explain.html#USING-EXPLAIN-CAVEATS)). Plan verification requires seeding realistic scale (100k+ rows) and running `ANALYZE` so `relpages` and `reltuples` reflect real production conditions.
+  - **Statistical sampling variance**: `ANALYZE` gathers statistics via random sampling of table pages rather than exhaustive counts. Cost estimates can vary slightly between seed generations. Cost budgets must provide a 20–30% safety cushion above observed baseline costs rather than brittle exact equality checks.
+
+## Foreign-key indexing discipline
+
+In PostgreSQL, foreign key constraints (`REFERENCES`) enforce referential integrity but do **not** automatically create indexes on the referencing columns ([PostgreSQL 16 Foreign Keys](https://www.postgresql.org/docs/16/ddl-constraints.html#DDL-CONSTRAINTS-FK)). Without an index whose leading columns match the foreign key:
+- Deletes or updates on the referenced parent table require full sequential scans on the referencing child table to verify referential integrity.
+- Heavy row-level table locks during parent updates cause severe concurrency bottlenecks.
+
+### Invariant and CI check
+
+- **Rule**: Every foreign key must be supported by an index in the same migration that creates the table.
+- **Verification**: CI runs `pnpm --filter @yen/db check:fk-indexes` against every migration from scratch.
+  - The check inspects [`pg_constraint`](https://www.postgresql.org/docs/16/catalog-pg-constraint.html) (`contype = 'f'`) against [`pg_index`](https://www.postgresql.org/docs/16/catalog-pg-index.html) (`indrelid = conrelid`, `indisvalid = true`, `indpred IS NULL`).
+  - Leading index columns (`indkey[1:cardinality(conkey)]`) must cover the foreign key constraint columns.
+- **Allowlist policy**: If a foreign key is deliberately unindexed, it must be declared with an explicit technical justification in the allowlist in [`src/foreign-keys.ts`](file:///home/aetos/.t3-app/worktrees/Yen/t3-7dd54381/packages/db/src/foreign-keys.ts).
+
+## Slow-query logging configuration (Staging & Production)
+
+To maintain visibility into query performance without introducing unacceptable logging overhead, configure the following PostgreSQL 16 parameters in `postgresql.conf`:
+
+### 1. `log_min_duration_statement`
+
+Logs the complete SQL statement and duration for any execution exceeding the configured threshold in milliseconds ([PostgreSQL 16 Error Reporting and Logging](https://www.postgresql.org/docs/16/runtime-config-logging.html#GUC-LOG-MIN-DURATION-STATEMENT)).
+- **Staging**: `log_min_duration_statement = 250` (250ms) to detect slow or unindexed query patterns during integration testing and QA.
+- **Production**: `log_min_duration_statement = 1000` (1000ms / 1s) to capture query regressions while avoiding excessive I/O log volume under high transactions per second.
+
+### 2. `auto_explain`
+
+The `auto_explain` extension automatically logs query execution plans of slow statements directly to the PostgreSQL log ([PostgreSQL 16 auto_explain Documentation](https://www.postgresql.org/docs/16/auto-explain.html)).
+- Configuration in `postgresql.conf`:
+
+  ```ini
+  shared_preload_libraries = 'auto_explain,pg_stat_statements'
+  ```
+- **Staging**:
+
+  ```ini
+  auto_explain.log_min_duration = 250ms
+  auto_explain.log_analyze = on         # Records actual run times and row counts per node
+  auto_explain.log_buffers = on         # Includes shared buffer cache hit/miss statistics
+  auto_explain.log_timing = on          # Per-node event timing
+  auto_explain.log_nested_statements = on
+  auto_explain.sample_rate = 1.0        # Explain 100% of statements exceeding duration
+  ```
+- **Production**:
+
+  ```ini
+  auto_explain.log_min_duration = 1000ms
+  auto_explain.log_analyze = off        # CAUTION: per-node timing introduces gettimeofday() overhead
+  auto_explain.log_buffers = on         # Low overhead, reveals disk cache misses
+  auto_explain.log_timing = off
+  auto_explain.log_nested_statements = on
+  auto_explain.sample_rate = 0.1        # 10% sample rate on high-throughput workloads (or 1.0 if threshold >= 2s)
+  ```
+
+### 3. `pg_stat_statements`
+
+The `pg_stat_statements` module tracks execution statistics (call count, total time, min/max/mean times, buffer reads) across all normalized query patterns ([PostgreSQL 16 pg_stat_statements Documentation](https://www.postgresql.org/docs/16/pgstatstatements.html)).
+- Installation:
+
+  ```sql
+  CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+  ```
+- **Staging & Production Settings**:
+
+  ```ini
+  pg_stat_statements.max = 10000        # Number of distinct query statements tracked (default 5000)
+  pg_stat_statements.track = top        # Tracks all top-level statements submitted by clients
+  pg_stat_statements.track_utility = on # Tracks DDL, ANALYZE, and VACUUM execution statistics
+  pg_stat_statements.save = on          # Persists statistics across PostgreSQL server restarts
+  ```
+- **Operational Query**:
+  Identify top queries consuming the most cumulative CPU/IO time:
+
+  ```sql
+  SELECT
+    queryid,
+    substring(query, 1, 80) AS short_query,
+    calls,
+    round(total_exec_time::numeric, 2) AS total_time_ms,
+    round(mean_exec_time::numeric, 2) AS mean_time_ms,
+    rows
+  FROM pg_stat_statements
+  ORDER BY total_exec_time DESC
+  LIMIT 10;
+  ```

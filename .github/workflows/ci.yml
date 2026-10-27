@@ -67,6 +67,9 @@ jobs:
       - name: Governance guard
         run: node --test .github/scripts/governance.test.mjs
 
+      - name: Foreign key index check
+        run: pnpm --filter @yen/db check:fk-indexes
+
       - name: Typecheck, test, build
         env:
           BASE_REF: ${{ github.base_ref }}

@@ -17,7 +17,8 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "migrate": "node src/cli.ts"
+    "migrate": "node src/cli.ts",
+    "check:fk-indexes": "node src/check-fk-indexes-cli.ts"
   },
   "dependencies": {
     "@yen/shared": "workspace:*",
