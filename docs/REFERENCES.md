@@ -21,7 +21,8 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 | Blockchain anchoring                 |       2 |
 | Privacy and law                      |       3 |
 | Supply chain and CI                  |       2 |
-| **Total**                            |  **63** |
+| Security and threat modeling         |       2 |
+| **Total**                            |  **65** |
 
 ## Tamper-evident logs and transparency
 
@@ -552,3 +553,21 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **URL:** https://docs.github.com/en/actions/reference/security/secure-use
 - **What we use it for:** GitHub recommends pinning third-party actions to full commit SHAs. Yen pins its workflow actions; pinning alone does not establish their safety.
 - **Where in this repo:** .github/workflows/ci.yml
+
+## Security and threat modeling
+
+<a id="stride-approach"></a>
+### Uncover Security Design Flaws Using The STRIDE Approach
+
+- **Source:** Shawn Hernan, Scott Lambert, Tomasz Ostwald and Adam Shostack; Microsoft Corporation, MSDN Magazine, 2006.
+- **URL:** https://learn.microsoft.com/en-us/archive/msdn-magazine/2006/november/uncover-security-design-flaws-using-the-stride-approach
+- **What we use it for:** STRIDE maps six threat categories to security properties and to data-flow diagram elements. Yen applies STRIDE to its money paths and trust boundaries; the article says threat modeling cannot prove a design secure, so the threat model records residual risk rather than claiming absence of threats.
+- **Where in this repo:** docs/THREAT-MODEL.md
+
+<a id="owasp-threat-modeling"></a>
+### Threat Modeling Cheat Sheet
+
+- **Source:** OWASP; OWASP Cheat Sheet Series, undated (accessed 2026).
+- **URL:** https://cheatsheetseries.owasp.org/cheatsheets/Threat_Modeling_Cheat_Sheet.html
+- **What we use it for:** Uses STRIDE categories as prompts against a system model and lists four responses to a threat (mitigate, eliminate, transfer, accept). It asks teams to document remaining risk and who owns it, but gives no method for measuring residual risk. Yen records residual risk and out-of-scope conditions per threat.
+- **Where in this repo:** docs/THREAT-MODEL.md
