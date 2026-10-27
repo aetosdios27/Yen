@@ -98,7 +98,7 @@ databaseSuite("query-plan discipline and EXPLAIN budgets", (sql) => {
       category: "user_lookups",
       sqlTemplate: "SELECT * FROM users WHERE display_name = $1",
       explain: (s, _ctx) =>
-        s`EXPLAIN (FORMAT JSON) SELECT * FROM users WHERE display_name = 'Nonexistent'`,
+        s`EXPLAIN (FORMAT JSON, VERBOSE) SELECT * FROM users WHERE display_name = 'Nonexistent'`,
       expectedPlan: {
         targetTable: "users",
         disallowSeqScan: true,
@@ -120,7 +120,8 @@ databaseSuite("query-plan discipline and EXPLAIN budgets", (sql) => {
       name: "Fund read with artificially unachievable cost budget",
       category: "fund_reads",
       sqlTemplate: "SELECT * FROM funds WHERE id = $1",
-      explain: (s, ctx) => s`EXPLAIN (FORMAT JSON) SELECT * FROM funds WHERE id = ${ctx.fundId}`,
+      explain: (s, ctx) =>
+        s`EXPLAIN (FORMAT JSON, VERBOSE) SELECT * FROM funds WHERE id = ${ctx.fundId}`,
       expectedPlan: {
         targetTable: "funds",
         expectedIndex: "funds_pkey",
@@ -225,9 +226,93 @@ databaseSuite("query-plan discipline and EXPLAIN budgets", (sql) => {
 
   it("reads realistic row counts from pg_class.reltuples via getTableEstimatedRowCounts", async () => {
     const counts = await getTableEstimatedRowCounts(sql);
-    expect(counts.users).toBeGreaterThanOrEqual(100000);
     expect(counts["public.users"]).toBeGreaterThanOrEqual(100000);
-    expect(counts.funds).toBeGreaterThanOrEqual(2000);
+    expect(counts["public.funds"]).toBeGreaterThanOrEqual(2000);
+    // Counts are keyed only by schema-qualified name, so a bare name cannot collide across schemas.
+    expect(counts.users).toBeUndefined();
+  });
+
+  it("keys row counts by schema: a small same-named table cannot hide a seq scan on a large one", async () => {
+    await sql`CREATE SCHEMA qp_small`;
+    await sql`CREATE SCHEMA qp_large`;
+    try {
+      // The small table is created last so it is the later pg_class row: a bare-name
+      // map would keep its count of 3 and hide the large table's sequential scan.
+      await sql`CREATE TABLE qp_large.users (id bigint PRIMARY KEY, display_name text NOT NULL)`;
+      await sql`INSERT INTO qp_large.users SELECT g, 'User ' || g FROM generate_series(1, 120000) g`;
+      await sql`CREATE TABLE qp_small.users (id bigint PRIMARY KEY, display_name text NOT NULL)`;
+      await sql`INSERT INTO qp_small.users SELECT g, 'Tiny ' || g FROM generate_series(1, 3) g`;
+      await sql`ANALYZE qp_large.users`;
+      await sql`ANALYZE qp_small.users`;
+
+      const counts = await getTableEstimatedRowCounts(sql, { schemas: ["qp_small", "qp_large"] });
+      expect(counts["qp_small.users"]).toBe(3);
+      expect(counts["qp_large.users"]).toBeGreaterThan(100000);
+
+      const largeScan: RegisteredHotPathQuery = {
+        id: "qp_large_users_unindexed_scan",
+        name: "Scan qp_large.users by unindexed display name",
+        category: "user_lookups",
+        sqlTemplate: "SELECT * FROM qp_large.users WHERE display_name = $1",
+        explain: (s) =>
+          s`EXPLAIN (FORMAT JSON, VERBOSE) SELECT * FROM qp_large.users WHERE display_name = 'Nobody'`,
+        expectedPlan: { targetTable: "users", disallowSeqScan: false, maxCost: 1e9 },
+      };
+      const smallScan: RegisteredHotPathQuery = {
+        id: "qp_small_users_unindexed_scan",
+        name: "Scan qp_small.users by unindexed display name",
+        category: "user_lookups",
+        sqlTemplate: "SELECT * FROM qp_small.users WHERE display_name = $1",
+        explain: (s) =>
+          s`EXPLAIN (FORMAT JSON, VERBOSE) SELECT * FROM qp_small.users WHERE display_name = 'Nobody'`,
+        expectedPlan: { targetTable: "users", disallowSeqScan: false, maxCost: 1e9 },
+      };
+
+      const largeResult = verifyPlanNode(await explainQuery(sql, largeScan, queryContext), counts);
+      expect(largeResult.passed).toBe(false);
+      expect(largeResult.violations.map((v) => v.kind)).toEqual(["seq_scan_large_table"]);
+      expect(largeResult.violations[0]?.message).toContain("qp_large.users");
+
+      const smallResult = verifyPlanNode(await explainQuery(sql, smallScan, queryContext), counts);
+      expect(smallResult.violations).toEqual([]);
+    } finally {
+      await sql`DROP SCHEMA IF EXISTS qp_small CASCADE`;
+      await sql`DROP SCHEMA IF EXISTS qp_large CASCADE`;
+    }
+  });
+
+  it("looks up a scanned node by its Schema and Relation Name, not the bare relation name", () => {
+    const query: RegisteredHotPathQuery = {
+      id: "qp_mock_schema_lookup",
+      name: "Mock scan in a large schema",
+      category: "user_lookups",
+      sqlTemplate: "SELECT * FROM qp_large.users",
+      explain: (s) => s`EXPLAIN (FORMAT JSON) SELECT 1`,
+      expectedPlan: { targetTable: "users", disallowSeqScan: false, maxCost: 1e9 },
+    };
+    const scan = {
+      "Node Type": "Seq Scan",
+      Schema: "qp_large",
+      "Relation Name": "users",
+      "Total Cost": 10.0,
+      "Startup Cost": 0.0,
+      "Plan Rows": 50,
+    };
+    const explanation: PlanExplanation = {
+      query,
+      rootPlan: scan,
+      allNodes: [scan],
+    };
+
+    const largeResult = verifyPlanNode(explanation, {
+      "qp_small.users": 3,
+      "qp_large.users": 120000,
+    });
+    expect(largeResult.violations.map((v) => v.kind)).toEqual(["seq_scan_large_table"]);
+
+    // A bare-name entry must not stand in for the qualified count.
+    const bareOnly = verifyPlanNode(explanation, { users: 3 });
+    expect(bareOnly.violations.map((v) => v.kind)).toEqual(["missing_table_row_count"]);
   });
 
   it("enforces allowedScanTypes on target table and rejects disallowed scan types", () => {

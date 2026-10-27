@@ -124,17 +124,17 @@ export async function seedRealisticDataset(sql: Sql): Promise<{
 
   const tableRowCounts: Record<string, number> = {};
   for (const row of countsParsed) {
-    tableRowCounts[row.relname] = row.count;
+    tableRowCounts[`public.${row.relname}`] = row.count;
   }
 
   const stats: SeedStats = {
-    users: tableRowCounts.users ?? 120000,
-    pseudonyms: tableRowCounts.pseudonyms ?? 120000,
-    orgs: tableRowCounts.orgs ?? 10000,
-    funds: tableRowCounts.funds ?? 20000,
-    memberships: tableRowCounts.memberships ?? 120000,
-    idempotencyKeys: tableRowCounts.idempotency_keys ?? 150000,
-    waitlistEntries: tableRowCounts.waitlist_entries ?? 120000,
+    users: tableRowCounts["public.users"] ?? 120000,
+    pseudonyms: tableRowCounts["public.pseudonyms"] ?? 120000,
+    orgs: tableRowCounts["public.orgs"] ?? 10000,
+    funds: tableRowCounts["public.funds"] ?? 20000,
+    memberships: tableRowCounts["public.memberships"] ?? 120000,
+    idempotencyKeys: tableRowCounts["public.idempotency_keys"] ?? 150000,
+    waitlistEntries: tableRowCounts["public.waitlist_entries"] ?? 120000,
     totalRows: Object.values(tableRowCounts).reduce((acc, c) => acc + c, 0),
   };
 

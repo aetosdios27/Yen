@@ -1,4 +1,9 @@
+import { randomUUID } from "node:crypto";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { beforeAll, expect, it } from "vitest";
+import type { Sql } from "./client.js";
 import {
   assertForeignKeyIndexes,
   findForeignKeysWithoutIndices,
@@ -6,6 +11,46 @@ import {
 } from "./foreign-keys.js";
 import { migrate } from "./migrate.js";
 import { databaseSuite } from "./test/database.js";
+
+/**
+ * Writes a migration directory whose middle migration sleeps for `holdSeconds`, so a
+ * verification stays in flight long enough for another session to act on the database.
+ */
+async function writeHoldingMigrations(holdSeconds: number): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), "yen-fk-verify-"));
+  await writeFile(
+    join(dir, "0001_parents_and_children.sql"),
+    `CREATE TABLE parents (id uuid PRIMARY KEY);
+CREATE TABLE children (id uuid PRIMARY KEY, parent_id uuid NOT NULL REFERENCES parents(id));
+CREATE INDEX children_parent_id_idx ON children (parent_id);
+`,
+  );
+  await writeFile(join(dir, "0002_hold.sql"), `SELECT pg_sleep(${holdSeconds});\n`);
+  await writeFile(
+    join(dir, "0003_notes.sql"),
+    `CREATE TABLE notes (id uuid PRIMARY KEY, parent_id uuid NOT NULL REFERENCES parents(id));
+CREATE INDEX notes_parent_id_idx ON notes (parent_id);
+`,
+  );
+  return dir;
+}
+
+async function scratchSchemaNames(sql: Sql): Promise<string[]> {
+  const rows = await sql`
+    SELECT nspname FROM pg_namespace
+    WHERE starts_with(nspname, 'yen_fk_verify_')
+    ORDER BY nspname
+  `;
+  return rows.map((row) => String(row.nspname));
+}
+
+async function waitUntil(condition: () => Promise<boolean>): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  while (!(await condition())) {
+    if (Date.now() > deadline) throw new Error("timed out waiting for condition");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
 
 databaseSuite("foreign key indexing discipline", (sql) => {
   beforeAll(async () => {
@@ -172,6 +217,46 @@ databaseSuite("foreign key indexing discipline", (sql) => {
       expect(allowed.find((v) => v.tableName === "test_audit.events")).toBeUndefined();
     } finally {
       await sql`DROP SCHEMA IF EXISTS test_audit CASCADE`;
+    }
+  });
+
+  it("leaves an unrelated schema created while a verification is in flight", async () => {
+    const dir = await writeHoldingMigrations(2);
+    const unrelated = `yen_unrelated_${randomUUID().replaceAll("-", "")}`;
+    try {
+      const verification = verifyAllMigrationsForeignKeys(sql, { dir });
+      await waitUntil(async () => (await scratchSchemaNames(sql)).length === 1);
+      await sql.unsafe(`CREATE SCHEMA ${unrelated}`);
+
+      await expect(verification).resolves.toMatchObject({ migrationCount: 3 });
+      expect(await scratchSchemaNames(sql)).toEqual([]);
+      const survivors = await sql`
+        SELECT nspname FROM pg_namespace WHERE nspname = ${unrelated}
+      `;
+      expect(survivors.map((row) => row.nspname)).toEqual([unrelated]);
+    } finally {
+      await sql.unsafe(`DROP SCHEMA IF EXISTS ${unrelated} CASCADE`);
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not drop the scratch schema of an overlapping verification", async () => {
+    // The first call finishes its hold well before the second, so the first call's
+    // cleanup runs while the second call still has migrations left to apply.
+    const firstDir = await writeHoldingMigrations(1);
+    const secondDir = await writeHoldingMigrations(3);
+    try {
+      const first = verifyAllMigrationsForeignKeys(sql, { dir: firstDir });
+      await waitUntil(async () => (await scratchSchemaNames(sql)).length === 1);
+      const second = verifyAllMigrationsForeignKeys(sql, { dir: secondDir });
+
+      const [firstResult, secondResult] = await Promise.all([first, second]);
+      expect(firstResult.migrationCount).toBe(3);
+      expect(secondResult.migrationCount).toBe(3);
+      expect(await scratchSchemaNames(sql)).toEqual([]);
+    } finally {
+      await rm(firstDir, { recursive: true, force: true });
+      await rm(secondDir, { recursive: true, force: true });
     }
   });
 });

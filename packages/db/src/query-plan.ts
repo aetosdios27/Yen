@@ -30,6 +30,7 @@ import {
 
 export type PlanNode = {
   "Node Type": string;
+  Schema?: string | undefined;
   "Relation Name"?: string | undefined;
   "Index Name"?: string | undefined;
   "Total Cost": number;
@@ -80,6 +81,7 @@ const explainResultSchema = z.array(
             "Total Cost": z.number(),
             "Startup Cost": z.number(),
             "Plan Rows": z.number(),
+            Schema: z.string().optional(),
             "Relation Name": z.string().optional(),
             "Index Name": z.string().optional(),
           })
@@ -103,7 +105,9 @@ export function collectPlanNodes(node: PlanNode): PlanNode[] {
 }
 
 /**
- * Runs EXPLAIN (FORMAT JSON) on a registered query and extracts the parsed plan.
+ * Runs EXPLAIN (FORMAT JSON, VERBOSE) on a registered query and extracts the parsed plan.
+ * VERBOSE is required because PostgreSQL only includes the scanned relation's schema in that
+ * output, which the large-table guard uses to identify row counts safely.
  */
 export async function explainQuery(
   sql: Sql,
@@ -121,8 +125,11 @@ export async function explainQuery(
 }
 
 /**
- * Reads estimated row counts from pg_class.reltuples for all user tables in the database.
+ * Reads estimated row counts from pg_class.reltuples for user tables.
  * Requires ANALYZE to have been executed so reltuples reflects table sizes.
+ *
+ * Keys are schema-qualified ("schema.table"). A bare table name is never a key, so same-named
+ * tables in different schemas keep separate counts.
  */
 export async function getTableEstimatedRowCounts(
   sql: Sql,
@@ -164,15 +171,25 @@ export async function getTableEstimatedRowCounts(
   const parsedRows = rowCountsSchema.parse(rows);
   const counts: Record<string, number> = {};
   for (const row of parsedRows) {
-    const count = Math.max(0, Number(row.row_count));
-    counts[row.relname] = count;
-    counts[`${row.nspname}.${row.relname}`] = count;
+    counts[`${row.nspname}.${row.relname}`] = Math.max(0, Number(row.row_count));
   }
   return counts;
 }
 
 /**
+ * The tableRowCounts key for a plan node: "Schema.Relation Name", as EXPLAIN reports them.
+ * Undefined when EXPLAIN omits either part, so the lookup finds no count.
+ */
+function qualifiedRelationName(node: PlanNode): string | undefined {
+  const relation = node["Relation Name"];
+  return relation === undefined || node.Schema === undefined
+    ? undefined
+    : `${node.Schema}.${relation}`;
+}
+
+/**
  * Verifies a query's plan against its expected plan shape and table size thresholds.
+ * Row counts are looked up by schema-qualified name (see getTableEstimatedRowCounts).
  */
 export function verifyPlanNode(
   planExplanation: PlanExplanation,
@@ -197,7 +214,9 @@ export function verifyPlanNode(
   for (const node of allNodes) {
     if (node["Node Type"] === "Seq Scan") {
       const relation = node["Relation Name"] ?? "unknown";
-      const rows = tableRowCounts[relation];
+      const qualifiedName = qualifiedRelationName(node);
+      const qualified = qualifiedName ?? relation;
+      const rows = qualifiedName === undefined ? undefined : tableRowCounts[qualifiedName];
 
       // Disallow on target table if query forbids seq scan
       if (relation === query.expectedPlan.targetTable && query.expectedPlan.disallowSeqScan) {
@@ -207,23 +226,23 @@ export function verifyPlanNode(
         violations.push({
           queryId: query.id,
           kind: "seq_scan_forbidden",
-          message: `Query "${query.id}" performed a Sequential Scan on target table "${relation}". Expected index: "${expected}".`,
+          message: `Query "${query.id}" performed a Sequential Scan on target table "${qualified}". Expected index: "${expected}".`,
         });
       }
 
-      // If tableRowCounts does not provide row count for this scanned relation, fail with violation
+      // A scanned relation without a schema-qualified row count fails closed
       if (rows === undefined) {
         violations.push({
           queryId: query.id,
           kind: "missing_table_row_count",
-          message: `Query "${query.id}" performed a Sequential Scan on table "${relation}", but no row count was provided in tableRowCounts for "${relation}".`,
+          message: `Query "${query.id}" performed a Sequential Scan on table "${qualified}", but no row count was provided in tableRowCounts for "${qualified}".`,
         });
       } else if (rows > 100000) {
         // Hard check: No registered hot-path query does a sequential scan on a table over 100k rows
         violations.push({
           queryId: query.id,
           kind: "seq_scan_large_table",
-          message: `Query "${query.id}" performed a Sequential Scan on table "${relation}" with ${rows} rows (> 100,000 row threshold).`,
+          message: `Query "${query.id}" performed a Sequential Scan on table "${qualified}" with ${rows} rows (> 100,000 row threshold).`,
         });
       }
     }

@@ -216,8 +216,10 @@ export async function assertForeignKeyIndexes(
 
 /**
  * Verifies foreign key indexing discipline across every migration built from scratch.
- * Applies migrations one by one to an isolated scratch schema and verifies after
- * each migration that no newly introduced foreign key lacks an index in the same migration.
+ * Applies migrations one by one to a scratch schema named with a fresh UUID. The call creates
+ * that schema and drops it by exact name when it finishes; it never drops any other schema.
+ * After each migration it verifies that no newly introduced foreign key lacks an index in the
+ * same migration.
  */
 export async function verifyAllMigrationsForeignKeys(
   sql: Sql,
@@ -233,12 +235,6 @@ export async function verifyAllMigrationsForeignKeys(
 
   // Use a reserved connection so transaction and search_path state stay bound
   const connection = await sql.reserve();
-  const initialSchemas = new Set(
-    z
-      .array(z.object({ nspname: z.string() }))
-      .parse(await connection`SELECT nspname FROM pg_namespace`)
-      .map((r) => r.nspname),
-  );
 
   try {
     await connection.unsafe(`CREATE SCHEMA ${scratchSchema}`);
@@ -273,17 +269,11 @@ export async function verifyAllMigrationsForeignKeys(
       totalChecked = Math.max(totalChecked, count);
     }
   } finally {
+    // Drop only the scratch schema this call created, by its generated name. Schemas that
+    // other sessions create while this runs are never inferred from a snapshot and dropped.
     try {
       await connection.unsafe(`SET search_path TO public`);
       await connection.unsafe(`DROP SCHEMA IF EXISTS ${scratchSchema} CASCADE`);
-      const postSchemas = z
-        .array(z.object({ nspname: z.string() }))
-        .parse(await connection`SELECT nspname FROM pg_namespace`);
-      for (const row of postSchemas) {
-        if (!initialSchemas.has(row.nspname) && !row.nspname.startsWith("pg_")) {
-          await connection.unsafe(`DROP SCHEMA IF EXISTS ${row.nspname} CASCADE`);
-        }
-      }
     } finally {
       connection.release();
     }

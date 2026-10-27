@@ -23,7 +23,7 @@ export type QueryCategory =
  * https://www.postgresql.org/docs/16/using-explain.html
  */
 export type ExpectedPlanShape = {
-  /** Maximum allowable estimated total cost from EXPLAIN (FORMAT JSON). */
+  /** Maximum allowable estimated total cost from EXPLAIN (FORMAT JSON, VERBOSE). */
   maxCost: number;
   /** Primary target table of the query. */
   targetTable: string;
@@ -70,7 +70,8 @@ const INITIAL_HOT_PATH_QUERIES: RegisteredHotPathQuery[] = [
     name: "Fund read by ID",
     category: "fund_reads",
     sqlTemplate: "SELECT * FROM funds WHERE id = $1",
-    explain: (sql, ctx) => sql`EXPLAIN (FORMAT JSON) SELECT * FROM funds WHERE id = ${ctx.fundId}`,
+    explain: (sql, ctx) =>
+      sql`EXPLAIN (FORMAT JSON, VERBOSE) SELECT * FROM funds WHERE id = ${ctx.fundId}`,
     expectedPlan: {
       targetTable: "funds",
       expectedIndex: "funds_pkey",
@@ -84,7 +85,7 @@ const INITIAL_HOT_PATH_QUERIES: RegisteredHotPathQuery[] = [
     category: "fund_reads",
     sqlTemplate: "SELECT * FROM funds WHERE org_id = $1",
     explain: (sql, ctx) =>
-      sql`EXPLAIN (FORMAT JSON) SELECT * FROM funds WHERE org_id = ${ctx.fundOrgId}`,
+      sql`EXPLAIN (FORMAT JSON, VERBOSE) SELECT * FROM funds WHERE org_id = ${ctx.fundOrgId}`,
     expectedPlan: {
       targetTable: "funds",
       expectedIndex: "funds_org_id_idx",
@@ -98,7 +99,7 @@ const INITIAL_HOT_PATH_QUERIES: RegisteredHotPathQuery[] = [
     category: "membership_lookups",
     sqlTemplate: "SELECT * FROM memberships WHERE user_id = $1",
     explain: (sql, ctx) =>
-      sql`EXPLAIN (FORMAT JSON) SELECT * FROM memberships WHERE user_id = ${ctx.membershipUserId}`,
+      sql`EXPLAIN (FORMAT JSON, VERBOSE) SELECT * FROM memberships WHERE user_id = ${ctx.membershipUserId}`,
     expectedPlan: {
       targetTable: "memberships",
       expectedIndex: "memberships_user_id_idx",
@@ -112,7 +113,7 @@ const INITIAL_HOT_PATH_QUERIES: RegisteredHotPathQuery[] = [
     category: "membership_lookups",
     sqlTemplate: "SELECT * FROM memberships WHERE fund_id = $1 AND user_id = $2",
     explain: (sql, ctx) =>
-      sql`EXPLAIN (FORMAT JSON) SELECT * FROM memberships WHERE fund_id = ${ctx.membershipFundId} AND user_id = ${ctx.membershipUserId}`,
+      sql`EXPLAIN (FORMAT JSON, VERBOSE) SELECT * FROM memberships WHERE fund_id = ${ctx.membershipFundId} AND user_id = ${ctx.membershipUserId}`,
     expectedPlan: {
       targetTable: "memberships",
       expectedIndex: ["memberships_pkey", "memberships_user_id_idx"],
@@ -126,7 +127,7 @@ const INITIAL_HOT_PATH_QUERIES: RegisteredHotPathQuery[] = [
     category: "membership_lookups",
     sqlTemplate: "SELECT * FROM memberships WHERE fund_id = $1",
     explain: (sql, ctx) =>
-      sql`EXPLAIN (FORMAT JSON) SELECT * FROM memberships WHERE fund_id = ${ctx.membershipFundId}`,
+      sql`EXPLAIN (FORMAT JSON, VERBOSE) SELECT * FROM memberships WHERE fund_id = ${ctx.membershipFundId}`,
     expectedPlan: {
       targetTable: "memberships",
       expectedIndex: "memberships_pkey",
@@ -139,7 +140,8 @@ const INITIAL_HOT_PATH_QUERIES: RegisteredHotPathQuery[] = [
     name: "User read by primary key ID",
     category: "user_lookups",
     sqlTemplate: "SELECT * FROM users WHERE id = $1",
-    explain: (sql, ctx) => sql`EXPLAIN (FORMAT JSON) SELECT * FROM users WHERE id = ${ctx.userId}`,
+    explain: (sql, ctx) =>
+      sql`EXPLAIN (FORMAT JSON, VERBOSE) SELECT * FROM users WHERE id = ${ctx.userId}`,
     expectedPlan: {
       targetTable: "users",
       expectedIndex: "users_pkey",
@@ -153,7 +155,7 @@ const INITIAL_HOT_PATH_QUERIES: RegisteredHotPathQuery[] = [
     category: "user_lookups",
     sqlTemplate: "SELECT * FROM users WHERE phone = $1",
     explain: (sql, ctx) =>
-      sql`EXPLAIN (FORMAT JSON) SELECT * FROM users WHERE phone = ${ctx.userPhone}`,
+      sql`EXPLAIN (FORMAT JSON, VERBOSE) SELECT * FROM users WHERE phone = ${ctx.userPhone}`,
     expectedPlan: {
       targetTable: "users",
       expectedIndex: "users_phone_key",
@@ -166,7 +168,8 @@ const INITIAL_HOT_PATH_QUERIES: RegisteredHotPathQuery[] = [
     name: "Organization read by ID",
     category: "org_lookups",
     sqlTemplate: "SELECT * FROM orgs WHERE id = $1",
-    explain: (sql, ctx) => sql`EXPLAIN (FORMAT JSON) SELECT * FROM orgs WHERE id = ${ctx.orgId}`,
+    explain: (sql, ctx) =>
+      sql`EXPLAIN (FORMAT JSON, VERBOSE) SELECT * FROM orgs WHERE id = ${ctx.orgId}`,
     expectedPlan: {
       targetTable: "orgs",
       expectedIndex: "orgs_pkey",
@@ -180,7 +183,7 @@ const INITIAL_HOT_PATH_QUERIES: RegisteredHotPathQuery[] = [
     category: "org_lookups",
     sqlTemplate: "SELECT * FROM orgs WHERE owner_id = $1",
     explain: (sql, ctx) =>
-      sql`EXPLAIN (FORMAT JSON) SELECT * FROM orgs WHERE owner_id = ${ctx.orgOwnerId}`,
+      sql`EXPLAIN (FORMAT JSON, VERBOSE) SELECT * FROM orgs WHERE owner_id = ${ctx.orgOwnerId}`,
     expectedPlan: {
       targetTable: "orgs",
       expectedIndex: "orgs_owner_id_idx",
@@ -194,7 +197,7 @@ const INITIAL_HOT_PATH_QUERIES: RegisteredHotPathQuery[] = [
     category: "idempotency",
     sqlTemplate: "SELECT * FROM idempotency_keys WHERE key = $1",
     explain: (sql, ctx) =>
-      sql`EXPLAIN (FORMAT JSON) SELECT * FROM idempotency_keys WHERE key = ${ctx.idempotencyKey}`,
+      sql`EXPLAIN (FORMAT JSON, VERBOSE) SELECT * FROM idempotency_keys WHERE key = ${ctx.idempotencyKey}`,
     expectedPlan: {
       targetTable: "idempotency_keys",
       expectedIndex: "idempotency_keys_pkey",
@@ -208,7 +211,7 @@ const INITIAL_HOT_PATH_QUERIES: RegisteredHotPathQuery[] = [
     category: "waitlist",
     sqlTemplate: "SELECT * FROM waitlist_entries WHERE contact = $1",
     explain: (sql, ctx) =>
-      sql`EXPLAIN (FORMAT JSON) SELECT * FROM waitlist_entries WHERE contact = ${ctx.waitlistContact}`,
+      sql`EXPLAIN (FORMAT JSON, VERBOSE) SELECT * FROM waitlist_entries WHERE contact = ${ctx.waitlistContact}`,
     expectedPlan: {
       targetTable: "waitlist_entries",
       expectedIndex: "waitlist_entries_contact_key",
