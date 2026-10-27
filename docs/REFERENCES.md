@@ -4,6 +4,25 @@
 
 ADRs and design-heavy pull requests must cite relevant entries here, explain what they take from each source and where the design differs, or explicitly say “no prior art found” when true. Before adding an entry, open and read the primary source, check its metadata, URL and the specific claim, and record any limits or differences. Entries for planned work are guidance, not evidence that it has shipped.
 
+## Coverage
+
+| Area                                 | Entries |
+| ------------------------------------ | ------: |
+| Tamper-evident logs and transparency |       8 |
+| Canonical serialization              |       1 |
+| Money and ledgers                    |       5 |
+| Idempotency and retries              |       5 |
+| Rate limiting and load shedding      |       7 |
+| Testing and failure handling         |       4 |
+| Benchmarking and latency             |       1 |
+| SRE and observability                |       5 |
+| PostgreSQL                           |      15 |
+| Authentication and approvals         |       5 |
+| Blockchain anchoring                 |       2 |
+| Privacy and law                      |       3 |
+| Supply chain and CI                  |       2 |
+| **Total**                            |  **63** |
+
 ## Tamper-evident logs and transparency
 
 <a id="crosby-wallach"></a>
@@ -45,6 +64,30 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **URL:** https://research.swtch.com/tlog
 - **What we use it for:** Merkle trees allow skeptical clients to check inclusion and append-only growth. Yen currently provides inclusion proofs, not append-only consistency proofs.
 - **Where in this repo:** packages/shared/src/merkle/README.md
+
+<a id="schneier-kelsey"></a>
+### Cryptographic Support for Secure Logs on Untrusted Machines
+
+- **Source:** Bruce Schneier and John Kelsey; 7th USENIX Security Symposium, 1998.
+- **URL:** https://www.usenix.org/conference/7th-usenix-security-symposium/cryptographic-support-secure-logs-untrusted-machines
+- **What we use it for:** The paper protects earlier entries against undetected modification following compromise. Yen uses hash chains and externally authenticated heads, not the paper’s key-evolving encryption scheme or its confidentiality guarantee.
+- **Where in this repo:** packages/eventlog/README.md
+
+<a id="trillian-structures"></a>
+### Verifiable data structures
+
+- **Source:** Transparency.dev; Trillian documentation, undated (accessed 2026).
+- **URL:** https://transparency.dev/verifiable-data-structures/
+- **What we use it for:** Consistency proofs establish that a later log retains earlier entries in order. Yen provides inclusion proofs but not consistency proofs.
+- **Where in this repo:** packages/shared/src/merkle/README.md
+
+<a id="rfc-6234"></a>
+### US Secure Hash Algorithms (SHA and SHA-based HMAC and HKDF)
+
+- **Source:** Donald Eastlake 3rd and Tony Hansen; RFC 6234, 2011.
+- **URL:** https://www.rfc-editor.org/rfc/rfc6234.html
+- **What we use it for:** The RFC describes SHA-256 and provides sample implementations. Yen uses SHA-256 with its own domain-separated formats, not this RFC’s sample code.
+- **Where in this repo:** packages/eventlog/README.md; packages/shared/src/merkle/README.md
 
 ## Canonical serialization
 
@@ -90,6 +133,14 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **What we use it for:** TigerBeetle guarantees equal sums of posted debits and credits. Yen plans a Konto ledger; this is a reference for its invariants, not evidence those guarantees have shipped.
 - **Where in this repo:** YEN-18
 
+<a id="kleppmann-accounting"></a>
+### Accounting for Computer Scientists
+
+- **Source:** Martin Kleppmann; author’s blog, 2011.
+- **URL:** https://martin.kleppmann.com/2011/03/07/accounting-for-computer-scientists.html
+- **What we use it for:** Modeling accounts as nodes and transfers as edges illustrates balanced accounting. Yen’s ledger is planned; this explanation is not evidence that it has shipped.
+- **Where in this repo:** YEN-18; packages/db/README.md
+
 ## Idempotency and retries
 
 <a id="stripe-idempotency"></a>
@@ -114,6 +165,22 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Source:** Jayadeba Jena, Sanjay Dalal and Dmitrii Tishkin; IETF Internet-Draft 08, 2026 (work in progress).
 - **URL:** https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-idempotency-key-header-08
 - **What we use it for:** The draft describes fingerprints, retries and conflicts for concurrent requests. Its structured-header string syntax differs from Yen’s current unquoted restricted header values; Yen does not claim conformance.
+- **Where in this repo:** apps/api/README.md
+
+<a id="aws-idempotency"></a>
+### Making retries safe with idempotent APIs
+
+- **Source:** Malcolm Featonby; AWS Builders’ Library, undated (accessed 2026).
+- **URL:** https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/
+- **What we use it for:** A client request identifier expresses retry intent, and recording it with mutations requires an atomic operation. Yen’s in-memory idempotency store does not yet provide durable coordination.
+- **Where in this repo:** apps/api/README.md
+
+<a id="aws-fallback"></a>
+### Avoiding fallback in distributed systems
+
+- **Source:** Jacob Gabrielson; AWS Builders’ Library, 2019.
+- **URL:** https://aws.amazon.com/builders-library/avoiding-fallback-in-distributed-systems/
+- **What we use it for:** Rare fallback paths can add reliability risk; evaluate and test failure paths. This is guidance for future integration design, not a description of a Yen fallback implementation.
 - **Where in this repo:** apps/api/README.md
 
 ## Rate limiting and load shedding
@@ -142,6 +209,38 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **What we use it for:** Overload and retries can propagate failures across services. Use this to reason about recovery and capacity.
 - **Where in this repo:** apps/api/README.md
 
+<a id="aws-load-shedding"></a>
+### Using load shedding to avoid overload
+
+- **Source:** David Yanacek; AWS Builders’ Library, 2019.
+- **URL:** https://aws.amazon.com/builders-library/using-load-shedding-to-avoid-overload/
+- **What we use it for:** Rejecting excess work helps maintain service under overload. Yen’s per-process rate limits are not a full load-shedding system.
+- **Where in this repo:** apps/api/README.md
+
+<a id="rfc-6585"></a>
+### Additional HTTP Status Codes
+
+- **Source:** Mark Nottingham and Roy Fielding; RFC 6585, 2012.
+- **URL:** https://www.rfc-editor.org/rfc/rfc6585.html
+- **What we use it for:** HTTP 429 signals excessive requests and can include Retry-After. Yen returns 429 with a retry delay for rate limiting.
+- **Where in this repo:** apps/api/README.md
+
+<a id="rfc-9110"></a>
+### HTTP Semantics
+
+- **Source:** Roy T. Fielding, Mark Nottingham and Julian Reschke; RFC 9110, 2022.
+- **URL:** https://www.rfc-editor.org/rfc/rfc9110.html
+- **What we use it for:** Retry-After may be an HTTP date or a delay in seconds. Yen sends a delay in seconds.
+- **Where in this repo:** apps/api/README.md
+
+<a id="cloudflare-rate-headers"></a>
+### Introducing new headers for rate limiting on Cloudflare’s API
+
+- **Source:** Cloudflare; Cloudflare changelog, 2025.
+- **URL:** https://developers.cloudflare.com/changelog/post/2025-09-03-rate-limiting-improvement/
+- **What we use it for:** Cloudflare exposes quota and reset information and a Retry-After delay. Yen sends Retry-After but does not implement those Cloudflare quota headers.
+- **Where in this repo:** apps/api/README.md
+
 ## Testing and failure handling
 
 <a id="yuan-failures"></a>
@@ -159,6 +258,22 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **URL:** https://www.foundationdb.org/files/fdb-paper.pdf
 - **What we use it for:** FoundationDB uses deterministic simulation to exercise distributed failures. Yen’s local tests are not FoundationDB-style distributed simulation.
 - **Where in this repo:** packages/db/src/test/database.test.ts
+
+<a id="jepsen-models"></a>
+### Consistency Models
+
+- **Source:** Jepsen; consistency reference, undated (accessed 2026).
+- **URL:** https://jepsen.io/consistency/models
+- **What we use it for:** The model hierarchy distinguishes serializability, linearizability and strict serializability when reasoning about concurrent histories. It does not establish a consistency guarantee for Yen.
+- **Where in this repo:** packages/db/README.md
+
+<a id="brandur-queues"></a>
+### Postgres Job Queues & Failure By MVCC
+
+- **Source:** Brandur Leach; author’s blog, 2015.
+- **URL:** https://brandur.org/postgres-queues
+- **What we use it for:** Long-running transactions can prevent cleanup of dead tuples and degrade a Postgres queue. Yen has no such job queue here; use this when evaluating a future queue.
+- **Where in this repo:** packages/db/README.md
 
 ## Benchmarking and latency
 
@@ -202,6 +317,14 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Source:** Rob Ewaschuk; Google, Site Reliability Engineering, 2016.
 - **URL:** https://sre.google/sre-book/monitoring-distributed-systems/
 - **What we use it for:** Monitoring should support actionable alerts and visibility into system behavior. Yen’s current request logs are a foundation, not a complete monitoring system.
+- **Where in this repo:** apps/api/README.md
+
+<a id="sre-implementing-slos"></a>
+### Implementing SLOs
+
+- **Source:** Steven Thurgood and David Ferguson, with Alex Hidalgo and Betsy Beyer; Google, Site Reliability Workbook, 2018.
+- **URL:** https://sre.google/workbook/implementing-slos/
+- **What we use it for:** Different request classes can need different latency and availability targets. Yen has not defined those SLOs here.
 - **Where in this repo:** apps/api/README.md
 
 ## PostgreSQL
@@ -254,6 +377,78 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **What we use it for:** The standard_conforming_strings setting changes interpretation of backslashes in ordinary strings. Migration preflight must account for this distinction.
 - **Where in this repo:** packages/db/src/sql-statements.ts
 
+<a id="brandur-job-drain"></a>
+### Transactionally Staged Job Drains in Postgres
+
+- **Source:** Brandur Leach; author’s blog, 2017.
+- **URL:** https://brandur.org/job-drain
+- **What we use it for:** Staging jobs in the transaction makes them invisible to a worker until commit. Yen proposes an outbox alongside event append but has not implemented this job-drain design.
+- **Where in this repo:** packages/eventlog/README.md
+
+<a id="pg-explain"></a>
+### EXPLAIN
+
+- **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
+- **URL:** https://www.postgresql.org/docs/16/sql-explain.html
+- **What we use it for:** EXPLAIN displays a query plan; ANALYZE executes the statement and can have side effects. This is diagnostic guidance, not a Yen benchmark.
+- **Where in this repo:** packages/db/README.md
+
+<a id="pg-timeouts"></a>
+### Client Connection Defaults
+
+- **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
+- **URL:** https://www.postgresql.org/docs/16/runtime-config-client.html
+- **What we use it for:** statement_timeout bounds statement execution, while lock_timeout applies to individual lock waits. These settings are references for future operational configuration, not asserted Yen defaults.
+- **Where in this repo:** packages/db/README.md
+
+<a id="pg-constraints"></a>
+### Constraints
+
+- **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
+- **URL:** https://www.postgresql.org/docs/16/ddl-constraints.html
+- **What we use it for:** Database constraints reject invalid values and can enforce uniqueness. Yen’s migrations use constraints; the proposed event append invariants require additional enforcement.
+- **Where in this repo:** packages/db/migrations/0001_app_tables.sql; packages/eventlog/README.md
+
+<a id="pg-row-security"></a>
+### Row Security Policies
+
+- **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
+- **URL:** https://www.postgresql.org/docs/16/ddl-rowsecurity.html
+- **What we use it for:** Enabled row security defaults to deny when no policy exists, but table owners typically bypass it. Yen’s API policy hooks are not PostgreSQL row security.
+- **Where in this repo:** apps/api/README.md; packages/db/README.md
+
+<a id="pg-insert"></a>
+### INSERT
+
+- **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
+- **URL:** https://www.postgresql.org/docs/16/sql-insert.html
+- **What we use it for:** ON CONFLICT DO UPDATE provides an atomic insert-or-update outcome. That primitive alone does not coordinate Yen’s idempotency record with external side effects.
+- **Where in this repo:** apps/api/README.md; packages/db/README.md
+
+<a id="pg-trigger"></a>
+### CREATE TRIGGER
+
+- **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
+- **URL:** https://www.postgresql.org/docs/16/sql-createtrigger.html
+- **What we use it for:** TRUNCATE triggers are statement-level, unlike row-level insert, update and delete triggers. Yen’s event-log README proposes triggers; they are not implemented in the current event-log package.
+- **Where in this repo:** packages/eventlog/README.md
+
+<a id="pg-privileges"></a>
+### Privileges
+
+- **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
+- **URL:** https://www.postgresql.org/docs/16/ddl-priv.html
+- **What we use it for:** UPDATE, DELETE and TRUNCATE are separate privileges, while ownership carries powers that cannot simply be revoked. Yen’s proposed append-only enforcement must account for privileged roles.
+- **Where in this repo:** packages/eventlog/README.md
+
+<a id="pg-index"></a>
+### CREATE INDEX
+
+- **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
+- **URL:** https://www.postgresql.org/docs/16/sql-createindex.html
+- **What we use it for:** A unique partial index can enforce uniqueness for a subset of rows. This is a schema-design reference, not a claim that such an index implements Yen’s future ledger invariants.
+- **Where in this repo:** packages/db/README.md
+
 ## Authentication and approvals
 
 <a id="webauthn-2"></a>
@@ -288,6 +483,14 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **What we use it for:** Users should identify significant transaction data such as amount and target before authorizing. Yen’s approval flow is not implemented yet.
 - **Where in this repo:** YEN-26
 
+<a id="rfc-9457"></a>
+### Problem Details for HTTP APIs
+
+- **Source:** Mark Nottingham, Erik Wilde and Sanjay Dalal; RFC 9457, 2023.
+- **URL:** https://www.rfc-editor.org/rfc/rfc9457.html
+- **What we use it for:** Machine-readable error details help clients interpret HTTP failures. Yen uses its own nested error envelope and does not claim RFC 9457 conformance.
+- **Where in this repo:** apps/api/README.md
+
 ## Blockchain anchoring
 
 <a id="opentimestamps"></a>
@@ -296,6 +499,14 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Source:** OpenTimestamps; project documentation, undated (accessed 2026).
 - **URL:** https://opentimestamps.org/
 - **What we use it for:** A timestamp proof demonstrates data existed before a point in time. Yen publishes roots through an authorized Polygon contract rather than implementing the OpenTimestamps format or Bitcoin calendars.
+- **Where in this repo:** contracts/README.md
+
+<a id="ethereum-reorg"></a>
+### Ethereum proof-of-stake attack and defense
+
+- **Source:** Ethereum.org; Ethereum documentation, undated (accessed 2026).
+- **URL:** https://ethereum.org/developers/docs/consensus-mechanisms/pos/attack-and-defense/
+- **What we use it for:** Chain reorganizations and finality delays are distinct risks when assessing publication. Yen targets Polygon PoS, whose consensus and finality must be assessed separately; testnets may reset.
 - **Where in this repo:** contracts/README.md
 
 ## Privacy and law
@@ -315,6 +526,14 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **URL:** https://www.meity.gov.in/static/uploads/2025/11/c56ceae6c383460ca69577428d36828b.pdf
 - **What we use it for:** Different provisions commence on different dates; assess the current commencement and rules when making compliance decisions.
 - **Where in this repo:** packages/db/README.md
+
+<a id="ico-pseudonymisation"></a>
+### Pseudonymisation
+
+- **Source:** Information Commissioner’s Office; UK GDPR guidance, undated (accessed 2026).
+- **URL:** https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/data-sharing/anonymisation/pseudonymisation/
+- **What we use it for:** Pseudonymisation reduces identification risk but does not automatically make data anonymous. This UK guidance is a design reference, not a determination of Indian legal compliance.
+- **Where in this repo:** packages/eventlog/README.md; packages/db/README.md
 
 ## Supply chain and CI
 
