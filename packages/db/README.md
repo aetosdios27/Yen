@@ -1,18 +1,14 @@
 # @yen/db
 
-Postgres.js client, application row schemas, and the v1 SQL schema for YEN-18.
+Postgres.js client, application row schemas, migration runner, and the fund event log persistence layer (YEN-21).
 
-## ADR: SQL owns the database schema
-
-**Context.** Konto uses plain SQL on postgres.js. The event log needs database triggers and privilege rules that must remain visible during review.
-
-**Options considered.** An ORM with generated migrations, Drizzle Kit with a TypeScript schema, or reviewed SQL files with a small postgres.js runner.
+## Scope and decisions
 
 **Decision.** Use plain SQL and forward-only migrations. Generate UUIDv7 primary keys in the application with `uuidv7()`; UUID columns have no defaults. Use `timestamptz` for instants and UTC sessions. Store money as `bigint` paise with nonnegative CHECK constraints. Use CHECKed text for membership roles, statuses, and fund visibility so later SQL migrations can change the allowed values without managing Postgres enum types. `legal_form` remains unconstrained text until the domain defines its allowed values.
 
 **Consequences.** SQL is the source of truth. Schema changes require a new migration and matching row-schema changes. Each migration must fit in one transaction. Deployments cannot roll back the schema; corrections require another forward migration. No ORM or query-builder layer sits between callers and Postgres.
 
-PII belongs only in application tables. `pseudonyms` is an erasable mapping from a public UUID to a user. Historical records store the UUID value without a foreign key to this mapping. They must never cascade from the mapping: deleting it must preserve the historical record. All app foreign keys use the default restrictive delete behavior. No event, donation, or expense tables are part of this package's v1 migration.
+PII belongs only in application tables. `pseudonyms` is an erasable mapping from a public UUID to a user. Historical records store the UUID value without a foreign key to this mapping. They must never cascade from the mapping: deleting it must preserve the historical record. All app foreign keys use the default restrictive delete behavior.
 
 The five fund roles are `owner`, `treasurer`, `approver`, `auditor`, and `member`. Multiple roles per user and fund are valid. Membership status is explicit on insert. Idempotency keys are globally unique and store a required request hash and completed JSON response; the API owns request hashing, concurrency, replay, and retention.
 
@@ -20,7 +16,7 @@ The five fund roles are `owner`, `treasurer`, `approver`, `auditor`, and `member
 
 `createSql(url)` returns a postgres.js client with at most 10 connections, prepared statements, a 10-second connection timeout, a 20-second idle timeout, quiet notices, and UTC sessions. Close the client with `await sql.end()`.
 
-Parse query results with the exported `userRowSchema`, `orgRowSchema`, `fundRowSchema`, `membershipRowSchema`, `pseudonymRowSchema`, or `idempotencyKeyRowSchema`. Each schema has a corresponding inferred `*Row` type. ID parsing uses `@yen/shared`'s branded `UserId`, `OrgId`, and `FundId` parsers.
+Parse query results with the exported `userRowSchema`, `orgRowSchema`, `fundRowSchema`, `membershipRowSchema`, `pseudonymRowSchema`, `idempotencyKeyRowSchema`, or `fundEventRowSchema`. Each schema has a corresponding inferred `*Row` type. ID parsing uses `@yen/shared`'s branded `UserId`, `OrgId`, and `FundId` parsers.
 
 User phones are stored only in canonical E.164 form and parsed as `PhoneE164` from `@yen/shared`. Converting free text such as `98765 43210` to `+919876543210` belongs to the login flow (YEN-22) and needs a product decision; the database and shared parser do not guess country codes.
 
@@ -37,6 +33,70 @@ try {
 ```
 
 Postgres `bigint` values remain JavaScript `bigint`, including values beyond `Number.MAX_SAFE_INTEGER`. `@yen/shared`'s `Paise` is a safe-integer number: callers must range-check before conversion and call `paise()` at that boundary. JSON responses must encode bigint values explicitly, for example as decimal strings. `uuidv7()` uses the current Unix milliseconds and cryptographic randomness; IDs within a millisecond are unique probabilistically and are not monotonically ordered.
+
+## Fund event log persistence
+
+The `fund_events` table stores the hash-chained business events for each fund, defined by migration `0003_fund_events.sql`:
+- `fund_id uuid NOT NULL REFERENCES funds(id)`
+- `seq bigint NOT NULL CHECK (seq >= 1)`
+- `type text NOT NULL`
+- `version integer NOT NULL CHECK (version = 1)`
+- `actor text NOT NULL CHECK (actor ~ '^psn_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'`
+- `occurred_at text NOT NULL CHECK (occurred_at ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$')`
+- `payload jsonb NOT NULL`
+- `prev_hash text NOT NULL CHECK (prev_hash ~ '^[0-9a-f]{64}$')`
+- `hash text NOT NULL CHECK (hash ~ '^[0-9a-f]{64}$')`
+- `canonical_envelope text NOT NULL`
+- `PRIMARY KEY (fund_id, seq)`
+
+### Database-enforced integrity
+
+Integrity is enforced in PostgreSQL triggers and functions:
+1. **Advisory lock and gapless sequence**: A BEFORE INSERT trigger takes a per-fund advisory lock (`pg_advisory_xact_lock` on the fund ID) for the duration of the transaction. It requires `seq` = 1 and `prev_hash` = 64 zeroes for the first event, and `seq = previous + 1` and `prev_hash = previous hash` for subsequent events.
+2. **Monotonic time**: The insert trigger requires `occurred_at >= previous occurred_at`.
+3. **Payload schema enforcement**: The insert trigger independently validates `payload` against the 24 event schemas. Payloads must contain only allowed keys and supported types (strings, safe integers).
+4. **RFC 8785 canonical envelope & SHA-256 verification**: The insert trigger reconstructs the RFC 8785 canonical JSON envelope using custom PL/pgSQL routines implementing UTF-16 code unit key sorting and ECMAScript number formatting, proves it matches `canonical_envelope`, and computes SHA-256 over `'yen/eventlog/event/v1' || E'\x00' || utf8(canonical_envelope)` using PostgreSQL 16's built-in `sha256(bytea)` function. Any row with a mismatched hash is rejected.
+5. **Immutability**: BEFORE UPDATE, DELETE, and TRUNCATE triggers always raise exceptions. Furthermore, UPDATE, DELETE, and TRUNCATE are revoked from PUBLIC (expected application role: `yen_app`).
+
+### TypeScript write path
+
+`appendEvent(client, input)` is the only write path. Inside the transaction, it locks the fund, reads the current head, constructs the event with `makeNextEvent` from `@yen/eventlog`, inserts the complete row, and returns the stored event:
+
+```ts
+import { appendEvent, createSql } from "@yen/db";
+
+const sql = createSql(databaseUrl);
+const event = await appendEvent(sql, {
+  fundId,
+  type: "fund.created",
+  version: 1,
+  actor,
+  occurredAt: "2026-01-01T00:00:00.000Z",
+  payload: { org_id: orgId, visibility: "private" },
+});
+```
+
+### Verification and CLI
+
+Verify a stored chain against a caller-supplied authenticated `ChainHead`:
+
+```ts
+import { createSql, verifyStoredChain } from "@yen/db";
+
+const sql = createSql(databaseUrl);
+const verification = await verifyStoredChain(sql, fundId, expectedHead);
+if (verification.ok) {
+  console.log(`Verified up to event ${verification.count}`);
+}
+```
+
+The workspace CLI checks fund event chains:
+
+```sh
+DATABASE_URL=postgres://postgres:pw@localhost:55432/yen pnpm --filter @yen/db verify-chain <fund-id> [--head <hash> --count <count>]
+```
+
+The CLI prints the first break (index, seq, reason) or the verified head. Note: the CLI is an internal consistency check, not an external authenticity proof.
 
 ## Run migrations
 
