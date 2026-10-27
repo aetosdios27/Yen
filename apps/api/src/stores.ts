@@ -147,7 +147,6 @@ interface Bucket {
   readonly tokens: number;
   readonly updatedAt: number;
   readonly fullAt: number;
-  readonly fixed: boolean;
 }
 
 export class MemoryRateLimitStore implements RateLimitStore {
@@ -168,17 +167,13 @@ export class MemoryRateLimitStore implements RateLimitStore {
     }
     const previous = this.buckets.get(key);
     if (!previous && this.buckets.size >= this.maxEntries) {
-      const evictable = [...this.buckets].find(([, bucket]) => !bucket.fixed);
-      if (evictable) this.buckets.delete(evictable[0]);
-      else {
-        let oldest = Infinity;
-        for (const bucket of this.buckets.values()) oldest = Math.min(oldest, bucket.fullAt);
-        return {
-          allowed: false,
-          overloaded: true,
-          retryAfterSeconds: Math.min(86400, Math.max(1, Math.ceil((oldest - now) / 1000))),
-        } as const;
-      }
+      let oldest = Infinity;
+      for (const bucket of this.buckets.values()) oldest = Math.min(oldest, bucket.fullAt);
+      return {
+        allowed: false,
+        overloaded: true,
+        retryAfterSeconds: Math.min(86400, Math.max(1, Math.ceil((oldest - now) / 1000))),
+      } as const;
     }
     const tokens = previous
       ? limit.expiresAt !== undefined
@@ -196,12 +191,7 @@ export class MemoryRateLimitStore implements RateLimitStore {
       updatedAt: now,
       fullAt:
         limit.expiresAt ?? now + ((limit.capacity - remaining) * limit.refillMs) / limit.capacity,
-      fixed: limit.expiresAt !== undefined,
     });
-    while (this.buckets.size > this.maxEntries) {
-      const oldest = this.buckets.keys().next().value;
-      if (oldest !== undefined) this.buckets.delete(oldest);
-    }
     if (tokens >= 1) return { allowed: true } as const;
     return {
       allowed: false,

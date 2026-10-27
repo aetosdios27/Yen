@@ -111,9 +111,12 @@ it("evicts full idle buckets and caps active buckets", async () => {
   const limit = { capacity: 1, refillMs: 10 };
   await store.consume("a", limit, 0);
   await store.consume("b", limit, 0);
-  await store.consume("c", limit, 0);
-  expect(await store.consume("a", limit, 0)).toEqual({ allowed: true });
-  expect(await store.consume("c", limit, 0)).toEqual({ allowed: false, retryAfterSeconds: 1 });
+  expect(await store.consume("c", limit, 0)).toEqual({
+    allowed: false,
+    overloaded: true,
+    retryAfterSeconds: 1,
+  });
+  expect(await store.consume("a", limit, 0)).toEqual({ allowed: false, retryAfterSeconds: 1 });
   await store.consume("d", limit, 10);
   expect(store.entryCount).toBe(1);
 });
