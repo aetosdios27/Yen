@@ -150,3 +150,10 @@ it("createClientIpResolver reads only forwarded when trustedHeader is forwarded"
   expect(resolver(mockContext)).toBe("198.51.100.5");
   expect(readHeaders).toEqual(["forwarded"]);
 });
+
+it("rejects malformed quoting before trusting a proxy-appended Forwarded element", () => {
+  const socket = "192.0.2.10";
+  const header = 'for=198.51.100.9;foo=" , for=203.0.113.5';
+  expect(parseRfc7239Forwarded(header, 1)).toBeUndefined();
+  expect(clientIp(socket, header, 1, "forwarded")).toBe(socket);
+});

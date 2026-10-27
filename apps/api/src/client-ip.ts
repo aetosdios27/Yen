@@ -27,7 +27,7 @@ function normalizeIpAddress(raw: string): string | undefined {
  * Splits a header string on a delimiter ("," or ";") only when outside double-quoted strings,
  * honoring backslash escapes per RFC 7230 Section 3.2.6.
  */
-function splitOutsideQuotes(input: string, delimiter: "," | ";"): string[] {
+function splitOutsideQuotes(input: string, delimiter: "," | ";"): string[] | undefined {
   const parts: string[] = [];
   let current = "";
   let inQuotes = false;
@@ -59,6 +59,7 @@ function splitOutsideQuotes(input: string, delimiter: "," | ";"): string[] {
     }
     current += char;
   }
+  if (inQuotes || escapeNext) return undefined;
   parts.push(current);
   return parts;
 }
@@ -72,11 +73,12 @@ function splitOutsideQuotes(input: string, delimiter: "," | ";"): string[] {
 export function parseRfc7239Forwarded(forwarded: string, hops: number): string | undefined {
   if (hops <= 0 || !forwarded) return undefined;
   const elements = splitOutsideQuotes(forwarded, ",");
-  if (elements.length < hops) return undefined;
+  if (!elements || elements.length < hops) return undefined;
   const selected = elements[elements.length - hops]?.trim();
   if (!selected) return undefined;
 
   const params = splitOutsideQuotes(selected, ";");
+  if (!params) return undefined;
   for (const param of params) {
     const trimmed = param.trim();
     const eqIdx = trimmed.indexOf("=");
