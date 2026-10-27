@@ -60,7 +60,13 @@
         "type": "object",
         "properties": {
           "name": { "type": "string", "minLength": 1, "maxLength": 200 },
-          "contact": { "type": "string", "minLength": 3, "maxLength": 254 },
+          "contact": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 254,
+            "pattern": "(?:^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$)|(?:^\\+[1-9][0-9]{7,14}$)|(?:^[6-9](?:[ -]*[0-9]){9}$)",
+            "description": "Email address, international phone in + digits form, or Indian 10-digit mobile number with optional spaces or hyphens."
+          },
           "org": { "type": "string", "minLength": 1, "maxLength": 200 },
           "locale": { "type": "string", "enum": ["en", "hi"] },
           "consent": {
@@ -270,6 +276,19 @@
           },
           "500": {
             "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Dependency unavailable",
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },

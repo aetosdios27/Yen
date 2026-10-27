@@ -144,6 +144,7 @@ export interface components {
     };
     WaitlistInput: {
       name: string;
+      /** @description Email address, international phone in + digits form, or Indian 10-digit mobile number with optional spaces or hyphens. */
       contact: string;
       org: string;
       /** @enum {string} */
@@ -318,6 +319,17 @@ export interface operations {
       };
       /** @description Internal failure; no private error information */
       500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Dependency unavailable */
+      503: {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;

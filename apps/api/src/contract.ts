@@ -187,7 +187,13 @@ const contact = z
     (value) => Array.from(value).length >= 3 && Array.from(value).length <= 254,
     "Expected 3–254 characters",
   )
-  .openapi({ minLength: 3, maxLength: 254 })
+  .openapi({
+    minLength: 3,
+    maxLength: 254,
+    pattern: `(?:${z.regexes.email.source})|(?:^\\+[1-9][0-9]{7,14}$)|(?:^[6-9](?:[ -]*[0-9]){9}$)`,
+    description:
+      "Email address, international phone in + digits form, or Indian 10-digit mobile number with optional spaces or hyphens.",
+  })
   .refine((value) => {
     if (value.includes("@")) return z.email().safeParse(value).success;
     return (

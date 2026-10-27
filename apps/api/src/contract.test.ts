@@ -172,6 +172,19 @@ it("validates every documented status and sent header against the committed Open
       consent: { accepted: true, text: "Yes", version: "1" },
     }),
   };
+  const invalidContact = {
+    ...waitlistPost,
+    body: JSON.stringify({
+      name: "A",
+      contact: "abc",
+      org: "Club",
+      locale: "en",
+      consent: { accepted: true, text: "Yes", version: "1" },
+    }),
+  };
+  const invalidContactResponse = await createApp(base).request("/v1/waitlist", invalidContact);
+  expect(invalidContactResponse.status).toBe(400);
+  await check("/v1/waitlist", "post", invalidContactResponse);
   const waitlist = createApp({ ...base, waitlistLimit: { capacity: 2, refillMs: 3600000 } });
   await check("/v1/waitlist", "post", await waitlist.request("/v1/waitlist", waitlistPost));
   await check(
@@ -206,6 +219,12 @@ it("validates every documented status and sent header against the committed Open
           await check(path, method, await app.request(url));
         } else if (status === "201") {
           await check(path, method, await app.request("/v1/funds", post));
+        } else if (status === "503") {
+          await check(
+            path,
+            method,
+            await createApp({ ...base, readiness: async () => false }).request("/ready"),
+          );
         } else if (status === "429") {
           await check(path, method, await rateLimited.request("/v1/me"));
         } else if (status === "409" && method === "post") {

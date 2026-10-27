@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { createApp } from "./app.js";
+import { createApp, openApiDocument } from "./app.js";
 import { MemoryWaitlistStore, type WaitlistStore } from "./dependencies.js";
 import { serializeRequestLog } from "./logging.js";
 
@@ -177,4 +177,10 @@ it("applies the same response floor to new, duplicate and invalid inputs", async
     await app.request("/v1/waitlist", post(value));
     expect(now - start).toBe(75);
   }
+});
+
+it("documents the contact formats", () => {
+  const document = openApiDocument();
+  const schema = JSON.stringify(document.components?.schemas?.WaitlistInput);
+  expect(schema).toContain("pattern");
 });
