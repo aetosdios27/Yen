@@ -63,6 +63,9 @@ After YEN-18, create an event table with `fund_id uuid`, `seq bigint`, `type tex
 
 ## Prior art
 
+- [Schneier and Kelsey](../../docs/REFERENCES.md#schneier-kelsey) address compromise of a logging machine; Yen does not implement their encryption scheme.
+- [Transactionally staged job drains](../../docs/REFERENCES.md#brandur-job-drain) motivate the proposed transactional outbox.
+- [PostgreSQL triggers](../../docs/REFERENCES.md#pg-trigger) distinguish statement-level TRUNCATE triggers from row triggers.
 - [RFC 8785](../../docs/REFERENCES.md#rfc-8785) defines canonical JSON; Yen adds a versioned hash domain and strict event schemas.
 - [Crosby and Wallach](../../docs/REFERENCES.md#crosby-wallach) describe auditing untrusted logs; Yen requires an externally authenticated head to verify a complete chain.
 - [DPDP Act](../../docs/REFERENCES.md#dpdp-act) informs minimizing personal data; pseudonyms alone do not establish compliance.

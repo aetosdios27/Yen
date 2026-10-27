@@ -231,6 +231,7 @@ retry. Creating another contract is a new deployment with separate empty history
 
 ## Prior art
 
+- [Ethereum attack and defense](../docs/REFERENCES.md#ethereum-reorg) illustrates reorg and finality risks; Polygon has its own consensus and testnets may reset.
 - [OpenTimestamps](../docs/REFERENCES.md#opentimestamps) illustrates independent timestamp verification; Yen uses an authorized Polygon registry and a different proof format.
 - [RFC 9162](../docs/REFERENCES.md#rfc-9162) describes log monitoring and conflicting views; the registry alone cannot prove off-chain completeness.
 - [RFC 6962](../docs/REFERENCES.md#rfc-6962) informs the underlying tree; Yen publishes nested, size-committing roots rather than certificate-tree heads.
