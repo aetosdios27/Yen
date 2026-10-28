@@ -1,4 +1,8 @@
 export { AppShell } from "./app-shell";
+export {
+  ApprovalPinModal,
+  type ApprovalPinModalProps,
+} from "./approval-pin-modal";
 export { Button, type ButtonProps, type ButtonVariant } from "./button";
 export { EmptyState, type EmptyStateProps } from "./empty-state";
 export {
@@ -17,6 +21,7 @@ export { Input, type InputProps } from "./input";
 export { InstallPrompt, type InstallPromptProps } from "./install-prompt";
 export { LocaleSwitcher, type LocaleSwitcherProps } from "./locale-switcher";
 export { Money, type MoneyProps } from "./money";
+export { RejectionModal, type RejectionModalProps } from "./rejection-modal";
 export { ServiceWorkerRegistration } from "./service-worker-registration";
 export { type Status, StatusBadge, type StatusBadgeProps } from "./status-badge";
 export { Stepper, type StepperProps, type StepperStep } from "./stepper";
