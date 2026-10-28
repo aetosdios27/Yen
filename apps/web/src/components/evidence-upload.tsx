@@ -8,7 +8,6 @@ import { cn } from "./cn";
 import {
   AlertTriangleIcon,
   CameraIcon,
-  CheckCircleIcon,
   FileTextIcon,
   UploadCloudIcon,
   XIcon,

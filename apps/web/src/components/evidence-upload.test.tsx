@@ -68,7 +68,7 @@ describe("EvidenceUpload component", () => {
   });
 
   it("renders existing evidence items with vendor details and duplicate warning", () => {
-    renderWithI18n(<EvidenceUpload existingEvidence={mockEvidenceList} />);
+    const { container } = renderWithI18n(<EvidenceUpload existingEvidence={mockEvidenceList} />);
 
     expect(screen.getByText("Stationery Mart")).toBeDefined();
     expect(screen.getByText("GSTIN: 27AAPFU0939F1ZV")).toBeDefined();
@@ -84,6 +84,7 @@ describe("EvidenceUpload component", () => {
     expect(duplicateWarning.textContent).toContain(
       "Notice: This identical document was previously attached to another expense request.",
     );
+    expect(container.querySelector("img")).toBeNull();
   });
 
   it("opens zoom dialog with document details and closes on dismiss or Escape", () => {
