@@ -60,7 +60,7 @@ Following the benchmark reporting discipline ([The USE Method](../../docs/REFERE
 
 ### 3.1. Append Path: Hot Fund Contention vs. Spread Funds Scaling
 
-Every append transaction executes the following sequence:
+Every append transaction executes through `appendEvent` (@yen/db, YEN-21):
 1. `SELECT pg_advisory_xact_lock(yen_fund_lock_key($fund_id))`
 2. `SELECT seq, hash, occurred_at FROM fund_events WHERE fund_id = $fund_id ORDER BY seq DESC LIMIT 1`
 3. Node application builds next chained event via `makeNextEvent`

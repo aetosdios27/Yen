@@ -31,7 +31,7 @@ Each layout is built in turn as the table `fund_events`, because the migration 0
 1. Node 24 and `pnpm install` from the repository root. Build the eventlog package, because the script imports its compiled output:
 
    ```sh
-   pnpm --filter @yen/eventlog build
+   pnpm --filter @yen/eventlog build && pnpm --filter @yen/db build
    ```
 
 2. An existing PostgreSQL 16 admin connection. Create a dedicated database; the benchmark itself refuses to connect to the shared `postgres` database:
@@ -57,7 +57,9 @@ Each layout is built in turn as the table `fund_events`, because the migration 0
 
    This pinned prerequisite makes the setup reproducible from this checkout without requiring the other PR's commit to exist in the local Git object database. When the migration lands on this branch, use the committed migration instead.
 
-The script checks for the tables and functions above before it changes anything and exits with the list of missing items if any are absent. For an existing Postgres installation, use its admin URL only for `createdb`; point `YEN_TEST_DATABASE_URL` at `yen_test_yen58` before applying migrations and running the benchmark.
+5. Event writer `appendEvent` from `@yen/db`. It is part of PR #20 (YEN-21). Repository rules require all event writes to go through `appendEvent` only. On branches where `@yen/db` does not yet include `appendEvent`, merge or rebase onto PR #20 (`origin/aetosdios27/yen-21-fund-events-persistence`) and build `@yen/db`. The script validates this prerequisite before execution and fails with an explanatory error if it is missing.
+
+The script checks for the prerequisite event writer, tables, and functions above before it changes anything and exits with the list of missing items if any are absent. For an existing Postgres installation, use its admin URL only for `createdb`; point `YEN_TEST_DATABASE_URL` at `yen_test_yen58` before applying migrations and running the benchmark.
 
 #### Run
 

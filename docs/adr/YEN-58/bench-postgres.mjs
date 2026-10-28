@@ -1,10 +1,22 @@
 import postgres from "../../../packages/db/node_modules/postgres/src/index.js";
-import {
-  canonicalize,
-  computeEventHash,
-  genesisHash,
-} from "../../../packages/eventlog/dist/index.js";
 import { resolveBenchmarkDatabaseUrl, startAppendHammer } from "./bench-helpers.mjs";
+
+let appendEvent = null;
+try {
+  const db = await import("@yen/db");
+  if (typeof db.appendEvent === "function") {
+    appendEvent = db.appendEvent;
+  }
+} catch {
+  try {
+    const db = await import("../../../packages/db/dist/index.js");
+    if (typeof db.appendEvent === "function") {
+      appendEvent = db.appendEvent;
+    }
+  } catch {
+    appendEvent = null;
+  }
+}
 
 /**
  * This script drops and rewrites `fund_events` and upserts seed rows in the database its URL names,
@@ -81,6 +93,14 @@ function summarizeLatencies(latencies) {
 }
 
 async function checkPrerequisites() {
+  if (typeof appendEvent !== "function") {
+    throw new Error(
+      "Missing prerequisite: appendEvent from @yen/db. " +
+        "All event writes must go through appendEvent. " +
+        "The event writer is introduced in PR #20 (branch origin/aetosdios27/yen-21-fund-events-persistence). " +
+        "Merge or rebase onto PR #20 and build @yen/db (`pnpm --filter @yen/db build`) to run this benchmark.",
+    );
+  }
   const missing = [];
   for (const [name, probe] of Object.entries(PREREQUISITES)) {
     const [row] = await sql.unsafe(`SELECT ${probe} IS NOT NULL AS found`);
@@ -161,70 +181,26 @@ async function createLayout({ partitions }) {
 }
 
 /**
- * Execute an append transaction against a given table name.
- * Uses advisory lock, reads head, computes next event, canonicalizes, and inserts.
+ * Execute an append transaction via appendEvent from @yen/db.
+ * Every event write in the repository must go through appendEvent.
  */
-async function appendToTable(tableName, fundId, payloadInput, actor) {
-  return await sql.begin(async (tx) => {
-    // 1. Transaction-scoped advisory lock
-    const lockKeyRes = await tx`SELECT yen_fund_lock_key(${fundId}::uuid) AS lock_key;`;
-    const lockKey = lockKeyRes[0].lock_key;
-    await tx`SELECT pg_advisory_xact_lock(${lockKey});`;
-
-    // 2. Read latest head event for this fund
-    const headRows = await tx.unsafe(
-      `
-      SELECT seq, hash, occurred_at
-      FROM ${tableName}
-      WHERE fund_id = $1::uuid
-      ORDER BY seq DESC
-      LIMIT 1;
-    `,
-      [fundId],
+async function appendToTable(_tableName, fundId, payloadInput, actor) {
+  if (typeof appendEvent !== "function") {
+    throw new Error(
+      "Missing prerequisite: appendEvent from @yen/db. " +
+        "All event writes must go through appendEvent. " +
+        "Merge or rebase onto PR #20 (origin/aetosdios27/yen-21-fund-events-persistence) and build @yen/db.",
     );
-
-    const prevSeq = headRows.length > 0 ? Number(headRows[0].seq) : 0;
-    const prevHash = headRows.length > 0 ? headRows[0].hash : genesisHash;
-    const seq = prevSeq + 1;
-    const occurred_at = "2026-10-27T10:00:00.000Z";
-
-    // 3. Build next event and hash
-    const unsigned = {
-      fund_id: fundId,
-      seq,
-      type: "donation.pledged",
-      version: 1,
-      actor,
-      occurred_at,
-      payload: payloadInput,
-      prev_hash: prevHash,
-    };
-    const canonicalEnvelope = canonicalize(unsigned);
-    const hash = await computeEventHash(unsigned);
-
-    // 4. Insert into the target table
-    await tx.unsafe(
-      `
-      INSERT INTO ${tableName} (
-        fund_id, seq, type, version, actor, occurred_at, payload, prev_hash, hash, canonical_envelope
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
-    `,
-      [
-        fundId,
-        seq,
-        unsigned.type,
-        unsigned.version,
-        unsigned.actor,
-        unsigned.occurred_at,
-        sql.json(unsigned.payload),
-        unsigned.prev_hash,
-        hash,
-        canonicalEnvelope,
-      ],
-    );
-
-    return { fundId, seq, hash };
+  }
+  const stored = await appendEvent(sql, {
+    fundId,
+    type: "donation.pledged",
+    version: 1,
+    actor,
+    occurredAt: "2026-10-27T10:00:00.000Z",
+    payload: payloadInput,
   });
+  return { fundId: stored.fund_id, seq: stored.seq, hash: stored.hash };
 }
 
 /**
@@ -456,10 +432,10 @@ async function benchmarkReadShapes(tableName) {
 async function main() {
   try {
     console.log("Starting Postgres Benchmark Suite for YEN-58...");
+    await checkPrerequisites();
+
     const serverVersion = await sql`SHOW server_version;`;
     console.log(`PostgreSQL Server Version: ${serverVersion[0].server_version}`);
-
-    await checkPrerequisites();
     await setupFunds();
 
     const results = {};
