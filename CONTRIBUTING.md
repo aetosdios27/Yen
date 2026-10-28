@@ -36,6 +36,10 @@ rules, and the [rollback runbook](docs/runbooks/web-rollback.md) for incidents.
 | `CI Gate` green, branch up to date   | one required check aggregates everything  |
 | Squash merge only, linear history    | one PR is one commit on `main`            |
 
+## How to cite
+
+ADRs and design-heavy PRs must cite relevant entries in [References](docs/REFERENCES.md), explain what they take and where the design differs, or explicitly state “no prior art found” when true. Add new primary sources only after opening and reading them and verifying their metadata, URL, and the claim attributed to them.
+
 ## Local checks
 
 ```sh

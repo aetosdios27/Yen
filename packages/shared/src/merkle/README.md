@@ -63,3 +63,10 @@ Published CT test vectors are not used. Portability tests require esbuild to bui
 an ESM bundle with `platform: "browser"` and reject every `node:` import. They compare
 valid and tampered proofs in Node and the browser bundle, executing the bundle in a
 restricted VM with only WebCrypto, TextEncoder, and Uint8Array supplied as host globals.
+
+## Prior art
+
+- [Trillian’s verifiable structures](../../../../docs/REFERENCES.md#trillian-structures) explain consistency proofs, which Yen does not yet provide.
+- [RFC 6962](../../../../docs/REFERENCES.md#rfc-6962) supplies the split and node domains; Yen adds salts and count commitments.
+- [Crosby and Wallach](../../../../docs/REFERENCES.md#crosby-wallach) motivate inclusion and consistency auditing; Yen does not implement consistency proofs.
+- [RFC 9162](../../../../docs/REFERENCES.md#rfc-9162) discusses comparison of log views; inclusion alone does not prevent split views.
