@@ -1,34 +1,45 @@
+import crypto from "node:crypto";
 import { OpenAPIHono, type z } from "@hono/zod-openapi";
 import { normalizeWaitlistContact } from "@yen/db";
-import { parseFundId } from "@yen/shared";
+import { payloadSchemas, pseudonymIdSchema } from "@yen/eventlog";
+import { parseFundId, parseGstin } from "@yen/shared";
 import type { Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import { routePath } from "hono/route";
 import {
+  ALLOWED_EVIDENCE_MIME_TYPES,
   createFundRoute,
   type fundSchema,
+  getEvidenceRoute,
   getFundRoute,
   healthRoute,
+  MAX_EVIDENCE_FILE_SIZE_BYTES,
   meRoute,
   openapiRoute,
   openapiSchema,
   principalSchema,
   readyRoute,
+  uploadEvidenceRoute,
   waitlistRoute,
 } from "./contract.js";
 import { type ApiEnv, type AppDependencies, defaultDependencies } from "./dependencies.js";
 import { ApiError, errorBody, errorStatus, ReadinessError, StoreError } from "./errors.js";
+import { stripExifMetadata } from "./exif-strip.js";
 import { logMethod } from "./logging.js";
 import {
   idempotency,
+  isEvidenceRoute,
   isWaitlistRoute,
   rateLimit,
   requestContext,
   requireAuth,
 } from "./middleware.js";
+import { verifyMimeSignature } from "./mime-signature.js";
 import type { FundAction, FundResource } from "./policy.js";
+import { buildOpaqueEvidenceKey } from "./storage.js";
+import type { AllowedEvidenceMimeType, StoredEvidence } from "./stores.js";
 
 export { devPolicy } from "./policy.js";
 
@@ -109,9 +120,17 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       throw new ApiError("payload_too_large");
     },
   });
-  app.use("/v1/*", (c, next) =>
-    isWaitlistRoute(c.req.path) ? waitlistBodyLimit(c, next) : next(),
-  );
+  const evidenceBodyLimit = bodyLimit({
+    maxSize: MAX_EVIDENCE_FILE_SIZE_BYTES + 65536,
+    onError: () => {
+      throw new ApiError("payload_too_large");
+    },
+  });
+  app.use("/v1/*", (c, next) => {
+    if (isWaitlistRoute(c.req.path)) return waitlistBodyLimit(c, next);
+    if (isEvidenceRoute(c.req.path) && c.req.method === "POST") return evidenceBodyLimit(c, next);
+    return next();
+  });
   app.use("/v1/*", idempotency(deps));
   app.use("/v1/me", requireAuth);
   app.use("/v1/funds/*", requireAuth);
@@ -172,6 +191,177 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const resource = { kind: "fund", fund: entry } as const;
     const principal = authorizedFund(c, "fund:read", resource);
     return c.json(deps.policy.redact(principal, resource), 200);
+  });
+  app.openapi(uploadEvidenceRoute, async (c) => {
+    const fundParam = parseFundId(c.req.valid("param").fundId);
+    if (!fundParam.ok) throw new ApiError("not_found");
+    const fundEntry = funds.get(fundParam.value);
+    if (!fundEntry) throw new ApiError("not_found");
+
+    const expenseId = c.req.valid("param").expenseId;
+    if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(expenseId)) {
+      throw new ApiError("not_found");
+    }
+
+    const principal = authorizedFund(c, "expense:add_evidence", {
+      kind: "expense",
+      fund: fundEntry,
+      expenseId,
+    });
+
+    const form = c.req.valid("form");
+    const file = form.file;
+    if (!(file instanceof File)) {
+      throw new ApiError("validation_failed", [
+        { path: ["form", "file"], message: "Evidence file is required" },
+      ]);
+    }
+
+    if (!ALLOWED_EVIDENCE_MIME_TYPES.includes(file.type as AllowedEvidenceMimeType)) {
+      throw new ApiError("validation_failed", [
+        {
+          path: ["form", "file"],
+          message: `Unsupported MIME type: ${file.type}. Allowed MIME types: ${ALLOWED_EVIDENCE_MIME_TYPES.join(", ")}`,
+        },
+      ]);
+    }
+
+    if (file.size > MAX_EVIDENCE_FILE_SIZE_BYTES) {
+      throw new ApiError("payload_too_large");
+    }
+
+    let validatedGstin: string | undefined;
+    if (form.gstin && form.gstin.trim() !== "") {
+      const gstinResult = parseGstin(form.gstin);
+      if (!gstinResult.ok) {
+        throw new ApiError("validation_failed", [
+          { path: ["form", "gstin"], message: gstinResult.error },
+        ]);
+      }
+      validatedGstin = gstinResult.value;
+    }
+
+    if (form.invoiceDate && form.invoiceDate.trim() !== "") {
+      const dateVal = form.invoiceDate.trim();
+      const parsedDate = Date.parse(dateVal);
+      if (!Number.isFinite(parsedDate)) {
+        throw new ApiError("validation_failed", [
+          { path: ["form", "invoiceDate"], message: "Invalid invoice date" },
+        ]);
+      }
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    if (bytes.length > MAX_EVIDENCE_FILE_SIZE_BYTES) {
+      throw new ApiError("payload_too_large");
+    }
+
+    // Binary signature / magic bytes check to prevent MIME spoofing
+    if (!verifyMimeSignature(bytes, file.type)) {
+      throw new ApiError("validation_failed", [
+        {
+          path: ["form", "file"],
+          message: "File binary signature does not match declared MIME type",
+        },
+      ]);
+    }
+
+    const evidenceId = deps.idGenerator();
+    const objectKey = buildOpaqueEvidenceKey(fundParam.value, expenseId, evidenceId);
+
+    // Fail-closed virus and malware scan
+    const scanResult = await deps.virusScanner.scan({
+      objectKey,
+      data: bytes,
+      mimeType: file.type,
+    });
+    if (scanResult.status === "infected") {
+      throw new ApiError("validation_failed", [
+        { path: ["form", "file"], message: `Malicious file rejected: ${scanResult.threatName}` },
+      ]);
+    }
+    if (scanResult.status === "quarantined") {
+      throw new ApiError("validation_failed", [
+        { path: ["form", "file"], message: `Upload quarantined: ${scanResult.reason}` },
+      ]);
+    }
+
+    // Server-computed SHA-256 over original trusted bytes (never client claim)
+    const fileSha256 = crypto.createHash("sha256").update(bytes).digest("hex");
+
+    // Store raw bytes in durable storage
+    await deps.storageAdapter.putObject(objectKey, bytes, file.type);
+
+    // Strip EXIF metadata for served image preview (privacy & safety)
+    const _sanitizedPreviewBytes = stripExifMetadata(bytes, file.type);
+
+    // Duplicate detection across expenses ONLY within authorized fund scope (prevent cross-fund disclosure)
+    const existingEvidence = await deps.evidenceStore.findBySha256(fileSha256);
+    const duplicateInSameFund = existingEvidence.find(
+      (e) => e.fundId === fundParam.value && e.expenseId !== expenseId,
+    );
+    const duplicateDetected = duplicateInSameFund !== undefined;
+
+    const record: StoredEvidence = {
+      evidenceId,
+      fundId: fundParam.value,
+      expenseId,
+      fileSha256,
+      mimeType: file.type as AllowedEvidenceMimeType,
+      fileSizeBytes: bytes.length,
+      objectKey,
+      duplicateDetected,
+      isDuplicate: duplicateDetected,
+      duplicateExpenseId: duplicateInSameFund?.expenseId,
+      vendorName: form.vendorName?.trim() || undefined,
+      gstin: validatedGstin,
+      invoiceNumber: form.invoiceNumber?.trim() || undefined,
+      invoiceDate: form.invoiceDate?.trim() || undefined,
+      createdAt: new Date(deps.clock()).toISOString(),
+    };
+
+    // If an authenticated event log appender is available, atomically record expense.evidence_added
+    if (deps.eventAppender) {
+      const payload = payloadSchemas["expense.evidence_added"].parse({
+        expense_id: expenseId,
+        evidence_id: evidenceId,
+        content_sha256: fileSha256,
+      });
+      const actorRaw = principal.id.startsWith("psn_") ? principal.id : `psn_${principal.id}`;
+      const actor = pseudonymIdSchema.parse(actorRaw);
+      await deps.eventAppender({
+        fundId: fundParam.value,
+        type: "expense.evidence_added",
+        version: 1,
+        actor,
+        occurredAt: record.createdAt,
+        payload,
+      });
+    }
+
+    await deps.evidenceStore.save(record);
+    return c.json(deps.policy.redact(principal, { kind: "evidence", evidence: record }), 201);
+  });
+  app.openapi(getEvidenceRoute, async (c) => {
+    const fundParam = parseFundId(c.req.valid("param").fundId);
+    if (!fundParam.ok) throw new ApiError("not_found");
+    const fundEntry = funds.get(fundParam.value);
+    if (!fundEntry) throw new ApiError("not_found");
+
+    const expenseId = c.req.valid("param").expenseId;
+    if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(expenseId)) {
+      throw new ApiError("not_found");
+    }
+
+    const principal = authorizedFund(c, "expense:read_evidence", {
+      kind: "expense",
+      fund: fundEntry,
+      expenseId,
+    });
+
+    const evidence = await deps.evidenceStore.getByExpense(fundParam.value, expenseId);
+    return c.json(deps.policy.redact(principal, { kind: "evidence_list", evidence }), 200);
   });
   app.openapi(openapiRoute, (c) => c.json(openapiSchema.parse(openApiDocument(app)), 200));
   app.openAPIRegistry.registerComponent("securitySchemes", "bearerAuth", {

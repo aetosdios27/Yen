@@ -193,6 +193,9 @@ importers:
       '@yen/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@yen/eventlog':
+        specifier: workspace:*
+        version: link:../../packages/eventlog
       '@yen/policy':
         specifier: workspace:*
         version: link:../../packages/policy
