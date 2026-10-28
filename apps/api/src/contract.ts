@@ -41,6 +41,10 @@ const limitedResponse = {
     "retry-after": { ...retryHeader["retry-after"], required: true },
   },
 };
+const overloadedResponse = {
+  ...jsonResponse(errorEnvelope, "Rate limit store at capacity"),
+  headers: { ...responseHeaders, "retry-after": { ...retryHeader["retry-after"], required: true } },
+};
 const protectedErrors = {
   400: jsonResponse(errorEnvelope, "Validation failed; details contain field paths"),
   401: jsonResponse(errorEnvelope, "Authentication required"),
@@ -52,6 +56,7 @@ const protectedErrors = {
   ),
   429: limitedResponse,
   500: internalResponse,
+  503: overloadedResponse,
 };
 const security = [{ bearerAuth: [] }];
 
@@ -77,7 +82,11 @@ export const readyRoute = createRoute({
   path: "/ready",
   operationId: "ready",
   summary: "Readiness",
-  responses: { 200: jsonResponse(statusSchema, "Dependencies are ready"), 500: internalResponse },
+  responses: {
+    200: jsonResponse(statusSchema, "Dependencies are ready"),
+    503: jsonResponse(errorEnvelope, "Dependency unavailable"),
+    500: internalResponse,
+  },
 });
 export const meRoute = createRoute({
   method: "get",
@@ -119,6 +128,7 @@ export const createFundRoute = createRoute({
     },
     429: protectedErrors[429],
     500: protectedErrors[500],
+    503: protectedErrors[503],
   },
 });
 export const getFundRoute = createRoute({
@@ -148,6 +158,80 @@ export const openapiRoute = createRoute({
   responses: {
     200: jsonResponse(openapiSchema, "OpenAPI 3.1 contract"),
     429: limitedResponse,
+    503: overloadedResponse,
+    500: internalResponse,
+  },
+});
+
+const validCharacters = (value: string, multiline = false) =>
+  Array.from(value).every((character) => {
+    const code = character.codePointAt(0);
+    if (code === undefined) return false;
+    if (multiline && (code === 9 || code === 10)) return true;
+    return code > 31 && !(code >= 127 && code <= 159) && !(code >= 0xd800 && code <= 0xdfff);
+  });
+const bounded = (max: number, multiline = false) =>
+  z
+    .string()
+    .refine(
+      (value) => validCharacters(value, multiline),
+      "Control characters and lone surrogates are not allowed",
+    )
+    .trim()
+    .refine(
+      (value) => Array.from(value).length >= 1 && Array.from(value).length <= max,
+      `Expected 1–${max} characters`,
+    )
+    .openapi({ minLength: 1, maxLength: max });
+const contact = z
+  .string()
+  .refine(
+    (value) => validCharacters(value),
+    "Control characters and lone surrogates are not allowed",
+  )
+  .trim()
+  .refine(
+    (value) => Array.from(value).length >= 3 && Array.from(value).length <= 254,
+    "Expected 3–254 characters",
+  )
+  .openapi({
+    minLength: 3,
+    maxLength: 254,
+    pattern: `(?:${z.regexes.email.source})|(?:^\\+[1-9][0-9]{7,14}$)|(?:^(?=.{10,19}$)[6-9](?:[ -]*[0-9]){9}[ -]*$)`,
+    description:
+      "Email address, international phone in + digits form, or Indian 10-digit mobile number with optional spaces or hyphens.",
+  })
+  .refine((value) => {
+    if (value.includes("@")) return z.email().safeParse(value).success;
+    return (
+      /^\+[1-9][0-9]{7,14}$/.test(value) ||
+      (/^[6-9][0-9 -]{9,18}$/.test(value) && /^[6-9][0-9]{9}$/.test(value.replace(/[ -]/g, "")))
+    );
+  }, "Expected an email or phone number");
+export const waitlistInput = z
+  .object({
+    name: bounded(200),
+    contact,
+    org: bounded(200),
+    locale: z.enum(["en", "hi"]),
+    consent: z
+      .object({ accepted: z.literal(true), text: bounded(1000, true), version: bounded(40) })
+      .strict(),
+  })
+  .strict()
+  .openapi("WaitlistInput");
+export const waitlistRoute = createRoute({
+  method: "post",
+  path: "/v1/waitlist",
+  operationId: "joinWaitlist",
+  tags: ["waitlist"],
+  request: { body: { required: true, content: { "application/json": { schema: waitlistInput } } } },
+  responses: {
+    201: jsonResponse(z.object({ status: z.literal("received") }), "Submission received"),
+    400: protectedErrors[400],
+    413: jsonResponse(errorEnvelope, "Request body too large"),
+    429: limitedResponse,
+    503: overloadedResponse,
     500: internalResponse,
   },
 });

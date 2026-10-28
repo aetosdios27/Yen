@@ -78,6 +78,27 @@ YEN_TEST_DATABASE_URL=postgres://postgres:pw@localhost:55432/postgres pnpm verif
 
 Without this variable, database suites skip with a message when `CI` is unset, `false`, or `0`. `CI=true` and `CI=1` make a missing variable a hard failure. These CI values are case-sensitive; other values, including an empty string, are rejected. An explicitly empty or invalid test URL fails in both local and CI modes. `packages/db/turbo.json` passes the variable and `CI` through Turbo's environment filter and disables test caching so database checks always execute.
 
+## Waitlist data and deletion
+
+`waitlist_entries` stores the submitted name, normalized contact and kind, club
+name, locale, consent text and version, a generated UUID, and creation time.
+The unique normalized contact prevents duplicate entries. For a deletion request,
+identify and normalize the contact as at signup, then use the helper with an
+operator-controlled connection; it returns the number of rows deleted:
+
+```ts
+import { createSql, deleteWaitlistEntryByContact } from "@yen/db";
+
+const sql = createSql(databaseUrl);
+try {
+  const removed = await deleteWaitlistEntryByContact(sql, normalizedContact);
+} finally {
+  await sql.end();
+}
+```
+
+Backups and any other copies also need an operational deletion and retention policy.
+
 ## Prior art
 
 - [PostgreSQL constraints](../../docs/REFERENCES.md#pg-constraints) explain database enforcement and uniqueness.
