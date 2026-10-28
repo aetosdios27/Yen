@@ -2,6 +2,12 @@ export { AppShell } from "./app-shell";
 export { Button, type ButtonProps, type ButtonVariant } from "./button";
 export { EmptyState, type EmptyStateProps } from "./empty-state";
 export {
+  ExpenseForm,
+  type ExpenseFormProps,
+  type ExpenseFormValues,
+  type ValidatedExpenseSubmission,
+} from "./expense-form";
+export {
   ExpenseTimeline,
   type ExpenseTimelineApproval,
   type ExpenseTimelineProps,

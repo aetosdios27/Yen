@@ -4,10 +4,10 @@ import { type ComponentPropsWithRef, useId } from "react";
 import { cn } from "./cn";
 
 export type InputProps = Omit<ComponentPropsWithRef<"input">, "id"> & {
-  id?: string;
+  id?: string | undefined;
   label: string;
-  hint?: string;
-  error?: string;
+  hint?: string | undefined;
+  error?: string | undefined;
 };
 
 export function Input({ id, label, hint, error, className, ...props }: InputProps) {
