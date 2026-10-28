@@ -68,6 +68,7 @@ Unknown exceptions return the fixed internal error message, with no stack or cau
 | `conflict`             | 409    |
 | `idempotency_conflict` | 409    |
 | `rate_limited`         | 429    |
+| `payload_too_large`    | 413    |
 | `internal`             | 500    |
 
 `src/errors.ts` owns the closed error-code schema and status table.
@@ -78,7 +79,7 @@ dependencies; false or a thrown exception returns `internal`.
 
 ## Idempotency storage contract
 
-Unsafe `/v1` requests require `Idempotency-Key` after authentication.
+Authenticated unsafe `/v1` requests require `Idempotency-Key` after authentication.
 Keys contain 1 to 128 characters from `A-Z`, `a-z`, `0-9`, `.`, `_`, `:`, and `-`.
 The store key is the JSON tuple `[principal.id, headerValue]`.
 The SHA-256 request hash binds the method, path and query, content type, and exact body bytes.
@@ -151,3 +152,40 @@ Fastify offers an established Node plugin ecosystem, but switching would add a m
 without improving this contract. Runtime-specific peer address lookup and server startup
 stay in the Node entrypoints. `createApp(deps)` accepts the clock, ID generator, stores,
 logger, principal, readiness check, and peer address resolver.
+
+## Waitlist
+
+`POST /v1/waitlist` is public and write-only. Send `name`, `contact`, `org`,
+`locale` (`en` or `hi`), and `consent` containing `accepted: true`, `text`,
+and `version`. A new or duplicate contact receives the same `201` response.
+Email is lowercased. Canonical E.164 numbers are accepted; as a product decision,
+Indian 10-digit mobile numbers with optional spaces or dashes default to `+91`.
+
+The database stores a UUID, name, normalized contact and kind, organization,
+locale, exact trimmed consent text and version, and creation time. It does not
+store IP addresses, request bodies, or a separate acceptance flag. No waitlist
+read or export endpoint exists. The real server requires `DATABASE_URL` unless `YEN_ALLOW_MEMORY_STORES=true` is explicitly set outside production. With that opt-in, waitlist data is held in memory and lost on restart. `dev:mock` uses memory automatically and is disabled in production. Database
+location must be configured by the operator; the application does not enforce India.
+
+The default limit is five requests per IP per fixed hour per process, configured
+with `WAITLIST_RATE_LIMIT_CAPACITY` and `WAITLIST_RATE_LIMIT_REFILL_MS`. The
+body limit defaults to 8192 bytes and is configured by `WAITLIST_BODY_LIMIT_BYTES`.
+A shared rate-limit store and trusted proxy configuration are needed for a
+multi-process or proxied deployment. Contact uniqueness provides retry safety;
+the public route does not require an idempotency key.
+
+The waitlist response floor (`WAITLIST_MIN_RESPONSE_MS`, default 75 ms) hides differences below the floor. The per-IP limit of five requests per hour makes statistical timing attacks impractical; a slow database could still exceed the floor.
+
+`TRUSTED_PROXY_HOPS` defaults to 0 and ignores forwarded headers. Set it to the number of trusted proxy hops (1–5) only when the server is reachable exclusively through those proxies; the address is selected from the right of `X-Forwarded-For`. Malformed headers fall back to the socket address. Rate limits are process-local; the shared store is tracked by YEN-55.
+
+The `RATE_LIMIT_MAX_KEYS` setting (1,000–1,000,000, default 100,000) is a deliberate
+global admission limit that protects process memory. When active fixed windows fill
+the store, new keys receive 503 with `Retry-After`; existing keys remain enforced.
+Each key retains its string and a bucket with three numbers, plus Map
+and JavaScript object overhead; memory varies with key length and runtime (budget
+roughly hundreds of bytes per key). A shared store is the long-term fix (YEN-55).
+
+Readiness uses a dedicated database connection, a two-second deadline and a
+server-side statement timeout. `READINESS_CACHE_MS` controls result caching
+(default 1,000 ms, range 0–60,000; 0 disables caching). Concurrent probes share
+one check.
