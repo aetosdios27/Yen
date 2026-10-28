@@ -52,6 +52,7 @@ databaseSuite("migration runner", (sql, url) => {
       );
     expect(tables.map((row) => row.tablename)).toEqual([
       "fund_events",
+      "fund_pseudonyms",
       "funds",
       "idempotency_keys",
       "memberships",
@@ -66,6 +67,7 @@ databaseSuite("migration runner", (sql, url) => {
     const waitlistSource = await readFile(join(defaultDir, "0002_waitlist.sql"));
     const fundEventsSource = await readFile(join(defaultDir, "0003_fund_events.sql"));
     const sharedStoresSource = await readFile(join(defaultDir, "0004_shared_stores.sql"));
+    const fundPseudonymsSource = await readFile(join(defaultDir, "0005_fund_pseudonyms.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -90,6 +92,12 @@ databaseSuite("migration runner", (sql, url) => {
         version: 4,
         name: "0004_shared_stores.sql",
         checksum: createHash("sha256").update(sharedStoresSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
+      {
+        version: 5,
+        name: "0005_fund_pseudonyms.sql",
+        checksum: createHash("sha256").update(fundPseudonymsSource).digest("hex"),
         applied_at: expect.any(Date),
       },
     ]);
@@ -125,7 +133,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(4);
+    expect(before).toHaveLength(5);
   });
 
   it("rejects an edited applied file and names it", async () => {

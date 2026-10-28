@@ -8,7 +8,11 @@ Postgres.js client, application row schemas, migration runner, and the fund even
 
 **Consequences.** SQL is the source of truth. Schema changes require a new migration and matching row-schema changes. Each migration must fit in one transaction. Deployments cannot roll back the schema; corrections require another forward migration. No ORM or query-builder layer sits between callers and Postgres.
 
-PII belongs only in application tables. `pseudonyms` is an erasable mapping from a public UUID to a user. Historical records store the UUID value without a foreign key to this mapping. They must never cascade from the mapping: deleting it must preserve the historical record. All app foreign keys use the default restrictive delete behavior.
+PII belongs only in application tables. `fund_pseudonyms` provides an erasable mapping from a `(user_id, fund_id)` pair to a fund-scoped pseudonym UUID (`psn_<uuid>`). Pseudonyms are strictly per person per fund (YEN-70) to prevent cross-fund linking of individuals across public audit logs. The old `pseudonyms` table from migration `0001_app_tables.sql` mapped `user_id` globally to a single pseudonym; it is deprecated and unused. Historical records store the UUID value without a foreign key to this mapping. They must never cascade from the mapping: deleting it must preserve the historical record. All app foreign keys use the default restrictive delete behavior.
+
+### Fund pseudonyms
+
+`ensureFundPseudonym(sql, { userId, fundId })` idempotently and safely generates or retrieves the `PseudonymId` for a user in a fund. It executes `INSERT ... ON CONFLICT (user_id, fund_id) DO NOTHING` followed by select, guaranteeing race-safety and convergence under concurrent calls.
 
 The five fund roles are `owner`, `treasurer`, `approver`, `auditor`, and `member`. Multiple roles per user and fund are valid. Membership status is explicit on insert. Idempotency keys are globally unique and store a required request hash and completed JSON response; the API owns request hashing, concurrency, replay, and retention.
 
@@ -16,7 +20,7 @@ The five fund roles are `owner`, `treasurer`, `approver`, `auditor`, and `member
 
 `createSql(url)` returns a postgres.js client with at most 10 connections, prepared statements, a 10-second connection timeout, a 20-second idle timeout, quiet notices, and UTC sessions. Close the client with `await sql.end()`.
 
-Parse query results with the exported `userRowSchema`, `orgRowSchema`, `fundRowSchema`, `membershipRowSchema`, `pseudonymRowSchema`, `idempotencyKeyRowSchema`, `fundEventRowSchema`, or `rateLimitRowSchema`. Each schema has a corresponding inferred `*Row` type. ID parsing uses `@yen/shared`'s branded `UserId`, `OrgId`, and `FundId` parsers.
+Parse query results with the exported `userRowSchema`, `orgRowSchema`, `fundRowSchema`, `membershipRowSchema`, `pseudonymRowSchema`, `fundPseudonymRowSchema`, `idempotencyKeyRowSchema`, `fundEventRowSchema`, or `rateLimitRowSchema`. Each schema has a corresponding inferred `*Row` type. ID parsing uses `@yen/shared`'s branded `UserId`, `OrgId`, and `FundId` parsers.
 
 User phones are stored only in canonical E.164 form and parsed as `PhoneE164` from `@yen/shared`. Converting free text such as `98765 43210` to `+919876543210` belongs to the login flow (YEN-22) and needs a product decision; the database and shared parser do not guess country codes.
 

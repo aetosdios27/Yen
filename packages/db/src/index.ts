@@ -10,9 +10,15 @@ export {
 } from "./events.js";
 export { migrate } from "./migrate.js";
 export {
+  type EnsureFundPseudonymParams,
+  ensureFundPseudonym,
+} from "./pseudonyms.js";
+export {
   type FundEventRow,
+  type FundPseudonymRow,
   type FundRow,
   fundEventRowSchema,
+  fundPseudonymRowSchema,
   fundRowSchema,
   type IdempotencyKeyRow,
   idempotencyKeyRowSchema,
