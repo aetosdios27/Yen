@@ -64,6 +64,19 @@ export const idempotencyKeyRowSchema = z.object({
   created_at: z.date(),
 });
 
+export const fundEventRowSchema = z.object({
+  fund_id: fundId,
+  seq: z.bigint().transform((n) => Number(n)),
+  type: z.string(),
+  version: z.literal(1),
+  actor: z.string(),
+  occurred_at: z.string(),
+  payload: z.json(),
+  prev_hash: z.string(),
+  hash: z.string(),
+  canonical_envelope: z.string(),
+});
+
 export type UserRow = z.infer<typeof userRowSchema>;
 export type OrgRow = z.infer<typeof orgRowSchema>;
 export type FundRow = z.infer<typeof fundRowSchema>;
@@ -140,3 +153,4 @@ export type NotificationOutboxRow = z.infer<typeof notificationOutboxRowSchema>;
 export type UserNotificationPreferencesRow = z.infer<typeof userNotificationPreferencesRowSchema>;
 export type FundNotificationDailyUsageRow = z.infer<typeof fundNotificationDailyUsageRowSchema>;
 export type NotificationDeadLetterRow = z.infer<typeof notificationDeadLetterRowSchema>;
+export type FundEventRow = z.infer<typeof fundEventRowSchema>;
