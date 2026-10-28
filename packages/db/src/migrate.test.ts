@@ -52,6 +52,7 @@ databaseSuite("migration runner", (sql, url) => {
       );
     expect(tables.map((row) => row.tablename)).toEqual([
       "donation_pledges",
+      "fund_events",
       "funds",
       "idempotency_keys",
       "memberships",
@@ -63,7 +64,8 @@ databaseSuite("migration runner", (sql, url) => {
     ]);
     const source = await readFile(join(defaultDir, "0001_app_tables.sql"));
     const waitlistSource = await readFile(join(defaultDir, "0002_waitlist.sql"));
-    const pledgeSource = await readFile(join(defaultDir, "0003_donation_pledges.sql"));
+    const fundEventsSource = await readFile(join(defaultDir, "0003_fund_events.sql"));
+    const pledgeSource = await readFile(join(defaultDir, "0004_donation_pledges.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -80,7 +82,13 @@ databaseSuite("migration runner", (sql, url) => {
       },
       {
         version: 3,
-        name: "0003_donation_pledges.sql",
+        name: "0003_fund_events.sql",
+        checksum: createHash("sha256").update(fundEventsSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
+      {
+        version: 4,
+        name: "0004_donation_pledges.sql",
         checksum: createHash("sha256").update(pledgeSource).digest("hex"),
         applied_at: expect.any(Date),
       },
@@ -530,7 +538,7 @@ databaseSuite("migration runner", (sql, url) => {
 
   it("rejects an out-of-order applied history", async () => {
     await migrate(sql);
-    await sql`UPDATE schema_migrations SET version = 4 WHERE version = 1`;
+    await sql`UPDATE schema_migrations SET version = 99 WHERE version = 1`;
     await expect(migrate(sql)).rejects.toThrow("Missing or out-of-order applied migration");
   });
 
