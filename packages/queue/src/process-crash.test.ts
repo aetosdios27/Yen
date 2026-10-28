@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { createSql } from "@yen/db";
 import { PgBoss } from "pg-boss";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { describePostgres } from "./test-utils.js";
+import { describePostgres, waitFor } from "./test-utils.js";
 import { WorkerRuntime } from "./worker.js";
 
 describePostgres("Worker Process Crash and Exact-Once Retry", (adminUrl) => {
@@ -152,12 +152,17 @@ describePostgres("Worker Process Crash and Exact-Once Retry", (adminUrl) => {
       expect(recoveryCompleted).toBe(true);
       expect(retriedAttemptCount).toBe(1); // Retried on attempt 1 (exactly once)
 
-      // 7. Verify final database state: completed with retry_count = 1
-      const [finalRow] = await sql`
+      // 7. Verify final database state: completed with retry_count = 1. The handler sets its flag
+      // before it returns, and pg-boss records completion only after that, so poll for the state
+      // instead of reading it once (a single read raced with the completion write on slow runners).
+      const finalRow = await waitFor(async () => {
+        const [row] = await sql`
           SELECT id, state, retry_count FROM pgboss.job WHERE id = ${jobId}::uuid
         `;
-      expect(finalRow?.state).toBe("completed");
-      expect(finalRow?.retry_count).toBe(1);
+        return row?.state === "completed" ? row : undefined;
+      }, 10000);
+      expect(finalRow.state).toBe("completed");
+      expect(finalRow.retry_count).toBe(1);
     } finally {
       if (recoveryWorker) {
         await recoveryWorker.stop();
