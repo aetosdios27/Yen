@@ -1,3 +1,11 @@
+export {
+  type CreateApprovalPinInput,
+  createApprovalPin,
+  deleteApprovalPin,
+  getApprovalPin,
+  type UpdateApprovalPinInput,
+  updateApprovalPin,
+} from "./approval-pin.js";
 export { createSql, type Sql } from "./client.js";
 export { parseDatabaseUrl } from "./env.js";
 export { migrate } from "./migrate.js";
@@ -12,7 +20,9 @@ export {
   orgRowSchema,
   type PseudonymRow,
   pseudonymRowSchema,
+  type UserApprovalPinRow,
   type UserRow,
+  userApprovalPinRowSchema,
   userRowSchema,
 } from "./rows.js";
 export { uuidv7 } from "./uuidv7.js";

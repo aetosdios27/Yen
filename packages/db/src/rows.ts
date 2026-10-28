@@ -64,9 +64,24 @@ export const idempotencyKeyRowSchema = z.object({
   created_at: z.date(),
 });
 
+export const userApprovalPinRowSchema = z.object({
+  user_id: userId,
+  salt: z.string(),
+  pin_hash: z.string(),
+  failed_attempts: z.number().int().nonnegative(),
+  total_failed_24h: z.number().int().nonnegative(),
+  first_failed_at: z.date().nullable(),
+  locked_until: z.date().nullable(),
+  cooling_off_until: z.date().nullable(),
+  status: z.enum(["active", "locked_out", "cooling_off"]),
+  created_at: z.date(),
+  updated_at: z.date(),
+});
+
 export type UserRow = z.infer<typeof userRowSchema>;
 export type OrgRow = z.infer<typeof orgRowSchema>;
 export type FundRow = z.infer<typeof fundRowSchema>;
 export type MembershipRow = z.infer<typeof membershipRowSchema>;
 export type PseudonymRow = z.infer<typeof pseudonymRowSchema>;
 export type IdempotencyKeyRow = z.infer<typeof idempotencyKeyRowSchema>;
+export type UserApprovalPinRow = z.infer<typeof userApprovalPinRowSchema>;

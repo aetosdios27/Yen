@@ -57,11 +57,13 @@ databaseSuite("migration runner", (sql, url) => {
       "orgs",
       "pseudonyms",
       "schema_migrations",
+      "user_approval_pins",
       "users",
       "waitlist_entries",
     ]);
     const source = await readFile(join(defaultDir, "0001_app_tables.sql"));
     const waitlistSource = await readFile(join(defaultDir, "0002_waitlist.sql"));
+    const pinsSource = await readFile(join(defaultDir, "0003_approval_pins.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -74,6 +76,12 @@ databaseSuite("migration runner", (sql, url) => {
         version: 2,
         name: "0002_waitlist.sql",
         checksum: createHash("sha256").update(waitlistSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
+      {
+        version: 3,
+        name: "0003_approval_pins.sql",
+        checksum: createHash("sha256").update(pinsSource).digest("hex"),
         applied_at: expect.any(Date),
       },
     ]);
@@ -109,7 +117,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(2);
+    expect(before).toHaveLength(3);
   });
 
   it("rejects an edited applied file and names it", async () => {
@@ -522,7 +530,7 @@ databaseSuite("migration runner", (sql, url) => {
 
   it("rejects an out-of-order applied history", async () => {
     await migrate(sql);
-    await sql`UPDATE schema_migrations SET version = 3 WHERE version = 1`;
+    await sql`UPDATE schema_migrations SET version = 4 WHERE version = 1`;
     await expect(migrate(sql)).rejects.toThrow("Missing or out-of-order applied migration");
   });
 
