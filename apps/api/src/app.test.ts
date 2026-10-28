@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { unsafeMarkRedactedForDevPolicy } from "@yen/policy";
 import { HTTPException } from "hono/http-exception";
 import { expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
@@ -238,7 +239,7 @@ it("consults policy for both fund routes and returns only its redacted view", as
     targetPaise: "7",
     createdAt: "1970-01-01T00:00:00.000Z",
   };
-  const redact = vi.fn(() => sentinel);
+  const redact = vi.fn(() => unsafeMarkRedactedForDevPolicy(sentinel));
   const { app } = setup({ policy: { can, redact } });
   const created = await app.request("/v1/funds", post());
   expect(await created.json()).toEqual(sentinel);
