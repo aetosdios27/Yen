@@ -64,6 +64,19 @@ export const idempotencyKeyRowSchema = z.object({
   created_at: z.date(),
 });
 
+export const fundEventRowSchema = z.object({
+  fund_id: fundId,
+  seq: z.bigint().transform((n) => Number(n)),
+  type: z.string(),
+  version: z.literal(1),
+  actor: z.string(),
+  occurred_at: z.string(),
+  payload: z.json(),
+  prev_hash: z.string(),
+  hash: z.string(),
+  canonical_envelope: z.string(),
+});
+
 export const authOtpRowSchema = z.object({
   id: z.uuid(),
   phone: phoneE164,
@@ -97,5 +110,6 @@ export type FundRow = z.infer<typeof fundRowSchema>;
 export type MembershipRow = z.infer<typeof membershipRowSchema>;
 export type PseudonymRow = z.infer<typeof pseudonymRowSchema>;
 export type IdempotencyKeyRow = z.infer<typeof idempotencyKeyRowSchema>;
+export type FundEventRow = z.infer<typeof fundEventRowSchema>;
 export type AuthOtpRow = z.infer<typeof authOtpRowSchema>;
 export type SessionRow = z.infer<typeof sessionRowSchema>;

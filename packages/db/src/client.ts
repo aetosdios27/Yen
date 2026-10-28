@@ -20,3 +20,9 @@ export function createSql(
 }
 
 export type Sql = ReturnType<typeof createSql>;
+export type TransactionSql = postgres.TransactionSql<{ bigint: bigint }>;
+export type SqlClient = postgres.ISql<{ bigint: bigint }>;
+
+export function isSql(client: SqlClient): client is Sql {
+  return "begin" in client && typeof (client as { begin?: unknown }).begin === "function";
+}
