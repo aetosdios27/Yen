@@ -1,5 +1,6 @@
 import type { NotificationOutboxRow } from "@yen/db";
 import { type Event, hashHexSchema, pseudonymIdSchema } from "@yen/eventlog";
+import type { WorkerRuntime } from "@yen/queue";
 import { type FundId, paise, parseFundId, parseUserId, type UserId } from "@yen/shared";
 import { describe, expect, it } from "vitest";
 import { InMemoryChannelProvider } from "./channels/in-memory.js";
@@ -16,7 +17,7 @@ describe("NotificationsService (End-to-End Integration)", () => {
   if (!userResult.ok) throw new Error(userResult.error);
   const userId = userResult.value;
 
-  function createService() {
+  function createService(queueRuntime?: WorkerRuntime) {
     const store = new InMemoryNotificationStore();
     const whatsapp = new InMemoryChannelProvider("whatsapp");
     const sms = new InMemoryChannelProvider("sms");
@@ -46,7 +47,7 @@ describe("NotificationsService (End-to-End Integration)", () => {
             status: "pending",
             attempts: 0,
             max_attempts: params?.[8] as number,
-            next_attempt_at: params?.[9] as Date,
+            next_attempt_at: new Date("2020-01-01T00:00:00.000Z"),
             lease_expires_at: null,
             delivered_at: null,
             channel_used: null,
@@ -75,6 +76,8 @@ describe("NotificationsService (End-to-End Integration)", () => {
       store,
       whatsappProvider: whatsapp,
       smsProvider: sms,
+      queueRuntime,
+      workerOptions: { clock: () => new Date("2026-10-28T14:00:00.000Z") },
     });
 
     return { service, store, whatsapp, sms, mockTx };
@@ -127,5 +130,44 @@ describe("NotificationsService (End-to-End Integration)", () => {
     const usage = await service.getFundDailyUsage(fundId, "2026-10-28");
     expect(usage.sent_count).toBe(1);
     expect(usage.total_cost_paise).toBe(30);
+  });
+
+  it("uses the shared queue runtime for transactional wakeups", async () => {
+    const queuedJobs: Array<{ name: string; data: unknown; options: unknown }> = [];
+    let registeredQueue: string | undefined;
+    let handler: ((job: unknown) => Promise<void>) | undefined;
+    const runtime = {
+      registerHandler: (queue: string, registeredHandler: (job: unknown) => Promise<void>) => {
+        registeredQueue = queue;
+        handler = registeredHandler;
+      },
+      getBoss: () => ({
+        send: async (name: string, data: unknown, options: unknown) => {
+          queuedJobs.push({ name, data, options });
+          return "queue-job-1";
+        },
+      }),
+    } as unknown as WorkerRuntime;
+    const { service, mockTx } = createService(runtime);
+
+    await service.enqueue(mockTx, {
+      fund_id: fundId,
+      user_id: userId,
+      idempotency_key: "notify:queue-runtime:1",
+      template_id: "donation_received",
+      template_data: {
+        fund_title: "Community Fund",
+        donation_id: "donation-1",
+        amount_paise: 1000,
+      },
+      preferred_channel: "sms",
+    });
+
+    expect(registeredQueue).toBe("notifications");
+    expect(queuedJobs).toHaveLength(1);
+    expect(queuedJobs[0]?.name).toBe("notifications");
+    expect(queuedJobs[0]?.options).toHaveProperty("db");
+    expect(handler).toBeDefined();
+    await handler?.({});
   });
 });

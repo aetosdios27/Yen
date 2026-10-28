@@ -11,6 +11,7 @@ CREATE TABLE notification_outbox (
   attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
   max_attempts integer NOT NULL DEFAULT 3 CHECK (max_attempts > 0),
   next_attempt_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  claim_token uuid,
   lease_expires_at timestamptz,
   delivered_at timestamptz,
   channel_used text CHECK (channel_used IN ('whatsapp', 'sms', 'email')),
@@ -61,3 +62,5 @@ CREATE TABLE notification_dead_letter (
   dead_lettered_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX notification_dead_letter_fund_idx ON notification_dead_letter (fund_id, dead_lettered_at);
+CREATE INDEX notification_dead_letter_notification_id_idx ON notification_dead_letter (notification_id);
+CREATE INDEX notification_dead_letter_user_id_idx ON notification_dead_letter (user_id);

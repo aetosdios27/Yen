@@ -18,22 +18,31 @@ export interface RecipientContactInfo {
 
 export interface NotificationStore {
   claimBatch(batchSize: number, leaseExpiresAt: Date, now?: Date): Promise<NotificationOutboxRow[]>;
+  ownsClaim(id: string, claimToken: string, now?: Date): Promise<boolean>;
 
   markDelivered(
     id: string,
+    claimToken: string,
     channel: NotificationChannel,
     costPaise: Paise,
     now?: Date,
+  ): Promise<boolean>;
+
+  markFailed(
+    id: string,
+    claimToken: string,
+    error: string,
+    nextAttemptAt: Date,
+    now?: Date,
   ): Promise<void>;
 
-  markFailed(id: string, error: string, nextAttemptAt: Date, now?: Date): Promise<void>;
+  markDeadLetter(id: string, claimToken: string, error: string, now?: Date): Promise<void>;
 
-  markDeadLetter(id: string, error: string, now?: Date): Promise<void>;
-
-  markSkipped(id: string, reason: string, now?: Date): Promise<void>;
+  markSkipped(id: string, claimToken: string, reason: string, now?: Date): Promise<void>;
 
   reschedule(
     id: string,
+    claimToken: string,
     nextAttemptAt: Date,
     decrementAttempt?: boolean,
     now?: Date,
@@ -74,6 +83,7 @@ export class InMemoryNotificationStore implements NotificationStore {
         const updated: NotificationOutboxRow = {
           ...row,
           status: "processing",
+          claim_token: uuidv7(),
           lease_expires_at: leaseExpiresAt,
           attempts: row.attempts + 1,
           updated_at: now,
@@ -86,14 +96,28 @@ export class InMemoryNotificationStore implements NotificationStore {
     return claimed;
   }
 
+  async ownsClaim(id: string, claimToken: string, now: Date = new Date()): Promise<boolean> {
+    const row = this.outbox.get(id);
+    return Boolean(
+      row &&
+        row.status === "processing" &&
+        row.claim_token === claimToken &&
+        row.lease_expires_at !== null &&
+        row.lease_expires_at > now,
+    );
+  }
+
   async markDelivered(
     id: string,
+    claimToken: string,
     channel: NotificationChannel,
     costPaise: Paise,
     now: Date = new Date(),
-  ): Promise<void> {
+  ): Promise<boolean> {
     const existing = this.outbox.get(id);
-    if (!existing) return;
+    if (existing?.status !== "processing" || existing.claim_token !== claimToken) {
+      return false;
+    }
     this.outbox.set(id, {
       ...existing,
       status: "delivered",
@@ -101,36 +125,46 @@ export class InMemoryNotificationStore implements NotificationStore {
       cost_paise: BigInt(costPaise),
       delivered_at: now,
       lease_expires_at: null,
+      claim_token: null,
       updated_at: now,
     });
+    return true;
   }
 
   async markFailed(
     id: string,
+    claimToken: string,
     error: string,
     nextAttemptAt: Date,
     now: Date = new Date(),
   ): Promise<void> {
     const existing = this.outbox.get(id);
-    if (!existing) return;
+    if (existing?.status !== "processing" || existing.claim_token !== claimToken) return;
     this.outbox.set(id, {
       ...existing,
       status: "pending",
       next_attempt_at: nextAttemptAt,
       last_error: error,
       lease_expires_at: null,
+      claim_token: null,
       updated_at: now,
     });
   }
 
-  async markDeadLetter(id: string, error: string, now: Date = new Date()): Promise<void> {
+  async markDeadLetter(
+    id: string,
+    claimToken: string,
+    error: string,
+    now: Date = new Date(),
+  ): Promise<void> {
     const existing = this.outbox.get(id);
-    if (!existing) return;
+    if (existing?.status !== "processing" || existing.claim_token !== claimToken) return;
     this.outbox.set(id, {
       ...existing,
       status: "dead_letter",
       last_error: error,
       lease_expires_at: null,
+      claim_token: null,
       updated_at: now,
     });
 
@@ -149,32 +183,40 @@ export class InMemoryNotificationStore implements NotificationStore {
     });
   }
 
-  async markSkipped(id: string, reason: string, now: Date = new Date()): Promise<void> {
+  async markSkipped(
+    id: string,
+    claimToken: string,
+    reason: string,
+    now: Date = new Date(),
+  ): Promise<void> {
     const existing = this.outbox.get(id);
-    if (!existing) return;
+    if (existing?.status !== "processing" || existing.claim_token !== claimToken) return;
     this.outbox.set(id, {
       ...existing,
       status: "skipped",
       last_error: reason,
       lease_expires_at: null,
+      claim_token: null,
       updated_at: now,
     });
   }
 
   async reschedule(
     id: string,
+    claimToken: string,
     nextAttemptAt: Date,
     decrementAttempt = false,
     now: Date = new Date(),
   ): Promise<void> {
     const existing = this.outbox.get(id);
-    if (!existing) return;
+    if (existing?.status !== "processing" || existing.claim_token !== claimToken) return;
     this.outbox.set(id, {
       ...existing,
       status: "pending",
       next_attempt_at: nextAttemptAt,
       attempts: decrementAttempt ? Math.max(0, existing.attempts - 1) : existing.attempts,
       lease_expires_at: null,
+      claim_token: null,
       updated_at: now,
     });
   }
@@ -235,6 +277,7 @@ export class PostgresNotificationStore implements NotificationStore {
     const rows = (await this.client.unsafe(
       `UPDATE notification_outbox
        SET status = 'processing',
+           claim_token = gen_random_uuid(),
            lease_expires_at = $1,
            attempts = attempts + 1,
            updated_at = $2
@@ -253,27 +296,43 @@ export class PostgresNotificationStore implements NotificationStore {
     return rows;
   }
 
+  async ownsClaim(id: string, claimToken: string, now: Date = new Date()): Promise<boolean> {
+    const rows = (await this.client.unsafe(
+      `SELECT EXISTS (
+         SELECT 1 FROM notification_outbox
+         WHERE id = $1 AND claim_token = $2 AND status = 'processing' AND lease_expires_at > $3
+       ) AS owned`,
+      [id, claimToken, now],
+    )) as Array<{ owned: boolean }>;
+    return rows[0]?.owned ?? false;
+  }
+
   async markDelivered(
     id: string,
+    claimToken: string,
     channel: NotificationChannel,
     costPaise: Paise,
     now: Date = new Date(),
-  ): Promise<void> {
-    await this.client.unsafe(
+  ): Promise<boolean> {
+    const rows = (await this.client.unsafe(
       `UPDATE notification_outbox
        SET status = 'delivered',
            channel_used = $1,
            cost_paise = $2,
            delivered_at = $3,
            lease_expires_at = NULL,
+           claim_token = NULL,
            updated_at = $3
-       WHERE id = $4`,
-      [channel, costPaise, now, id],
-    );
+       WHERE id = $4 AND claim_token = $5 AND status = 'processing'
+       RETURNING id`,
+      [channel, costPaise, now, id, claimToken],
+    )) as Array<{ id: string }>;
+    return rows.length > 0;
   }
 
   async markFailed(
     id: string,
+    claimToken: string,
     error: string,
     nextAttemptAt: Date,
     now: Date = new Date(),
@@ -284,22 +343,29 @@ export class PostgresNotificationStore implements NotificationStore {
            next_attempt_at = $1,
            last_error = $2,
            lease_expires_at = NULL,
+           claim_token = NULL,
            updated_at = $3
-       WHERE id = $4`,
-      [nextAttemptAt, error, now, id],
+       WHERE id = $4 AND claim_token = $5 AND status = 'processing'`,
+      [nextAttemptAt, error, now, id, claimToken],
     );
   }
 
-  async markDeadLetter(id: string, error: string, now: Date = new Date()): Promise<void> {
+  async markDeadLetter(
+    id: string,
+    claimToken: string,
+    error: string,
+    now: Date = new Date(),
+  ): Promise<void> {
     const rows = (await this.client.unsafe(
       `UPDATE notification_outbox
        SET status = 'dead_letter',
            last_error = $1,
            lease_expires_at = NULL,
+           claim_token = NULL,
            updated_at = $2
-       WHERE id = $3
+       WHERE id = $3 AND claim_token = $4 AND status = 'processing'
        RETURNING *`,
-      [error, now, id],
+      [error, now, id, claimToken],
     )) as NotificationOutboxRow[];
 
     const row = rows[0];
@@ -326,20 +392,27 @@ export class PostgresNotificationStore implements NotificationStore {
     }
   }
 
-  async markSkipped(id: string, reason: string, now: Date = new Date()): Promise<void> {
+  async markSkipped(
+    id: string,
+    claimToken: string,
+    reason: string,
+    now: Date = new Date(),
+  ): Promise<void> {
     await this.client.unsafe(
       `UPDATE notification_outbox
        SET status = 'skipped',
            last_error = $1,
            lease_expires_at = NULL,
+           claim_token = NULL,
            updated_at = $2
-       WHERE id = $3`,
-      [reason, now, id],
+       WHERE id = $3 AND claim_token = $4 AND status = 'processing'`,
+      [reason, now, id, claimToken],
     );
   }
 
   async reschedule(
     id: string,
+    claimToken: string,
     nextAttemptAt: Date,
     decrementAttempt = false,
     now: Date = new Date(),
@@ -351,9 +424,10 @@ export class PostgresNotificationStore implements NotificationStore {
            next_attempt_at = $1,
            attempts = ${attemptAdjustment},
            lease_expires_at = NULL,
+           claim_token = NULL,
            updated_at = $2
-       WHERE id = $3`,
-      [nextAttemptAt, now, id],
+       WHERE id = $3 AND claim_token = $4 AND status = 'processing'`,
+      [nextAttemptAt, now, id, claimToken],
     );
   }
 

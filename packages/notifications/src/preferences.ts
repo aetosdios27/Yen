@@ -33,10 +33,7 @@ export function isChannelEnabled(
   }
 }
 
-/**
- * Resolves ordered list of channels to try for this user.
- * WhatsApp is primary, followed by SMS, followed by Email.
- */
+/** Resolves the user's explicitly selected channel without silently changing channels. */
 export function getEligibleChannels(
   preferences: UserPreferences,
   preferredChannel: NotificationChannel = "whatsapp",
@@ -45,20 +42,7 @@ export function getEligibleChannels(
     return [];
   }
 
-  const primary = preferredChannel;
-  const secondary: NotificationChannel = primary === "whatsapp" ? "sms" : "whatsapp";
-  const tertiary: NotificationChannel = "email";
-
-  const candidates: NotificationChannel[] = [primary, secondary, tertiary];
-  const eligible: NotificationChannel[] = [];
-
-  for (const channel of candidates) {
-    if (isChannelEnabled(preferences, channel) && !eligible.includes(channel)) {
-      eligible.push(channel);
-    }
-  }
-
-  return eligible;
+  return isChannelEnabled(preferences, preferredChannel) ? [preferredChannel] : [];
 }
 
 /**

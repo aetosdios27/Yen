@@ -103,6 +103,7 @@ export const notificationOutboxRowSchema = z.object({
   attempts: z.number().int().nonnegative(),
   max_attempts: z.number().int().positive(),
   next_attempt_at: z.date(),
+  claim_token: z.uuid().nullable().optional(),
   lease_expires_at: z.date().nullable(),
   delivered_at: z.date().nullable(),
   channel_used: z.enum(["whatsapp", "sms", "email"]).nullable(),

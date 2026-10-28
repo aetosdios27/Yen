@@ -1,5 +1,6 @@
 import type { NotificationOutboxRow } from "@yen/db";
 import type { Event } from "@yen/eventlog";
+import { transactionalEnqueue, type WorkerRuntime } from "@yen/queue";
 import type { FundId, UserId } from "@yen/shared";
 import { EmailChannelProvider } from "./channels/email.js";
 import { SmsChannelProvider } from "./channels/sms.js";
@@ -30,14 +31,17 @@ export interface NotificationsServiceOptions {
         clock?: (() => Date) | undefined;
       }
     | undefined;
+  queueRuntime?: WorkerRuntime | undefined;
 }
 
 export class NotificationsService {
   readonly store: NotificationStore;
   readonly worker: NotificationsWorker;
+  private readonly queueRuntime: WorkerRuntime | undefined;
 
   constructor(options: NotificationsServiceOptions) {
     this.store = options.store;
+    this.queueRuntime = options.queueRuntime;
     const whatsappProvider = options.whatsappProvider ?? new WhatsAppChannelProvider();
     const smsProvider = options.smsProvider ?? new SmsChannelProvider();
     const emailProvider = options.emailProvider ?? new EmailChannelProvider();
@@ -52,13 +56,23 @@ export class NotificationsService {
       backoffBaseSeconds: options.workerOptions?.backoffBaseSeconds,
       clock: options.workerOptions?.clock,
     });
+
+    this.queueRuntime?.registerHandler(
+      "notifications",
+      async () => {
+        await this.processPending();
+      },
+      { localConcurrency: 1, batchSize: 1 },
+    );
   }
 
   async enqueue(
     tx: SqlTransaction,
     input: EnqueueNotificationInput,
   ): Promise<NotificationOutboxRow | null> {
-    return enqueueNotification(tx, input);
+    const row = await enqueueNotification(tx, input);
+    if (row) await this.enqueueWakeup(tx);
+    return row;
   }
 
   async handleEvent(
@@ -66,7 +80,9 @@ export class NotificationsService {
     event: Event,
     recipients: EventNotificationRecipient[],
   ): Promise<NotificationOutboxRow[]> {
-    return createNotificationsForEvent(tx, event, recipients);
+    const rows = await createNotificationsForEvent(tx, event, recipients);
+    if (rows.length > 0) await this.enqueueWakeup(tx);
+    return rows;
   }
 
   async processPending(): Promise<BatchProcessingSummary> {
@@ -83,5 +99,15 @@ export class NotificationsService {
 
   async getFundDailyUsage(fundId: FundId, date: string): Promise<DailyFundUsage> {
     return this.store.getDailyFundUsage(fundId, date);
+  }
+
+  private async enqueueWakeup(tx: SqlTransaction): Promise<void> {
+    if (!this.queueRuntime) return;
+    await transactionalEnqueue(
+      this.queueRuntime.getBoss(),
+      tx as Parameters<typeof transactionalEnqueue>[1],
+      "notifications",
+      { type: "outbox-ready" },
+    );
   }
 }

@@ -20,6 +20,7 @@
   "dependencies": {
     "@yen/db": "workspace:*",
     "@yen/eventlog": "workspace:*",
+    "@yen/queue": "workspace:*",
     "@yen/shared": "workspace:*",
     "postgres": "^3.4.7",
     "zod": "^4.6.7"

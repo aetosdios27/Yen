@@ -37,7 +37,7 @@ describe("User Notification Preferences & Quiet Hours", () => {
       expect(getEligibleChannels(prefs, "whatsapp")).toEqual([]);
     });
 
-    it("falls back to SMS when WhatsApp is opted out", () => {
+    it("does not change the selected channel when WhatsApp is disabled", () => {
       const prefs: UserPreferences = {
         ...getDefaultUserPreferences(userId),
         whatsapp_enabled: false,
@@ -45,17 +45,18 @@ describe("User Notification Preferences & Quiet Hours", () => {
 
       expect(isChannelEnabled(prefs, "whatsapp")).toBe(false);
       expect(isChannelEnabled(prefs, "sms")).toBe(true);
-      expect(getEligibleChannels(prefs, "whatsapp")).toEqual(["sms", "email"]);
+      expect(getEligibleChannels(prefs, "whatsapp")).toEqual([]);
+      expect(getEligibleChannels(prefs, "sms")).toEqual(["sms"]);
     });
 
-    it("falls back to email when WhatsApp and SMS are opted out", () => {
+    it("does not fall back to email when the selected phone channel is disabled", () => {
       const prefs: UserPreferences = {
         ...getDefaultUserPreferences(userId),
         whatsapp_enabled: false,
         sms_enabled: false,
       };
 
-      expect(getEligibleChannels(prefs, "whatsapp")).toEqual(["email"]);
+      expect(getEligibleChannels(prefs, "whatsapp")).toEqual([]);
     });
 
     it("returns empty when all channels are disabled", () => {

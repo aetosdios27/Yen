@@ -2,7 +2,7 @@ import { paise, parseFundId, parseUserId } from "@yen/shared";
 import { describe, expect, it } from "vitest";
 import { InMemoryChannelProvider } from "./channels/in-memory.js";
 import { InMemoryNotificationStore } from "./store.js";
-import { NotificationsWorker } from "./worker.js";
+import { NotificationsWorker, type NotificationsWorkerOptions } from "./worker.js";
 
 describe("NotificationsWorker (Delivery, Fallback, Crash Resilience, Cost Guard, DLQ)", () => {
   const fundResult = parseFundId("11111111-1111-7111-8111-111111111111");
@@ -13,7 +13,7 @@ describe("NotificationsWorker (Delivery, Fallback, Crash Resilience, Cost Guard,
   if (!userResult.ok) throw new Error(userResult.error);
   const userId = userResult.value;
 
-  function setup() {
+  function setup(logger?: NotificationsWorkerOptions["logger"]) {
     const store = new InMemoryNotificationStore();
     const whatsapp = new InMemoryChannelProvider("whatsapp");
     const sms = new InMemoryChannelProvider("sms");
@@ -38,6 +38,7 @@ describe("NotificationsWorker (Delivery, Fallback, Crash Resilience, Cost Guard,
       clock,
       leaseDurationMs: 60_000,
       backoffBaseSeconds: 5,
+      logger,
     });
 
     return { store, whatsapp, sms, email, worker, clock, advanceMinutes };
@@ -91,12 +92,21 @@ describe("NotificationsWorker (Delivery, Fallback, Crash Resilience, Cost Guard,
     expect(usage.total_cost_paise).toBe(30);
   });
 
-  it("falls back to SMS when WhatsApp delivery fails, recording 15 paise cost", async () => {
-    const { store, whatsapp, sms, worker } = setup();
+  it("does not silently fall back to SMS when selected WhatsApp delivery fails", async () => {
+    const logged: string[] = [];
+    const logger = {
+      info: (message: string, meta?: Record<string, unknown>) =>
+        logged.push(JSON.stringify({ message, meta })),
+      warn: (message: string, meta?: Record<string, unknown>) =>
+        logged.push(JSON.stringify({ message, meta })),
+      error: (message: string, meta?: Record<string, unknown>) =>
+        logged.push(JSON.stringify({ message, meta })),
+    };
+    const { store, whatsapp, sms, worker } = setup(logger);
 
     // Simulate WhatsApp failure
     whatsapp.shouldFail = true;
-    whatsapp.failureError = "Recipient WhatsApp unregistered";
+    whatsapp.failureError = "Recipient +919876543210 token=super-secret";
 
     store.outbox.set("notif-fallback", {
       id: "notif-fallback",
@@ -126,17 +136,50 @@ describe("NotificationsWorker (Delivery, Fallback, Crash Resilience, Cost Guard,
 
     const summary = await worker.processNextBatch();
 
-    expect(summary.delivered).toBe(1);
+    expect(summary.failed).toBe(1);
     expect(whatsapp.sentMessages).toHaveLength(0); // Failed
-    expect(sms.sentMessages).toHaveLength(1); // Delivered via SMS fallback!
+    expect(sms.sentMessages).toHaveLength(0);
 
     const row = store.outbox.get("notif-fallback");
-    expect(row?.status).toBe("delivered");
-    expect(row?.channel_used).toBe("sms");
-    expect(row?.cost_paise).toBe(15n);
+    expect(row?.status).toBe("pending");
+    expect(row?.channel_used).toBeNull();
 
     const usage = await store.getDailyFundUsage(fundId, "2026-10-28");
-    expect(usage.total_cost_paise).toBe(15);
+    expect(usage.total_cost_paise).toBe(0);
+    expect(logged.join(" ")).not.toContain("+919876543210");
+    expect(logged.join(" ")).not.toContain("super-secret");
+  });
+
+  it("delivers through SMS when SMS is the selected channel", async () => {
+    const { store, sms, whatsapp, worker } = setup();
+    store.outbox.set("notif-sms", {
+      id: "notif-sms",
+      fund_id: fundId,
+      user_id: userId,
+      event_id: "evt-sms",
+      idempotency_key: "idem-sms",
+      template_id: "donation_received",
+      template_data: { fund_title: "Village Fund", donation_id: "don-2", amount_paise: 1000 },
+      preferred_channel: "sms",
+      status: "pending",
+      attempts: 0,
+      max_attempts: 3,
+      next_attempt_at: new Date("2026-10-28T10:00:00.000Z"),
+      lease_expires_at: null,
+      delivered_at: null,
+      channel_used: null,
+      cost_paise: 0n,
+      last_error: null,
+      created_at: new Date("2026-10-28T10:00:00.000Z"),
+      updated_at: new Date("2026-10-28T10:00:00.000Z"),
+    });
+
+    const summary = await worker.processNextBatch();
+
+    expect(summary.delivered).toBe(1);
+    expect(sms.sentMessages).toHaveLength(1);
+    expect(whatsapp.sentMessages).toHaveLength(0);
+    expect(store.outbox.get("notif-sms")?.channel_used).toBe("sms");
   });
 
   it("killing worker mid-send never double-sends or drops a notification (Acceptance Criterion 1)", async () => {
@@ -201,13 +244,40 @@ describe("NotificationsWorker (Delivery, Fallback, Crash Resilience, Cost Guard,
     // Step 2: Time advances past lease expiration (10:02)
     advanceMinutes(2);
 
-    // Step 3: New worker starts up and processes pending batches
-    const summary = await worker.processNextBatch();
+    // Step 3: A replacement worker reclaims the expired lease with a fresh token.
+    const reclaimed = await store.claimBatch(
+      10,
+      new Date("2026-10-28T10:03:00.000Z"),
+      new Date("2026-10-28T10:02:00.000Z"),
+    );
+    expect(reclaimed).toHaveLength(1);
+    expect(reclaimed[0]?.claim_token).not.toBe(claimed[0]?.claim_token);
+
+    const staleClaim = claimed[0];
+    if (!staleClaim) throw new Error("Expected original claim");
+    expect(await worker.processNotification(staleClaim, new Date("2026-10-28T10:02:00.000Z"))).toBe(
+      "failed",
+    );
+    expect(whatsapp.sentMessages).toHaveLength(1);
+
+    // A stale worker cannot release or overwrite a row now owned by the replacement.
+    await store.markFailed(
+      "notif-crash",
+      staleClaim.claim_token ?? "stale-token",
+      "stale result",
+      new Date("2026-10-28T10:03:00.000Z"),
+    );
+    expect(store.outbox.get("notif-crash")?.status).toBe("processing");
+    expect(store.outbox.get("notif-crash")?.claim_token).toBe(reclaimed[0]?.claim_token);
+
+    const replacement = reclaimed[0];
+    if (!replacement) throw new Error("Expected replacement claim");
+    expect(
+      await worker.processNotification(replacement, new Date("2026-10-28T10:02:00.000Z")),
+    ).toBe("delivered");
 
     // Verification:
     // 1. Not dropped: row was picked up and completed
-    expect(summary.claimed).toBe(1);
-    expect(summary.delivered).toBe(1);
 
     const finalRow = store.outbox.get("notif-crash");
     expect(finalRow?.status).toBe("delivered");

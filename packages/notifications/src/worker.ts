@@ -95,12 +95,18 @@ export class NotificationsWorker {
     row: NotificationOutboxRow,
     now: Date = this.clock(),
   ): Promise<"delivered" | "failed" | "skipped" | "dead_letter"> {
+    const claimToken = row.claim_token;
+    if (!claimToken) {
+      throw new Error("Claimed notification is missing its fencing token");
+    }
+
     const parsedFund = parseFundId(row.fund_id);
     const parsedUser = parseUserId(row.user_id);
 
     if (!parsedFund.ok || !parsedUser.ok) {
       await this.store.markDeadLetter(
         row.id,
+        claimToken,
         "Corrupted notification row: invalid fund or user ID",
         now,
       );
@@ -113,7 +119,7 @@ export class NotificationsWorker {
     // 1. Check user preferences & opt-out
     const preferences = await this.store.getUserPreferences(userId);
     if (preferences.opted_out) {
-      await this.store.markSkipped(row.id, "User opted out of all notifications", now);
+      await this.store.markSkipped(row.id, claimToken, "User opted out of all notifications", now);
       this.logger?.info("Notification skipped: user opted out", {
         notification_id: row.id,
         fund_id: fundId,
@@ -124,7 +130,7 @@ export class NotificationsWorker {
     // 2. Check quiet hours
     if (isDuringQuietHours(preferences, now)) {
       const quietHoursEnd = calculateQuietHoursEnd(preferences, now);
-      await this.store.reschedule(row.id, quietHoursEnd, true, now);
+      await this.store.reschedule(row.id, claimToken, quietHoursEnd, true, now);
       this.logger?.info("Notification postponed due to quiet hours", {
         notification_id: row.id,
         fund_id: fundId,
@@ -141,7 +147,7 @@ export class NotificationsWorker {
       const errorMsg = capCheck.reason ?? "Daily notification cap exceeded for fund";
       // Cap is per day, retry next day or fail
       const nextAttemptAt = new Date(now.getTime() + 60 * 60 * 1000); // 1 hour later
-      await this.store.markFailed(row.id, errorMsg, nextAttemptAt, now);
+      await this.store.markFailed(row.id, claimToken, errorMsg, nextAttemptAt, now);
       this.logger?.warn("Notification blocked by cost guard: daily cap reached", {
         notification_id: row.id,
         fund_id: fundId,
@@ -154,7 +160,12 @@ export class NotificationsWorker {
     // 4. Retrieve recipient contact
     const contact = await this.store.getUserContact(userId);
     if (!contact || (!contact.phone && !contact.email)) {
-      await this.store.markDeadLetter(row.id, "Recipient has no contact information on file", now);
+      await this.store.markDeadLetter(
+        row.id,
+        claimToken,
+        "Recipient has no contact information on file",
+        now,
+      );
       return "dead_letter";
     }
 
@@ -164,18 +175,23 @@ export class NotificationsWorker {
       rendered = renderNotificationTemplate(row.template_id, row.template_data, preferences.locale);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : "Template render error";
-      await this.store.markDeadLetter(row.id, `Template error: ${errMsg}`, now);
+      await this.store.markDeadLetter(row.id, claimToken, `Template error: ${errMsg}`, now);
       return "dead_letter";
     }
 
     // 6. Resolve eligible channels
     const eligibleChannels = getEligibleChannels(preferences, row.preferred_channel);
     if (eligibleChannels.length === 0) {
-      await this.store.markSkipped(row.id, "No delivery channels enabled in user preferences", now);
+      await this.store.markSkipped(
+        row.id,
+        claimToken,
+        "No delivery channels enabled in user preferences",
+        now,
+      );
       return "skipped";
     }
 
-    // 7. Delivery attempt with WhatsApp primary and SMS fallback
+    // 7. Deliver only through the user's selected channel.
     let lastError = "Delivery failed across all channels";
     let delivered = false;
 
@@ -186,9 +202,14 @@ export class NotificationsWorker {
       const recipientContact = channel === "email" ? contact.email : contact.phone;
       if (!recipientContact) continue;
 
-      // Note: channel-specific deduplication key for fallback safety
-      const channelIdempotencyKey =
-        channel === "whatsapp" ? row.idempotency_key : `${row.idempotency_key}:${channel}`;
+      if (!(await this.store.ownsClaim(row.id, claimToken, now))) {
+        this.logger?.warn("Notification delivery stopped after claim was replaced", {
+          notification_id: row.id,
+        });
+        return "failed";
+      }
+
+      const channelIdempotencyKey = row.idempotency_key;
 
       const deliveryResult = await provider.send({
         recipientContact,
@@ -200,7 +221,19 @@ export class NotificationsWorker {
 
       if (deliveryResult.success) {
         // Record delivery and cost
-        await this.store.markDelivered(row.id, channel, deliveryResult.cost_paise, now);
+        const claimedByThisWorker = await this.store.markDelivered(
+          row.id,
+          claimToken,
+          channel,
+          deliveryResult.cost_paise,
+          now,
+        );
+        if (!claimedByThisWorker) {
+          this.logger?.warn("Notification result ignored after claim was replaced", {
+            notification_id: row.id,
+          });
+          return "failed";
+        }
         await this.store.incrementFundUsage(fundId, today, deliveryResult.cost_paise);
 
         this.logger?.info("Notification successfully delivered", {
@@ -214,12 +247,12 @@ export class NotificationsWorker {
         break;
       }
 
-      // Channel delivery failed, record sanitized error and attempt next fallback
+      // Keep provider details out of logs because they can contain recipient data.
       lastError = deliveryResult.error ?? `Failure on channel ${channel}`;
-      this.logger?.warn("Channel delivery failed, falling back", {
+      this.logger?.warn("Channel delivery failed", {
         notification_id: row.id,
         channel,
-        error: lastError,
+        error: "provider_error",
       });
     }
 
@@ -229,12 +262,12 @@ export class NotificationsWorker {
 
     // If all channels failed
     if (row.attempts >= row.max_attempts) {
-      await this.store.markDeadLetter(row.id, lastError, now);
+      await this.store.markDeadLetter(row.id, claimToken, lastError, now);
       this.logger?.error("Notification moved to dead-letter queue", {
         notification_id: row.id,
         fund_id: fundId,
         attempts: row.attempts,
-        error: lastError,
+        error: "provider_error",
       });
       return "dead_letter";
     }
@@ -242,14 +275,14 @@ export class NotificationsWorker {
     // Schedule retry with exponential backoff
     const delaySeconds = this.backoffBaseSeconds * 2 ** Math.max(0, row.attempts - 1);
     const nextAttemptAt = new Date(now.getTime() + delaySeconds * 1000);
-    await this.store.markFailed(row.id, lastError, nextAttemptAt, now);
+    await this.store.markFailed(row.id, claimToken, lastError, nextAttemptAt, now);
 
     this.logger?.warn("Notification delivery failed, scheduled retry", {
       notification_id: row.id,
       fund_id: fundId,
       attempts: row.attempts,
       retry_at: nextAttemptAt.toISOString(),
-      error: lastError,
+      error: "provider_error",
     });
 
     return "failed";
