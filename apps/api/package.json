@@ -7,6 +7,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "pnpm openapi:check && vitest run",
+    "test:load": "tsx scripts/load-test.ts",
     "start": "node --env-file-if-exists=.env dist/server.js",
     "openapi:generate": "pnpm --filter @yen/shared build && tsx scripts/openapi.ts",
     "openapi:check": "tsx scripts/openapi.ts --check",
@@ -16,6 +17,7 @@
     "@hono/node-server": "2.1.5",
     "@hono/zod-openapi": "1.6.3",
     "@yen/db": "workspace:*",
+    "@yen/policy": "workspace:*",
     "@yen/shared": "workspace:*",
     "hono": "4.13.14",
     "zod": "4.6.7"

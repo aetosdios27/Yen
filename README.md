@@ -5,7 +5,7 @@
 # Yen
 
 **Community money you can check.**<br>
-Donors verify every rupee. Treasurers cannot quietly spend it.
+Donors verify every rupee. Treasurers cannot quietly spend it. <!-- claim: CLAIM-01 -->
 
 [![CI](https://github.com/aetosdios27/Yen/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/aetosdios27/Yen/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/aetosdios27/Yen/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/aetosdios27/Yen/actions/workflows/codeql.yml)
@@ -18,7 +18,7 @@ Donors verify every rupee. Treasurers cannot quietly spend it.
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](#built-with)
 [![Polygon Amoy testnet](https://img.shields.io/badge/chain-Polygon%20Amoy%20(testnet)-8247E5?logo=polygon&logoColor=white)](#built-with)
 
-[Why Yen](#why-yen) · [How it works](#how-it-works) · [Guarantees and limits](#guarantees-and-limits) · [Built with](#built-with) · [Roadmap](#roadmap) · [Getting started](#getting-started)
+[Why Yen](#why-yen) · [How it works](#how-it-works) · [Guarantees and limits](#guarantees-and-limits) · [Built with](#built-with) · [Roadmap](#roadmap) · [Getting started](#getting-started) · [Deployment](#deployment)
 
 </div>
 
@@ -30,7 +30,7 @@ Clubs, festivals, housing societies and small NGOs collect money through persona
 
 ## How it works
 
-Yen **never holds money**. Funds stay in the club's own bank account. This section describes the design; most of it is still being built and nothing is deployed yet. Yen watches the account, enforces configured spending approvals, and ensures any change would be detected.
+Yen **never holds money**. <!-- claim: CLAIM-02 --> Funds stay in the club's own bank account. This section describes the design; most of it is still being built and nothing is deployed yet. Yen watches the account, enforces configured spending approvals, and ensures any change would be detected. <!-- claim: CLAIM-03 -->
 
 ```mermaid
 flowchart LR
@@ -45,16 +45,21 @@ flowchart LR
     D -. checks a record in the browser .-> C
 ```
 
-1. **Donations go directly to the club bank account.** The bank feed confirms incoming payments, so a payment is recorded only when the bank reports it.
-2. **Spending requires permission.** The treasurer submits an expense request with a bill. Configured approvers confirm with passkeys, and donors receive an objection window.
-3. **Debits match approved requests.** Bank debits are reconciled against approved requests. Any debit without a matching approval is flagged publicly.
-4. **Events are hash-chained in the event log (planned).** Each record includes the cryptographic hash of the prior record, ensuring any change would be detected.
-5. **Merkle roots anchor to a public chain (planned).** Periodic root hashes are published to the Polygon Amoy testnet without names or amounts. Anyone can verify proofs locally in the browser.
+1. **Donations go directly to the club bank account.** The bank feed confirms incoming payments, so a payment is recorded only when the bank reports it. <!-- claim: CLAIM-13 -->
+2. **Spending requires permission.** The treasurer submits an expense request with a bill. Configured approvers confirm with a 6-digit Yen PIN (recorded by Yen after PIN confirmation), and donors receive an objection window. <!-- claim: CLAIM-12 --> <!-- claim: CLAIM-15 --> <!-- claim: CLAIM-30 -->
+3. **Debits match approved requests.** Bank debits are reconciled against approved requests. Any debit without a matching approval is flagged publicly. <!-- claim: CLAIM-14 -->
+4. **Events are hash-chained in the event log (planned).** Each record includes the cryptographic hash of the prior record, ensuring any change would be detected. <!-- claim: CLAIM-03 -->
+5. **Merkle roots anchor to a public chain (planned).** Periodic root hashes are published to the Polygon Amoy testnet without names or amounts. <!-- claim: CLAIM-10 --> Anyone can verify proofs locally in the browser. <!-- claim: CLAIM-09 -->
 
 <a id="what-we-promise-and-what-we-dont"></a>
 ## Guarantees and limits
 
 We only claim what a skeptic can check.
+
+<!-- claim: CLAIM-03 -->
+<!-- claim: CLAIM-12 -->
+<!-- claim: CLAIM-14 -->
+<!-- claim: CLAIM-11 -->
 
 | We guarantee                                                 | We do not guarantee                                                                                                             |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -105,7 +110,7 @@ contracts/        Placeholder; RootRegistry is planned in YEN-16
 .greptile/        AI review rules specific to this repo
 ```
 
-Money is always **integer paise** with the branded `Paise` type, never floats.
+Money is always **integer paise** with the branded `Paise` type, never floats. <!-- claim: CLAIM-16 -->
 
 ## Getting started
 
@@ -133,11 +138,20 @@ The API requires `PORT`, and the web app requires an HTTP(S) `NEXT_PUBLIC_API_UR
 
 The shared design system lives in `apps/web`; open `http://localhost:3000/design-system` for its 375 px review page. See [`apps/web/README.md`](apps/web/README.md) for tokens, components, language switching and accessibility checks.
 
+## Deployment
+
+The web app deploys to Vercel from `apps/web`. Pull requests get a preview URL
+from the Vercel bot; `main` deploys production only after an approved pull
+request passes **CI Gate**. Project setup, environment scopes and the
+single-gate policy are in [`docs/deployment/web.md`](docs/deployment/web.md).
+If production breaks, use the
+[web rollback runbook](docs/runbooks/web-rollback.md).
+
 <a id="how-we-work"></a>
 <a id="security"></a>
 ## Contributing and security
 
-Direct pushes to `main` are blocked. Every change requires an independent review and passing CI checks. See [CONTRIBUTING.md](CONTRIBUTING.md) for pull request guidelines and [`.github/rulesets/`](.github/rulesets) for branch protection policies.
+Direct pushes to `main` are blocked. Every change requires an independent review and passing CI checks. <!-- claim: CLAIM-23 --> See [CONTRIBUTING.md](CONTRIBUTING.md) for pull request guidelines and [`.github/rulesets/`](.github/rulesets) for branch protection policies.
 
 To report security vulnerabilities privately, follow [SECURITY.md](SECURITY.md). Any path that permits editing recorded events, bypassing configured approvals, or holding user funds is treated as critical.
 
