@@ -51,34 +51,6 @@ export {
 export { addPaise, formatInr, type Paise, paise } from "./paise.js";
 export { paiseWire } from "./paise-wire.js";
 export { type PhoneE164, parsePhoneE164 } from "./phone.js";
-export function parseGstin(
-  value: string,
-): { readonly ok: true; readonly value: string } | { readonly ok: false; readonly error: string } {
-  const normalized = value.trim().toUpperCase();
-  if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(normalized)) {
-    return { ok: false, error: "Invalid GSTIN format" };
-  }
-  if (!validateGstinChecksum(normalized)) {
-    return { ok: false, error: "Invalid GSTIN checksum" };
-  }
-  return { ok: true, value: normalized };
-}
-export function validateGstinChecksum(value: string): boolean {
-  const normalized = value.trim().toUpperCase();
-  if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(normalized)) return false;
-  const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  let sum = 0;
-  let factor = 2;
-  for (let index = normalized.length - 2; index >= 0; index -= 1) {
-    const digit = alphabet.indexOf(normalized[index] ?? "");
-    if (digit < 0) return false;
-    const product = digit * factor;
-    sum += Math.floor(product / 36) + (product % 36);
-    factor = factor === 2 ? 1 : 2;
-  }
-  const check = (36 - (sum % 36)) % 36;
-  return normalized.at(-1) === alphabet[check];
-}
 export {
   type RootRegistryAddress,
   rootRegistryAbi,
