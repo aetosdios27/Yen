@@ -60,3 +60,13 @@ The database persistence layer is implemented in `@yen/db` via migration `0003_f
 The database independently verifies that `canonical_envelope` is RFC 8785 canonical JSON for precisely the eight envelope fields other than `hash`, and recomputes SHA-256 over `'yen/eventlog/event/v1' || E'\\x00' || utf8(canonical_envelope)` using PostgreSQL's built-in `sha256(bytea)` function. The database canonicalizer does not rely on `jsonb::text`; it implements RFC 8785 rules including UTF-16 code unit key sorting and ECMAScript number formatting in PL/pgSQL, proven against `canonical-vectors.json` and `golden-events.json`.
 
 `appendEvent(client, input)` in `@yen/db` is the single authorized write path: it runs inside a transaction, takes a transaction-scoped advisory lock keyed on the fund ID (`pg_advisory_xact_lock`), reads the latest event, calls `makeNextEvent`, inserts the complete row, and returns the stored event. The insert trigger independently enforces the fund-local gapless sequence, genesis or preceding hash, real UTC millisecond timestamps in order, known type/version and exact payload schema, and hash equality. Its head lookup targets the public table even when a temporary table has the same name. Update, delete, and truncate triggers always raise, and those privileges are revoked from PUBLIC; application roles must not be granted them directly.
+
+## Prior art
+
+- [Schneier and Kelsey](../../docs/REFERENCES.md#schneier-kelsey) address compromise of a logging machine; Yen does not implement their encryption scheme.
+- [Transactionally staged job drains](../../docs/REFERENCES.md#brandur-job-drain) motivate the proposed transactional outbox.
+- [PostgreSQL triggers](../../docs/REFERENCES.md#pg-trigger) distinguish statement-level TRUNCATE triggers from row triggers.
+- [RFC 8785](../../docs/REFERENCES.md#rfc-8785) defines canonical JSON; Yen adds a versioned hash domain and strict event schemas.
+- [Crosby and Wallach](../../docs/REFERENCES.md#crosby-wallach) describe auditing untrusted logs; Yen requires an externally authenticated head to verify a complete chain.
+- [DPDP Act](../../docs/REFERENCES.md#dpdp-act) informs minimizing personal data; pseudonyms alone do not establish compliance.
+- [PostgreSQL explicit locking](../../docs/REFERENCES.md#pg-locking) describes transaction-scoped advisory locks proposed for the pending append path.

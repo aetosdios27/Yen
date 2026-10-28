@@ -160,3 +160,12 @@ try {
 ```
 
 Backups and any other copies also need an operational deletion and retention policy.
+
+## Prior art
+
+- [PostgreSQL constraints](../../docs/REFERENCES.md#pg-constraints) explain database enforcement and uniqueness.
+- [PostgreSQL EXPLAIN](../../docs/REFERENCES.md#pg-explain) describes query plans and the effects of ANALYZE.
+- [PostgreSQL lexical structure](../../docs/REFERENCES.md#pg-lexical) informs migration preflight; the scanner is not a complete SQL parser.
+- [PostgreSQL string compatibility](../../docs/REFERENCES.md#pg-strings) explains why string interpretation depends on server settings.
+- [Square Money](../../docs/REFERENCES.md#square-money) uses integer minor units; Yen stores paise as bigint and checks range at number boundaries.
+- [DPDP Act](../../docs/REFERENCES.md#dpdp-act) provides context for limiting personal data; an erasable mapping alone does not prove compliance.
