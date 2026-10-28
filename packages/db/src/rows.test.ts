@@ -2,6 +2,7 @@ import type { PhoneE164 } from "@yen/shared";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   fundEventRowSchema,
+  fundPseudonymRowSchema,
   fundRowSchema,
   idempotencyKeyRowSchema,
   membershipRowSchema,
@@ -82,6 +83,38 @@ describe("row parsing at the database boundary", () => {
     expect(pseudonymRowSchema.safeParse({ pseudonym_id: "invalid", user_id: id }).success).toBe(
       false,
     );
+    expect(
+      fundPseudonymRowSchema.safeParse({
+        pseudonym_id: "invalid",
+        user_id: id,
+        fund_id: id,
+        created_at: now,
+      }).success,
+    ).toBe(false);
+    expect(
+      fundPseudonymRowSchema.safeParse({
+        pseudonym_id: id,
+        user_id: "invalid",
+        fund_id: id,
+        created_at: now,
+      }).success,
+    ).toBe(false);
+    expect(
+      fundPseudonymRowSchema.safeParse({
+        pseudonym_id: id,
+        user_id: id,
+        fund_id: "invalid",
+        created_at: now,
+      }).success,
+    ).toBe(false);
+    expect(
+      fundPseudonymRowSchema.safeParse({
+        pseudonym_id: id,
+        user_id: id,
+        fund_id: id,
+        created_at: now,
+      }).success,
+    ).toBe(true);
     expect(
       idempotencyKeyRowSchema.safeParse({
         key: "key",

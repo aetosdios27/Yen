@@ -11,6 +11,7 @@ export const errorCode = z.enum([
   "overloaded",
   "payload_too_large",
   "internal",
+  "gateway_timeout",
 ]);
 
 export const errorStatus = {
@@ -24,6 +25,7 @@ export const errorStatus = {
   overloaded: 503,
   payload_too_large: 413,
   internal: 500,
+  gateway_timeout: 504,
 } as const satisfies Record<z.infer<typeof errorCode>, number>;
 
 export type ErrorCode = keyof typeof errorStatus;
@@ -39,6 +41,7 @@ const messages: Record<ErrorCode, string> = {
   overloaded: "Service temporarily unavailable",
   payload_too_large: "Request body too large",
   internal: "Internal server error",
+  gateway_timeout: "Gateway timeout",
 };
 
 export const validationDetail = z.object({

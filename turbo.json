@@ -16,7 +16,8 @@
       "dependsOn": ["build"]
     },
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "env": ["YEN_TEST_DATABASE_URL", "CI"]
     },
     "@yen/api-client#test": {
       "dependsOn": ["^build"],

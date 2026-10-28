@@ -57,10 +57,20 @@ export const pseudonymRowSchema = z.object({
   user_id: userId,
 });
 
+export const fundPseudonymRowSchema = z.object({
+  pseudonym_id: z.uuid(),
+  user_id: userId,
+  fund_id: fundId,
+  created_at: z.date(),
+});
+
 export const idempotencyKeyRowSchema = z.object({
   key: z.string(),
   request_hash: z.string(),
-  response: z.json(),
+  token: z.string(),
+  lease_expires_at: z.date().nullable(),
+  response: z.json().nullable(),
+  replay_expires_at: z.date().nullable(),
   created_at: z.date(),
 });
 
@@ -91,12 +101,49 @@ export const userApprovalPinRowSchema = z.object({
   updated_at: z.date(),
 });
 
+export const authOtpRowSchema = z.object({
+  id: z.uuid(),
+  phone: phoneE164,
+  otp_hash: z.string(),
+  salt: z.string(),
+  attempts: z.number().int().nonnegative(),
+  max_attempts: z.number().int().positive(),
+  channel: z.enum(["whatsapp", "sms"]),
+  expires_at: z.date(),
+  resend_available_at: z.date(),
+  consumed_at: z.date().nullable(),
+  created_at: z.date(),
+});
+
+export const sessionRowSchema = z.object({
+  id: z.uuid(),
+  user_id: userId,
+  token_hash: z.string(),
+  user_agent: z.string(),
+  device_info: z.string(),
+  ip_address: z.string(),
+  created_at: z.date(),
+  last_active_at: z.date(),
+  expires_at: z.date(),
+  revoked_at: z.date().nullable(),
+});
+
+export const rateLimitRowSchema = z.object({
+  key: z.string(),
+  tokens: z.number(),
+  updated_at: z.date(),
+  expires_at: z.date(),
+});
+
 export type UserRow = z.infer<typeof userRowSchema>;
 export type OrgRow = z.infer<typeof orgRowSchema>;
 export type FundRow = z.infer<typeof fundRowSchema>;
 export type MembershipRow = z.infer<typeof membershipRowSchema>;
 export type PseudonymRow = z.infer<typeof pseudonymRowSchema>;
+export type FundPseudonymRow = z.infer<typeof fundPseudonymRowSchema>;
 export type IdempotencyKeyRow = z.infer<typeof idempotencyKeyRowSchema>;
 export type FundEventRow = z.infer<typeof fundEventRowSchema>;
-
 export type UserApprovalPinRow = z.infer<typeof userApprovalPinRowSchema>;
+export type AuthOtpRow = z.infer<typeof authOtpRowSchema>;
+export type SessionRow = z.infer<typeof sessionRowSchema>;
+export type RateLimitRow = z.infer<typeof rateLimitRowSchema>;
