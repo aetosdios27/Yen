@@ -1,4 +1,4 @@
-import type { KontoTransactionExecutor } from "@konto-ledger/types";
+import { migrate, type Sql } from "@yen/db";
 
 export const LEDGER_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS konto_accounts (
@@ -163,41 +163,9 @@ CREATE TABLE IF NOT EXISTS konto_staged_intents (
 CREATE INDEX IF NOT EXISTS idx_staged_intents_status
   ON konto_staged_intents (status) WHERE status = 'PENDING';
 
-CREATE OR REPLACE FUNCTION yen_fund_lock_key(p_fund_id uuid)
-RETURNS bigint
-LANGUAGE sql
-IMMUTABLE
-PARALLEL SAFE
-AS $$
-  SELECT (('x' || pg_catalog.substr(pg_catalog.replace(p_fund_id::text, '-', ''), 1, 16))::bit(64) #
-          ('x' || pg_catalog.substr(pg_catalog.replace(p_fund_id::text, '-', ''), 17, 16))::bit(64))::bigint;
-$$;
-
-CREATE TABLE IF NOT EXISTS fund_events (
-  fund_id UUID NOT NULL,
-  seq BIGINT NOT NULL CHECK (seq >= 1),
-  version INTEGER NOT NULL DEFAULT 1 CHECK (version = 1),
-  type TEXT NOT NULL,
-  actor TEXT NOT NULL,
-  occurred_at TEXT NOT NULL,
-  payload JSONB NOT NULL,
-  prev_hash TEXT NOT NULL CHECK (prev_hash ~ '^[0-9a-f]{64}$'),
-  hash TEXT NOT NULL CHECK (hash ~ '^[0-9a-f]{64}$'),
-  canonical_envelope TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (fund_id, seq),
-  UNIQUE (fund_id, hash)
-);
-
-CREATE INDEX IF NOT EXISTS idx_fund_events_fund_occurred
-  ON fund_events(fund_id, occurred_at);
-
-DROP TRIGGER IF EXISTS enforce_fund_events_immutable ON fund_events;
-CREATE TRIGGER enforce_fund_events_immutable
-  BEFORE UPDATE OR DELETE OR TRUNCATE ON fund_events
-  FOR EACH STATEMENT EXECUTE FUNCTION reject_ledger_mutation_fn();
 `;
 
-export async function initLedgerSchema(sql: KontoTransactionExecutor): Promise<void> {
+export async function initLedgerSchema(sql: Sql): Promise<void> {
+  await migrate(sql);
   await sql.unsafe(LEDGER_SCHEMA_SQL);
 }

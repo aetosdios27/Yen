@@ -1,5 +1,4 @@
 import { KontoInsufficientFundsError } from "@konto-ledger/core";
-import { uuidv7 } from "@yen/db";
 import { chainHead, checkChainStructure, verifyChain } from "@yen/eventlog";
 import { paise, parseFundId } from "@yen/shared";
 import { expect, it } from "vitest";
@@ -17,11 +16,46 @@ import {
   settleExpense,
 } from "./operations.js";
 import { replayFundEvents } from "./replay.js";
-import { ledgerDatabaseSuite } from "./test/database.js";
+import { createLedgerTestFund, ledgerDatabaseSuite } from "./test/database.js";
 
 ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (sql) => {
+  it("uses the migrated fund event table and rejects a broken hash chain", async () => {
+    const migrations = await sql<{ name: string }[]>`
+      SELECT name FROM public.schema_migrations ORDER BY version
+    `;
+    expect(migrations.map(({ name }) => name)).toContain("0003_fund_events.sql");
+
+    const functionDefinition = await sql<{ definition: string }[]>`
+      SELECT pg_get_functiondef('public.yen_fund_lock_key(uuid)'::regprocedure) AS definition
+    `;
+    expect(functionDefinition[0]?.definition).toMatch(
+      /SET search_path TO ['"]?pg_catalog['"]?,\s*['"]?public['"]?,\s*['"]?pg_temp['"]?/i,
+    );
+
+    const fundId = await createLedgerTestFund(sql);
+    await sql.begin(async (tx) => {
+      await recordDonation(tx, {
+        fundId,
+        amount: paise(1000),
+        reference: "seed-broken-chain-test",
+      });
+    });
+
+    await expect(sql`
+      INSERT INTO public.fund_events (
+        fund_id, seq, version, type, actor, occurred_at, payload, prev_hash, hash, canonical_envelope
+      )
+      SELECT fund_id, seq + 1, version, type, actor, occurred_at, payload,
+        ${"0".repeat(64)}, ${"f".repeat(64)}, '{}'
+      FROM public.fund_events
+      WHERE fund_id = ${fundId}
+      ORDER BY seq DESC
+      LIMIT 1
+    `).rejects.toThrow(/prev_hash mismatch/i);
+  });
+
   it("rolls back a newly created hold when event construction fails", async () => {
-    const fundId = uuidv7();
+    const fundId = await createLedgerTestFund(sql);
     await sql.begin(async (tx) => {
       await recordDonation(tx, {
         fundId,
@@ -51,7 +85,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
   });
 
   it("restores a released hold when its event cannot be constructed", async () => {
-    const fundId = uuidv7();
+    const fundId = await createLedgerTestFund(sql);
     await sql.begin(async (tx) => {
       await recordDonation(tx, {
         fundId,
@@ -91,7 +125,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
   });
 
   it("AC1: Killing the transaction between ledger write and event write leaves neither in DB", async () => {
-    const fundId = uuidv7();
+    const fundId = await createLedgerTestFund(sql);
 
     // Attempt a transaction that writes to ledger and then aborts/throws
     await expect(
@@ -127,7 +161,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
   });
 
   it("event append failure inside transaction rolls back ledger journal and entries", async () => {
-    const fundId = uuidv7();
+    const fundId = await createLedgerTestFund(sql);
 
     await expect(
       sql.begin(async (tx) => {
@@ -168,7 +202,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
   });
 
   it("AC3: Overspend is impossible: a request above available balance is rejected atomically", async () => {
-    const fundId = uuidv7();
+    const fundId = await createLedgerTestFund(sql);
 
     // Seed fund with 50,000 paise
     await sql.begin(async (tx) => {
@@ -206,7 +240,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
   });
 
   it("concurrent reservations that together exceed available balance serialize so exactly one succeeds", async () => {
-    const fundId = uuidv7();
+    const fundId = await createLedgerTestFund(sql);
     await sql.begin(async (tx) => {
       await recordDonation(tx, {
         fundId,
@@ -250,7 +284,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
   });
 
   it("AC4: Idempotency: the same donation reported twice posts once", async () => {
-    const fundId = uuidv7();
+    const fundId = await createLedgerTestFund(sql);
     const reference = "utr_unique_1234567890";
 
     let result1: RecordDonationResult | undefined;
@@ -289,7 +323,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
   });
 
   it("rejects duplicate donation with same idempotency key but different amount", async () => {
-    const fundId = uuidv7();
+    const fundId = await createLedgerTestFund(sql);
     const reference = "utr_mismatch_test";
 
     await sql.begin(async (tx) => {
@@ -312,7 +346,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
   });
 
   it("reserveForExpense is idempotent on retry with same parameters, and rejects different amount", async () => {
-    const fundId = uuidv7();
+    const fundId = await createLedgerTestFund(sql);
     await sql.begin(async (tx) => {
       await recordDonation(tx, {
         fundId,
@@ -360,7 +394,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
   });
 
   it("expireExpense releases hold and restores available balance", async () => {
-    const fundId = uuidv7();
+    const fundId = await createLedgerTestFund(sql);
     await sql.begin(async (tx) => {
       await recordDonation(tx, {
         fundId,
@@ -400,7 +434,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
   });
 
   it("prevents duplicate refund of the same donation", async () => {
-    const fundId = uuidv7();
+    const fundId = await createLedgerTestFund(sql);
     let donationId = "";
 
     await sql.begin(async (tx) => {
@@ -436,7 +470,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
   });
 
   it("Full money flow: donation -> reserve -> settle -> release -> refund with AC2 replay parity", async () => {
-    const fundId = uuidv7();
+    const fundId = await createLedgerTestFund(sql);
 
     // 1. Initial donation: 100,000 paise
     await sql.begin(async (tx) => {
@@ -574,7 +608,7 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
   });
 
   it("fund_events table is append-only and rejects UPDATE, DELETE, and TRUNCATE via triggers", async () => {
-    const fundId = uuidv7();
+    const fundId = await createLedgerTestFund(sql);
     await sql.begin(async (tx) => {
       await recordDonation(tx, {
         fundId,
@@ -598,8 +632,8 @@ ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (s
   });
 
   it("rejects cross-fund hold committal or release", async () => {
-    const fundA = uuidv7();
-    const fundB = uuidv7();
+    const fundA = await createLedgerTestFund(sql);
+    const fundB = await createLedgerTestFund(sql);
 
     let holdAId = "";
     let expenseAId = "";

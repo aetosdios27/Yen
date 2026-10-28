@@ -161,28 +161,3 @@ CREATE TABLE IF NOT EXISTS konto_staged_intents (
 
 CREATE INDEX IF NOT EXISTS idx_staged_intents_status
   ON konto_staged_intents (status) WHERE status = 'PENDING';
-
-CREATE TABLE IF NOT EXISTS fund_events (
-  fund_id UUID NOT NULL,
-  seq BIGINT NOT NULL CHECK (seq >= 1),
-  version INTEGER NOT NULL DEFAULT 1 CHECK (version = 1),
-  type TEXT NOT NULL,
-  actor TEXT NOT NULL,
-  occurred_at TEXT NOT NULL,
-  payload JSONB NOT NULL,
-  prev_hash TEXT NOT NULL CHECK (prev_hash ~ '^[0-9a-f]{64}$'),
-  hash TEXT NOT NULL CHECK (hash ~ '^[0-9a-f]{64}$'),
-  canonical_envelope TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (fund_id, seq),
-  UNIQUE (fund_id, hash)
-);
-
-CREATE INDEX IF NOT EXISTS idx_fund_events_fund_occurred
-  ON fund_events(fund_id, occurred_at);
-
-DROP TRIGGER IF EXISTS enforce_fund_events_immutable ON fund_events;
-CREATE TRIGGER enforce_fund_events_immutable
-  BEFORE UPDATE OR DELETE OR TRUNCATE ON fund_events
-  FOR EACH STATEMENT EXECUTE FUNCTION reject_ledger_mutation_fn();
-

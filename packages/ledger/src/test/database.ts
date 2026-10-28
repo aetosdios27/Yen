@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { createSql, type Sql } from "@yen/db";
+import { createSql, type Sql, uuidv7 } from "@yen/db";
 import { afterAll, beforeAll, describe, it } from "vitest";
 import * as z from "zod";
 import { initLedgerSchema } from "../schema.js";
@@ -50,4 +50,31 @@ export function ledgerDatabaseSuite(name: string, tests: (sql: Sql, url: string)
 
     tests(sql, url.toString());
   });
+}
+
+export async function createLedgerTestFund(sql: Sql, fundId = uuidv7()): Promise<string> {
+  const userId = uuidv7();
+  const orgId = uuidv7();
+  const phoneNumber = (
+    (BigInt(`0x${userId.replaceAll("-", "")}`) % 900_000_000_000n) +
+    100_000_000_000n
+  ).toString();
+  const phone = `+1${phoneNumber}`;
+
+  await sql.begin(async (tx) => {
+    await tx`
+      INSERT INTO users (id, phone, display_name)
+      VALUES (${userId}, ${phone}, 'Ledger test user')
+    `;
+    await tx`
+      INSERT INTO orgs (id, name, legal_form, owner_id)
+      VALUES (${orgId}, 'Ledger test organization', 'individual', ${userId})
+    `;
+    await tx`
+      INSERT INTO funds (id, org_id, title, policy_json)
+      VALUES (${fundId}, ${orgId}, 'Ledger test fund', '{}'::jsonb)
+    `;
+  });
+
+  return fundId;
 }
