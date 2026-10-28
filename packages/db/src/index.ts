@@ -15,6 +15,14 @@ export {
   type TransactionSql,
 } from "./client.js";
 export {
+  type DevSeedExpense,
+  type DevSeedResult,
+  type DevSeedUser,
+  ensureDevTables,
+  SEED_CONSTANTS,
+  seedDevDatabase,
+} from "./dev-seed.js";
+export {
   type DonationNameChoice,
   deleteDisplayName,
   deleteGuestDisplayName,
