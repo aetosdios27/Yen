@@ -390,6 +390,7 @@ export const resetPinConfirmInput = z
   .object({
     otp: z.string().trim().min(1).max(10),
     newPin: pinSchema,
+    challengeId: z.string().uuid().optional(),
   })
   .strict()
   .openapi("ResetPinConfirmInput");
@@ -439,7 +440,8 @@ export const unlockPinRoute = createRoute({
   tags: ["auth", "pin"],
   operationId: "unlockApprovalPin",
   security,
-  description: "Allows an owner or support to unlock a locked-out approver PIN.",
+  description:
+    "Allows an authorized administrator or recovery capability to unlock a locked-out approver PIN.",
   request: {
     body: { required: true, content: { "application/json": { schema: unlockPinInput } } },
   },

@@ -1,13 +1,19 @@
 import type { z } from "@hono/zod-openapi";
 import { type Redacted, unsafeMarkRedactedForDevPolicy } from "@yen/policy";
-import type {
-  addMemberResponse,
-  expenseApprovalResponse,
-  expenseRejectionResponse,
-  fundSchema,
-  payeeChangeResponse,
-  policyChangeResponse,
-  removeMemberResponse,
+import {
+  type addMemberResponse,
+  addMemberResponse as addMemberResponseSchema,
+  type expenseApprovalResponse,
+  expenseApprovalResponse as expenseApprovalResponseSchema,
+  type expenseRejectionResponse,
+  expenseRejectionResponse as expenseRejectionResponseSchema,
+  type fundSchema,
+  type payeeChangeResponse,
+  payeeChangeResponse as payeeChangeResponseSchema,
+  type policyChangeResponse,
+  policyChangeResponse as policyChangeResponseSchema,
+  type removeMemberResponse,
+  removeMemberResponse as removeMemberResponseSchema,
 } from "./contract.js";
 import type { Principal } from "./dependencies.js";
 
@@ -53,102 +59,71 @@ export type ActionReceiptMap = {
   "fund:member:remove": RemoveMemberReceipt;
 };
 
+const ACTION_RECEIPT_SCHEMAS = {
+  "fund:expense:approve": expenseApprovalResponseSchema,
+  "fund:expense:reject": expenseRejectionResponseSchema,
+  "fund:payee:change": payeeChangeResponseSchema,
+  "fund:policy:change": policyChangeResponseSchema,
+  "fund:member:add": addMemberResponseSchema,
+  "fund:member:remove": removeMemberResponseSchema,
+} as const;
+
+const ACTION_RECEIPT_ALLOWLIST = {
+  "fund:expense:approve": ["status", "expenseId", "approvedAt"],
+  "fund:expense:reject": ["status", "expenseId", "reason", "rejectedAt"],
+  "fund:payee:change": ["status", "vpa"],
+  "fund:policy:change": ["status", "policyJson"],
+  "fund:member:add": ["status", "memberId", "role"],
+  "fund:member:remove": ["status", "memberId"],
+} as const;
+
 /**
- * Validates and redacts an action receipt using a strict field allowlist.
- * Guarantees that internal fields, raw fund records, or unexpected payload fields
- * cannot leak across the API boundary.
+ * Validates and redacts an action receipt using authoritative response Zod schemas
+ * and strict field allowlists. Guarantees that internal fields, raw fund records,
+ * or unexpected payload fields cannot leak across the API boundary.
+ *
+ * NOTE: Action receipts (e.g. fund:expense:approve, fund:payee:change) acknowledge
+ * successful cryptographic verification and authorization. They are distinct from
+ * persistent banking operations or transaction execution, which belong to the separate
+ * ledger/bank reconciliation scope.
  */
 export function redactActionReceipt<A extends ActionReceiptAction>(
   action: A,
   receipt: unknown,
 ): Redacted<ActionReceiptMap[A]> {
-  if (!receipt || typeof receipt !== "object") {
+  if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) {
     throw new Error("Invalid receipt: expected object");
   }
-  const raw = receipt as Record<string, unknown>;
 
-  switch (action) {
-    case "fund:expense:approve": {
-      if (
-        raw.status !== "approved" ||
-        typeof raw.expenseId !== "string" ||
-        typeof raw.approvedAt !== "string"
-      ) {
-        throw new Error("Invalid expense approval receipt: shape mismatch");
-      }
-      return unsafeMarkRedactedForDevPolicy({
-        status: "approved" as const,
-        expenseId: raw.expenseId,
-        approvedAt: raw.approvedAt,
-      } as unknown) as Redacted<ActionReceiptMap[A]>;
-    }
-    case "fund:expense:reject": {
-      if (
-        raw.status !== "rejected" ||
-        typeof raw.expenseId !== "string" ||
-        typeof raw.reason !== "string" ||
-        typeof raw.rejectedAt !== "string"
-      ) {
-        throw new Error("Invalid expense rejection receipt: shape mismatch");
-      }
-      return unsafeMarkRedactedForDevPolicy({
-        status: "rejected" as const,
-        expenseId: raw.expenseId,
-        reason: raw.reason,
-        rejectedAt: raw.rejectedAt,
-      } as unknown) as Redacted<ActionReceiptMap[A]>;
-    }
-    case "fund:payee:change": {
-      if (raw.status !== "updated" || typeof raw.vpa !== "string") {
-        throw new Error("Invalid payee change receipt: shape mismatch");
-      }
-      return unsafeMarkRedactedForDevPolicy({
-        status: "updated" as const,
-        vpa: raw.vpa,
-      } as unknown) as Redacted<ActionReceiptMap[A]>;
-    }
-    case "fund:policy:change": {
-      if (
-        raw.status !== "updated" ||
-        !raw.policyJson ||
-        typeof raw.policyJson !== "object" ||
-        Array.isArray(raw.policyJson)
-      ) {
-        throw new Error("Invalid policy change receipt: shape mismatch");
-      }
-      return unsafeMarkRedactedForDevPolicy({
-        status: "updated" as const,
-        policyJson: raw.policyJson as Record<string, unknown>,
-      } as unknown) as Redacted<ActionReceiptMap[A]>;
-    }
-    case "fund:member:add": {
-      if (
-        raw.status !== "added" ||
-        typeof raw.memberId !== "string" ||
-        typeof raw.role !== "string"
-      ) {
-        throw new Error("Invalid member add receipt: shape mismatch");
-      }
-      return unsafeMarkRedactedForDevPolicy({
-        status: "added" as const,
-        memberId: raw.memberId,
-        role: raw.role,
-      } as unknown) as Redacted<ActionReceiptMap[A]>;
-    }
-    case "fund:member:remove": {
-      if (raw.status !== "removed" || typeof raw.memberId !== "string") {
-        throw new Error("Invalid member remove receipt: shape mismatch");
-      }
-      return unsafeMarkRedactedForDevPolicy({
-        status: "removed" as const,
-        memberId: raw.memberId,
-      } as unknown) as Redacted<ActionReceiptMap[A]>;
-    }
-    default: {
-      const _exhaustive: never = action;
-      throw new Error(`Unsupported action receipt: ${String(_exhaustive)}`);
+  const schema = ACTION_RECEIPT_SCHEMAS[action];
+  const allowlist = ACTION_RECEIPT_ALLOWLIST[action];
+  if (!schema || !allowlist) {
+    throw new Error(`Unsupported action receipt: ${String(action)}`);
+  }
+
+  const raw = receipt as Record<string, unknown>;
+  const filtered: Record<string, unknown> = {};
+  for (const key of allowlist) {
+    if (key in raw) {
+      filtered[key] = raw[key];
     }
   }
+
+  const actionNames: Record<ActionReceiptAction, string> = {
+    "fund:expense:approve": "expense approval",
+    "fund:expense:reject": "expense rejection",
+    "fund:payee:change": "payee change",
+    "fund:policy:change": "policy change",
+    "fund:member:add": "member add",
+    "fund:member:remove": "member remove",
+  };
+
+  const parseResult = schema.safeParse(filtered);
+  if (!parseResult.success) {
+    throw new Error(`Invalid ${actionNames[action]} receipt: shape mismatch`);
+  }
+
+  return unsafeMarkRedactedForDevPolicy(parseResult.data as ActionReceiptMap[A]);
 }
 
 export interface Policy {
@@ -174,7 +149,16 @@ export const denyAllPolicy: Policy = {
 
 export const devPolicy: Policy = {
   can: (principal, action, resource) => {
-    if (action === "fund:member:unlock") return true;
+    if (action === "fund:member:unlock") {
+      const roles = principal.roles ?? [];
+      const capabilities = principal.capabilities ?? [];
+      return (
+        roles.includes("admin") ||
+        roles.includes("recovery") ||
+        capabilities.includes("admin") ||
+        capabilities.includes("recovery")
+      );
+    }
     if (resource.fund === undefined) return action === "fund:create";
     return resource.fund.owner === principal.id;
   },

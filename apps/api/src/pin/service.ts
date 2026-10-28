@@ -1,6 +1,7 @@
 import { ApiError } from "../errors.js";
 import { computeActionHash, generatePinSalt, hashPin, verifyPinHash } from "./crypto.js";
 import type { PinNotificationService } from "./notifications.js";
+import type { PinOtpVerifier } from "./otp.js";
 import { type PinValidationContext, validatePin } from "./rules.js";
 import type { ActionTokenStore, PinStore } from "./store.js";
 
@@ -8,7 +9,8 @@ export interface PinServiceOptions {
   readonly pinStore: PinStore;
   readonly actionTokenStore: ActionTokenStore;
   readonly notificationService: PinNotificationService;
-  readonly pinSecret: string;
+  readonly pinSecret?: string | null;
+  readonly otpVerifier?: PinOtpVerifier | null;
   readonly clock?: () => number;
   readonly lockoutDurationMs?: number; // default 30 minutes
   readonly coolingOffDurationMs?: number; // default 24 hours
@@ -27,7 +29,8 @@ export class PinService {
   private readonly pinStore: PinStore;
   private readonly actionTokenStore: ActionTokenStore;
   private readonly notificationService: PinNotificationService;
-  private readonly pinSecret: string;
+  private readonly pinSecret: string | null;
+  private readonly otpVerifier: PinOtpVerifier | null;
   private readonly clock: () => number;
   private readonly lockoutDurationMs: number;
   private readonly coolingOffDurationMs: number;
@@ -37,14 +40,43 @@ export class PinService {
     this.pinStore = options.pinStore;
     this.actionTokenStore = options.actionTokenStore;
     this.notificationService = options.notificationService;
-    this.pinSecret = options.pinSecret;
+    if (options.pinSecret !== undefined && options.pinSecret !== null) {
+      if (typeof options.pinSecret !== "string" || options.pinSecret.trim().length < 32) {
+        throw new Error(
+          "PIN_HMAC_SECRET must be an explicit, cryptographically strong secret of at least 32 characters",
+        );
+      }
+      this.pinSecret = options.pinSecret;
+    } else {
+      this.pinSecret = null;
+    }
+    this.otpVerifier = options.otpVerifier ?? null;
     this.clock = options.clock ?? Date.now;
     this.lockoutDurationMs = options.lockoutDurationMs ?? 30 * 60 * 1000;
     this.coolingOffDurationMs = options.coolingOffDurationMs ?? 24 * 60 * 60 * 1000;
     this.tokenTtlMs = options.tokenTtlMs ?? 60 * 1000;
   }
 
+  private ensureConfigured(): string {
+    if (!this.pinSecret) {
+      throw new ApiError("forbidden", [
+        { path: ["service"], message: "Approval PIN service is unconfigured" },
+      ]);
+    }
+    return this.pinSecret;
+  }
+
+  private ensureOtpVerifier(): PinOtpVerifier {
+    if (!this.otpVerifier) {
+      throw new ApiError("forbidden", [
+        { path: ["service"], message: "PIN reset OTP provider is unconfigured" },
+      ]);
+    }
+    return this.otpVerifier;
+  }
+
   async setupPin(userId: string, pin: string, context?: PinValidationContext): Promise<void> {
+    const pinSecret = this.ensureConfigured();
     const existing = await this.pinStore.get(userId);
     if (existing) {
       throw new ApiError("conflict", [
@@ -60,7 +92,7 @@ export class PinService {
     }
 
     const salt = generatePinSalt();
-    const pinHash = await hashPin(userId, salt, pin, this.pinSecret);
+    const pinHash = await hashPin(userId, salt, pin, pinSecret);
 
     await this.pinStore.create({
       userId,
@@ -76,6 +108,7 @@ export class PinService {
   }
 
   async getPinStatus(userId: string): Promise<SanitizedPinStatus> {
+    this.ensureConfigured();
     const record = await this.pinStore.get(userId);
     if (!record) {
       return {
@@ -116,6 +149,7 @@ export class PinService {
     pin: string,
     actionHash: string,
   ): Promise<{ approvalToken: string; expiresAt: string }> {
+    const pinSecret = this.ensureConfigured();
     let record = await this.pinStore.get(userId);
     if (!record) {
       throw new ApiError("forbidden", [
@@ -128,29 +162,35 @@ export class PinService {
 
     const now = this.clock();
 
-    // 1. Check permanent 24h lockout (10 wrong attempts)
+    // 1. Check permanent 24h lockout
     if (record.status === "locked_out") {
       throw new ApiError("forbidden", [
         {
           path: ["json", "pin"],
-          message: "PIN locked out after 10 failed attempts; support or owner reset required",
+          message: "PIN is permanently locked out; reset is required via authorized recovery",
         },
       ]);
     }
 
-    // 2. Check 24-hour cooling-off period after reset
+    // 2. Check cooling off
     if (record.status === "cooling_off") {
       if (record.coolingOffUntil && now < record.coolingOffUntil) {
         throw new ApiError("forbidden", [
           {
             path: ["json", "pin"],
-            message: "PIN is currently in 24-hour cooling-off period following reset",
+            message: `PIN is in cooling-off period until ${new Date(record.coolingOffUntil).toISOString()}`,
           },
         ]);
       }
+      // Cooling off expired: transition status back to active
+      await this.pinStore.update(userId, {
+        status: "active",
+        coolingOffUntil: null,
+      });
+      record = { ...record, status: "active", coolingOffUntil: null };
     }
 
-    // 3. Check 30-minute rate limit lock (5 consecutive failed attempts)
+    // 3. Check temporary rate-limiting lockout
     if (record.lockedUntil) {
       if (now < record.lockedUntil) {
         const retryAfterSeconds = Math.max(1, Math.ceil((record.lockedUntil - now) / 1000));
@@ -175,7 +215,7 @@ export class PinService {
     }
 
     // 4. Verify PIN hash
-    const isValid = await verifyPinHash(userId, record.salt, pin, record.pinHash, this.pinSecret);
+    const isValid = await verifyPinHash(userId, record.salt, pin, record.pinHash, pinSecret);
 
     if (!isValid) {
       // Manage 24h rolling window
@@ -264,6 +304,7 @@ export class PinService {
     newPin: string,
     context?: PinValidationContext,
   ): Promise<void> {
+    const pinSecret = this.ensureConfigured();
     const record = await this.pinStore.get(userId);
     if (!record) {
       throw new ApiError("forbidden", [
@@ -289,7 +330,7 @@ export class PinService {
     }
 
     const newSalt = generatePinSalt();
-    const newHash = await hashPin(userId, newSalt, newPin, this.pinSecret);
+    const newHash = await hashPin(userId, newSalt, newPin, pinSecret);
 
     await this.pinStore.update(userId, {
       salt: newSalt,
@@ -300,8 +341,11 @@ export class PinService {
     });
   }
 
-  async requestReset(_userId: string): Promise<{ challengeId: string }> {
-    return { challengeId: crypto.randomUUID() };
+  async requestReset(userId: string): Promise<{ challengeId: string }> {
+    this.ensureConfigured();
+    const otpVerifier = this.ensureOtpVerifier();
+    const challenge = await otpVerifier.createChallenge(userId);
+    return { challengeId: challenge.challengeId };
   }
 
   async confirmReset(
@@ -309,10 +353,29 @@ export class PinService {
     otp: string,
     newPin: string,
     context?: PinValidationContext,
+    challengeId?: string,
   ): Promise<{ coolingOffUntil: string }> {
+    const pinSecret = this.ensureConfigured();
+    const otpVerifier = this.ensureOtpVerifier();
+
     if (!otp || otp.trim().length === 0) {
       throw new ApiError("validation_failed", [
         { path: ["json", "otp"], message: "OTP is required" },
+      ]);
+    }
+
+    const verification = await otpVerifier.verifyChallenge({
+      userId,
+      otp,
+      challengeId,
+    });
+
+    if (!verification.valid) {
+      throw new ApiError("forbidden", [
+        {
+          path: ["json", "otp"],
+          message: verification.reason ?? "Invalid, expired, or already-used OTP challenge",
+        },
       ]);
     }
 
@@ -328,7 +391,7 @@ export class PinService {
     const coolingOffUntilIso = new Date(coolingOffUntilMs).toISOString();
 
     const newSalt = generatePinSalt();
-    const newHash = await hashPin(userId, newSalt, newPin, this.pinSecret);
+    const newHash = await hashPin(userId, newSalt, newPin, pinSecret);
 
     const record = await this.pinStore.get(userId);
     if (record) {
@@ -367,6 +430,7 @@ export class PinService {
   }
 
   async unlockPin(targetUserId: string): Promise<void> {
+    this.ensureConfigured();
     const record = await this.pinStore.get(targetUserId);
     if (!record) {
       throw new ApiError("not_found", [
@@ -388,6 +452,7 @@ export class PinService {
     actionDetails: Record<string, unknown>,
     options: { pin?: string | undefined; approvalToken?: string | undefined },
   ): Promise<void> {
+    this.ensureConfigured();
     const actionHash = computeActionHash(actionDetails);
 
     if (options.approvalToken) {

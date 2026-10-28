@@ -8,6 +8,7 @@ import {
   MemoryPinNotificationService,
   MemoryPinStore,
   type PinNotificationService,
+  type PinOtpVerifier,
   PinService,
   type PinStore,
 } from "./pin/index.js";
@@ -22,6 +23,8 @@ import {
 
 export interface Principal {
   readonly id: string;
+  readonly roles?: readonly string[];
+  readonly capabilities?: readonly string[];
 }
 
 export type ApiEnv = {
@@ -44,6 +47,15 @@ export class MemoryWaitlistStore implements WaitlistStore {
   }
 }
 
+export function validatePinSecret(secret: unknown): string {
+  if (typeof secret !== "string" || secret.trim().length < 32) {
+    throw new Error(
+      "PIN_HMAC_SECRET must be an explicit, cryptographically strong secret of at least 32 characters",
+    );
+  }
+  return secret;
+}
+
 export interface AppDependencies {
   readonly waitlistStore: WaitlistStore;
   readonly waitlistLimit: RateLimit;
@@ -64,7 +76,8 @@ export interface AppDependencies {
   readonly pinStore: PinStore;
   readonly actionTokenStore: ActionTokenStore;
   readonly pinNotificationService: PinNotificationService;
-  readonly pinSecret: string;
+  readonly pinSecret: string | null;
+  readonly otpVerifier?: PinOtpVerifier | null;
   readonly pinService: PinService;
 }
 
@@ -72,12 +85,14 @@ export function defaultDependencies(clock: () => number = Date.now): AppDependen
   const pinStore = new MemoryPinStore({ clock });
   const actionTokenStore = new MemoryActionTokenStore({ clock });
   const pinNotificationService = new MemoryPinNotificationService();
-  const pinSecret = process.env.PIN_HMAC_SECRET ?? "yen_default_pin_hmac_secret_32bytes_long";
+  const rawPinSecret = process.env.PIN_HMAC_SECRET;
+  const pinSecret = rawPinSecret ? validatePinSecret(rawPinSecret) : null;
   const pinService = new PinService({
     pinStore,
     actionTokenStore,
     notificationService: pinNotificationService,
     pinSecret,
+    otpVerifier: null,
     clock,
   });
 
@@ -102,6 +117,7 @@ export function defaultDependencies(clock: () => number = Date.now): AppDependen
     actionTokenStore,
     pinNotificationService,
     pinSecret,
+    otpVerifier: null,
     pinService,
   };
 }

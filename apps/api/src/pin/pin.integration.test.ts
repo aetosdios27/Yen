@@ -4,6 +4,7 @@ import { defaultDependencies } from "../dependencies.js";
 import { type LogEntry, serializeRequestLog } from "../logging.js";
 import { computeActionHash } from "./crypto.js";
 import { MemoryPinNotificationService } from "./notifications.js";
+import { MemoryPinOtpVerifier, type PinOtpVerifier } from "./otp.js";
 import { PinService } from "./service.js";
 import { MemoryActionTokenStore, MemoryPinStore } from "./store.js";
 
@@ -14,7 +15,14 @@ describe("Approval PIN (YEN-25)", () => {
   // biome-ignore lint/suspicious/noExplicitAny: test json unwrapper
   const jsonOf = async <T = any>(res: Response): Promise<T> => (await res.json()) as T;
 
-  function buildTestApp(options: { clockStart?: number } = {}) {
+  function buildTestApp(
+    options: {
+      clockStart?: number;
+      principal?: { id: string; roles?: readonly string[]; capabilities?: readonly string[] };
+      pinSecret?: string | null;
+      otpVerifier?: PinOtpVerifier | null;
+    } = {},
+  ) {
     let now = options.clockStart ?? 1700000000000;
     const clock = () => now;
     const setTime = (time: number) => {
@@ -34,26 +42,34 @@ describe("Approval PIN (YEN-25)", () => {
     const pinStore = new MemoryPinStore({ clock });
     const actionTokenStore = new MemoryActionTokenStore({ clock });
     const pinNotificationService = new MemoryPinNotificationService();
-    const pinSecret = "test_pin_hmac_secret_32_bytes_long_env_kms";
+    const pinSecret =
+      options.pinSecret !== undefined
+        ? options.pinSecret
+        : "test_pin_hmac_secret_32_bytes_long_env_kms";
+    const otpVerifier =
+      options.otpVerifier !== undefined ? options.otpVerifier : new MemoryPinOtpVerifier({ clock });
 
     const pinService = new PinService({
       pinStore,
       actionTokenStore,
       notificationService: pinNotificationService,
       pinSecret,
+      otpVerifier,
       clock,
     });
 
+    const activePrincipal = options.principal ?? principal;
     const deps = {
       ...defaultDependencies(clock),
       policy: devPolicy,
-      principal,
+      principal: activePrincipal,
       clock,
       logger,
       pinStore,
       actionTokenStore,
       pinNotificationService,
       pinSecret,
+      otpVerifier,
       pinService,
     };
 
@@ -77,6 +93,25 @@ describe("Approval PIN (YEN-25)", () => {
       });
     };
 
+    const postAs = async (
+      actingPrincipal: { id: string; roles?: readonly string[]; capabilities?: readonly string[] },
+      path: string,
+      body?: unknown,
+      headers: Record<string, string> = {},
+    ): Promise<Response> => {
+      const actingApp = createApp({ ...deps, principal: actingPrincipal });
+      const idempotencyKey = headers["Idempotency-Key"] ?? `idemp-key-${keyCounter++}`;
+      return await actingApp.request(path, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+          ...headers,
+        },
+        body: JSON.stringify(body ?? {}),
+      });
+    };
+
     return {
       app,
       deps,
@@ -86,7 +121,10 @@ describe("Approval PIN (YEN-25)", () => {
       logs,
       pinNotificationService,
       pinStore,
+      pinService,
+      otpVerifier,
       post,
+      postAs,
     };
   }
 
@@ -252,7 +290,7 @@ describe("Approval PIN (YEN-25)", () => {
     });
 
     it("locks out PIN permanently after 10 failed attempts in 24 hours and notifies approvers", async () => {
-      const { app, post, advanceTime, pinNotificationService } = buildTestApp();
+      const { app, post, postAs, advanceTime, pinNotificationService } = buildTestApp();
 
       await post("/v1/auth/pin/setup", { pin: "482915" });
 
@@ -293,8 +331,18 @@ describe("Approval PIN (YEN-25)", () => {
       const resBlocked = await post("/v1/auth/pin/verify", { pin: "482915", actionHash });
       expect(resBlocked.status).toBe(403);
 
-      // Owner/support unlocks PIN
-      const unlockRes = await post("/v1/auth/pin/unlock", { targetUserId: userId });
+      // Arbitrary user cannot unlock PIN (fails closed with 403)
+      const arbitraryUnlock = await post("/v1/auth/pin/unlock", { targetUserId: userId });
+      expect(arbitraryUnlock.status).toBe(403);
+
+      // Authorized owner/support with explicit server admin role unlocks PIN
+      const adminPrincipal = {
+        id: "00000000-0000-4000-8000-000000000099",
+        roles: ["admin"],
+      };
+      const unlockRes = await postAs(adminPrincipal, "/v1/auth/pin/unlock", {
+        targetUserId: userId,
+      });
       expect(unlockRes.status).toBe(200);
 
       // Now correct PIN succeeds
@@ -381,6 +429,136 @@ describe("Approval PIN (YEN-25)", () => {
       advanceTime(13 * 60 * 60 * 1000);
       const verifyRes2 = await post("/v1/auth/pin/verify", { pin: "937104", actionHash });
       expect(verifyRes2.status).toBe(200);
+    });
+
+    it("fails closed when OTP reset provider is unconfigured", async () => {
+      const { post } = buildTestApp({ otpVerifier: null });
+      await post("/v1/auth/pin/setup", { pin: "482915" });
+
+      const reqRes = await post("/v1/auth/pin/reset/request", {});
+      expect(reqRes.status).toBe(403);
+      const errReq = await jsonOf(reqRes);
+      expect(errReq.error.details[0].message).toContain("unconfigured");
+
+      const confirmRes = await post("/v1/auth/pin/reset/confirm", {
+        otp: "123456",
+        newPin: "937104",
+      });
+      expect(confirmRes.status).toBe(403);
+      const errConfirm = await jsonOf(confirmRes);
+      expect(errConfirm.error.details[0].message).toContain("unconfigured");
+    });
+
+    it("denies wrong OTP code, expired challenge, reused challenge, and cross-user challenge", async () => {
+      const { post, postAs, advanceTime } = buildTestApp();
+      await post("/v1/auth/pin/setup", { pin: "482915" });
+
+      // 1. Request reset for User A
+      const reqRes = await post("/v1/auth/pin/reset/request", {});
+      expect(reqRes.status).toBe(200);
+      const { challengeId } = await jsonOf(reqRes);
+      expect(challengeId).toBeDefined();
+
+      // 2. Cross-user challenge denied: User B attempts to use User A challengeId
+      const userB = { id: "00000000-0000-4000-8000-000000000002" };
+      const crossUserRes = await postAs(userB, "/v1/auth/pin/reset/confirm", {
+        otp: "123456",
+        newPin: "937104",
+        challengeId,
+      });
+      expect(crossUserRes.status).toBe(403);
+      const crossErr = await jsonOf(crossUserRes);
+      expect(crossErr.error.details[0].message).toContain("Challenge does not belong to user");
+
+      // 3. User B attempts to confirm reset without having initiated a challenge
+      const noChallengeRes = await postAs(userB, "/v1/auth/pin/reset/confirm", {
+        otp: "123456",
+        newPin: "937104",
+      });
+      expect(noChallengeRes.status).toBe(403);
+      const noChalErr = await jsonOf(noChallengeRes);
+      expect(noChalErr.error.details[0].message).toContain("No challenge initiated for user");
+
+      // 4. Wrong OTP code denied for User A
+      const wrongOtpRes = await post("/v1/auth/pin/reset/confirm", {
+        otp: "999999",
+        newPin: "937104",
+        challengeId,
+      });
+      expect(wrongOtpRes.status).toBe(403);
+      const wrongErr = await jsonOf(wrongOtpRes);
+      expect(wrongErr.error.details[0].message).toContain("Incorrect OTP code");
+
+      // 5. Expired challenge denied
+      advanceTime(11 * 60 * 1000); // 11 minutes (TTL is 10 minutes)
+      const expiredRes = await post("/v1/auth/pin/reset/confirm", {
+        otp: "123456",
+        newPin: "937104",
+        challengeId,
+      });
+      expect(expiredRes.status).toBe(403);
+      const expiredErr = await jsonOf(expiredRes);
+      expect(expiredErr.error.details[0].message).toContain("Challenge has expired");
+
+      // 6. Valid reset works with a fresh challenge
+      const freshReq = await post("/v1/auth/pin/reset/request", {});
+      const { challengeId: freshChallengeId } = await jsonOf(freshReq);
+
+      const validRes = await post("/v1/auth/pin/reset/confirm", {
+        otp: "123456",
+        newPin: "937104",
+        challengeId: freshChallengeId,
+      });
+      expect(validRes.status).toBe(200);
+      const validBody = await jsonOf(validRes);
+      expect(validBody.status).toBe("cooling_off");
+
+      // 7. Reused challenge denied: attempting to use the same challenge again
+      const reusedRes = await post("/v1/auth/pin/reset/confirm", {
+        otp: "123456",
+        newPin: "826305",
+        challengeId: freshChallengeId,
+      });
+      expect(reusedRes.status).toBe(403);
+      const reusedErr = await jsonOf(reusedRes);
+      expect(reusedErr.error.details[0].message).toContain("Challenge has already been used");
+    });
+  });
+
+  describe("Unlock PIN Role Boundary & Capabilities", () => {
+    it("arbitrary authenticated user cannot unlock another user", async () => {
+      const { post, postAs } = buildTestApp();
+      await post("/v1/auth/pin/setup", { pin: "482915" });
+
+      const otherUser = { id: "00000000-0000-4000-8000-000000000099" };
+      const res = await postAs(otherUser, "/v1/auth/pin/unlock", { targetUserId: userId });
+      expect(res.status).toBe(403);
+    });
+
+    it("ignores client role headers (x-role / x-admin) and enforces server-validated role", async () => {
+      const { post } = buildTestApp();
+      await post("/v1/auth/pin/setup", { pin: "482915" });
+
+      const res = await post(
+        "/v1/auth/pin/unlock",
+        { targetUserId: userId },
+        { "X-Role": "admin", "X-Admin": "true", "x-recovery": "true" },
+      );
+      expect(res.status).toBe(403);
+    });
+
+    it("permits explicit server-validated recovery capability to unlock", async () => {
+      const { post, postAs } = buildTestApp();
+      await post("/v1/auth/pin/setup", { pin: "482915" });
+
+      const recoveryPrincipal = {
+        id: "00000000-0000-4000-8000-000000000088",
+        capabilities: ["recovery"],
+      };
+      const res = await postAs(recoveryPrincipal, "/v1/auth/pin/unlock", { targetUserId: userId });
+      expect(res.status).toBe(200);
+      const body = await jsonOf(res);
+      expect(body.status).toBe("unlocked");
     });
   });
 

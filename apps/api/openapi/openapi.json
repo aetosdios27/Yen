@@ -230,7 +230,8 @@
             "pattern": "^\\d{6}$",
             "example": "482915",
             "description": "6-digit Yen approval PIN"
-          }
+          },
+          "challengeId": { "type": "string", "format": "uuid" }
         },
         "required": ["otp", "newPin"],
         "additionalProperties": false
@@ -1930,7 +1931,7 @@
         "tags": ["auth", "pin"],
         "operationId": "unlockApprovalPin",
         "security": [{ "bearerAuth": [] }],
-        "description": "Allows an owner or support to unlock a locked-out approver PIN.",
+        "description": "Allows an authorized administrator or recovery capability to unlock a locked-out approver PIN.",
         "requestBody": {
           "required": true,
           "content": {

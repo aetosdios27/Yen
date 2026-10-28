@@ -241,10 +241,16 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   app.openapi(confirmPinResetRoute, async (c) => {
     const principal = c.get("principal");
     if (!principal) throw new ApiError("unauthenticated");
-    const { otp, newPin } = c.req.valid("json");
-    const result = await deps.pinService.confirmReset(principal.id, otp, newPin, {
-      userId: principal.id,
-    });
+    const { otp, newPin, challengeId } = c.req.valid("json");
+    const result = await deps.pinService.confirmReset(
+      principal.id,
+      otp,
+      newPin,
+      {
+        userId: principal.id,
+      },
+      challengeId,
+    );
     return c.json({ status: "cooling_off" as const, coolingOffUntil: result.coolingOffUntil }, 200);
   });
 

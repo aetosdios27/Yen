@@ -211,7 +211,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** @description Allows an owner or support to unlock a locked-out approver PIN. */
+    /** @description Allows an authorized administrator or recovery capability to unlock a locked-out approver PIN. */
     post: operations["unlockApprovalPin"];
     delete?: never;
     options?: never;
@@ -467,6 +467,8 @@ export interface components {
        * @example 482915
        */
       newPin: string;
+      /** Format: uuid */
+      challengeId?: string;
     };
     UnlockPinResponse: {
       /** @enum {string} */
