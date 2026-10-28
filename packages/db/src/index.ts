@@ -1,4 +1,12 @@
 export {
+  type CreateApprovalPinInput,
+  createApprovalPin,
+  deleteApprovalPin,
+  getApprovalPin,
+  type UpdateApprovalPinInput,
+  updateApprovalPin,
+} from "./approval-pin.js";
+export {
   createSql,
   type Sql,
   type SqlClient,
@@ -65,7 +73,9 @@ export {
   rateLimitRowSchema,
   type SessionRow,
   sessionRowSchema,
+  type UserApprovalPinRow,
   type UserRow,
+  userApprovalPinRowSchema,
   userRowSchema,
 } from "./rows.js";
 export { type SeedStats, seedRealisticDataset } from "./seed.js";

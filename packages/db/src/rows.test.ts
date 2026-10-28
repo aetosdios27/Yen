@@ -9,6 +9,7 @@ import {
   orgRowSchema,
   pseudonymRowSchema,
   type UserRow,
+  userApprovalPinRowSchema,
   userRowSchema,
 } from "./rows.js";
 import { uuidv7 } from "./uuidv7.js";
@@ -142,5 +143,29 @@ describe("row parsing at the database boundary", () => {
     expect(parsed.fund_id).toBe(id);
     expect(fundEventRowSchema.safeParse({ ...rawEvent, fund_id: "invalid" }).success).toBe(false);
     expect(fundEventRowSchema.safeParse({ ...rawEvent, version: 2 }).success).toBe(false);
+  });
+  it("validates approval pin rows and rejects invalid statuses or negative attempts", () => {
+    const pin = {
+      user_id: id,
+      salt: "1234567890abcdef",
+      pin_hash: "$2b$10$abcdefghijklmnopqrstuvwxyz0123456789",
+      failed_attempts: 0,
+      total_failed_24h: 0,
+      first_failed_at: null,
+      locked_until: null,
+      cooling_off_until: null,
+      status: "active" as const,
+      created_at: now,
+      updated_at: now,
+    };
+    expect(userApprovalPinRowSchema.safeParse(pin).success).toBe(true);
+    expect(userApprovalPinRowSchema.safeParse({ ...pin, status: "unknown" }).success).toBe(false);
+    expect(userApprovalPinRowSchema.safeParse({ ...pin, failed_attempts: -1 }).success).toBe(false);
+    expect(userApprovalPinRowSchema.safeParse({ ...pin, total_failed_24h: -1 }).success).toBe(
+      false,
+    );
+    expect(userApprovalPinRowSchema.safeParse({ ...pin, user_id: "not-a-uuid" }).success).toBe(
+      false,
+    );
   });
 });

@@ -18,9 +18,16 @@ import {
   verifyOtp,
 } from "./auth/index.js";
 import {
+  addMemberRoute,
+  approveExpenseRoute,
+  changePayeeRoute,
+  changePinRoute,
+  changePolicyRoute,
+  confirmPinResetRoute,
   createFundRoute,
   type fundSchema,
   getFundRoute,
+  getPinStatusRoute,
   getSessionsRoute,
   healthRoute,
   logoutAllRoute,
@@ -30,10 +37,16 @@ import {
   openapiSchema,
   principalSchema,
   readyRoute,
+  rejectExpenseRoute,
+  removeMemberRoute,
+  requestPinResetRoute,
   revokeSessionRoute,
   rotateSessionRoute,
   sendOtpRoute,
+  setupPinRoute,
+  unlockPinRoute,
   verifyOtpRoute,
+  verifyPinRoute,
   waitlistRoute,
 } from "./contract.js";
 import { type ApiEnv, type AppDependencies, defaultDependencies } from "./dependencies.js";
@@ -42,12 +55,14 @@ import { logMethod } from "./logging.js";
 import {
   concurrencyLimit,
   idempotency,
+  isPublicAuthRoute,
   isWaitlistRoute,
   rateLimit,
   requestContext,
   requestTimeout,
   requireAuth,
 } from "./middleware.js";
+import { computeActionHash } from "./pin/index.js";
 import type { FundAction, FundResource } from "./policy.js";
 
 export { devPolicy } from "./policy.js";
@@ -120,6 +135,9 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         : error instanceof HTTPException && error.status === 400
           ? new ApiError("validation_failed")
           : new ApiError("internal");
+    if (error && typeof error === "object" && "retryAfterSeconds" in error) {
+      c.header("retry-after", String((error as { retryAfterSeconds: number }).retryAfterSeconds));
+    }
     return c.json(
       errorBody(failure, c.get("requestId")),
       error instanceof ReadinessError ? 503 : errorStatus[failure.code],
@@ -147,11 +165,9 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   app.use("/v1/*", idempotency(deps));
   app.use("/v1/me", requireAuth);
   app.use("/v1/funds/*", requireAuth);
-  app.use("/v1/auth/session/*", requireAuth);
-  app.use("/v1/auth/sessions", requireAuth);
-  app.use("/v1/auth/sessions/*", requireAuth);
-  app.use("/v1/auth/logout", requireAuth);
-  app.use("/v1/auth/logout-all", requireAuth);
+  app.use("/v1/auth/*", (c, next) =>
+    isPublicAuthRoute(c.req.path) ? next() : requireAuth(c, next),
+  );
 
   const funds = new Map<string, { owner: string; fund: z.infer<typeof fundSchema> }>();
   const authorizedFund = (c: Context<ApiEnv>, action: FundAction, resource: FundResource) => {
@@ -469,6 +485,248 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const principal = authorizedFund(c, "fund:read", resource);
     return c.json(deps.policy.redact(principal, resource), 200);
   });
+
+  const getFundOrNotFound = (fundIdString: string) => {
+    const id = parseFundId(fundIdString);
+    if (!id.ok) throw new ApiError("not_found");
+    const entry = funds.get(id.value);
+    if (!entry) throw new ApiError("not_found");
+    return { id: id.value, resource: { kind: "fund", fund: entry } as const };
+  };
+
+  app.openapi(setupPinRoute, async (c) => {
+    const principal = c.get("principal");
+    if (!principal) throw new ApiError("unauthenticated");
+    const { pin } = c.req.valid("json");
+    await deps.pinService.setupPin(principal.id, pin, { userId: principal.id });
+    return c.json({ status: "created" as const, isSet: true as const }, 201);
+  });
+
+  app.openapi(getPinStatusRoute, async (c) => {
+    const principal = c.get("principal");
+    if (!principal) throw new ApiError("unauthenticated");
+    const status = await deps.pinService.getPinStatus(principal.id);
+    return c.json(status, 200);
+  });
+
+  app.openapi(verifyPinRoute, async (c) => {
+    const principal = c.get("principal");
+    if (!principal) throw new ApiError("unauthenticated");
+    const { pin, actionHash } = c.req.valid("json");
+    const result = await deps.pinService.verifyPin(principal.id, pin, actionHash);
+    return c.json(result, 200);
+  });
+
+  app.openapi(changePinRoute, async (c) => {
+    const principal = c.get("principal");
+    if (!principal) throw new ApiError("unauthenticated");
+    const { currentPin, newPin } = c.req.valid("json");
+    await deps.pinService.changePin(principal.id, currentPin, newPin, { userId: principal.id });
+    return c.json({ status: "updated" as const }, 200);
+  });
+
+  app.openapi(requestPinResetRoute, async (c) => {
+    const principal = c.get("principal");
+    if (!principal) throw new ApiError("unauthenticated");
+    const result = await deps.pinService.requestReset(principal.id);
+    return c.json({ status: "otp_sent" as const, challengeId: result.challengeId }, 200);
+  });
+
+  app.openapi(confirmPinResetRoute, async (c) => {
+    const principal = c.get("principal");
+    if (!principal) throw new ApiError("unauthenticated");
+    const { otp, newPin, challengeId } = c.req.valid("json");
+    const result = await deps.pinService.confirmReset(
+      principal.id,
+      otp,
+      newPin,
+      {
+        userId: principal.id,
+      },
+      challengeId,
+    );
+    return c.json({ status: "cooling_off" as const, coolingOffUntil: result.coolingOffUntil }, 200);
+  });
+
+  app.openapi(unlockPinRoute, async (c) => {
+    const principal = c.get("principal");
+    if (!principal) throw new ApiError("unauthenticated");
+    if (!deps.policy.can(principal, "fund:member:unlock", { kind: "fund" })) {
+      throw new ApiError("forbidden");
+    }
+    const { targetUserId } = c.req.valid("json");
+    await deps.pinService.unlockPin(targetUserId);
+    return c.json({ status: "unlocked" as const }, 200);
+  });
+
+  app.openapi(approveExpenseRoute, async (c) => {
+    const { fundId, expenseId } = c.req.valid("param");
+    const { id, resource } = getFundOrNotFound(fundId);
+    const principal = authorizedFund(c, "fund:expense:approve", resource);
+
+    const body = c.req.valid("json");
+    const approvalToken = c.req.header("x-approval-token") ?? body?.approvalToken;
+    const pin = c.req.header("x-approval-pin") ?? body?.pin;
+
+    const actionDetails = { action: "expense:approve", fundId: id, targetId: expenseId };
+    await deps.pinService.verifyAction(principal.id, actionDetails, { pin, approvalToken });
+
+    await deps.pinNotificationService.notify({
+      kind: "approval_executed",
+      approverUserId: principal.id,
+      actionHash: computeActionHash(actionDetails),
+      recipientRoles: ["approver", "owner"],
+      actionSummary: actionDetails,
+    });
+
+    return c.json(
+      deps.policy.redactReceipt(
+        principal,
+        "fund:expense:approve",
+        {
+          status: "approved" as const,
+          expenseId,
+          approvedAt: new Date(deps.clock()).toISOString(),
+        },
+        resource,
+      ),
+      200,
+    );
+  });
+
+  app.openapi(rejectExpenseRoute, async (c) => {
+    const { fundId, expenseId } = c.req.valid("param");
+    const { id, resource } = getFundOrNotFound(fundId);
+    const principal = authorizedFund(c, "fund:expense:reject", resource);
+
+    const body = c.req.valid("json");
+    const approvalToken = c.req.header("x-approval-token") ?? body?.approvalToken;
+    const pin = c.req.header("x-approval-pin") ?? body?.pin;
+
+    const actionDetails = { action: "expense:reject", fundId: id, targetId: expenseId };
+    await deps.pinService.verifyAction(principal.id, actionDetails, { pin, approvalToken });
+
+    await deps.pinNotificationService.notify({
+      kind: "approval_executed",
+      approverUserId: principal.id,
+      actionHash: computeActionHash(actionDetails),
+      recipientRoles: ["approver", "owner"],
+      actionSummary: actionDetails,
+    });
+
+    return c.json(
+      deps.policy.redactReceipt(
+        principal,
+        "fund:expense:reject",
+        {
+          status: "rejected" as const,
+          expenseId,
+          reason: body?.reason ?? "policy",
+          rejectedAt: new Date(deps.clock()).toISOString(),
+        },
+        resource,
+      ),
+      200,
+    );
+  });
+
+  app.openapi(changePayeeRoute, async (c) => {
+    const { fundId } = c.req.valid("param");
+    const { id, resource } = getFundOrNotFound(fundId);
+    const principal = authorizedFund(c, "fund:payee:change", resource);
+
+    const body = c.req.valid("json");
+    const approvalToken = c.req.header("x-approval-token") ?? body.approvalToken;
+    const pin = c.req.header("x-approval-pin") ?? body.pin;
+
+    const actionDetails = { action: "payee:change", fundId: id, vpa: body.vpa };
+    await deps.pinService.verifyAction(principal.id, actionDetails, { pin, approvalToken });
+
+    return c.json(
+      deps.policy.redactReceipt(
+        principal,
+        "fund:payee:change",
+        { status: "updated" as const, vpa: body.vpa },
+        resource,
+      ),
+      200,
+    );
+  });
+
+  app.openapi(changePolicyRoute, async (c) => {
+    const { fundId } = c.req.valid("param");
+    const { id, resource } = getFundOrNotFound(fundId);
+    const principal = authorizedFund(c, "fund:policy:change", resource);
+
+    const body = c.req.valid("json");
+    const approvalToken = c.req.header("x-approval-token") ?? body.approvalToken;
+    const pin = c.req.header("x-approval-pin") ?? body.pin;
+
+    const actionDetails = { action: "policy:change", fundId: id, policy: body.policyJson };
+    await deps.pinService.verifyAction(principal.id, actionDetails, { pin, approvalToken });
+
+    return c.json(
+      deps.policy.redactReceipt(
+        principal,
+        "fund:policy:change",
+        { status: "updated" as const, policyJson: body.policyJson },
+        resource,
+      ),
+      200,
+    );
+  });
+
+  app.openapi(addMemberRoute, async (c) => {
+    const { fundId } = c.req.valid("param");
+    const { id, resource } = getFundOrNotFound(fundId);
+    const principal = authorizedFund(c, "fund:member:add", resource);
+
+    const body = c.req.valid("json");
+    const approvalToken = c.req.header("x-approval-token") ?? body.approvalToken;
+    const pin = c.req.header("x-approval-pin") ?? body.pin;
+
+    const actionDetails = {
+      action: "member:add",
+      fundId: id,
+      targetId: body.userId,
+      role: body.role,
+    };
+    await deps.pinService.verifyAction(principal.id, actionDetails, { pin, approvalToken });
+
+    return c.json(
+      deps.policy.redactReceipt(
+        principal,
+        "fund:member:add",
+        { status: "added" as const, memberId: body.userId, role: body.role },
+        resource,
+      ),
+      201,
+    );
+  });
+
+  app.openapi(removeMemberRoute, async (c) => {
+    const { fundId, memberId } = c.req.valid("param");
+    const { id, resource } = getFundOrNotFound(fundId);
+    const principal = authorizedFund(c, "fund:member:remove", resource);
+
+    const body = c.req.valid("json");
+    const approvalToken = c.req.header("x-approval-token") ?? body?.approvalToken;
+    const pin = c.req.header("x-approval-pin") ?? body?.pin;
+
+    const actionDetails = { action: "member:remove", fundId: id, targetId: memberId };
+    await deps.pinService.verifyAction(principal.id, actionDetails, { pin, approvalToken });
+
+    return c.json(
+      deps.policy.redactReceipt(
+        principal,
+        "fund:member:remove",
+        { status: "removed" as const, memberId },
+        resource,
+      ),
+      200,
+    );
+  });
+
   app.openapi(openapiRoute, (c) => c.json(openapiSchema.parse(openApiDocument(app)), 200));
   app.openAPIRegistry.registerComponent("securitySchemes", "bearerAuth", {
     type: "http",

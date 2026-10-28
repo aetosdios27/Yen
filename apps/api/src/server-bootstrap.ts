@@ -9,6 +9,7 @@ import { rateLimits } from "./config.js";
 import { createDatabaseReady } from "./database-ready.js";
 import { DefaultInFlightTracker } from "./dependencies.js";
 import { createServerLifecycle, type ServerLifecycle, shutdownOnSignal } from "./lifecycle.js";
+import { PostgresPinStore } from "./pin/index.js";
 import { useMemoryStore } from "./server-config.js";
 import {
   MemoryRateLimitStore,
@@ -136,6 +137,7 @@ export async function startServer(
       }),
     }),
     ...(sql ? { authStore: new PostgresAuthStore(sql) } : {}),
+    ...(sql ? { pinStore: new PostgresPinStore(sql) } : {}),
     otpHashKey: resolvedConfig.OTP_HASH_KEY ?? "development-only-otp-hash-key-change-me",
     otpDeliveryProvider: createOtpDeliveryProvider(resolvedConfig.NODE_ENV),
     waitlistLimit: {

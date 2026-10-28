@@ -87,6 +87,20 @@ export const fundEventRowSchema = z.object({
   canonical_envelope: z.string(),
 });
 
+export const userApprovalPinRowSchema = z.object({
+  user_id: userId,
+  salt: z.string(),
+  pin_hash: z.string(),
+  failed_attempts: z.number().int().nonnegative(),
+  total_failed_24h: z.number().int().nonnegative(),
+  first_failed_at: z.date().nullable(),
+  locked_until: z.date().nullable(),
+  cooling_off_until: z.date().nullable(),
+  status: z.enum(["active", "locked_out", "cooling_off"]),
+  created_at: z.date(),
+  updated_at: z.date(),
+});
+
 export const authOtpRowSchema = z.object({
   id: z.uuid(),
   phone: phoneE164,
@@ -129,6 +143,7 @@ export type PseudonymRow = z.infer<typeof pseudonymRowSchema>;
 export type FundPseudonymRow = z.infer<typeof fundPseudonymRowSchema>;
 export type IdempotencyKeyRow = z.infer<typeof idempotencyKeyRowSchema>;
 export type FundEventRow = z.infer<typeof fundEventRowSchema>;
+export type UserApprovalPinRow = z.infer<typeof userApprovalPinRowSchema>;
 export type AuthOtpRow = z.infer<typeof authOtpRowSchema>;
 export type SessionRow = z.infer<typeof sessionRowSchema>;
 export type RateLimitRow = z.infer<typeof rateLimitRowSchema>;
