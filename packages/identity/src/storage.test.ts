@@ -86,6 +86,21 @@ databaseSuite("Yen ID storage and assignment", (sql) => {
     expect(rowB[0]?.yen_id).toBe(idB);
   });
 
+  it("recovers from a collision inside the caller's transaction", async () => {
+    const userA = await createTestUser(sql);
+    const userB = await createTestUser(sql);
+    const occupied = await assignYenId(sql, userA);
+    let attempts = 0;
+    await sql.begin(async (tx) => {
+      const assigned = await assignYenId(tx, userB, {
+        idGenerator: () => (++attempts === 1 ? occupied : generateYenId()),
+      });
+      expect(assigned).not.toBe(occupied);
+      expect(attempts).toBeGreaterThanOrEqual(2);
+      expect(await tx`SELECT 1 AS value`).toHaveLength(1);
+    });
+  });
+
   it("keeps a tombstone row when a user is deleted and guarantees the ID can never be re-issued", async () => {
     const userId = await createTestUser(sql, "User To Be Erased");
     const assignedId = await assignYenId(sql, userId);

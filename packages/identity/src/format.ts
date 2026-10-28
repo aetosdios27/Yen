@@ -9,6 +9,7 @@ import { computeDammCheckDigit, validateDammCheckDigit } from "./damm.js";
 export const yenIdSchema = z
   .string()
   .check(z.regex(/^[1-9][0-9]{8}$/))
+  .refine(validateDammCheckDigit, { message: "Invalid check digit in Yen ID" })
   .brand<"YenId">();
 
 export type YenId = z.infer<typeof yenIdSchema>;

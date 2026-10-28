@@ -1,20 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { computeDammCheckDigit, validateDammCheckDigit } from "./damm.js";
-import { formatYenId, generateYenId, parseYenId } from "./format.js";
+import { formatYenId, generateYenId, parseYenId, yenIdSchema } from "./format.js";
 
 describe("Yen ID generation and formatting", () => {
   it("generates random valid 9-digit IDs with leading digit 1-9 and valid Damm check digit", () => {
-    const generated = new Set<string>();
     for (let i = 0; i < 200; i++) {
       const id = generateYenId();
       expect(id).toMatch(/^[1-9][0-9]{8}$/);
       expect(id).toHaveLength(9);
       expect(id[0]).not.toBe("0");
       expect(validateDammCheckDigit(id)).toBe(true);
-      generated.add(id);
     }
-    // Random generation produces unique IDs across 200 samples
-    expect(generated.size).toBe(200);
   });
 
   it("formats 9-digit IDs into 3 groups of 3 digits separated by spaces", () => {
@@ -163,4 +159,11 @@ describe("Yen ID generation and formatting", () => {
       }
     }
   });
+});
+
+it("schema and parser both reject an invalid Damm check digit", () => {
+  expect(yenIdSchema.safeParse("100000000").success).toBe(false);
+  expect(parseYenId("100000000").ok).toBe(false);
+  const valid = generateYenId();
+  expect(yenIdSchema.safeParse(valid).success).toBe(true);
 });

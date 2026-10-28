@@ -45,39 +45,23 @@ export async function assignYenId(
   // 2. Generation & insertion loop with race and collision resolution
   while (true) {
     const candidate = generate();
-    try {
-      const inserted = await sql<{ yen_id: string }[]>`
-        INSERT INTO yen_ids (yen_id, user_id)
-        VALUES (${candidate}, ${validUserId})
-        ON CONFLICT (user_id) DO NOTHING
-        RETURNING yen_id
-      `;
-      if (inserted[0]?.yen_id) {
-        return inserted[0].yen_id as YenId;
-      }
+    const inserted = await sql<{ yen_id: string }[]>`
+      INSERT INTO yen_ids (yen_id, user_id)
+      VALUES (${candidate}, ${validUserId})
+      ON CONFLICT DO NOTHING
+      RETURNING yen_id
+    `;
+    if (inserted[0]?.yen_id) {
+      return inserted[0].yen_id as YenId;
+    }
 
-      // If nothing returned, another concurrent worker inserted an ID for this user.
-      const current = await sql<{ yen_id: string }[]>`
-        SELECT yen_id FROM yen_ids WHERE user_id = ${validUserId}
-      `;
-      if (current[0]?.yen_id) {
-        return current[0].yen_id as YenId;
-      }
-    } catch (err: unknown) {
-      const error = err as { code?: string; constraint_name?: string };
-      // 23505 is PostgreSQL unique_violation
-      if (error?.code === "23505") {
-        // If a concurrent worker completed assignment for this user, return it
-        const current = await sql<{ yen_id: string }[]>`
-          SELECT yen_id FROM yen_ids WHERE user_id = ${validUserId}
-        `;
-        if (current[0]?.yen_id) {
-          return current[0].yen_id as YenId;
-        }
-        // Otherwise candidate collided on PRIMARY KEY (yen_id); retry with fresh candidate.
-        continue;
-      }
-      throw err;
+    // Either the candidate is taken or a concurrent caller assigned this user.
+    // No unique-violation exception is raised, so caller transactions remain usable.
+    const current = await sql<{ yen_id: string }[]>`
+      SELECT yen_id FROM yen_ids WHERE user_id = ${validUserId}
+    `;
+    if (current[0]?.yen_id) {
+      return current[0].yen_id as YenId;
     }
   }
 }
