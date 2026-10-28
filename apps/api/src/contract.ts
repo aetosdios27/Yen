@@ -235,3 +235,152 @@ export const waitlistRoute = createRoute({
     500: internalResponse,
   },
 });
+
+export const ALLOWED_EVIDENCE_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+] as const;
+
+export const MAX_EVIDENCE_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+
+export const uploadEvidenceBody = z
+  .object({
+    file: z.instanceof(File).openapi({
+      type: "string",
+      format: "binary",
+      description: "Evidence document file (max 10MB; JPEG, PNG, WebP, PDF)",
+    }),
+    vendorName: z.string().trim().min(1).max(200).optional().openapi({
+      description: "Optional merchant or vendor name",
+    }),
+    gstin: z.string().trim().toUpperCase().optional().openapi({
+      description: "Optional 15-character Indian GSTIN",
+    }),
+    invoiceNumber: z.string().trim().min(1).max(100).optional().openapi({
+      description: "Optional invoice or receipt reference number",
+    }),
+    invoiceDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional()
+      .openapi({
+        description: "Optional invoice issue date (YYYY-MM-DD)",
+      }),
+  })
+  .openapi("UploadEvidenceInput");
+
+export const evidenceRecordSchema = z
+  .object({
+    evidenceId: z
+      .string()
+      .uuid()
+      .openapi({ description: "Unique identifier for this evidence upload" }),
+    fundId: z.string().uuid(),
+    expenseId: z.string().uuid(),
+    fileSha256: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .openapi({ description: "Cryptographic SHA-256 hash of the uploaded file bytes" }),
+    mimeType: z
+      .enum(ALLOWED_EVIDENCE_MIME_TYPES)
+      .openapi({ description: "MIME type of uploaded file" }),
+    fileSizeBytes: z.number().int().min(1).max(MAX_EVIDENCE_FILE_SIZE_BYTES),
+    duplicateDetected: z.boolean().openapi({
+      description:
+        "Flag indicating whether this identical file was previously attached to another expense",
+    }),
+    isDuplicate: z.boolean().openapi({ description: "Alias for duplicateDetected" }),
+    duplicateExpenseId: z
+      .string()
+      .uuid()
+      .optional()
+      .openapi({ description: "Expense ID of previously attached duplicate, if detected" }),
+    vendorName: z.string().optional(),
+    gstin: z.string().optional(),
+    invoiceNumber: z.string().optional(),
+    invoiceDate: z.string().optional(),
+    createdAt: z.iso.datetime(),
+  })
+  .strict()
+  .openapi("EvidenceRecord");
+
+export const evidenceListSchema = z
+  .object({
+    evidence: z.array(evidenceRecordSchema),
+  })
+  .strict()
+  .openapi("EvidenceList");
+
+export const uploadEvidenceRoute = createRoute({
+  method: "post",
+  path: "/v1/funds/{fundId}/expenses/{expenseId}/evidence",
+  tags: ["expenses", "evidence"],
+  operationId: "uploadEvidence",
+  security,
+  description:
+    "Uploads bill or receipt evidence for an expense. Computes server-side SHA-256 hash, validates GSTIN and MIME type, enforces 10MB limit, and flags duplicates across expenses.",
+  request: {
+    params: z.object({
+      fundId: z.string().openapi({
+        description: "Canonical lowercase FundId UUID; invalid IDs return 404",
+        param: { name: "fundId", in: "path" },
+      }),
+      expenseId: z.string().openapi({
+        description: "Canonical lowercase ExpenseId UUID; invalid IDs return 404",
+        param: { name: "expenseId", in: "path" },
+      }),
+    }),
+    body: {
+      required: true,
+      content: {
+        "multipart/form-data": {
+          schema: uploadEvidenceBody,
+        },
+      },
+    },
+  },
+  responses: {
+    201: jsonResponse(evidenceRecordSchema, "Evidence uploaded and pinned"),
+    400: protectedErrors[400],
+    401: protectedErrors[401],
+    403: protectedErrors[403],
+    404: protectedErrors[404],
+    413: jsonResponse(errorEnvelope, "File exceeds maximum size of 10MB"),
+    429: limitedResponse,
+    500: internalResponse,
+    503: overloadedResponse,
+  },
+});
+
+export const getEvidenceRoute = createRoute({
+  method: "get",
+  path: "/v1/funds/{fundId}/expenses/{expenseId}/evidence",
+  tags: ["expenses", "evidence"],
+  operationId: "getEvidence",
+  security,
+  description: "Retrieves all evidence attached to an expense.",
+  request: {
+    params: z.object({
+      fundId: z.string().openapi({
+        description: "Canonical lowercase FundId UUID; invalid IDs return 404",
+        param: { name: "fundId", in: "path" },
+      }),
+      expenseId: z.string().openapi({
+        description: "Canonical lowercase ExpenseId UUID; invalid IDs return 404",
+        param: { name: "expenseId", in: "path" },
+      }),
+    }),
+  },
+  responses: {
+    200: jsonResponse(evidenceListSchema, "Evidence records for expense"),
+    400: protectedErrors[400],
+    401: protectedErrors[401],
+    403: protectedErrors[403],
+    404: protectedErrors[404],
+    429: limitedResponse,
+    500: internalResponse,
+    503: overloadedResponse,
+  },
+});
