@@ -346,13 +346,13 @@ importers:
   packages/ledger:
     dependencies:
       '@konto-ledger/adapters':
-        specifier: ^0.2.0
+        specifier: 0.2.0
         version: 0.2.0(postgres@3.4.9)
       '@konto-ledger/core':
-        specifier: ^0.2.0
+        specifier: 0.2.0
         version: 0.2.0
       '@konto-ledger/types':
-        specifier: ^0.2.0
+        specifier: 0.2.0
         version: 0.2.0
       '@yen/db':
         specifier: workspace:*

@@ -1,5 +1,12 @@
 import type { KontoTransactionExecutor } from "@konto-ledger/types";
-import { type Event, type EventInput, makeNextEvent, parseEvent } from "@yen/eventlog";
+import * as db from "@yen/db";
+import {
+  canonicalize,
+  type Event,
+  type EventInput,
+  makeNextEvent,
+  parseEvent,
+} from "@yen/eventlog";
 
 export function toEventInput(raw: {
   fund_id: string;
@@ -27,6 +34,31 @@ export function nowUtcIso(prevOccurredAt?: string): string {
   const prevMs = prevOccurredAt ? Date.parse(prevOccurredAt) : 0;
   const targetMs = Math.max(nowMs, Number.isFinite(prevMs) ? prevMs + 1 : nowMs);
   return new Date(targetMs).toISOString();
+}
+
+/**
+ * Computes the exact 64-bit signed advisory lock key matching Yen's PostgreSQL yen_fund_lock_key().
+ */
+export function yenFundLockKey(fundId: string): bigint {
+  const hex = fundId.replace(/-/g, "");
+  if (!/^[0-9a-fA-F]{32}$/.test(hex)) {
+    throw new TypeError(`Invalid fundId for lock key: ${fundId}`);
+  }
+  const h1 = BigInt(`0x${hex.slice(0, 16)}`);
+  const h2 = BigInt(`0x${hex.slice(16, 32)}`);
+  return BigInt.asIntN(64, h1 ^ h2);
+}
+
+/**
+ * Acquires a transaction-scoped advisory lock on the fund ID using yen_fund_lock_key.
+ * This establishes consistent lock ordering across Konto row locks and event appends.
+ */
+export async function acquireFundLockInTx(
+  tx: KontoTransactionExecutor,
+  fundId: string,
+): Promise<void> {
+  const lockKey = yenFundLockKey(fundId);
+  await tx`SELECT pg_advisory_xact_lock(${lockKey.toString()}::bigint)`;
 }
 
 interface FundEventRow {
@@ -81,15 +113,29 @@ export async function appendFundEventInTx(
   fundId: string,
   input: EventInput,
 ): Promise<Event> {
-  // Acquire transaction-scoped advisory lock keyed by fundId to serialize concurrent appends per fund
-  await tx`SELECT pg_advisory_xact_lock(hashtext(${fundId}))`;
+  // Delegate directly to @yen/db appendEvent if provided (e.g. once PR #20 merges)
+  if (typeof (db as Record<string, unknown>).appendEvent === "function") {
+    return (
+      (db as Record<string, unknown>).appendEvent as (
+        client: unknown,
+        inp: unknown,
+      ) => Promise<Event>
+    )(tx, input);
+  }
+
+  // Acquire transaction-scoped advisory lock keyed by yenFundLockKey to serialize concurrent appends per fund
+  await acquireFundLockInTx(tx, fundId);
 
   const prev = await getLatestFundEvent(tx, fundId);
   const event = await makeNextEvent(prev, input);
 
+  // Compute canonical envelope matching RFC 8785 representation required by PR #20
+  const { hash: _h, ...unsignedEnvelope } = event;
+  const canonicalEnvelope = canonicalize(unsignedEnvelope);
+
   await tx`
     INSERT INTO fund_events (
-      fund_id, seq, version, type, actor, occurred_at, payload, prev_hash, hash
+      fund_id, seq, version, type, actor, occurred_at, payload, prev_hash, hash, canonical_envelope
     ) VALUES (
       ${event.fund_id},
       ${event.seq.toString()},
@@ -99,7 +145,8 @@ export async function appendFundEventInTx(
       ${event.occurred_at},
       ${tx.json(event.payload)},
       ${event.prev_hash},
-      ${event.hash}
+      ${event.hash},
+      ${canonicalEnvelope}
     )
   `;
 

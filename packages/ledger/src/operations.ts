@@ -8,20 +8,42 @@ import {
 import type { KontoQueryExecutor, KontoTransactionExecutor } from "@konto-ledger/types";
 import { uuidv7 } from "@yen/db";
 import type { Event, PseudonymId } from "@yen/eventlog";
-import { type Paise, paise } from "@yen/shared";
+import type { Paise } from "@yen/shared";
 import { ensureFundAccounts, getFundAccountIds } from "./accounts.js";
-import { appendFundEventInTx, getFundEvents, nowUtcIso, toEventInput } from "./eventlog.js";
+import {
+  acquireFundLockInTx,
+  appendFundEventInTx,
+  nowUtcIso,
+  parseFundEventRow,
+  toEventInput,
+} from "./eventlog.js";
 import type { FundBalances } from "./replay.js";
 
 export const SYSTEM_ACTOR: PseudonymId = "psn_00000000-0000-7000-8000-000000000000" as PseudonymId;
 
-export function asQueryExecutor(
-  executor: KontoTransactionExecutor | KontoQueryExecutor,
-): KontoQueryExecutor {
-  const cast = executor as unknown as Record<string, unknown>;
-  if (typeof cast.begin === "function") {
-    return executor as KontoQueryExecutor;
+/**
+ * Asserts that the provided executor is an active database transaction handle
+ * rather than an unpooled/pooled query executor. Prevents hold operations from
+ * auto-committing on a separate connection outside the caller's transaction.
+ */
+export function assertTransactionExecutor(tx: KontoTransactionExecutor): void {
+  if (!tx || typeof tx !== "function") {
+    throw new TypeError("Expected a KontoTransactionExecutor function");
   }
+  const cast = tx as unknown as Record<string, unknown>;
+  if (typeof cast.begin === "function" && typeof cast.savepoint !== "function") {
+    throw new TypeError(
+      "Expected a transaction handle (KontoTransactionExecutor), but received a query executor / pool with begin(). All ledger operations must run inside an existing database transaction.",
+    );
+  }
+}
+
+/**
+ * Wraps a transaction executor so that Konto operations requiring a KontoQueryExecutor
+ * (like hold()) execute within the caller's existing transaction without spawning a new one.
+ */
+export function asTransactionQueryExecutor(executor: KontoTransactionExecutor): KontoQueryExecutor {
+  assertTransactionExecutor(executor);
   const wrapped = (strings: TemplateStringsArray, ...values: unknown[]) =>
     executor(strings, ...values);
   return Object.assign(wrapped, {
@@ -31,9 +53,11 @@ export function asQueryExecutor(
   }) as KontoQueryExecutor;
 }
 
+export const asQueryExecutor = asTransactionQueryExecutor;
+
 export interface RecordDonationInput {
   fundId: string;
-  amount: Paise | number;
+  amount: Paise;
   donorId?: string;
   reference?: string;
   bankTransactionId?: string;
@@ -50,15 +74,34 @@ export interface RecordDonationResult {
   duplicate?: boolean;
 }
 
+interface FundEventRow {
+  fund_id: string;
+  seq: string | number;
+  version: number;
+  type: string;
+  actor: string;
+  occurred_at: string;
+  payload: unknown;
+  prev_hash: string;
+  hash: string;
+}
+
 export async function recordDonation(
   tx: KontoTransactionExecutor,
   input: RecordDonationInput,
 ): Promise<RecordDonationResult> {
-  const paiseAmount = paise(typeof input.amount === "number" ? input.amount : Number(input.amount));
-  if (paiseAmount <= 0) {
+  assertTransactionExecutor(tx);
+
+  if (typeof input.amount !== "number" || !Number.isSafeInteger(input.amount)) {
+    throw new TypeError("Paise must be a safe integer");
+  }
+  if (input.amount <= 0) {
     throw new RangeError("Donation amount must be positive paise");
   }
-  const amountBig = BigInt(paiseAmount);
+  const amountBig = BigInt(input.amount);
+
+  // Lock order: acquire fund advisory lock first before Konto row locks
+  await acquireFundLockInTx(tx, input.fundId);
 
   const accounts = await ensureFundAccounts(tx, input.fundId);
   const donationId = input.donationId ?? uuidv7();
@@ -68,33 +111,64 @@ export async function recordDonation(
     input.idempotencyKey ?? (input.reference ? `donation:${input.reference}` : undefined);
 
   if (idempotencyKey) {
-    const existing = await tx<{ id: string; metadata: { donationId?: string } | null }[]>`
+    const existing = await tx<
+      {
+        id: string;
+        metadata: {
+          fundId?: string;
+          donationId?: string;
+          amount?: number;
+        } | null;
+      }[]
+    >`
       SELECT id, metadata FROM konto_journals
       WHERE account_id = ${accounts.bankId} AND idempotency_key = ${idempotencyKey}
       LIMIT 1
     `;
     if (existing[0]) {
       const origDonationId = existing[0].metadata?.donationId ?? input.donationId;
-      const events = await getFundEvents(tx, input.fundId);
-      const verified = events.find(
-        (e) =>
-          e.type === "donation.verified" &&
-          (!origDonationId ||
-            (e.payload as { donation_id: string }).donation_id === origDonationId),
-      );
-      const pledge = events.find(
-        (e) =>
-          e.type === "donation.pledged" &&
-          (!origDonationId ||
-            (e.payload as { donation_id: string }).donation_id === origDonationId),
-      );
-      if (verified && pledge) {
-        return {
-          journalId: existing[0].id,
-          pledgeEvent: pledge,
-          verifiedEvent: verified,
-          duplicate: true,
-        };
+      const existingFundId = existing[0].metadata?.fundId;
+      if (existingFundId && existingFundId !== input.fundId) {
+        throw new Error(
+          `Idempotency conflict: donation already recorded for a different fund: ${existingFundId}`,
+        );
+      }
+
+      // Query pledge event for the original donation to check amount
+      const pledgeRows = await tx<FundEventRow[]>`
+        SELECT fund_id, seq, version, type, actor, occurred_at, payload, prev_hash, hash
+        FROM fund_events
+        WHERE fund_id = ${input.fundId}
+          AND type = 'donation.pledged'
+          AND (payload->>'donation_id') = ${origDonationId}
+        LIMIT 1
+      `;
+      const pledgeRow = pledgeRows[0];
+      if (pledgeRow) {
+        const recordedAmount = (pledgeRow.payload as { amount_paise: number }).amount_paise;
+        if (recordedAmount !== input.amount) {
+          throw new Error(
+            `Idempotency conflict: donation already recorded with amount ${recordedAmount} paise, got ${input.amount} paise`,
+          );
+        }
+
+        const verifiedRows = await tx<FundEventRow[]>`
+          SELECT fund_id, seq, version, type, actor, occurred_at, payload, prev_hash, hash
+          FROM fund_events
+          WHERE fund_id = ${input.fundId}
+            AND type = 'donation.verified'
+            AND (payload->>'donation_id') = ${origDonationId}
+          LIMIT 1
+        `;
+        const verifiedRow = verifiedRows[0];
+        if (verifiedRow) {
+          return {
+            journalId: existing[0].id,
+            pledgeEvent: parseFundEventRow(pledgeRow),
+            verifiedEvent: parseFundEventRow(verifiedRow),
+            duplicate: true,
+          };
+        }
       }
     }
   }
@@ -113,38 +187,69 @@ export async function recordDonation(
         reference: input.reference ?? null,
         donorId: input.donorId ?? null,
         donationId,
+        amount: input.amount,
       },
     });
     journalId = res.journalId;
   } catch (err) {
     if (err instanceof KontoDuplicateTransactionError && idempotencyKey) {
-      const existing = await tx<{ id: string; metadata: { donationId?: string } | null }[]>`
+      const existing = await tx<
+        {
+          id: string;
+          metadata: {
+            fundId?: string;
+            donationId?: string;
+            amount?: number;
+          } | null;
+        }[]
+      >`
         SELECT id, metadata FROM konto_journals
         WHERE account_id = ${accounts.bankId} AND idempotency_key = ${idempotencyKey}
         LIMIT 1
       `;
       if (existing[0]) {
         const origDonationId = existing[0].metadata?.donationId ?? input.donationId;
-        const events = await getFundEvents(tx, input.fundId);
-        const verified = events.find(
-          (e) =>
-            e.type === "donation.verified" &&
-            (!origDonationId ||
-              (e.payload as { donation_id: string }).donation_id === origDonationId),
-        );
-        const pledge = events.find(
-          (e) =>
-            e.type === "donation.pledged" &&
-            (!origDonationId ||
-              (e.payload as { donation_id: string }).donation_id === origDonationId),
-        );
-        if (verified && pledge) {
-          return {
-            journalId: existing[0].id,
-            pledgeEvent: pledge,
-            verifiedEvent: verified,
-            duplicate: true,
-          };
+        const existingFundId = existing[0].metadata?.fundId;
+        if (existingFundId && existingFundId !== input.fundId) {
+          throw new Error(
+            `Idempotency conflict: donation already recorded for a different fund: ${existingFundId}`,
+          );
+        }
+
+        const pledgeRows = await tx<FundEventRow[]>`
+          SELECT fund_id, seq, version, type, actor, occurred_at, payload, prev_hash, hash
+          FROM fund_events
+          WHERE fund_id = ${input.fundId}
+            AND type = 'donation.pledged'
+            AND (payload->>'donation_id') = ${origDonationId}
+          LIMIT 1
+        `;
+        const pledgeRow = pledgeRows[0];
+        if (pledgeRow) {
+          const recordedAmount = (pledgeRow.payload as { amount_paise: number }).amount_paise;
+          if (recordedAmount !== input.amount) {
+            throw new Error(
+              `Idempotency conflict: donation already recorded with amount ${recordedAmount} paise, got ${input.amount} paise`,
+            );
+          }
+
+          const verifiedRows = await tx<FundEventRow[]>`
+            SELECT fund_id, seq, version, type, actor, occurred_at, payload, prev_hash, hash
+            FROM fund_events
+            WHERE fund_id = ${input.fundId}
+              AND type = 'donation.verified'
+              AND (payload->>'donation_id') = ${origDonationId}
+            LIMIT 1
+          `;
+          const verifiedRow = verifiedRows[0];
+          if (verifiedRow) {
+            return {
+              journalId: existing[0].id,
+              pledgeEvent: parseFundEventRow(pledgeRow),
+              verifiedEvent: parseFundEventRow(verifiedRow),
+              duplicate: true,
+            };
+          }
         }
       }
     }
@@ -192,7 +297,7 @@ export async function recordDonation(
 
 export interface ReserveForExpenseInput {
   fundId: string;
-  amount: Paise | number;
+  amount: Paise;
   expenseId?: string;
   approverId?: string;
   description?: string;
@@ -207,35 +312,165 @@ export interface ReserveForExpenseResult {
   expenseId: string;
   submittedEvent: Event;
   approvedEvent: Event;
+  duplicate?: boolean;
 }
 
 export async function reserveForExpense(
   tx: KontoTransactionExecutor,
   input: ReserveForExpenseInput,
 ): Promise<ReserveForExpenseResult> {
-  const paiseAmount = paise(typeof input.amount === "number" ? input.amount : Number(input.amount));
-  if (paiseAmount <= 0) {
+  assertTransactionExecutor(tx);
+
+  if (typeof input.amount !== "number" || !Number.isSafeInteger(input.amount)) {
+    throw new TypeError("Paise must be a safe integer");
+  }
+  if (input.amount <= 0) {
     throw new RangeError("Reserve amount must be positive paise");
   }
-  const amountBig = BigInt(paiseAmount);
+  const amountBig = BigInt(input.amount);
+
+  // Lock order: acquire fund advisory lock first before Konto row locks
+  await acquireFundLockInTx(tx, input.fundId);
 
   const accounts = await ensureFundAccounts(tx, input.fundId);
   const expenseId = input.expenseId ?? uuidv7();
   const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
 
-  const { holdId } = await hold(asQueryExecutor(tx), {
-    accountId: accounts.bankId,
-    recipientId: accounts.expensesId,
-    amount: amountBig,
-    idempotencyKey: input.idempotencyKey,
-    ttlMs: input.ttlMs,
-    metadata: {
-      fundId: input.fundId,
-      expenseId,
-      description: input.description ?? "",
-      approverId: input.approverId ?? null,
-    },
-  });
+  // Idempotency check for existing hold
+  if (input.idempotencyKey) {
+    const existingHolds = await tx<
+      {
+        id: string;
+        account_id: string;
+        recipient_id: string;
+        amount: string;
+        metadata: {
+          fundId?: string;
+          expenseId?: string;
+        } | null;
+      }[]
+    >`
+      SELECT id, account_id, recipient_id, amount, metadata
+      FROM konto_holds
+      WHERE account_id = ${accounts.bankId} AND idempotency_key = ${input.idempotencyKey}
+      LIMIT 1
+    `;
+    const existing = existingHolds[0];
+    if (existing) {
+      const existingAmount = BigInt(existing.amount);
+      const existingFundId = existing.metadata?.fundId;
+      if (existingAmount !== amountBig || (existingFundId && existingFundId !== input.fundId)) {
+        throw new Error(
+          `Idempotency conflict: hold already exists with different parameters for key ${input.idempotencyKey}`,
+        );
+      }
+      const existingExpenseId = existing.metadata?.expenseId ?? expenseId;
+
+      const submittedRows = await tx<FundEventRow[]>`
+        SELECT fund_id, seq, version, type, actor, occurred_at, payload, prev_hash, hash
+        FROM fund_events
+        WHERE fund_id = ${input.fundId}
+          AND type = 'expense.submitted'
+          AND (payload->>'expense_id') = ${existingExpenseId}
+        LIMIT 1
+      `;
+      const approvedRows = await tx<FundEventRow[]>`
+        SELECT fund_id, seq, version, type, actor, occurred_at, payload, prev_hash, hash
+        FROM fund_events
+        WHERE fund_id = ${input.fundId}
+          AND type = 'expense.approved'
+          AND (payload->>'expense_id') = ${existingExpenseId}
+        LIMIT 1
+      `;
+
+      if (submittedRows[0] && approvedRows[0]) {
+        return {
+          holdId: existing.id,
+          expenseId: existingExpenseId,
+          submittedEvent: parseFundEventRow(submittedRows[0]),
+          approvedEvent: parseFundEventRow(approvedRows[0]),
+          duplicate: true,
+        };
+      }
+    }
+  }
+
+  let holdId: string;
+  try {
+    const holdRes = await hold(asTransactionQueryExecutor(tx), {
+      accountId: accounts.bankId,
+      recipientId: accounts.expensesId,
+      amount: amountBig,
+      idempotencyKey: input.idempotencyKey,
+      ttlMs: input.ttlMs,
+      metadata: {
+        fundId: input.fundId,
+        expenseId,
+        description: input.description ?? "",
+        approverId: input.approverId ?? null,
+      },
+    });
+    holdId = holdRes.holdId;
+  } catch (err) {
+    if (err instanceof KontoDuplicateTransactionError && input.idempotencyKey) {
+      const existingHolds = await tx<
+        {
+          id: string;
+          account_id: string;
+          recipient_id: string;
+          amount: string;
+          metadata: {
+            fundId?: string;
+            expenseId?: string;
+          } | null;
+        }[]
+      >`
+        SELECT id, account_id, recipient_id, amount, metadata
+        FROM konto_holds
+        WHERE account_id = ${accounts.bankId} AND idempotency_key = ${input.idempotencyKey}
+        LIMIT 1
+      `;
+      const existing = existingHolds[0];
+      if (existing) {
+        const existingAmount = BigInt(existing.amount);
+        const existingFundId = existing.metadata?.fundId;
+        if (existingAmount !== amountBig || (existingFundId && existingFundId !== input.fundId)) {
+          throw new Error(
+            `Idempotency conflict: hold already exists with different parameters for key ${input.idempotencyKey}`,
+          );
+        }
+        const existingExpenseId = existing.metadata?.expenseId ?? expenseId;
+
+        const submittedRows = await tx<FundEventRow[]>`
+          SELECT fund_id, seq, version, type, actor, occurred_at, payload, prev_hash, hash
+          FROM fund_events
+          WHERE fund_id = ${input.fundId}
+            AND type = 'expense.submitted'
+            AND (payload->>'expense_id') = ${existingExpenseId}
+          LIMIT 1
+        `;
+        const approvedRows = await tx<FundEventRow[]>`
+          SELECT fund_id, seq, version, type, actor, occurred_at, payload, prev_hash, hash
+          FROM fund_events
+          WHERE fund_id = ${input.fundId}
+            AND type = 'expense.approved'
+            AND (payload->>'expense_id') = ${existingExpenseId}
+          LIMIT 1
+        `;
+
+        if (submittedRows[0] && approvedRows[0]) {
+          return {
+            holdId: existing.id,
+            expenseId: existingExpenseId,
+            submittedEvent: parseFundEventRow(submittedRows[0]),
+            approvedEvent: parseFundEventRow(approvedRows[0]),
+            duplicate: true,
+          };
+        }
+      }
+    }
+    throw err;
+  }
 
   const time1 = input.occurredAt ?? nowUtcIso();
   const submittedEvent = await appendFundEventInTx(
@@ -295,6 +530,9 @@ export async function settleExpense(
   tx: KontoTransactionExecutor,
   input: SettleExpenseInput,
 ): Promise<SettleExpenseResult> {
+  assertTransactionExecutor(tx);
+  await acquireFundLockInTx(tx, input.fundId);
+
   const accounts = getFundAccountIds(input.fundId);
   const holds = await tx<
     {
@@ -316,13 +554,15 @@ export async function settleExpense(
     throw new Error(`Hold ${input.holdId} does not belong to fund ${input.fundId}`);
   }
 
-  const events = await getFundEvents(tx, input.fundId);
-  const expenseEvent = events.find(
-    (e) =>
-      (e.type === "expense.submitted" || e.type === "expense.approved") &&
-      (e.payload as { expense_id: string }).expense_id === input.expenseId,
-  );
-  if (!expenseEvent) {
+  // Direct targeted query by expense_id instead of loading all fund events
+  const expenseRows = await tx<{ type: string; payload: unknown }[]>`
+    SELECT type, payload FROM fund_events
+    WHERE fund_id = ${input.fundId}
+      AND (payload->>'expense_id') = ${input.expenseId}
+      AND type IN ('expense.submitted', 'expense.approved')
+    LIMIT 1
+  `;
+  if (!expenseRows[0]) {
     throw new Error(`Expense ${input.expenseId} does not belong to fund ${input.fundId}`);
   }
 
@@ -375,6 +615,9 @@ export async function releaseExpense(
   tx: KontoTransactionExecutor,
   input: ReleaseExpenseInput,
 ): Promise<ReleaseExpenseResult> {
+  assertTransactionExecutor(tx);
+  await acquireFundLockInTx(tx, input.fundId);
+
   const accounts = getFundAccountIds(input.fundId);
   const holds = await tx<
     {
@@ -396,13 +639,15 @@ export async function releaseExpense(
     throw new Error(`Hold ${input.holdId} does not belong to fund ${input.fundId}`);
   }
 
-  const events = await getFundEvents(tx, input.fundId);
-  const expenseEvent = events.find(
-    (e) =>
-      (e.type === "expense.submitted" || e.type === "expense.approved") &&
-      (e.payload as { expense_id: string }).expense_id === input.expenseId,
-  );
-  if (!expenseEvent) {
+  // Direct targeted query by expense_id
+  const expenseRows = await tx<{ type: string; payload: unknown }[]>`
+    SELECT type, payload FROM fund_events
+    WHERE fund_id = ${input.fundId}
+      AND (payload->>'expense_id') = ${input.expenseId}
+      AND type IN ('expense.submitted', 'expense.approved')
+    LIMIT 1
+  `;
+  if (!expenseRows[0]) {
     throw new Error(`Expense ${input.expenseId} does not belong to fund ${input.fundId}`);
   }
 
@@ -448,6 +693,9 @@ export async function expireExpense(
   tx: KontoTransactionExecutor,
   input: ExpireExpenseInput,
 ): Promise<ExpireExpenseResult> {
+  assertTransactionExecutor(tx);
+  await acquireFundLockInTx(tx, input.fundId);
+
   const accounts = getFundAccountIds(input.fundId);
   const holds = await tx<
     {
@@ -469,13 +717,15 @@ export async function expireExpense(
     throw new Error(`Hold ${input.holdId} does not belong to fund ${input.fundId}`);
   }
 
-  const events = await getFundEvents(tx, input.fundId);
-  const expenseEvent = events.find(
-    (e) =>
-      (e.type === "expense.submitted" || e.type === "expense.approved") &&
-      (e.payload as { expense_id: string }).expense_id === input.expenseId,
-  );
-  if (!expenseEvent) {
+  // Direct targeted query by expense_id
+  const expenseRows = await tx<{ type: string; payload: unknown }[]>`
+    SELECT type, payload FROM fund_events
+    WHERE fund_id = ${input.fundId}
+      AND (payload->>'expense_id') = ${input.expenseId}
+      AND type IN ('expense.submitted', 'expense.approved')
+    LIMIT 1
+  `;
+  if (!expenseRows[0]) {
     throw new Error(`Expense ${input.expenseId} does not belong to fund ${input.fundId}`);
   }
 
@@ -505,7 +755,7 @@ export async function expireExpense(
 
 export interface RecordRefundInput {
   fundId: string;
-  amount?: Paise | number;
+  amount?: Paise;
   donationId: string;
   reason?: "unmatched" | "duplicate" | "cancelled";
   actorPseudonym?: PseudonymId | string;
@@ -516,29 +766,78 @@ export interface RecordRefundInput {
 export interface RecordRefundResult {
   journalId: string;
   rejectedEvent: Event;
+  duplicate?: boolean;
 }
 
 export async function recordRefund(
   tx: KontoTransactionExecutor,
   input: RecordRefundInput,
 ): Promise<RecordRefundResult> {
+  assertTransactionExecutor(tx);
+  await acquireFundLockInTx(tx, input.fundId);
+
   const accounts = await ensureFundAccounts(tx, input.fundId);
   const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
+  const idempotencyKey = input.idempotencyKey ?? `refund:${input.donationId}`;
 
-  // Find verified donation amount
-  const events = await getFundEvents(tx, input.fundId);
-  const pledge = events.find(
-    (e) =>
-      e.type === "donation.pledged" &&
-      (e.payload as { donation_id: string }).donation_id === input.donationId,
-  );
+  // Find verified donation amount via targeted query
+  const pledgeRows = await tx<FundEventRow[]>`
+    SELECT fund_id, seq, version, type, actor, occurred_at, payload, prev_hash, hash
+    FROM fund_events
+    WHERE fund_id = ${input.fundId}
+      AND type = 'donation.pledged'
+      AND (payload->>'donation_id') = ${input.donationId}
+    LIMIT 1
+  `;
+  const pledge = pledgeRows[0];
   if (!pledge) {
     throw new Error(`Donation ${input.donationId} not found`);
   }
+
+  // Ensure donation was verified
+  const verifiedRows = await tx<{ type: string }[]>`
+    SELECT type FROM fund_events
+    WHERE fund_id = ${input.fundId}
+      AND type = 'donation.verified'
+      AND (payload->>'donation_id') = ${input.donationId}
+    LIMIT 1
+  `;
+  if (!verifiedRows[0]) {
+    throw new Error(`Donation ${input.donationId} was not verified`);
+  }
+
+  // Prevent double refunding: check for previous donation.rejected
+  const rejectedRows = await tx<FundEventRow[]>`
+    SELECT fund_id, seq, version, type, actor, occurred_at, payload, prev_hash, hash
+    FROM fund_events
+    WHERE fund_id = ${input.fundId}
+      AND type = 'donation.rejected'
+      AND (payload->>'donation_id') = ${input.donationId}
+    LIMIT 1
+  `;
+  if (rejectedRows[0]) {
+    // Check if idempotent retry
+    const existingRefundJournal = await tx<{ id: string }[]>`
+      SELECT id FROM konto_journals
+      WHERE account_id = ${accounts.bankId} AND idempotency_key = ${idempotencyKey}
+      LIMIT 1
+    `;
+    if (existingRefundJournal[0]) {
+      return {
+        journalId: existingRefundJournal[0].id,
+        rejectedEvent: parseFundEventRow(rejectedRows[0]),
+        duplicate: true,
+      };
+    }
+    throw new Error(`Donation ${input.donationId} has already been refunded`);
+  }
+
   const donationAmount = (pledge.payload as { amount_paise: number }).amount_paise;
   if (input.amount !== undefined) {
-    const requested = paise(typeof input.amount === "number" ? input.amount : Number(input.amount));
-    if (requested !== donationAmount) {
+    if (typeof input.amount !== "number" || !Number.isSafeInteger(input.amount)) {
+      throw new TypeError("Paise must be a safe integer");
+    }
+    if (input.amount !== donationAmount) {
       throw new RangeError(
         `Partial refunds are not supported by the v1 event log contract. Expected full refund of ${donationAmount} paise.`,
       );
@@ -548,7 +847,7 @@ export async function recordRefund(
 
   const { journalId } = await transferInTx(tx, {
     accountId: accounts.bankId,
-    idempotencyKey: input.idempotencyKey,
+    idempotencyKey,
     entries: [
       { accountId: accounts.bankId, amount: -amountBig },
       { accountId: accounts.donationsId, amount: amountBig },

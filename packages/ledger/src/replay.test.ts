@@ -416,6 +416,152 @@ describe("replayFundEvents unit tests", () => {
     expect(finalBalances.expensesPaise).toBe(0n);
     expect(finalBalances.availablePaise).toBe(100000n);
   });
+
+  it("does not double-count bank debits when expense.paid precedes bank.debit_seen with same bank_transaction_id", async () => {
+    let prev: Event | null = null;
+    const events: Event[] = [];
+    const addEvent = async (raw: Parameters<typeof toEventInput>[0]) => {
+      const input = toEventInput(raw);
+      const ev = await makeNextEvent(prev, input);
+      events.push(ev);
+      prev = ev;
+      return ev;
+    };
+
+    const bankTxId = "0194ebc4-94e8-7000-8000-000000000099";
+
+    // 1. Initial donation: 100,000 paise
+    await addEvent({
+      fund_id: FUND_ID,
+      actor: ACTOR,
+      occurred_at: "2027-01-01T10:00:00.000Z",
+      type: "donation.pledged",
+      payload: { donation_id: "0194ebc4-94e8-7000-8000-000000000010", amount_paise: 100000 },
+    });
+    await addEvent({
+      fund_id: FUND_ID,
+      actor: ACTOR,
+      occurred_at: "2027-01-01T10:01:00.000Z",
+      type: "donation.verified",
+      payload: {
+        donation_id: "0194ebc4-94e8-7000-8000-000000000010",
+        bank_transaction_id: "0194ebc4-94e8-7000-8000-000000000020",
+      },
+    });
+
+    // 2. Submit expense: 30,000 paise
+    await addEvent({
+      fund_id: FUND_ID,
+      actor: ACTOR,
+      occurred_at: "2027-01-01T10:02:00.000Z",
+      type: "expense.submitted",
+      payload: { expense_id: "0194ebc4-94e8-7000-8000-000000000030", amount_paise: 30000 },
+    });
+
+    // 3. Settle expense with bankTxId
+    await addEvent({
+      fund_id: FUND_ID,
+      actor: ACTOR,
+      occurred_at: "2027-01-01T10:03:00.000Z",
+      type: "expense.paid",
+      payload: {
+        expense_id: "0194ebc4-94e8-7000-8000-000000000030",
+        bank_transaction_id: bankTxId,
+      },
+    });
+
+    // 4. Bank debit seen with the same bankTxId
+    await addEvent({
+      fund_id: FUND_ID,
+      actor: ACTOR,
+      occurred_at: "2027-01-01T10:04:00.000Z",
+      type: "bank.debit_seen",
+      payload: {
+        bank_transaction_id: bankTxId,
+        amount_paise: 30000,
+      },
+    });
+
+    // Balance must be 70,000 paise and expenses 30,000 paise (not 40,000 / 60,000)
+    const balances = replayFundEvents(FUND_ID, events);
+    expect(balances.bankPaise).toBe(70000n);
+    expect(balances.expensesPaise).toBe(30000n);
+    expect(balances.availablePaise).toBe(70000n);
+    expect(balances.donationsPaise).toBe(100000n);
+  });
+
+  it("does not double-count bank debits when bank.debit_seen precedes expense.paid with same bank_transaction_id", async () => {
+    let prev: Event | null = null;
+    const events: Event[] = [];
+    const addEvent = async (raw: Parameters<typeof toEventInput>[0]) => {
+      const input = toEventInput(raw);
+      const ev = await makeNextEvent(prev, input);
+      events.push(ev);
+      prev = ev;
+      return ev;
+    };
+
+    const bankTxId = "0194ebc4-94e8-7000-8000-000000000099";
+
+    // 1. Initial donation: 100,000 paise
+    await addEvent({
+      fund_id: FUND_ID,
+      actor: ACTOR,
+      occurred_at: "2027-01-01T10:00:00.000Z",
+      type: "donation.pledged",
+      payload: { donation_id: "0194ebc4-94e8-7000-8000-000000000010", amount_paise: 100000 },
+    });
+    await addEvent({
+      fund_id: FUND_ID,
+      actor: ACTOR,
+      occurred_at: "2027-01-01T10:01:00.000Z",
+      type: "donation.verified",
+      payload: {
+        donation_id: "0194ebc4-94e8-7000-8000-000000000010",
+        bank_transaction_id: "0194ebc4-94e8-7000-8000-000000000020",
+      },
+    });
+
+    // 2. Submit expense: 30,000 paise
+    await addEvent({
+      fund_id: FUND_ID,
+      actor: ACTOR,
+      occurred_at: "2027-01-01T10:02:00.000Z",
+      type: "expense.submitted",
+      payload: { expense_id: "0194ebc4-94e8-7000-8000-000000000030", amount_paise: 30000 },
+    });
+
+    // 3. Bank debit seen FIRST
+    await addEvent({
+      fund_id: FUND_ID,
+      actor: ACTOR,
+      occurred_at: "2027-01-01T10:03:00.000Z",
+      type: "bank.debit_seen",
+      payload: {
+        bank_transaction_id: bankTxId,
+        amount_paise: 30000,
+      },
+    });
+
+    // 4. Settle expense with the same bankTxId LATER
+    await addEvent({
+      fund_id: FUND_ID,
+      actor: ACTOR,
+      occurred_at: "2027-01-01T10:04:00.000Z",
+      type: "expense.paid",
+      payload: {
+        expense_id: "0194ebc4-94e8-7000-8000-000000000030",
+        bank_transaction_id: bankTxId,
+      },
+    });
+
+    // Balance must be 70,000 paise and expenses 30,000 paise (not 40,000 / 60,000)
+    const balances = replayFundEvents(FUND_ID, events);
+    expect(balances.bankPaise).toBe(70000n);
+    expect(balances.expensesPaise).toBe(30000n);
+    expect(balances.availablePaise).toBe(70000n);
+    expect(balances.donationsPaise).toBe(100000n);
+  });
 });
 
 describe("replayFundEvents property-based tests (AC: replaying all events reproduces ledger balances)", () => {

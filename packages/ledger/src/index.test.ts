@@ -15,7 +15,6 @@ it("exports all required ledger and Konto primitives", () => {
   expect(typeof ledger.fundAccountId).toBe("function");
   expect(typeof ledger.fundAccountName).toBe("function");
   expect(typeof ledger.replayFundEvents).toBe("function");
-  expect(typeof ledger.initLedgerSchema).toBe("function");
   expect(typeof ledger.KontoInsufficientFundsError).toBe("function");
   expect(typeof ledger.KontoHoldNotFoundError).toBe("function");
 });

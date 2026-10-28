@@ -25,6 +25,7 @@ export function replayFundEvents(fundId: string, events: readonly Event[]): Fund
   const verifiedDonations = new Map<string, bigint>();
   const settledExpenses = new Map<string, bigint>();
   const seenBankCredits = new Set<string>();
+  const seenBankDebits = new Set<string>();
 
   for (const event of events) {
     if (event.fund_id !== fundId) continue;
@@ -87,8 +88,11 @@ export function replayFundEvents(fundId: string, events: readonly Event[]): Fund
         const payload = event.payload as { expense_id: string; bank_transaction_id: string };
         const holdAmount = activeHolds.get(payload.expense_id) ?? 0n;
         pendingSpend -= holdAmount;
-        bank -= holdAmount;
-        expenses += holdAmount;
+        if (!seenBankDebits.has(payload.bank_transaction_id)) {
+          bank -= holdAmount;
+          expenses += holdAmount;
+          seenBankDebits.add(payload.bank_transaction_id);
+        }
         settledExpenses.set(payload.expense_id, holdAmount);
         activeHolds.delete(payload.expense_id);
         break;
@@ -109,14 +113,18 @@ export function replayFundEvents(fundId: string, events: readonly Event[]): Fund
         bank += paidAmount;
         expenses -= paidAmount;
         settledExpenses.delete(payload.expense_id);
+        seenBankDebits.delete(payload.bank_transaction_id);
         break;
       }
 
       case "bank.debit_seen": {
         const payload = event.payload as { bank_transaction_id: string; amount_paise: number };
         const amount = BigInt(payload.amount_paise);
-        bank -= amount;
-        expenses += amount;
+        if (!seenBankDebits.has(payload.bank_transaction_id)) {
+          bank -= amount;
+          expenses += amount;
+          seenBankDebits.add(payload.bank_transaction_id);
+        }
         break;
       }
     }

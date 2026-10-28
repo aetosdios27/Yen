@@ -163,6 +163,16 @@ CREATE TABLE IF NOT EXISTS konto_staged_intents (
 CREATE INDEX IF NOT EXISTS idx_staged_intents_status
   ON konto_staged_intents (status) WHERE status = 'PENDING';
 
+CREATE OR REPLACE FUNCTION yen_fund_lock_key(p_fund_id uuid)
+RETURNS bigint
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+AS $$
+  SELECT (('x' || pg_catalog.substr(pg_catalog.replace(p_fund_id::text, '-', ''), 1, 16))::bit(64) #
+          ('x' || pg_catalog.substr(pg_catalog.replace(p_fund_id::text, '-', ''), 17, 16))::bit(64))::bigint;
+$$;
+
 CREATE TABLE IF NOT EXISTS fund_events (
   fund_id UUID NOT NULL,
   seq BIGINT NOT NULL CHECK (seq >= 1),
@@ -173,6 +183,7 @@ CREATE TABLE IF NOT EXISTS fund_events (
   payload JSONB NOT NULL,
   prev_hash TEXT NOT NULL CHECK (prev_hash ~ '^[0-9a-f]{64}$'),
   hash TEXT NOT NULL CHECK (hash ~ '^[0-9a-f]{64}$'),
+  canonical_envelope TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (fund_id, seq),
   UNIQUE (fund_id, hash)

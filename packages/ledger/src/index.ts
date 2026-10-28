@@ -16,15 +16,19 @@ export {
   getFundAccountIds,
 } from "./accounts.js";
 export {
+  acquireFundLockInTx,
   appendEvent,
   appendFundEventInTx,
   getFundEvents,
   getLatestFundEvent,
   nowUtcIso,
   toEventInput,
+  yenFundLockKey,
 } from "./eventlog.js";
 export {
   asQueryExecutor,
+  assertTransactionExecutor,
+  asTransactionQueryExecutor,
   available,
   balance,
   type ExpireExpenseInput,
@@ -52,7 +56,3 @@ export {
   type FundBalances,
   replayFundEvents,
 } from "./replay.js";
-export {
-  initLedgerSchema,
-  LEDGER_SCHEMA_SQL,
-} from "./schema.js";
