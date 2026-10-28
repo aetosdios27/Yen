@@ -139,6 +139,31 @@ describePostgres("queue CLI runtime", (adminUrl) => {
     expect(await proc.exit).toBe(0);
   }, 30000);
 
+  it("finishes a graceful stop when SIGTERM arrives twice", async () => {
+    // Process managers and wrappers such as `pnpm start` can deliver SIGTERM to both the wrapper and
+    // the worker. A second signal during shutdown must not fall back to the default kill.
+    const proc = spawnWorker(
+      process.execPath,
+      [fileURLToPath(new URL("../dist/cli.js", import.meta.url))],
+      workerEnv(targetUrl.toString()),
+    );
+    running.push(proc);
+    await waitForOutput(proc, "Worker runtime started");
+
+    const pid = proc.child.pid;
+    if (pid === undefined) throw new Error("Worker process has no pid");
+    // Exactly two signals, a few milliseconds apart: the second lands while the first is stopping.
+    process.kill(pid, "SIGTERM");
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {
+      // The worker already exited cleanly; nothing left to signal.
+    }
+
+    expect(await proc.exit).toBe(0);
+  }, 30000);
+
   it("does not complete a job on a queue with no implemented handler", async () => {
     const proc = startDocumentedWorker();
     await waitForOutput(proc, "Worker runtime started");

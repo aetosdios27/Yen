@@ -133,17 +133,19 @@ export class WorkerRuntime {
   }
 
   private async shutdown(): Promise<void> {
-    if (this.signalCleanup) {
-      this.signalCleanup();
-      this.signalCleanup = undefined;
-    }
-
+    // The signal listeners stay installed until shutdown finishes. Removing them first lets a
+    // repeated SIGTERM (a wrapper plus the process manager) fall back to the default kill and cut
+    // the graceful stop short. Repeats are harmless because stop() is idempotent.
     const timeout = this.options.gracefulShutdownTimeoutMs ?? 10000;
     try {
       await this.boss.stop({ graceful: true, timeout });
     } finally {
       await this.sql.end({ timeout: 2 });
       this.isStarted = false;
+      if (this.signalCleanup) {
+        this.signalCleanup();
+        this.signalCleanup = undefined;
+      }
     }
   }
 
@@ -159,8 +161,8 @@ export class WorkerRuntime {
     const sigtermHandler = () => void onSignal("SIGTERM");
     const sigintHandler = () => void onSignal("SIGINT");
 
-    process.once("SIGTERM", sigtermHandler);
-    process.once("SIGINT", sigintHandler);
+    process.on("SIGTERM", sigtermHandler);
+    process.on("SIGINT", sigintHandler);
 
     this.signalCleanup = () => {
       process.removeListener("SIGTERM", sigtermHandler);
