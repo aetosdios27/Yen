@@ -7,6 +7,13 @@
     "node": "24.21.0"
   },
   "scripts": {
+    "dev": "turbo run dev",
+    "dev:full": "tsx scripts/dev-full.ts",
+    "db:migrate": "pnpm --filter @yen/db migrate",
+    "db:seed": "tsx scripts/seed.ts",
+    "db:reset": "tsx scripts/db-reset.ts",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
     "check": "biome ci .",
     "format": "biome check --write .",
     "typecheck": "turbo run typecheck",
@@ -18,6 +25,9 @@
   "devDependencies": {
     "@biomejs/biome": "^2.6.3",
     "@types/node": "^26.6.5",
+    "@yen/db": "workspace:*",
+    "@yen/shared": "workspace:*",
+    "tsx": "4.23.15",
     "turbo": "^2.11.10",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"

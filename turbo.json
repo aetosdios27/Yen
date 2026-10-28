@@ -1,7 +1,13 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "globalDependencies": ["tsconfig.base.json", "biome.json", "vitest.config.ts", ".nvmrc"],
-  "globalPassThroughEnv": ["YEN_TEST_DATABASE_URL", "YEN_ANVIL_TEST_DATABASE_URL", "CI"],
+  "globalPassThroughEnv": [
+    "YEN_TEST_DATABASE_URL",
+    "YEN_ANVIL_TEST_DATABASE_URL",
+    "CI",
+    "DATABASE_URL",
+    "PORT"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -22,6 +28,10 @@
     "@yen/api-client#test": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/apps/api/openapi/openapi.json"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
     }
   }
 }

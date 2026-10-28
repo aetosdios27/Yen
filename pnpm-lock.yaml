@@ -172,6 +172,15 @@ importers:
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.5
+      '@yen/db':
+        specifier: workspace:*
+        version: link:packages/db
+      '@yen/shared':
+        specifier: workspace:*
+        version: link:packages/shared
+      tsx:
+        specifier: 4.23.15
+        version: 4.23.15
       turbo:
         specifier: ^2.11.10
         version: 2.11.10
