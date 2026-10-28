@@ -27,7 +27,7 @@ describe("dependencies PIN secret configuration", () => {
   it("validates and uses explicit PIN_HMAC_SECRET from environment", () => {
     const original = process.env.PIN_HMAC_SECRET;
     try {
-      const explicitSecret = "explicit_test_secret_that_is_32_bytes_long";
+      const explicitSecret = "a".repeat(32);
       process.env.PIN_HMAC_SECRET = explicitSecret;
       const deps = defaultDependencies();
       expect(deps.pinSecret).toBe(explicitSecret);
