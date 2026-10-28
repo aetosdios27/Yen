@@ -100,6 +100,126 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/funds/{fundId}/expenses": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Lists expense requests for a fund. */
+    get: operations["listExpenses"];
+    put?: never;
+    /** @description Creates a new draft expense request for a fund. Money is nonnegative integer paise encoded as decimal string. Requires Idempotency-Key. */
+    post: operations["createExpense"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/funds/{fundId}/expenses/{expenseId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Reads an expense request. Unauthorized requests return 404. */
+    get: operations["getExpense"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/funds/{fundId}/expenses/{expenseId}/submit": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Submits a draft expense request, creating a ledger hold to reserve funds. Transitions draft -> submitted. Emits expense.submitted event. */
+    post: operations["submitExpense"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/funds/{fundId}/expenses/{expenseId}/approve": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Records a passkey-signed approval for a submitted expense. Reaching quorum transitions submitted -> approved. Emits expense.approved event. */
+    post: operations["approveExpense"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/funds/{fundId}/expenses/{expenseId}/reject": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Rejects a submitted expense and releases the reserved ledger hold. Transitions submitted -> rejected. Emits expense.rejected event. */
+    post: operations["rejectExpense"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/funds/{fundId}/expenses/{expenseId}/pay": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Commits/settles the ledger hold for an approved expense after payment. Transitions approved -> paid. Emits expense.paid event. */
+    post: operations["payExpense"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/funds/{fundId}/expenses/{expenseId}/reconcile": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Reconciles a paid expense against bank debit verification. Transitions paid -> reconciled. Emits bank.debit_seen event. */
+    post: operations["reconcileExpense"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/openapi.json": {
     parameters: {
       query?: never;
@@ -174,6 +294,83 @@ export interface components {
       name: string;
       /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
       targetPaise: string;
+    };
+    Expense: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      fundId: string;
+      requesterId: string;
+      /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
+      amountPaise: string;
+      description: string;
+      recipientRef: string;
+      status: components["schemas"]["ExpenseStatus"];
+      holdId: string | null;
+      approvalsCount: number;
+      /** Format: uuid */
+      supersedesId: string | null;
+      /** Format: date-time */
+      submittedAt: string | null;
+      /** Format: date-time */
+      approvedAt: string | null;
+      /** Format: date-time */
+      rejectedAt: string | null;
+      /** @enum {string|null} */
+      rejectionReason: "quorum" | "objection" | "policy" | null;
+      /** Format: date-time */
+      expiredAt: string | null;
+      /** Format: date-time */
+      paidAt: string | null;
+      /** Format: date-time */
+      reconciledAt: string | null;
+      /** Format: uuid */
+      bankTransactionId: string | null;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    /** @enum {string} */
+    ExpenseStatus:
+      | "draft"
+      | "submitted"
+      | "approved"
+      | "rejected"
+      | "expired"
+      | "paid"
+      | "reconciled";
+    CreateExpenseInput: {
+      /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
+      amountPaise: string;
+      description: string;
+      recipientRef: string;
+      evidence?: components["schemas"]["ExpenseEvidence"][];
+      /** Format: uuid */
+      supersedesId?: string;
+    };
+    ExpenseEvidence: {
+      /** Format: uuid */
+      evidenceId: string;
+      contentSha256: string;
+    };
+    PasskeySignatureInput: {
+      credentialId: string;
+      signatureHex: string;
+      clientDataJson: string;
+      authenticatorDataHex: string;
+    };
+    RejectExpenseInput: {
+      /** @enum {string} */
+      reason: "quorum" | "objection" | "policy";
+    };
+    PayExpenseInput: {
+      /** Format: uuid */
+      bankTransactionId: string;
+    };
+    ReconcileExpenseInput: {
+      /** Format: uuid */
+      bankTransactionId: string;
     };
   };
   responses: never;
@@ -675,6 +872,1057 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  listExpenses: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        fundId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of expenses */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Expense"][];
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource conflict, changed idempotency input, or request in progress */
+      409: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  createExpense: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path: {
+        /** @description Canonical lowercase FundId UUID */
+        fundId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateExpenseInput"];
+      };
+    };
+    responses: {
+      /** @description Draft expense created */
+      201: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Expense"];
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource conflict, changed idempotency input, or request in progress */
+      409: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          /** @description Seconds until retry */
+          "retry-after"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  getExpense: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        fundId: string;
+        expenseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Expense details */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Expense"];
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource conflict, changed idempotency input, or request in progress */
+      409: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  submitExpense: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path: {
+        fundId: string;
+        expenseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Expense submitted and funds reserved via hold */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Expense"];
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource conflict, changed idempotency input, or request in progress */
+      409: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          /** @description Seconds until retry */
+          "retry-after"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  approveExpense: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path: {
+        fundId: string;
+        expenseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PasskeySignatureInput"];
+      };
+    };
+    responses: {
+      /** @description Approval recorded */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Expense"];
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource conflict, changed idempotency input, or request in progress */
+      409: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          /** @description Seconds until retry */
+          "retry-after"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  rejectExpense: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path: {
+        fundId: string;
+        expenseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RejectExpenseInput"];
+      };
+    };
+    responses: {
+      /** @description Expense rejected and hold released */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Expense"];
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource conflict, changed idempotency input, or request in progress */
+      409: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          /** @description Seconds until retry */
+          "retry-after"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  payExpense: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path: {
+        fundId: string;
+        expenseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PayExpenseInput"];
+      };
+    };
+    responses: {
+      /** @description Expense paid and hold settled */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Expense"];
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource conflict, changed idempotency input, or request in progress */
+      409: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          /** @description Seconds until retry */
+          "retry-after"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  reconcileExpense: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path: {
+        fundId: string;
+        expenseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ReconcileExpenseInput"];
+      };
+    };
+    responses: {
+      /** @description Expense reconciled */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Expense"];
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource conflict, changed idempotency input, or request in progress */
+      409: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          /** @description Seconds until retry */
+          "retry-after"?: string;
           [name: string]: unknown;
         };
         content: {
