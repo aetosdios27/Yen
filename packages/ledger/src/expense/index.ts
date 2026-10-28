@@ -53,6 +53,7 @@ export {
 export {
   type AmountThreshold,
   type ApprovalProofVerifier,
+  BankTransactionMismatchError,
   DuplicateApprovalError,
   type ExpenseEvidence,
   ExpenseNotEditableError,

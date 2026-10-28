@@ -305,6 +305,16 @@ describe("Expense Requests API Routes (YEN-30)", () => {
     expect(paidBody.paidAt).toBeDefined();
     expect(paidBody.bankTransactionId).toBe(bankTxId);
 
+    const mismatchedReconcile = await app.request(
+      req(
+        "POST",
+        `/v1/funds/${FUND_ID}/expenses/${created.id}/reconcile`,
+        { bankTransactionId: "00000000-0000-4000-8000-000000000078" },
+        "lifecycle-reconcile-wrong-bank-tx",
+      ),
+    );
+    expect(mismatchedReconcile.status).toBe(409);
+
     // 5. Reconcile
     const reconcileRes = await app.request(
       req(

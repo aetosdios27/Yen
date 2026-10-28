@@ -11,7 +11,12 @@ import {
   submitExpenseInTx,
 } from "./service.js";
 import { createDraftRequest } from "./state-machine.js";
-import { type ExpenseRequest, type FundPolicy, InvalidStateTransitionError } from "./types.js";
+import {
+  BankTransactionMismatchError,
+  type ExpenseRequest,
+  type FundPolicy,
+  InvalidStateTransitionError,
+} from "./types.js";
 
 const policy: FundPolicy = {
   approvalQuorum: 1,
@@ -86,6 +91,23 @@ describe("expense transaction transition guards", () => {
     const tx = query as unknown as KontoTransactionExecutor;
 
     await expect(action(tx, rejectedExpense())).rejects.toBeInstanceOf(InvalidStateTransitionError);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("rejects reconciliation against a different bank transaction before issuing queries", async () => {
+    const query = vi.fn(() => {
+      throw new Error("transaction must not be touched for mismatched reconciliation");
+    });
+    const tx = query as unknown as KontoTransactionExecutor;
+    const paidExpense = {
+      ...rejectedExpense(),
+      status: "paid" as const,
+      bankTransactionId: "bank-original",
+    };
+
+    await expect(
+      reconcileExpenseInTx({ tx, expense: paidExpense, bankTransactionId: "bank-other" }),
+    ).rejects.toBeInstanceOf(BankTransactionMismatchError);
     expect(query).not.toHaveBeenCalled();
   });
 });

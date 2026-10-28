@@ -342,6 +342,7 @@ export async function reconcileExpenseInTx(
   const fundId = expense.fundId;
   const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
   const time = input.nowUtc ?? nowUtcIso();
+  const updatedExpense = reconcileExpense(expense, bankTransactionId, time);
 
   await tx`SELECT pg_advisory_xact_lock(hashtext(${fundId}))`;
 
@@ -359,8 +360,6 @@ export async function reconcileExpenseInTx(
       },
     }),
   );
-
-  const updatedExpense = reconcileExpense(expense, bankTransactionId, time);
 
   return {
     updatedExpense,

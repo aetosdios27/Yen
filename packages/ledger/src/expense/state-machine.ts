@@ -3,6 +3,7 @@ import type { PseudonymId } from "@yen/eventlog";
 import { type Paise, paise } from "@yen/shared";
 import {
   type ApprovalProofVerifier,
+  BankTransactionMismatchError,
   DuplicateApprovalError,
   type ExpenseEvidence,
   ExpenseNotEditableError,
@@ -334,6 +335,9 @@ export function reconcileExpense(
   nowUtc?: string,
 ): ExpenseRequest {
   assertValidTransition(expense.status, "reconciled");
+  if (expense.bankTransactionId !== null && expense.bankTransactionId !== bankTransactionId) {
+    throw new BankTransactionMismatchError();
+  }
   const now = nowUtc ?? new Date().toISOString();
   return {
     ...expense,

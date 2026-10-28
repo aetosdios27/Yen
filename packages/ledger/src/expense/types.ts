@@ -120,6 +120,13 @@ export class InvalidPasskeySignatureError extends Error {
   }
 }
 
+export class BankTransactionMismatchError extends Error {
+  constructor() {
+    super("Reconciliation bank transaction does not match the paid expense");
+    this.name = "BankTransactionMismatchError";
+  }
+}
+
 export class ObjectionWindowActiveError extends Error {
   constructor(message = "Cannot approve while objection window is active") {
     super(message);

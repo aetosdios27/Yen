@@ -1,6 +1,7 @@
 import { OpenAPIHono, type z } from "@hono/zod-openapi";
 import { normalizeWaitlistContact } from "@yen/db";
 import {
+  BankTransactionMismatchError,
   createDraftRequest,
   DuplicateApprovalError,
   type ExpenseRequest,
@@ -485,7 +486,13 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     }
     const input = c.req.valid("json");
     const now = new Date(deps.clock()).toISOString();
-    const updated = reconcileExpense(expense, input.bankTransactionId, now);
+    let updated: ExpenseRequest;
+    try {
+      updated = reconcileExpense(expense, input.bankTransactionId, now);
+    } catch (err) {
+      if (err instanceof BankTransactionMismatchError) throw new ApiError("conflict");
+      throw err;
+    }
     await deps.expenseStore.save(updated);
     const updatedView = toExpenseView(updated);
     return c.json(
