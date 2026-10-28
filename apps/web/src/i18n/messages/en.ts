@@ -18,6 +18,10 @@ export const en = {
     loading: "Loading",
     dismiss: "Dismiss",
   },
+  dashboard: {
+    demoNotice:
+      "Demo data: balances, requests, and approval activity are simulated. No payment or approval is verified or sent.",
+  },
   nav: {
     primary: "Primary",
     designSystem: "Design system",

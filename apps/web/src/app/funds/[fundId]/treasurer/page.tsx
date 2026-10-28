@@ -103,6 +103,13 @@ export default function TreasurerPage({ params }: TreasurerPageProps) {
         <h1 className="text-display font-bold text-ink">{t("treasurer.title")}</h1>
       </div>
 
+      <p
+        role="note"
+        className="rounded-control border border-pending-border bg-pending-bg p-3 text-small font-medium text-pending-ink"
+      >
+        {t("dashboard.demoNotice")}
+      </p>
+
       {/* Loading state */}
       {loading ? (
         <div
@@ -110,7 +117,7 @@ export default function TreasurerPage({ params }: TreasurerPageProps) {
           aria-busy="true"
           className="flex flex-col gap-4 rounded-card border border-border bg-surface p-6 text-center"
         >
-          <ClockIcon className="mx-auto h-8 w-8 animate-spin text-primary" />
+          <ClockIcon className="mx-auto h-8 w-8 motion-safe:animate-spin text-primary" />
           <p className="text-body font-medium text-ink-muted">{t("common.loading")}...</p>
         </div>
       ) : error ? (

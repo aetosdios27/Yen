@@ -36,6 +36,7 @@ describe("ApproverPage", () => {
     expect(screen.getByText(/Fast decision:/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Approve" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Reject" })).toBeTruthy();
+    expect(screen.getByText(/Demo data:/)).toBeTruthy();
     expect(screen.getByText("Request progress")).toBeTruthy();
   });
 
