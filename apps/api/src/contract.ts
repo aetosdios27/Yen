@@ -242,19 +242,33 @@ export const ALLOWED_EVIDENCE_MIME_TYPES = [
   "image/webp",
   "application/pdf",
 ] as const;
-export const MAX_EVIDENCE_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+export const MAX_EVIDENCE_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 const evidenceSchema = z
   .object({
-    evidenceId: z.string().uuid(),
+    evidenceId: z
+      .string()
+      .uuid()
+      .openapi({ description: "Unique identifier for this evidence upload" }),
     fundId: z.string().uuid(),
     expenseId: z.string().uuid(),
-    fileSha256: z.string().regex(/^[a-f0-9]{64}$/),
-    mimeType: z.enum(ALLOWED_EVIDENCE_MIME_TYPES),
-    fileSizeBytes: z.number().int().nonnegative(),
+    fileSha256: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .openapi({ description: "SHA-256 hash computed by the server from the uploaded bytes" }),
+    mimeType: z
+      .enum(ALLOWED_EVIDENCE_MIME_TYPES)
+      .openapi({ description: "MIME type of uploaded file" }),
+    fileSizeBytes: z.number().int().min(1).max(MAX_EVIDENCE_FILE_SIZE_BYTES),
     fileName: z.string().min(1).max(120),
-    duplicateDetected: z.boolean(),
-    isDuplicate: z.boolean(),
-    duplicateExpenseId: z.string().uuid().optional(),
+    duplicateDetected: z
+      .boolean()
+      .openapi({ description: "Identical bytes were attached to another expense in this fund" }),
+    isDuplicate: z.boolean().openapi({ description: "Alias for duplicateDetected" }),
+    duplicateExpenseId: z
+      .string()
+      .uuid()
+      .optional()
+      .openapi({ description: "Expense ID of the prior duplicate in this fund, when present" }),
     vendorName: z.string().optional(),
     gstin: z.string().optional(),
     invoiceNumber: z.string().optional(),
@@ -262,36 +276,75 @@ const evidenceSchema = z
     createdAt: z.iso.datetime(),
   })
   .strict();
-const evidenceForm = z.object({
-  file: z.any().openapi({ type: "string", format: "binary" }),
-  vendorName: z.string().optional(),
-  gstin: z.string().optional(),
-  invoiceNumber: z.string().optional(),
-  invoiceDate: z.string().optional(),
-});
+const evidenceForm = z
+  .object({
+    file: z.any().openapi({
+      type: "string",
+      format: "binary",
+      description: "Evidence document (max 10MB; JPEG, PNG, WebP, PDF)",
+    }),
+    vendorName: z
+      .string()
+      .trim()
+      .min(1)
+      .max(200)
+      .optional()
+      .openapi({ description: "Optional merchant or vendor name" }),
+    gstin: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .optional()
+      .openapi({ description: "Optional 15-character Indian GSTIN; validated by the API" }),
+    invoiceNumber: z
+      .string()
+      .trim()
+      .min(1)
+      .max(100)
+      .optional()
+      .openapi({ description: "Optional invoice or receipt reference number" }),
+    invoiceDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional()
+      .openapi({ description: "Optional invoice issue date (YYYY-MM-DD)" }),
+  })
+  .openapi("UploadEvidenceInput");
 const evidenceParams = z.object({
-  fundId: z.string(),
-  expenseId: z.string(),
+  fundId: z.string().openapi({
+    description: "Canonical lowercase FundId UUID; invalid IDs return 404",
+    param: { name: "fundId", in: "path" },
+  }),
+  expenseId: z.string().openapi({
+    description: "Canonical lowercase ExpenseId UUID; invalid IDs return 404",
+    param: { name: "expenseId", in: "path" },
+  }),
 });
 export const uploadEvidenceRoute = createRoute({
   method: "post",
   path: "/v1/funds/{fundId}/expenses/{expenseId}/evidence",
+  tags: ["expenses", "evidence"],
   operationId: "uploadEvidence",
+  description:
+    "Uploads bill or receipt evidence. Computes SHA-256 server-side, validates GSTIN and MIME type, enforces the 10MB limit, and detects duplicates within the fund.",
   security,
   request: {
     params: evidenceParams,
     body: { required: true, content: { "multipart/form-data": { schema: evidenceForm } } },
   },
   responses: {
-    201: jsonResponse(evidenceSchema, "Evidence stored with a server computed hash"),
+    201: jsonResponse(evidenceSchema, "Evidence stored with a server-computed hash"),
     ...protectedErrors,
-    413: jsonResponse(errorEnvelope, "Evidence body exceeds the upload size limit"),
+    413: jsonResponse(errorEnvelope, "Evidence body exceeds the upload size limit of 10MB"),
   },
 });
 export const getEvidenceRoute = createRoute({
   method: "get",
   path: "/v1/funds/{fundId}/expenses/{expenseId}/evidence",
+  tags: ["expenses", "evidence"],
   operationId: "getEvidence",
+  description:
+    "Retrieves evidence attached to an expense after verifying stored bytes against their pinned SHA-256 hashes.",
   security,
   request: { params: evidenceParams },
   responses: {

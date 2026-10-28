@@ -107,8 +107,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** @description Retrieves evidence attached to an expense after verifying stored bytes against their pinned SHA-256 hashes. */
     get: operations["getEvidence"];
     put?: never;
+    /** @description Uploads bill or receipt evidence. Computes SHA-256 server-side, validates GSTIN and MIME type, enforces the 10MB limit, and detects duplicates within the fund. */
     post: operations["uploadEvidence"];
     delete?: never;
     options?: never;
@@ -190,6 +192,21 @@ export interface components {
       name: string;
       /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
       targetPaise: string;
+    };
+    UploadEvidenceInput: {
+      /**
+       * Format: binary
+       * @description Evidence document (max 10MB; JPEG, PNG, WebP, PDF)
+       */
+      file?: string;
+      /** @description Optional merchant or vendor name */
+      vendorName?: string;
+      /** @description Optional 15-character Indian GSTIN; validated by the API */
+      gstin?: string;
+      /** @description Optional invoice or receipt reference number */
+      invoiceNumber?: string;
+      /** @description Optional invoice issue date (YYYY-MM-DD) */
+      invoiceDate?: string;
     };
   };
   responses: never;
@@ -741,7 +758,9 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Canonical lowercase FundId UUID; invalid IDs return 404 */
         fundId: string;
+        /** @description Canonical lowercase ExpenseId UUID; invalid IDs return 404 */
         expenseId: string;
       };
       cookie?: never;
@@ -758,20 +777,32 @@ export interface operations {
         content: {
           "application/json": {
             evidence: {
-              /** Format: uuid */
+              /**
+               * Format: uuid
+               * @description Unique identifier for this evidence upload
+               */
               evidenceId: string;
               /** Format: uuid */
               fundId: string;
               /** Format: uuid */
               expenseId: string;
+              /** @description SHA-256 hash computed by the server from the uploaded bytes */
               fileSha256: string;
-              /** @enum {string} */
+              /**
+               * @description MIME type of uploaded file
+               * @enum {string}
+               */
               mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
               fileSizeBytes: number;
               fileName: string;
+              /** @description Identical bytes were attached to another expense in this fund */
               duplicateDetected: boolean;
+              /** @description Alias for duplicateDetected */
               isDuplicate: boolean;
-              /** Format: uuid */
+              /**
+               * Format: uuid
+               * @description Expense ID of the prior duplicate in this fund, when present
+               */
               duplicateExpenseId?: string;
               vendorName?: string;
               gstin?: string;
@@ -882,25 +913,20 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Canonical lowercase FundId UUID; invalid IDs return 404 */
         fundId: string;
+        /** @description Canonical lowercase ExpenseId UUID; invalid IDs return 404 */
         expenseId: string;
       };
       cookie?: never;
     };
     requestBody: {
       content: {
-        "multipart/form-data": {
-          /** Format: binary */
-          file?: string;
-          vendorName?: string;
-          gstin?: string;
-          invoiceNumber?: string;
-          invoiceDate?: string;
-        };
+        "multipart/form-data": components["schemas"]["UploadEvidenceInput"];
       };
     };
     responses: {
-      /** @description Evidence stored with a server computed hash */
+      /** @description Evidence stored with a server-computed hash */
       201: {
         headers: {
           /** @description Request correlation ID */
@@ -909,20 +935,32 @@ export interface operations {
         };
         content: {
           "application/json": {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Unique identifier for this evidence upload
+             */
             evidenceId: string;
             /** Format: uuid */
             fundId: string;
             /** Format: uuid */
             expenseId: string;
+            /** @description SHA-256 hash computed by the server from the uploaded bytes */
             fileSha256: string;
-            /** @enum {string} */
+            /**
+             * @description MIME type of uploaded file
+             * @enum {string}
+             */
             mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
             fileSizeBytes: number;
             fileName: string;
+            /** @description Identical bytes were attached to another expense in this fund */
             duplicateDetected: boolean;
+            /** @description Alias for duplicateDetected */
             isDuplicate: boolean;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Expense ID of the prior duplicate in this fund, when present
+             */
             duplicateExpenseId?: string;
             vendorName?: string;
             gstin?: string;
@@ -988,7 +1026,7 @@ export interface operations {
           "application/json": components["schemas"]["ErrorEnvelope"];
         };
       };
-      /** @description Evidence body exceeds the upload size limit */
+      /** @description Evidence body exceeds the upload size limit of 10MB */
       413: {
         headers: {
           /** @description Request correlation ID */
