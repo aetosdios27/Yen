@@ -24,10 +24,16 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               {t("app.name")}
             </Link>
-            <nav aria-label={t("nav.primary")}>
+            <nav aria-label={t("nav.primary")} className="flex items-center gap-4">
+              <Link
+                href="/login"
+                className="tap-target inline-flex items-center rounded-control text-small font-semibold text-primary underline-offset-4 hover:underline"
+              >
+                {t("nav.login")}
+              </Link>
               <Link
                 href="/design-system"
-                className="tap-target inline-flex items-center rounded-control text-small font-semibold text-primary underline-offset-4 hover:underline"
+                className="tap-target inline-flex items-center rounded-control text-small font-semibold text-ink-muted underline-offset-4 hover:underline"
               >
                 {t("nav.designSystem")}
               </Link>
