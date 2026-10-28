@@ -60,9 +60,24 @@ export const devPolicy: Policy = {
     }
     return false;
   },
-  redact(_viewer: Principal, resource: ExistingFundResource): any {
-    if (resource.kind === "fund") return unsafeMarkRedactedForDevPolicy(resource.fund.fund);
-    if (resource.kind === "evidence") return unsafeMarkRedactedForDevPolicy(resource.evidence);
-    return unsafeMarkRedactedForDevPolicy({ evidence: [...resource.evidence] });
+  redact(
+    _viewer: Principal,
+    resource: ExistingFundResource,
+  ): Redacted<FundView> & Redacted<StoredEvidence> & Redacted<{ evidence: StoredEvidence[] }> {
+    if (resource.kind === "fund") {
+      return unsafeMarkRedactedForDevPolicy(resource.fund.fund) as unknown as Redacted<FundView> &
+        Redacted<StoredEvidence> &
+        Redacted<{ evidence: StoredEvidence[] }>;
+    }
+    if (resource.kind === "evidence") {
+      return unsafeMarkRedactedForDevPolicy(resource.evidence) as unknown as Redacted<FundView> &
+        Redacted<StoredEvidence> &
+        Redacted<{ evidence: StoredEvidence[] }>;
+    }
+    return unsafeMarkRedactedForDevPolicy({
+      evidence: [...resource.evidence],
+    }) as unknown as Redacted<FundView> &
+      Redacted<StoredEvidence> &
+      Redacted<{ evidence: StoredEvidence[] }>;
   },
 };
