@@ -1,5 +1,12 @@
 import type { WaitlistEntry } from "@yen/db";
 import type { Context } from "hono";
+import {
+  type AuthStore,
+  DevStubOtpDeliveryProvider,
+  MemoryAuthStore,
+  type OtpDeliveryProvider,
+  type Session,
+} from "./auth/index.js";
 import { rateLimitEnv, rateLimits } from "./config.js";
 import { jsonLogger, type Logger } from "./logging.js";
 import { denyAllPolicy, type Policy } from "./policy.js";
@@ -19,6 +26,7 @@ export type ApiEnv = {
   Variables: {
     requestId: string;
     principal: Principal | null;
+    session: Session | null;
   };
 };
 
@@ -52,6 +60,15 @@ export interface AppDependencies {
   readonly corsOrigins: string[];
   readonly readiness: () => Promise<boolean>;
   readonly rateLimits: { readonly ip: RateLimit; readonly principal: RateLimit };
+  readonly authStore: AuthStore;
+  readonly otpDeliveryProvider: OtpDeliveryProvider;
+  readonly otpCooldownMs: number;
+  readonly otpExpiryMs: number;
+  readonly otpMaxAttempts: number;
+  readonly otpRateLimitIp: RateLimit;
+  readonly otpRateLimitPhone: RateLimit;
+  readonly sessionCookieName: string;
+  readonly sessionMaxAgeSeconds: number;
 }
 
 export function defaultDependencies(clock: () => number = Date.now): AppDependencies {
@@ -72,5 +89,14 @@ export function defaultDependencies(clock: () => number = Date.now): AppDependen
     corsOrigins: [],
     readiness: async () => true,
     rateLimits: rateLimits(rateLimitEnv.parse({})),
+    authStore: new MemoryAuthStore(),
+    otpDeliveryProvider: new DevStubOtpDeliveryProvider(clock),
+    otpCooldownMs: 60_000,
+    otpExpiryMs: 300_000,
+    otpMaxAttempts: 3,
+    otpRateLimitIp: { capacity: 10, refillMs: 600_000 },
+    otpRateLimitPhone: { capacity: 5, refillMs: 600_000 },
+    sessionCookieName: "yen_session",
+    sessionMaxAgeSeconds: 30 * 24 * 3600,
   };
 }
