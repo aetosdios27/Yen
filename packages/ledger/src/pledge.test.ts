@@ -1,15 +1,14 @@
-import { uuidv7 } from "@yen/db";
 import { chainHead, checkChainStructure, verifyChain } from "@yen/eventlog";
 import { paise, parseFundId } from "@yen/shared";
 import { expect, it } from "vitest";
 import { getFundEvents } from "./eventlog.js";
 import { available, getBalances, pledgeDonation, recordDonation } from "./operations.js";
 import { replayFundEvents } from "./replay.js";
-import { ledgerDatabaseSuite } from "./test/database.js";
+import { createTestFund, ledgerDatabaseSuite } from "./test/database.js";
 
 ledgerDatabaseSuite("donation pledges", (sql) => {
   it("keeps a self-reported pledge out of the spendable balance", async () => {
-    const fundId = uuidv7();
+    const fundId = await createTestFund(sql);
 
     const result = await sql.begin((tx) =>
       pledgeDonation(tx, { fundId, amount: paise(50000), utr: "123456789012" }),
@@ -25,8 +24,8 @@ ledgerDatabaseSuite("donation pledges", (sql) => {
   });
 
   it("rejects a repeated UPI reference, including against another fund", async () => {
-    const first = uuidv7();
-    const second = uuidv7();
+    const first = await createTestFund(sql);
+    const second = await createTestFund(sql);
 
     await sql.begin((tx) =>
       pledgeDonation(tx, { fundId: first, amount: paise(10000), utr: "210987654321" }),
@@ -47,7 +46,7 @@ ledgerDatabaseSuite("donation pledges", (sql) => {
   });
 
   it("appends one chained pledge event, never a verification", async () => {
-    const fundId = uuidv7();
+    const fundId = await createTestFund(sql);
 
     const result = await sql.begin((tx) =>
       pledgeDonation(tx, { fundId, amount: paise(25000), utr: "111222333444" }),
@@ -77,7 +76,7 @@ ledgerDatabaseSuite("donation pledges", (sql) => {
   });
 
   it("never writes the donor's name, phone or UPI reference into the event log", async () => {
-    const fundId = uuidv7();
+    const fundId = await createTestFund(sql);
 
     await sql.begin((tx) =>
       pledgeDonation(tx, {
@@ -104,7 +103,7 @@ ledgerDatabaseSuite("donation pledges", (sql) => {
   });
 
   it("replays to the same balances the ledger holds", async () => {
-    const fundId = uuidv7();
+    const fundId = await createTestFund(sql);
 
     await sql.begin(async (tx) => {
       await pledgeDonation(tx, { fundId, amount: paise(40000), utr: "999888777666" });

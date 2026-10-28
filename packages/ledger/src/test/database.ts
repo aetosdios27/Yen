@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { createSql, migrate, type Sql } from "@yen/db";
+import { randomInt, randomUUID } from "node:crypto";
+import { createSql, migrate, type Sql, uuidv7 } from "@yen/db";
 import { afterAll, beforeAll, describe, it } from "vitest";
 import * as z from "zod";
 import { initLedgerSchema } from "../schema.js";
@@ -8,6 +8,17 @@ const ciSchema = z
   .enum(["true", "false", "1", "0"])
   .optional()
   .transform((value) => value === "true" || value === "1");
+
+export async function createTestFund(sql: Sql): Promise<string> {
+  const userId = uuidv7();
+  const orgId = uuidv7();
+  const fundId = uuidv7();
+  const phone = `+91${randomInt(1_000_000_000, 10_000_000_000)}`;
+  await sql`INSERT INTO users (id, phone, display_name) VALUES (${userId}, ${phone}, 'Test User')`;
+  await sql`INSERT INTO orgs (id, name, legal_form, owner_id) VALUES (${orgId}, 'Test Org', 'society', ${userId})`;
+  await sql`INSERT INTO funds (id, org_id, title, policy_json) VALUES (${fundId}, ${orgId}, 'Test Fund', '{}')`;
+  return fundId;
+}
 
 export function ledgerDatabaseSuite(name: string, tests: (sql: Sql, url: string) => void): void {
   const ci = ciSchema.safeParse(process.env.CI);
