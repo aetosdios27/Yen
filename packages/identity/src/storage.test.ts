@@ -1,8 +1,8 @@
 import { migrate, type Sql, uuidv7 } from "@yen/db";
 import { type UserId, userIdSchema } from "@yen/shared";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, expect, it } from "vitest";
 import { databaseSuite } from "../../db/src/test/database.js";
-import { formatYenId, generateYenId, type YenId } from "./format.js";
+import { generateYenId, type YenId } from "./format.js";
 import { assignYenId } from "./storage.js";
 
 async function createTestUser(sql: Sql, displayName = "Test User"): Promise<UserId> {
@@ -33,8 +33,8 @@ databaseSuite("Yen ID storage and assignment", (sql) => {
       SELECT yen_id, user_id FROM yen_ids WHERE user_id = ${userId}
     `;
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.yen_id).toBe(firstId);
-    expect(rows[0]!.user_id).toBe(userId);
+    expect(rows[0]?.yen_id).toBe(firstId);
+    expect(rows[0]?.user_id).toBe(userId);
   });
 
   it("handles 50-way concurrent assignment for one user, returning exactly one unique ID", async () => {
@@ -47,14 +47,15 @@ databaseSuite("Yen ID storage and assignment", (sql) => {
     const uniqueIds = new Set(results);
     expect(uniqueIds.size).toBe(1);
 
-    const singleId = results[0]!;
+    const singleId = results[0];
+    expect(singleId).toBeDefined();
     expect(singleId).toMatch(/^[1-9][0-9]{8}$/);
 
     const dbRows = await sql<{ yen_id: string; user_id: string }[]>`
       SELECT yen_id, user_id FROM yen_ids WHERE user_id = ${userId}
     `;
     expect(dbRows).toHaveLength(1);
-    expect(dbRows[0]!.yen_id).toBe(singleId);
+    expect(dbRows[0]?.yen_id).toBe(singleId);
   });
 
   it("retries and recovers when a generated ID collides with an existing Yen ID", async () => {
@@ -82,7 +83,7 @@ databaseSuite("Yen ID storage and assignment", (sql) => {
     const rowB = await sql<{ yen_id: string }[]>`
       SELECT yen_id FROM yen_ids WHERE user_id = ${userB}
     `;
-    expect(rowB[0]!.yen_id).toBe(idB);
+    expect(rowB[0]?.yen_id).toBe(idB);
   });
 
   it("keeps a tombstone row when a user is deleted and guarantees the ID can never be re-issued", async () => {
@@ -94,7 +95,7 @@ databaseSuite("Yen ID storage and assignment", (sql) => {
       SELECT yen_id, user_id FROM yen_ids WHERE yen_id = ${assignedId}
     `;
     expect(rowBefore).toBeDefined();
-    expect(rowBefore!.user_id).toBe(userId);
+    expect(rowBefore?.user_id).toBe(userId);
 
     // Delete the user from the users table (e.g. account erasure)
     await sql`DELETE FROM users WHERE id = ${userId}`;
@@ -104,8 +105,8 @@ databaseSuite("Yen ID storage and assignment", (sql) => {
       SELECT yen_id, user_id FROM yen_ids WHERE yen_id = ${assignedId}
     `;
     expect(tombstone).toBeDefined();
-    expect(tombstone!.yen_id).toBe(assignedId);
-    expect(tombstone!.user_id).toBeNull();
+    expect(tombstone?.yen_id).toBe(assignedId);
+    expect(tombstone?.user_id).toBeNull();
 
     // Invariant proof: Attempting to insert that exact same Yen ID fails with primary key violation
     const newUser = await createTestUser(sql, "New Account");
@@ -126,7 +127,7 @@ databaseSuite("Yen ID storage and assignment", (sql) => {
     const [tombstoneCheck] = await sql<{ yen_id: string; user_id: string | null }[]>`
       SELECT yen_id, user_id FROM yen_ids WHERE yen_id = ${assignedId}
     `;
-    expect(tombstoneCheck!.user_id).toBeNull();
+    expect(tombstoneCheck?.user_id).toBeNull();
   });
 
   it("enforces table CHECK constraint (^[1-9][0-9]{8}$) against invalid formats", async () => {

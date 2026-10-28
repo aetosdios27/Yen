@@ -2,6 +2,15 @@ import { randomInt } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { computeDammCheckDigit, DAMM_MATRIX, validateDammCheckDigit } from "./damm.js";
 
+/** Reads a matrix or digit cell and fails the test loudly if the index is out of range. */
+function at(row: readonly number[] | undefined, index: number): number {
+  const value = row?.[index];
+  if (value === undefined) {
+    throw new Error(`No value at index ${index}`);
+  }
+  return value;
+}
+
 describe("Damm check digit algorithm", () => {
   it("satisfies Latin square and main diagonal properties of the quasigroup", () => {
     expect(DAMM_MATRIX).toHaveLength(10);
@@ -14,14 +23,14 @@ describe("Damm check digit algorithm", () => {
         expect(rowSet.has(i)).toBe(true);
       }
       // Main diagonal is 0
-      expect(DAMM_MATRIX[r]![r]).toBe(0);
+      expect(DAMM_MATRIX[r]?.[r]).toBe(0);
     }
 
     // Column must be a permutation of 0..9
     for (let c = 0; c < 10; c++) {
       const colSet = new Set<number>();
       for (let r = 0; r < 10; r++) {
-        colSet.add(DAMM_MATRIX[r]![c]!);
+        colSet.add(at(DAMM_MATRIX[r], c));
       }
       expect(colSet.size).toBe(10);
     }
@@ -31,11 +40,11 @@ describe("Damm check digit algorithm", () => {
     for (let c = 0; c < 10; c++) {
       for (let x = 0; x < 10; x++) {
         for (let y = 0; y < 10; y++) {
-          const c_x = DAMM_MATRIX[c]![x]!;
-          const c_x_y = DAMM_MATRIX[c_x]![y]!;
+          const c_x = at(DAMM_MATRIX[c], x);
+          const c_x_y = at(DAMM_MATRIX[c_x], y);
 
-          const c_y = DAMM_MATRIX[c]![y]!;
-          const c_y_x = DAMM_MATRIX[c_y]![x]!;
+          const c_y = at(DAMM_MATRIX[c], y);
+          const c_y_x = at(DAMM_MATRIX[c_y], x);
 
           if (c_x_y === c_y_x) {
             expect(x).toBe(y);
@@ -81,7 +90,7 @@ describe("Damm check digit algorithm", () => {
 
       // Enumerate ALL single-digit substitutions across all 9 positions
       for (let pos = 0; pos < 9; pos++) {
-        const original = fullDigits[pos]!;
+        const original = at(fullDigits, pos);
         for (let replacement = 0; replacement < 10; replacement++) {
           if (replacement === original) continue;
 
@@ -114,8 +123,8 @@ describe("Damm check digit algorithm", () => {
 
       // Enumerate ALL adjacent transpositions for 8 adjacent pairs (0-1, 1-2, ..., 7-8)
       for (let pos = 0; pos < 8; pos++) {
-        const a = fullDigits[pos]!;
-        const b = fullDigits[pos + 1]!;
+        const a = at(fullDigits, pos);
+        const b = at(fullDigits, pos + 1);
 
         // Note: transposition of two equal digits changes nothing and is excluded by specification
         if (a === b) continue;
