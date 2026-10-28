@@ -133,6 +133,26 @@ databaseSuite("fund_pseudonyms per-person per-fund mapping", (sql) => {
     expect(duplicates).toEqual([]);
   });
 
+  it("issues random pseudonyms that carry no creation time", async () => {
+    const userId = await createTestUser(sql);
+    const fundIds = [
+      (await createTestFund(sql, userId)).fundId,
+      (await createTestFund(sql, userId)).fundId,
+      (await createTestFund(sql, userId)).fundId,
+    ];
+    const issued = await Promise.all(
+      fundIds.map((fundId) => ensureFundPseudonym(sql, { userId, fundId })),
+    );
+
+    for (const pseudonym of issued) {
+      // psn_ + 8-4-4-4-12: the first character of the third group is the UUID version.
+      expect(pseudonym.charAt(18)).toBe("4");
+    }
+    // A time-ordered id issued in the same moment would share its leading bytes across funds.
+    const prefixes = new Set(issued.map((pseudonym) => pseudonym.slice(4, 12)));
+    expect(prefixes.size).toBe(issued.length);
+  });
+
   it("50 concurrent calls converge", async () => {
     const user = await createTestUser(sql);
     const { fundId } = await createTestFund(sql, user);

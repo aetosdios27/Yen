@@ -1,7 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { type PseudonymId, pseudonymIdSchema } from "@yen/eventlog";
 import { type FundId, parseFundId, parseUserId, type UserId } from "@yen/shared";
 import type { SqlClient } from "./client.js";
-import { uuidv7 } from "./uuidv7.js";
 
 export interface EnsureFundPseudonymParams {
   userId: UserId | string;
@@ -34,7 +34,9 @@ export async function ensureFundPseudonym(
 
   // Membership check: Do not enforce fund membership here; donors without accounts come later.
   while (true) {
-    const id = uuidv7();
+    // Random (v4), not time-ordered (v7): a pseudonym is public, and a timestamp prefix would let a
+    // reader link the same person's pseudonyms across funds by when they joined.
+    const id = randomUUID();
     const inserted = await sql<{ pseudonym_id: string }[]>`
       INSERT INTO fund_pseudonyms (pseudonym_id, user_id, fund_id)
       VALUES (${id}, ${validUserId}, ${validFundId})
