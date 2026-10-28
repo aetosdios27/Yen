@@ -94,15 +94,15 @@ databaseSuite("dev-seed database integration", (sql) => {
     const paidExp = expenseRows.find((e) => e.status === "paid");
 
     expect(approvedExp).toBeDefined();
-    expect(approvedExp?.amount_paise).toBe("7500000"); // 75,000 rupees in paise
+    expect(BigInt(approvedExp?.amount_paise)).toBe(7500000n); // 75,000 rupees in paise
     expect(pendingExp).toBeDefined();
-    expect(pendingExp?.amount_paise).toBe("2500000"); // 25,000 rupees in paise
+    expect(BigInt(pendingExp?.amount_paise)).toBe(2500000n); // 25,000 rupees in paise
     expect(paidExp).toBeDefined();
-    expect(paidExp?.amount_paise).toBe("3500000"); // 35,000 rupees in paise
+    expect(BigInt(paidExp?.amount_paise)).toBe(3500000n); // 35,000 rupees in paise
 
     // Verify Konto Ledger Accounts and Entries
     const entrySumRows = await sql`SELECT sum(amount)::bigint as total FROM konto_entries`;
-    expect(entrySumRows[0]?.total).toBe("0"); // zero-sum double entry invariant
+    expect(BigInt(entrySumRows[0]?.total ?? 0)).toBe(0n); // zero-sum double entry invariant
 
     // Verify Event Log Chain Integrity
     const chainCheck = await checkStoredChainStructure(sql, result.fund.id as FundId);
