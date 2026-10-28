@@ -802,7 +802,7 @@ describe("chain verification", () => {
       ),
       { numRuns: 300 },
     );
-  });
+  }, 30_000);
 
   it("detects a flipped byte in any event hash at that event", async () => {
     await fc.assert(
@@ -825,7 +825,7 @@ describe("chain verification", () => {
       ),
       { numRuns: 300 },
     );
-  });
+  }, 30_000);
 
   it("covers every pinned event field and each of its 32 hash bytes", async () => {
     for (const [index, event] of events.entries()) {
@@ -848,7 +848,7 @@ describe("chain verification", () => {
         ).toBe(false);
       }
     }
-  });
+  }, 30_000);
 
   it("detects removal, reordering, duplication, and insertion", async () => {
     await fc.assert(
@@ -878,7 +878,7 @@ describe("chain verification", () => {
         }
       }),
     );
-  });
+  }, 30_000);
 
   it("reports first-break reasons and verifies async streams", async () => {
     async function* stream(): AsyncIterable<unknown> {

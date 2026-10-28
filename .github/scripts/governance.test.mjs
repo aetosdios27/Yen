@@ -29,6 +29,18 @@ test("CI Gate and CodeQL are required checks", () => {
   assert.ok(contexts?.includes("Analyze (javascript-typescript)"));
 });
 
+test("Vercel is a preview signal, never a required merge check", () => {
+  const contexts = rule("required_status_checks")?.parameters.required_status_checks.map(
+    (check) => check.context,
+  );
+  assert.ok(contexts, "required status checks must exist");
+  assert.equal(
+    contexts.some((context) => /vercel/i.test(context)),
+    false,
+    "Vercel deployments must stay informational; CI Gate remains the merge gate",
+  );
+});
+
 test("every CODEOWNERS rule names at least two owners so either teammate can approve the other", () => {
   const rules = read("CODEOWNERS")
     .split("\n")

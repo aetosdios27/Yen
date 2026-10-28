@@ -60,7 +60,7 @@ jobs:
 
       - name: OpenAPI diff
         run: |
-          pnpm --filter @yen/shared build
+          pnpm turbo run build --filter="@yen/api^..."
           pnpm --filter @yen/api openapi:check
           pnpm --filter @yen/api-client generate:check
 
@@ -77,6 +77,9 @@ jobs:
           else
             pnpm turbo run typecheck test build
           fi
+
+      - name: Accessibility (axe, zero violations)
+        run: pnpm --filter @yen/web test:a11y
 
   secrets:
     name: Secret scan

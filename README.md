@@ -18,7 +18,7 @@ Donors verify every rupee. Treasurers cannot quietly spend it. <!-- claim: CLAIM
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](#built-with)
 [![Polygon Amoy testnet](https://img.shields.io/badge/chain-Polygon%20Amoy%20(testnet)-8247E5?logo=polygon&logoColor=white)](#built-with)
 
-[Why Yen](#why-yen) · [How it works](#how-it-works) · [Guarantees and limits](#guarantees-and-limits) · [Built with](#built-with) · [Roadmap](#roadmap) · [Getting started](#getting-started)
+[Why Yen](#why-yen) · [How it works](#how-it-works) · [Guarantees and limits](#guarantees-and-limits) · [Built with](#built-with) · [Roadmap](#roadmap) · [Getting started](#getting-started) · [Deployment](#deployment)
 
 </div>
 
@@ -76,7 +76,7 @@ We only claim what a skeptic can check.
 | Languages          | TypeScript (strict), Solidity                                                                          |
 | Monorepo           | pnpm workspaces, Turborepo                                                                             |
 | Quality            | Biome, Vitest, Foundry, Playwright (planned)                                                           |
-| Web app            | Next.js placeholder; PWA planned                                                                       |
+| Web app            | Next.js with a shared design system and EN/HI i18n; PWA planned                                        |
 | API                | Hono HTTP service with a health endpoint                                                               |
 | Data & ledger      | PostgreSQL 16, [Konto](https://github.com/aetosdios27/Konto) double-entry ledger integration (planned) |
 | Event log          | Hash-chained event log (planned)                                                                       |
@@ -100,7 +100,7 @@ Delivery is structured into six focus areas:
 ## Repository layout
 
 ```
-apps/web/         Next.js placeholder with typed environment settings
+apps/web/         Next.js app, design system and EN/HI i18n
 apps/api/         Hono HTTP service with a health endpoint
 packages/shared/  Integer paise, branded IDs, Merkle proofs
 packages/ledger/  Placeholder for ledger integration
@@ -135,6 +135,17 @@ pnpm --filter @yen/web dev
 ```
 
 The API requires `PORT`, and the web app requires an HTTP(S) `NEXT_PUBLIC_API_URL`. The example files provide local values. `pnpm format` auto-fixes formatting and safe lint issues.
+
+The shared design system lives in `apps/web`; open `http://localhost:3000/design-system` for its 375 px review page. See [`apps/web/README.md`](apps/web/README.md) for tokens, components, language switching and accessibility checks.
+
+## Deployment
+
+The web app deploys to Vercel from `apps/web`. Pull requests get a preview URL
+from the Vercel bot; `main` deploys production only after an approved pull
+request passes **CI Gate**. Project setup, environment scopes and the
+single-gate policy are in [`docs/deployment/web.md`](docs/deployment/web.md).
+If production breaks, use the
+[web rollback runbook](docs/runbooks/web-rollback.md).
 
 <a id="how-we-work"></a>
 <a id="security"></a>

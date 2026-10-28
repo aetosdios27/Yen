@@ -17,6 +17,7 @@ it("exports typed env and parses it only once per startup", async () => {
   expect(env).toMatchObject({
     NODE_ENV: "test",
     PORT: 3001,
+    RATE_LIMIT_MAX_KEYS: 100000,
     RATE_LIMIT_IP_CAPACITY: 120,
     RATE_LIMIT_PRINCIPAL_CAPACITY: 60,
     RATE_LIMIT_REFILL_MS: 60000,
@@ -62,3 +63,51 @@ it.each(["0", "-1", "1.5", "Infinity", "private-value"])(
     await expect(import("./env.js")).rejects.not.toThrow("private-value");
   },
 );
+
+it("requires a valid database URL in production", async () => {
+  vi.stubEnv("PORT", "3001");
+  vi.stubEnv("NODE_ENV", "production");
+  vi.stubEnv("DATABASE_URL", undefined);
+  await expect(import("./env.js")).rejects.toThrow("DATABASE_URL");
+});
+
+it("accepts a PostgreSQL URL in production and rejects invalid URLs without exposing them", async () => {
+  vi.stubEnv("PORT", "3001");
+  vi.stubEnv("NODE_ENV", "production");
+  vi.stubEnv("DATABASE_URL", "postgres://postgres:pw@localhost:55432/postgres");
+  expect((await import("./env.js")).env.DATABASE_URL).toBe(
+    "postgres://postgres:pw@localhost:55432/postgres",
+  );
+  vi.resetModules();
+  vi.stubEnv("DATABASE_URL", "private-invalid-value");
+  await expect(import("./env.js")).rejects.toThrow("DATABASE_URL");
+  await expect(import("./env.js")).rejects.not.toThrow("private-invalid-value");
+});
+
+it.each([
+  ["TRUSTED_PROXY_HOPS", "-1"],
+  ["TRUSTED_PROXY_HOPS", "6"],
+  ["TRUSTED_PROXY_HOPS", "1.5"],
+  ["WAITLIST_MIN_RESPONSE_MS", "-1"],
+  ["WAITLIST_MIN_RESPONSE_MS", "2001"],
+  ["WAITLIST_MIN_RESPONSE_MS", "1.5"],
+])("rejects out of range %s=%s", async (key, value) => {
+  vi.stubEnv("PORT", "3001");
+  vi.stubEnv(key, value);
+  await expect(import("./env.js")).rejects.toThrow(key);
+});
+
+it.each(["999", "1000001", "1.5", "invalid"])(
+  "rejects invalid rate limit key cap %s",
+  async (value) => {
+    vi.stubEnv("PORT", "3001");
+    vi.stubEnv("RATE_LIMIT_MAX_KEYS", value);
+    await expect(import("./env.js")).rejects.toThrow("RATE_LIMIT_MAX_KEYS");
+  },
+);
+
+it.each(["-1", "60001", "1.5", "invalid"])("rejects invalid readiness cache %s", async (value) => {
+  vi.stubEnv("PORT", "3001");
+  vi.stubEnv("READINESS_CACHE_MS", value);
+  await expect(import("./env.js")).rejects.toThrow("READINESS_CACHE_MS");
+});
