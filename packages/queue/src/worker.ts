@@ -1,5 +1,5 @@
 import { createSql, type Sql } from "@yen/db";
-import { PgBoss, type Queue, type WorkOptions } from "pg-boss";
+import { type JobResult, PgBoss, type Queue, type WorkOptions } from "pg-boss";
 import { DEFAULT_QUEUES, DEFAULT_SCHEMA } from "./config.js";
 import type { DeadLetterJob, Job, JobHandler, QueuePolicy, WorkerRuntimeOptions } from "./types.js";
 
@@ -102,9 +102,11 @@ export class WorkerRuntime {
           batchSize: policy.batchSize ?? 1,
           localConcurrency: policy.localConcurrency ?? 5,
           pollingIntervalSeconds: 0.5,
+          perJobResults: true,
         };
 
         await this.boss.work(queueName, workOptions, async (jobs) => {
+          const results: JobResult[] = [];
           for (const rawJob of jobs) {
             const job: Job<unknown> = {
               id: rawJob.id,
@@ -113,8 +115,21 @@ export class WorkerRuntime {
               retryCount: rawJob.retryCount,
               expireInSeconds: rawJob.expireInSeconds,
             };
-            await handler(job);
+            try {
+              await handler(job);
+              results.push({ id: rawJob.id, status: "completed" });
+            } catch (err) {
+              results.push({
+                id: rawJob.id,
+                status: "failed",
+                output:
+                  err instanceof Error
+                    ? { message: err.message, name: err.name, stack: err.stack }
+                    : { error: String(err) },
+              });
+            }
           }
+          return results;
         });
       }
 

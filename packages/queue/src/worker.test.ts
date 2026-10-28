@@ -222,4 +222,111 @@ describePostgres("WorkerRuntime", (adminUrl) => {
       await gracefulWorker.stop();
     }
   });
+
+  it("isolates failures per job in a batch, ensuring subsequent jobs execute and complete while failing jobs retry and dead-letter", async () => {
+    const BATCH_DLQ = "batch-dlq";
+    const batchWorker = new WorkerRuntime({
+      connectionString: targetUrl.toString(),
+      schema: "pgboss",
+      migrate: false,
+      gracefulShutdownTimeoutMs: 5000,
+      queues: {
+        "batch-isolation-work": {
+          localConcurrency: 1,
+          batchSize: 5,
+          retryLimit: 1,
+          retryDelay: 0,
+          retryBackoff: false,
+          expireInSeconds: 10,
+          deadLetter: BATCH_DLQ,
+        },
+      },
+    });
+
+    const executionCounts = new Map<string, number>();
+
+    batchWorker.registerHandler("batch-isolation-work", async (job) => {
+      const data = job.data as { id: string; shouldFail: boolean };
+      executionCounts.set(data.id, (executionCounts.get(data.id) ?? 0) + 1);
+      if (data.shouldFail) {
+        throw new Error(`Deliberate failure for ${data.id}`);
+      }
+    });
+
+    const boss = worker.getBoss();
+    await boss.createQueue(BATCH_DLQ);
+    await boss.createQueue("batch-isolation-work", {
+      retryLimit: 1,
+      retryDelay: 0,
+      retryBackoff: false,
+      expireInSeconds: 10,
+      deadLetter: BATCH_DLQ,
+    });
+    const failJobId = await boss.send("batch-isolation-work", {
+      id: "failing-job",
+      shouldFail: true,
+    });
+    const successJob1Id = await boss.send("batch-isolation-work", {
+      id: "success-job-1",
+      shouldFail: false,
+    });
+    const successJob2Id = await boss.send("batch-isolation-work", {
+      id: "success-job-2",
+      shouldFail: false,
+    });
+    expect(failJobId).not.toBeNull();
+    expect(successJob1Id).not.toBeNull();
+    expect(successJob2Id).not.toBeNull();
+    if (!failJobId || !successJob1Id || !successJob2Id) {
+      throw new Error("Job IDs must not be null");
+    }
+
+    try {
+      await batchWorker.start();
+
+      // Wait until the failing job exhausts retries and lands in the dead-letter queue
+      const deadLetterRow = await waitFor(async () => {
+        const rows = await sql<{ name: string; data: unknown }[]>`
+          SELECT name, data FROM pgboss.job
+          WHERE name = ${BATCH_DLQ} AND data->>'id' = 'failing-job'
+        `;
+        return rows[0];
+      });
+
+      expect(deadLetterRow).toBeDefined();
+
+      // Wait until success jobs reach their final state
+      await waitFor(async () => {
+        const rows = await sql<{ id: string; state: string }[]>`
+          SELECT id, state FROM pgboss.job
+          WHERE id IN (${failJobId}, ${successJob1Id}, ${successJob2Id})
+        `;
+        const states = new Map(rows.map((r) => [r.id, r.state]));
+        if (
+          states.get(failJobId) === "failed" &&
+          states.get(successJob1Id) === "completed" &&
+          states.get(successJob2Id) === "completed"
+        ) {
+          return true;
+        }
+        return undefined;
+      });
+
+      // Verify execution counts:
+      // failing-job attempted twice (initial attempt + 1 retry)
+      expect(executionCounts.get("failing-job")).toBe(2);
+      // success jobs behind failing-job in the batch must have executed exactly once
+      expect(executionCounts.get("success-job-1")).toBe(1);
+      expect(executionCounts.get("success-job-2")).toBe(1);
+
+      // Verify success jobs never landed in dead-letter
+      const deadLetterSuccessRows = await sql<{ id: string }[]>`
+        SELECT id FROM pgboss.job
+        WHERE name = ${BATCH_DLQ} AND data->>'id' IN ('success-job-1', 'success-job-2')
+      `;
+      expect(deadLetterSuccessRows).toHaveLength(0);
+    } finally {
+      await batchWorker.stop();
+    }
+  });
 });
