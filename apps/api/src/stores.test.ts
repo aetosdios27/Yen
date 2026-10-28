@@ -1,5 +1,6 @@
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { MemoryIdempotencyStore, MemoryRateLimitStore } from "./stores.js";
+import { idempotencyStoreConformance, rateLimitStoreConformance } from "./stores-conformance.js";
 
 const request = { key: '["principal","key"]', requestHash: "hash", createdAt: 0 };
 const response = {
@@ -8,30 +9,16 @@ const response = {
   bodyBase64: "e30=",
 };
 
-it("reserves atomically and replays completed responses", async () => {
-  const store = new MemoryIdempotencyStore({ clock: () => 0 });
-  const first = await store.begin(request);
-  expect(first.kind).toBe("new");
-  if (first.kind !== "new") throw new Error("Expected reservation");
-  expect(await store.begin(request)).toEqual({ kind: "in_progress", requestHash: "hash" });
-  await store.complete(request, first.token, response);
-  expect(await store.begin(request)).toEqual({ kind: "complete", requestHash: "hash", response });
-  await expect(store.complete(request, first.token, response)).rejects.toThrow();
+describe("MemoryIdempotencyStore conformance", () => {
+  idempotencyStoreConformance(async (options) => ({
+    store: new MemoryIdempotencyStore(options),
+  }));
 });
 
-it("takes over an expired lease and fences the abandoned attempt", async () => {
-  let now = 0;
-  const store = new MemoryIdempotencyStore({ clock: () => now, inProgressTtlMs: 30 });
-  const first = await store.begin(request);
-  if (first.kind !== "new") throw new Error("Expected reservation");
-  now = 30;
-  const replacement = await store.begin(request);
-  expect(replacement.kind).toBe("new");
-  if (replacement.kind !== "new") throw new Error("Expected replacement");
-  expect(replacement.token).not.toBe(first.token);
-  await expect(store.complete(request, first.token, response)).rejects.toThrow();
-  await store.complete(request, replacement.token, response);
-  expect(await store.begin(request)).toMatchObject({ kind: "complete", response });
+describe("MemoryRateLimitStore conformance", () => {
+  rateLimitStoreConformance(async (options) => ({
+    store: new MemoryRateLimitStore(options),
+  }));
 });
 
 it("caps retained completed responses", async () => {
@@ -82,28 +69,6 @@ it("refuses capacity when every retained entry is in progress", async () => {
   await expect(store.begin({ ...request, key: "other" })).rejects.toThrow(
     "Idempotency store capacity exhausted",
   );
-});
-
-it("expires completed responses after the replay window", async () => {
-  let now = 0;
-  const store = new MemoryIdempotencyStore({ clock: () => now, replayRetentionMs: 10 });
-  const first = await store.begin(request);
-  if (first.kind !== "new") throw new Error("Expected reservation");
-  await store.complete(request, first.token, response);
-  now = 9;
-  expect(await store.begin(request)).toMatchObject({ kind: "complete" });
-  now = 10;
-  expect(await store.begin(request)).toMatchObject({ kind: "new" });
-});
-
-it("refills token buckets by elapsed time and isolates keys", async () => {
-  const store = new MemoryRateLimitStore();
-  const limit = { capacity: 2, refillMs: 10000 };
-  expect(await store.consume("a", limit, 0)).toEqual({ allowed: true });
-  expect(await store.consume("a", limit, 0)).toEqual({ allowed: true });
-  expect(await store.consume("a", limit, 0)).toEqual({ allowed: false, retryAfterSeconds: 5 });
-  expect(await store.consume("b", limit, 0)).toEqual({ allowed: true });
-  expect(await store.consume("a", limit, 5000)).toEqual({ allowed: true });
 });
 
 it("evicts full idle buckets and caps active buckets", async () => {

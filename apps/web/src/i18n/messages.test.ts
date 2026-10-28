@@ -36,6 +36,8 @@ const IDENTICAL_BY_DESIGN = new Set([
   "designSystem.inputErrorPlaceholder",
   "expenseForm.amountPlaceholder",
   "expenseForm.payeeUpiPlaceholder",
+  "auth.phonePlaceholder",
+  "auth.otpPlaceholder",
 ]);
 
 const PLACEHOLDER = /\{\w+\}/g;

@@ -35,7 +35,7 @@ type Completion = {
   readonly expiresAt: number;
 };
 
-interface IdempotencyOptions {
+export interface IdempotencyOptions {
   readonly clock?: () => number;
   readonly inProgressTtlMs?: number;
   readonly replayRetentionMs?: number;
@@ -175,13 +175,15 @@ export class MemoryRateLimitStore implements RateLimitStore {
         retryAfterSeconds: Math.min(86400, Math.max(1, Math.ceil((oldest - now) / 1000))),
       } as const;
     }
+    // A delayed caller can pass an earlier `now`; the bucket clock must never move backwards.
+    const effectiveNow = previous ? Math.max(now, previous.updatedAt) : now;
     const tokens = previous
       ? limit.expiresAt !== undefined
         ? previous.tokens
         : Math.min(
             limit.capacity,
             previous.tokens +
-              (Math.max(0, now - previous.updatedAt) * limit.capacity) / limit.refillMs,
+              (Math.max(0, effectiveNow - previous.updatedAt) * limit.capacity) / limit.refillMs,
           )
       : limit.capacity;
     if (previous) this.remove(previous);
@@ -190,9 +192,10 @@ export class MemoryRateLimitStore implements RateLimitStore {
       key,
       index: this.heap.length,
       tokens: remaining,
-      updatedAt: now,
+      updatedAt: effectiveNow,
       fullAt:
-        limit.expiresAt ?? now + ((limit.capacity - remaining) * limit.refillMs) / limit.capacity,
+        limit.expiresAt ??
+        effectiveNow + ((limit.capacity - remaining) * limit.refillMs) / limit.capacity,
     };
     this.buckets.set(key, bucket);
     this.heap.push(bucket);
@@ -251,5 +254,61 @@ export class MemoryRateLimitStore implements RateLimitStore {
       this.swap(current, smallest);
       current = smallest;
     }
+  }
+}
+
+export {
+  type PostgresIdempotencyOptions,
+  PostgresIdempotencyStore,
+  type PostgresRateLimitOptions,
+  PostgresRateLimitStore,
+} from "./postgres-stores.js";
+export type AllowedEvidenceMimeType = "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
+
+export interface StoredEvidence {
+  readonly evidenceId: string;
+  readonly fundId: string;
+  readonly expenseId: string;
+  readonly fileSha256: string;
+  readonly mimeType: AllowedEvidenceMimeType;
+  readonly fileSizeBytes: number;
+  readonly fileName: string;
+  readonly objectKey?: string | undefined;
+  readonly duplicateDetected: boolean;
+  readonly isDuplicate: boolean;
+  readonly duplicateExpenseId?: string | undefined;
+  readonly vendorName?: string | undefined;
+  readonly gstin?: string | undefined;
+  readonly invoiceNumber?: string | undefined;
+  readonly invoiceDate?: string | undefined;
+  readonly createdAt: string;
+}
+
+export interface EvidenceStore {
+  save(evidence: StoredEvidence): Promise<StoredEvidence>;
+  getByExpense(fundId: string, expenseId: string): Promise<readonly StoredEvidence[]>;
+  findBySha256(fundId: string, sha256: string): Promise<readonly StoredEvidence[]>;
+}
+
+export class MemoryEvidenceStore implements EvidenceStore {
+  private readonly records = new Map<string, StoredEvidence>();
+  private readonly byHash = new Map<string, StoredEvidence[]>();
+
+  async save(evidence: StoredEvidence): Promise<StoredEvidence> {
+    this.records.set(evidence.evidenceId, evidence);
+    const list = this.byHash.get(evidence.fileSha256) ?? [];
+    list.push(evidence);
+    this.byHash.set(evidence.fileSha256, list);
+    return evidence;
+  }
+
+  async getByExpense(fundId: string, expenseId: string): Promise<readonly StoredEvidence[]> {
+    return Array.from(this.records.values()).filter(
+      (e) => e.fundId === fundId && e.expenseId === expenseId,
+    );
+  }
+
+  async findBySha256(fundId: string, sha256: string): Promise<readonly StoredEvidence[]> {
+    return (this.byHash.get(sha256) ?? []).filter((evidence) => evidence.fundId === fundId);
   }
 }

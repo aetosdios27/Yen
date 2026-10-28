@@ -1,4 +1,4 @@
-declare const paiseBrand: unique symbol;
+export declare const paiseBrand: unique symbol;
 
 /** An integer number of paise (1 rupee = 100 paise). Never a float. */
 export type Paise = number & { readonly [paiseBrand]: "Paise" };
