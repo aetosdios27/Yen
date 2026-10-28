@@ -41,9 +41,28 @@ try {
 // The runtime stops gracefully on the first SIGTERM/SIGINT and then removes its own listeners, after
 // which the process exits once its event loop drains. A repeated signal in that window (a wrapper
 // such as `pnpm start` forwarding a signal the process manager also sent) must not fall back to the
-// default kill, which would report a signal exit instead of the worker's own status.
+// default kill, which would report a signal exit instead of the worker's own status. Listeners stay
+// installed in the CLI so repeated signals remain harmless, and resolving stop() writes the stopped
+// confirmation line to stdout before exit.
+let stoppedReported = false;
+const handleShutdownSignal = () => {
+  void worker
+    .stop()
+    .then(() => {
+      if (!stoppedReported) {
+        stoppedReported = true;
+        process.stdout.write("Worker runtime stopped.\n");
+      }
+    })
+    .catch((error) => {
+      process.stderr.write(
+        `Error during graceful shutdown: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
+    });
+};
+
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
-  process.on(signal, () => {});
+  process.on(signal, handleShutdownSignal);
 }
 
 process.stdout.write("Worker runtime started and listening for jobs.\n");

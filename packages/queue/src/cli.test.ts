@@ -11,7 +11,7 @@ const packageDir = fileURLToPath(new URL("..", import.meta.url));
 interface WorkerProcess {
   child: ChildProcess;
   output: string;
-  exit: Promise<number | null>;
+  exit: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
 }
 
 /** Starts a worker in its own process group so SIGTERM reaches pnpm and the node child alike. */
@@ -25,7 +25,9 @@ function spawnWorker(file: string, args: string[], env: NodeJS.ProcessEnv): Work
   const proc: WorkerProcess = {
     child,
     output: "",
-    exit: new Promise((resolve) => child.once("close", (code) => resolve(code))),
+    exit: new Promise((resolve) =>
+      child.once("close", (code, signal) => resolve({ code, signal })),
+    ),
   };
   const collect = (chunk: Buffer) => {
     proc.output += chunk.toString("utf8");
@@ -39,9 +41,9 @@ async function waitForOutput(proc: WorkerProcess, text: string, timeoutMs = 2000
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (proc.output.includes(text)) return;
-    if (proc.child.exitCode !== null) {
+    if (proc.child.exitCode !== null || proc.child.signalCode !== null) {
       throw new Error(
-        `Worker exited with ${proc.child.exitCode} before printing "${text}": ${proc.output}`,
+        `Worker exited with code=${proc.child.exitCode} signal=${proc.child.signalCode} before printing "${text}": ${proc.output}`,
       );
     }
     await new Promise((r) => setTimeout(r, 50));
@@ -76,7 +78,7 @@ describe("queue CLI startup validation", () => {
       env,
     );
 
-    expect(await proc.exit).toBe(1);
+    expect(await proc.exit).toEqual({ code: 1, signal: null });
     expect(proc.output).toContain("DATABASE_URL is required");
     expect(proc.output).not.toContain("started and listening");
   });
@@ -93,7 +95,7 @@ describe("queue CLI startup validation", () => {
       env,
     );
 
-    expect(await proc.exit).toBe(1);
+    expect(await proc.exit).toEqual({ code: 1, signal: null });
     expect(proc.output).toContain("QUEUE_SCHEMA must be");
     expect(proc.output).not.toContain("Worker failed to start");
   });
@@ -136,7 +138,12 @@ describePostgres("queue CLI runtime", (adminUrl) => {
     await waitForOutput(proc, "Worker runtime started");
     sigterm(proc);
 
-    expect(await proc.exit).toBe(0);
+    const exit = await proc.exit;
+    expect(proc.output).toContain("Worker runtime stopped.");
+    expect(
+      (exit.code === 0 && exit.signal === null) ||
+        (exit.code === null && exit.signal === "SIGTERM"),
+    ).toBe(true);
   }, 30000);
 
   it("finishes a graceful stop when SIGTERM arrives twice", async () => {
@@ -161,7 +168,8 @@ describePostgres("queue CLI runtime", (adminUrl) => {
       // The worker already exited cleanly; nothing left to signal.
     }
 
-    expect(await proc.exit).toBe(0);
+    expect(await proc.exit).toEqual({ code: 0, signal: null });
+    expect(proc.output).toContain("Worker runtime stopped.");
   }, 30000);
 
   it("does not complete a job on a queue with no implemented handler", async () => {
@@ -200,6 +208,11 @@ describePostgres("queue CLI runtime", (adminUrl) => {
     );
 
     sigterm(proc);
-    expect(await proc.exit).toBe(0);
+    const exit = await proc.exit;
+    expect(proc.output).toContain("Worker runtime stopped.");
+    expect(
+      (exit.code === 0 && exit.signal === null) ||
+        (exit.code === null && exit.signal === "SIGTERM"),
+    ).toBe(true);
   }, 30000);
 });
