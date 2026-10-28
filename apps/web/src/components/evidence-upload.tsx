@@ -31,6 +31,7 @@ export type EvidenceItem = {
   fundId?: string | undefined;
   expenseId?: string | undefined;
   fileSha256: string;
+  fileName?: string | undefined;
   mimeType: string;
   fileSizeBytes: number;
   duplicateDetected?: boolean | undefined;
@@ -280,6 +281,7 @@ export function EvidenceUpload({
         // Direct API upload via standard endpoint
         const res = await fetch(`/v1/funds/${fundId}/expenses/${expenseId}/evidence`, {
           method: "POST",
+          headers: { "Idempotency-Key": crypto.randomUUID() },
           body: formData,
         });
 
@@ -352,6 +354,7 @@ export function EvidenceUpload({
           {t("evidence.title")}
         </h2>
         <p className="text-small text-ink-muted">{t("evidence.uploadDescription")}</p>
+        <p className="text-small text-warning">{t("evidence.malwareScannerNotice")}</p>
         {isSlow ? (
           <p className="mt-1 text-small font-medium text-warning" role="status">
             {t("evidence.slowNetworkNotice")}
@@ -478,7 +481,7 @@ export function EvidenceUpload({
                 placeholder={t("evidence.gstinPlaceholder")}
                 hint={t("evidence.gstinHint")}
                 value={gstin}
-                error={gstinError}
+                {...(gstinError ? { error: gstinError } : {})}
                 onChange={(e) => handleGstinChange(e.target.value)}
                 disabled={isUploading}
               />

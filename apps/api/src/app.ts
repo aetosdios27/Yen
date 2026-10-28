@@ -27,6 +27,7 @@ import {
 import { type ApiEnv, type AppDependencies, defaultDependencies } from "./dependencies.js";
 import { ApiError, errorBody, errorStatus, ReadinessError, StoreError } from "./errors.js";
 import { stripExifMetadata } from "./exif-strip.js";
+import { getVerifiedEvidenceObject } from "./integrity-job.js";
 import { logMethod } from "./logging.js";
 import {
   idempotency,
@@ -38,7 +39,7 @@ import {
 } from "./middleware.js";
 import { verifyMimeSignature } from "./mime-signature.js";
 import type { FundAction, FundResource } from "./policy.js";
-import { buildOpaqueEvidenceKey } from "./storage.js";
+import { buildOpaqueEvidenceKey, sanitizeEvidenceFilename } from "./storage.js";
 import type { AllowedEvidenceMimeType, StoredEvidence } from "./stores.js";
 
 export { devPolicy } from "./policy.js";
@@ -139,7 +140,13 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   const authorizedFund = (c: Context<ApiEnv>, action: FundAction, resource: FundResource) => {
     const principal = c.get("principal");
     if (!principal) throw new ApiError("unauthenticated");
-    if (!deps.policy.can(principal, action, resource)) {
+    let allowed = false;
+    try {
+      allowed = deps.policy.can(principal, action, resource) === true;
+    } catch {
+      allowed = false;
+    }
+    if (!allowed) {
       throw new ApiError(action === "fund:read" ? "not_found" : "forbidden");
     }
     return principal;
@@ -270,7 +277,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const evidenceId = deps.idGenerator();
     const objectKey = buildOpaqueEvidenceKey(fundParam.value, expenseId, evidenceId);
 
-    // Fail-closed virus and malware scan
+    // No real malware scanner is integrated; the runtime adapter must explicitly approve uploads.
     const scanResult = await deps.virusScanner.scan({
       objectKey,
       data: bytes,
@@ -310,6 +317,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       fileSha256,
       mimeType: file.type as AllowedEvidenceMimeType,
       fileSizeBytes: bytes.length,
+      fileName: sanitizeEvidenceFilename(file.name),
       objectKey,
       duplicateDetected,
       isDuplicate: duplicateDetected,
@@ -361,6 +369,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     });
 
     const evidence = await deps.evidenceStore.getByExpense(fundParam.value, expenseId);
+    for (const item of evidence) await getVerifiedEvidenceObject(item, deps.storageAdapter);
     return c.json(deps.policy.redact(principal, { kind: "evidence_list", evidence }), 200);
   });
   app.openapi(openapiRoute, (c) => c.json(openapiSchema.parse(openApiDocument(app)), 200));

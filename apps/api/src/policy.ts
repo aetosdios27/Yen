@@ -1,5 +1,11 @@
 import type { z } from "@hono/zod-openapi";
-import { type Redacted, unsafeMarkRedactedForDevPolicy } from "@yen/policy";
+import {
+  DEFAULT_FUND_POLICY,
+  can as policyCan,
+  type Redacted,
+  unsafeMarkRedactedForDevPolicy,
+} from "@yen/policy";
+import { paise, parseFundId } from "@yen/shared";
 import type { fundSchema } from "./contract.js";
 import type { Principal } from "./dependencies.js";
 import type { StoredEvidence } from "./stores.js";
@@ -47,18 +53,41 @@ export const denyAllPolicy: Policy = {
 
 export const devPolicy: Policy = {
   can: (principal, action, resource) => {
-    if (resource.kind === "fund") {
-      return resource.fund === undefined
-        ? action === "fund:create"
-        : action === "fund:read" && resource.fund.owner === principal.id;
+    try {
+      const actor = { id: principal.id, role: "owner" as const };
+      if (resource.kind === "fund" && resource.fund === undefined) {
+        return action === "fund:create" && policyCan(actor, action, { kind: "fund" });
+      }
+      const fund = resource.fund;
+      if (!fund) return false;
+      if (fund.owner !== principal.id) return false;
+      const fundId = parseFundId(fund.fund.id);
+      if (!fundId.ok) return false;
+      if (resource.kind === "fund") {
+        return (
+          action === "fund:read" &&
+          policyCan(actor, action, {
+            kind: "fund",
+            fund: { fundId: fundId.value, ownerId: fund.owner, policy: DEFAULT_FUND_POLICY },
+          })
+        );
+      }
+      const engineAction = action === "expense:read_evidence" ? "expense:read" : action;
+      return policyCan(actor, engineAction, {
+        kind: "expense",
+        expense: {
+          fundId: fundId.value,
+          expenseId: resource.expenseId,
+          policy: DEFAULT_FUND_POLICY,
+          requesterId: principal.id,
+          amountPaise: paise(0),
+          status: "submitted",
+          approvals: [],
+        },
+      });
+    } catch {
+      return false;
     }
-    if (resource.kind === "expense") {
-      return (
-        (action === "expense:add_evidence" || action === "expense:read_evidence") &&
-        resource.fund.owner === principal.id
-      );
-    }
-    return false;
   },
   redact(
     _viewer: Principal,

@@ -235,3 +235,67 @@ export const waitlistRoute = createRoute({
     500: internalResponse,
   },
 });
+
+export const ALLOWED_EVIDENCE_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+] as const;
+export const MAX_EVIDENCE_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+const evidenceSchema = z
+  .object({
+    evidenceId: z.string().uuid(),
+    fundId: z.string().uuid(),
+    expenseId: z.string().uuid(),
+    fileSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    mimeType: z.enum(ALLOWED_EVIDENCE_MIME_TYPES),
+    fileSizeBytes: z.number().int().nonnegative(),
+    fileName: z.string().min(1).max(120),
+    duplicateDetected: z.boolean(),
+    isDuplicate: z.boolean(),
+    duplicateExpenseId: z.string().uuid().optional(),
+    vendorName: z.string().optional(),
+    gstin: z.string().optional(),
+    invoiceNumber: z.string().optional(),
+    invoiceDate: z.string().optional(),
+    createdAt: z.iso.datetime(),
+  })
+  .strict();
+const evidenceForm = z.object({
+  file: z.any().openapi({ type: "string", format: "binary" }),
+  vendorName: z.string().optional(),
+  gstin: z.string().optional(),
+  invoiceNumber: z.string().optional(),
+  invoiceDate: z.string().optional(),
+});
+const evidenceParams = z.object({
+  fundId: z.string(),
+  expenseId: z.string(),
+});
+export const uploadEvidenceRoute = createRoute({
+  method: "post",
+  path: "/v1/funds/{fundId}/expenses/{expenseId}/evidence",
+  operationId: "uploadEvidence",
+  security,
+  request: {
+    params: evidenceParams,
+    body: { required: true, content: { "multipart/form-data": { schema: evidenceForm } } },
+  },
+  responses: {
+    201: jsonResponse(evidenceSchema, "Evidence stored with a server computed hash"),
+    ...protectedErrors,
+    413: jsonResponse(errorEnvelope, "Evidence body exceeds the upload size limit"),
+  },
+});
+export const getEvidenceRoute = createRoute({
+  method: "get",
+  path: "/v1/funds/{fundId}/expenses/{expenseId}/evidence",
+  operationId: "getEvidence",
+  security,
+  request: { params: evidenceParams },
+  responses: {
+    200: jsonResponse(z.object({ evidence: z.array(evidenceSchema) }).strict(), "Evidence list"),
+    ...protectedErrors,
+  },
+});

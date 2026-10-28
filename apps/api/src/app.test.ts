@@ -7,6 +7,7 @@ import { fundSchema } from "./contract.js";
 import type { AppDependencies } from "./dependencies.js";
 import { ApiError, errorEnvelope, errorStatus } from "./errors.js";
 import { type LogEntry, serializeRequestLog } from "./logging.js";
+import type { Policy } from "./policy.js";
 import { devPolicy } from "./policy.js";
 import { MemoryIdempotencyStore, MemoryRateLimitStore } from "./stores.js";
 
@@ -239,7 +240,9 @@ it("consults policy for both fund routes and returns only its redacted view", as
     targetPaise: "7",
     createdAt: "1970-01-01T00:00:00.000Z",
   };
-  const redact = vi.fn(() => unsafeMarkRedactedForDevPolicy(sentinel));
+  const redact = vi.fn(() =>
+    unsafeMarkRedactedForDevPolicy(sentinel),
+  ) as unknown as Policy["redact"];
   const { app } = setup({ policy: { can, redact } });
   const created = await app.request("/v1/funds", post());
   expect(await created.json()).toEqual(sentinel);

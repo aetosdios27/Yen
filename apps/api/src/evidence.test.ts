@@ -6,7 +6,7 @@ import { checkEvidenceIntegrity, runEvidenceIntegrityJob } from "./integrity-job
 import { devPolicy } from "./policy.js";
 import { MemoryStorageAdapter } from "./storage.js";
 import { MemoryEvidenceStore, type StoredEvidence } from "./stores.js";
-import { MemoryVirusScannerAdapter } from "./virus-scanner.js";
+import { MemoryVirusScannerAdapter } from "./test-utils/memory-virus-scanner.js";
 
 const FUND_OWNER = { id: "00000000-0000-4000-8000-000000000001" };
 const EXPENSE_ID_1 = "00000000-0000-4000-8000-000000000011";
@@ -23,6 +23,18 @@ const VALID_PNG_BYTES = new Uint8Array([
 const VALID_WEBP_BYTES = new Uint8Array([
   0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x20,
 ]);
+
+async function evidenceRequest(
+  app: ReturnType<typeof createApp>,
+  input: string,
+  init?: RequestInit,
+): Promise<Response> {
+  const headers = new Headers(init?.headers);
+  if ((init?.method ?? "GET").toUpperCase() === "POST") {
+    headers.set("Idempotency-Key", `evidence-${crypto.randomUUID()}`);
+  }
+  return app.request(input, { ...init, headers });
+}
 
 function createTestApp(
   options: {
@@ -72,6 +84,22 @@ async function createTestFund(app: ReturnType<typeof createApp>) {
 }
 
 describe("Evidence Upload API Endpoint", () => {
+  it("rejects uploads when the default app has no malware scanner configured", async () => {
+    const app = createApp({ principal: FUND_OWNER, policy: devPolicy });
+    const fundId = await createTestFund(app);
+    const form = new FormData();
+    form.append("file", new File([VALID_PDF_BYTES], "invoice.pdf", { type: "application/pdf" }));
+
+    const response = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`,
+      { method: "POST", body: form },
+    );
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toMatchObject({ error: { code: "internal" } });
+  });
+
   it("uploads an evidence bill and computes server-side cryptographic SHA-256", async () => {
     const { app } = createTestApp();
     const fundId = await createTestFund(app);
@@ -86,10 +114,14 @@ describe("Evidence Upload API Endpoint", () => {
     fd.append("invoiceNumber", "INV-2026-001");
     fd.append("invoiceDate", "2026-10-28");
 
-    const res = await app.request(`/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`, {
-      method: "POST",
-      body: fd,
-    });
+    const res = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`,
+      {
+        method: "POST",
+        body: fd,
+      },
+    );
 
     expect(res.status).toBe(201);
     const body = (await res.json()) as StoredEvidence;
@@ -123,10 +155,14 @@ describe("Evidence Upload API Endpoint", () => {
     for (const { name, type, bytes } of mimeTestCases) {
       const fd = new FormData();
       fd.append("file", new File([bytes], name, { type }));
-      const res = await app.request(`/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`, {
-        method: "POST",
-        body: fd,
-      });
+      const res = await evidenceRequest(
+        app,
+        `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`,
+        {
+          method: "POST",
+          body: fd,
+        },
+      );
       expect(res.status, `MIME type ${type} should be accepted`).toBe(201);
       const data = (await res.json()) as StoredEvidence;
       expect(data.mimeType).toBe(type);
@@ -144,10 +180,14 @@ describe("Evidence Upload API Endpoint", () => {
     const fd = new FormData();
     fd.append("file", new File([fakeJpeg], "exploit.jpg", { type: "image/jpeg" }));
 
-    const res = await app.request(`/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`, {
-      method: "POST",
-      body: fd,
-    });
+    const res = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`,
+      {
+        method: "POST",
+        body: fd,
+      },
+    );
 
     expect(res.status).toBe(400);
     const body = (await res.json()) as {
@@ -164,10 +204,14 @@ describe("Evidence Upload API Endpoint", () => {
     const fd = new FormData();
     fd.append("file", new File(["plain text bill"], "bill.txt", { type: "text/plain" }));
 
-    const res = await app.request(`/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`, {
-      method: "POST",
-      body: fd,
-    });
+    const res = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`,
+      {
+        method: "POST",
+        body: fd,
+      },
+    );
 
     expect(res.status).toBe(400);
     const body = (await res.json()) as {
@@ -189,10 +233,14 @@ describe("Evidence Upload API Endpoint", () => {
     );
     fdBadGstin.append("gstin", "27AAPFU0939F1ZO");
 
-    const resBad = await app.request(`/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`, {
-      method: "POST",
-      body: fdBadGstin,
-    });
+    const resBad = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`,
+      {
+        method: "POST",
+        body: fdBadGstin,
+      },
+    );
 
     expect(resBad.status).toBe(400);
     const bodyBad = (await resBad.json()) as {
@@ -209,10 +257,14 @@ describe("Evidence Upload API Endpoint", () => {
     );
     fdGoodGstin.append("gstin", "27AAPFU0939F1ZV");
 
-    const resGood = await app.request(`/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`, {
-      method: "POST",
-      body: fdGoodGstin,
-    });
+    const resGood = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`,
+      {
+        method: "POST",
+        body: fdGoodGstin,
+      },
+    );
     expect(resGood.status).toBe(201);
   });
 
@@ -224,14 +276,45 @@ describe("Evidence Upload API Endpoint", () => {
     const fd = new FormData();
     fd.append("file", new File([oversizedBytes], "big.pdf", { type: "application/pdf" }));
 
-    const res = await app.request(`/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`, {
-      method: "POST",
-      body: fd,
-    });
+    const res = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`,
+      {
+        method: "POST",
+        body: fd,
+      },
+    );
 
     expect(res.status).toBe(413);
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("payload_too_large");
+  });
+
+  it("stops reading an oversized request body at the streaming body limit", async () => {
+    const { app } = createTestApp();
+    const fundId = await createTestFund(app);
+    let pulledBytes = 0;
+    let remainingBytes = 12 * 1024 * 1024;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        const chunk = new Uint8Array(Math.min(65536, remainingBytes));
+        pulledBytes += chunk.byteLength;
+        remainingBytes -= chunk.byteLength;
+        controller.enqueue(chunk);
+        if (remainingBytes === 0) controller.close();
+      },
+    });
+    const response = await app.request(`/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "multipart/form-data; boundary=test",
+        "Idempotency-Key": "streaming-size-limit",
+      },
+      body: stream,
+      duplex: "half",
+    } as RequestInit);
+    expect(response.status).toBe(413);
+    expect(pulledBytes).toBeLessThanOrEqual(11 * 1024 * 1024);
   });
 
   it("fails closed when virus scanner detects infected file or test malware signature", async () => {
@@ -246,10 +329,14 @@ describe("Evidence Upload API Endpoint", () => {
     const fd = new FormData();
     fd.append("file", new File([eicarPrefix], "infected.pdf", { type: "application/pdf" }));
 
-    const res = await app.request(`/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`, {
-      method: "POST",
-      body: fd,
-    });
+    const res = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`,
+      {
+        method: "POST",
+        body: fd,
+      },
+    );
 
     expect(res.status).toBe(400);
     const body = (await res.json()) as {
@@ -270,10 +357,14 @@ describe("Evidence Upload API Endpoint", () => {
     // First upload to expense 1
     const fd1 = new FormData();
     fd1.append("file", new File([identicalFileBytes], "bill1.pdf", { type: "application/pdf" }));
-    const res1 = await app.request(`/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`, {
-      method: "POST",
-      body: fd1,
-    });
+    const res1 = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`,
+      {
+        method: "POST",
+        body: fd1,
+      },
+    );
     expect(res1.status).toBe(201);
     const data1 = (await res1.json()) as StoredEvidence;
     expect(data1.duplicateDetected).toBe(false);
@@ -285,10 +376,14 @@ describe("Evidence Upload API Endpoint", () => {
       "file",
       new File([identicalFileBytes], "bill1_copy.pdf", { type: "application/pdf" }),
     );
-    const resSame = await app.request(`/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`, {
-      method: "POST",
-      body: fdSame,
-    });
+    const resSame = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`,
+      {
+        method: "POST",
+        body: fdSame,
+      },
+    );
     expect(resSame.status).toBe(201);
     const dataSame = (await resSame.json()) as StoredEvidence;
     expect(dataSame.duplicateDetected).toBe(false);
@@ -297,10 +392,14 @@ describe("Evidence Upload API Endpoint", () => {
     // Upload identical file to a DIFFERENT expense within the same fund
     const fd2 = new FormData();
     fd2.append("file", new File([identicalFileBytes], "bill2.pdf", { type: "application/pdf" }));
-    const res2 = await app.request(`/v1/funds/${fundId}/expenses/${EXPENSE_ID_2}/evidence`, {
-      method: "POST",
-      body: fd2,
-    });
+    const res2 = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_2}/evidence`,
+      {
+        method: "POST",
+        body: fd2,
+      },
+    );
     expect(res2.status).toBe(201);
     const data2 = (await res2.json()) as StoredEvidence;
     expect(data2.duplicateDetected).toBe(true);
@@ -320,19 +419,27 @@ describe("Evidence Upload API Endpoint", () => {
     // Upload in Fund A
     const fdA = new FormData();
     fdA.append("file", new File([identicalBytes], "bill_a.pdf", { type: "application/pdf" }));
-    const resA = await app.request(`/v1/funds/${fundA}/expenses/${EXPENSE_ID_1}/evidence`, {
-      method: "POST",
-      body: fdA,
-    });
+    const resA = await evidenceRequest(
+      app,
+      `/v1/funds/${fundA}/expenses/${EXPENSE_ID_1}/evidence`,
+      {
+        method: "POST",
+        body: fdA,
+      },
+    );
     expect(resA.status).toBe(201);
 
     // Upload same identical bytes in Fund B - MUST NOT be flagged as duplicate, and MUST NOT reveal Fund A expense
     const fdB = new FormData();
     fdB.append("file", new File([identicalBytes], "bill_b.pdf", { type: "application/pdf" }));
-    const resB = await app.request(`/v1/funds/${fundB}/expenses/${EXPENSE_ID_2}/evidence`, {
-      method: "POST",
-      body: fdB,
-    });
+    const resB = await evidenceRequest(
+      app,
+      `/v1/funds/${fundB}/expenses/${EXPENSE_ID_2}/evidence`,
+      {
+        method: "POST",
+        body: fdB,
+      },
+    );
     expect(resB.status).toBe(201);
     const dataB = (await resB.json()) as StoredEvidence;
     expect(dataB.duplicateDetected).toBe(false);
@@ -353,10 +460,14 @@ describe("Evidence Upload API Endpoint", () => {
     const fd = new FormData();
     fd.append("file", new File([VALID_PDF_BYTES], "event_bill.pdf", { type: "application/pdf" }));
 
-    const res = await app.request(`/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`, {
-      method: "POST",
-      body: fd,
-    });
+    const res = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`,
+      {
+        method: "POST",
+        body: fd,
+      },
+    );
     expect(res.status).toBe(201);
     const body = (await res.json()) as StoredEvidence;
 
@@ -373,6 +484,12 @@ describe("Evidence Upload API Endpoint", () => {
     expect(event.payload.expense_id).toBe(EXPENSE_ID_1);
     expect(event.payload.evidence_id).toBe(body.evidenceId);
     expect(event.payload.content_sha256).toBe(body.fileSha256);
+    expect(Object.keys(event.payload).sort()).toEqual([
+      "content_sha256",
+      "evidence_id",
+      "expense_id",
+    ]);
+    expect(JSON.stringify(event.payload)).not.toContain("event_bill.pdf");
   });
 
   it("verifies cryptographic integrity check job against stored bytes and detects tampering", async () => {
@@ -383,10 +500,14 @@ describe("Evidence Upload API Endpoint", () => {
     const fd = new FormData();
     fd.append("file", new File([VALID_PDF_BYTES], "audit.pdf", { type: "application/pdf" }));
 
-    const res = await app.request(`/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`, {
-      method: "POST",
-      body: fd,
-    });
+    const res = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`,
+      {
+        method: "POST",
+        body: fd,
+      },
+    );
     expect(res.status).toBe(201);
 
     // Fetch the stored evidence record from the system evidence store
@@ -409,6 +530,13 @@ describe("Evidence Upload API Endpoint", () => {
 
     // Tamper with the stored bytes in durable storage
     storageAdapter.simulateTamper(storedEvidence.objectKey, new Uint8Array([0x00, 0x00, 0x00]));
+
+    const readAfterTamper = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`,
+    );
+    expect(readAfterTamper.status).toBe(500);
+    expect(await readAfterTamper.json()).toMatchObject({ error: { code: "internal" } });
 
     // Integrity check must now detect tampering
     const tamperedCheck = await checkEvidenceIntegrity(storedEvidence, storageAdapter);
@@ -435,16 +563,19 @@ describe("Evidence Upload API Endpoint", () => {
     fd2.append("file", new File([VALID_PNG_BYTES], "part2.png", { type: "image/png" }));
     fd2.append("vendorName", "Merchant B");
 
-    await app.request(`/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`, {
+    await evidenceRequest(app, `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`, {
       method: "POST",
       body: fd1,
     });
-    await app.request(`/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`, {
+    await evidenceRequest(app, `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`, {
       method: "POST",
       body: fd2,
     });
 
-    const getRes = await app.request(`/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`);
+    const getRes = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`,
+    );
     expect(getRes.status).toBe(200);
     const list = (await getRes.json()) as { evidence: StoredEvidence[] };
     expect(list.evidence).toHaveLength(2);
@@ -466,10 +597,14 @@ describe("Evidence Upload API Endpoint", () => {
     fd.append("gstin", "27AAPFU0939F1ZV");
     fd.append("invoiceNumber", "CONFIDENTIAL-INV-99");
 
-    const res = await app.request(`/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`, {
-      method: "POST",
-      body: fd,
-    });
+    const res = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`,
+      {
+        method: "POST",
+        body: fd,
+      },
+    );
     expect(res.status).toBe(201);
 
     // Verify all logger events produced

@@ -28,6 +28,10 @@ visibility and redaction rules. Until then, production needs an explicit policy.
 All authenticated routes reject requests until a principal is explicitly injected.
 The bearer security scheme reserves the contract for YEN-22; it does not authenticate tokens today.
 
+## Evidence uploads
+
+No real malware scanner is integrated. The default scanner rejects every upload until a real scanner adapter is configured; the EICAR matching adapter exists only as a test double and does not provide malware protection.
+
 ## Wire money
 
 Every money field is a **canonical nonnegative decimal string of integer paise**.

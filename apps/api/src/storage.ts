@@ -36,11 +36,28 @@ export function buildOpaqueEvidenceKey(
   evidenceId: string,
   nonce: string = crypto.randomBytes(16).toString("hex"),
 ): string {
-  // Disallow path traversal or non-canonical characters
-  if (!/^[0-9a-f-]{36}$/.test(fundId) || !/^[0-9a-f-]{36}$/.test(expenseId)) {
-    throw new Error("Invalid fundId or expenseId for storage key construction");
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  if (!uuid.test(fundId) || !uuid.test(expenseId) || !uuid.test(evidenceId)) {
+    throw new Error("Invalid identifiers for evidence storage key construction");
   }
+  if (!/^[a-f0-9]{32}$/.test(nonce)) throw new Error("Invalid storage key nonce");
   return `funds/${fundId}/expenses/${expenseId}/evidence/${evidenceId}/${nonce}`;
+}
+
+export function sanitizeEvidenceFilename(filename: string): string {
+  const basename = filename.normalize("NFKC").replaceAll("\\", "/").split("/").at(-1) ?? "";
+  const safe = basename
+    .split("")
+    .filter((character) => {
+      const code = character.charCodeAt(0);
+      return !(code < 32 || (code >= 127 && code <= 159));
+    })
+    .join("")
+    .replace(/[^\p{L}\p{N}._ -]/gu, "_")
+    .replace(/^\.+/, "")
+    .trim()
+    .slice(0, 120);
+  return safe || "evidence";
 }
 
 /**

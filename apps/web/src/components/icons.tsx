@@ -103,3 +103,39 @@ export function LoaderIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function CameraIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M14 5H9l-2 3H4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-3l-3-3Z" />
+      <circle cx="12" cy="13" r="3" />
+    </Icon>
+  );
+}
+
+export function FileTextIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 2v6h6M8 13h8M8 17h8" />
+    </Icon>
+  );
+}
+
+export function ZoomInIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m16 16 5 5M10.5 7v7M7 10.5h7" />
+    </Icon>
+  );
+}
+
+export function UploadCloudIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M20 16.5a4.5 4.5 0 0 0-1.5-8.74A6.5 6.5 0 0 0 6 9.5 3.5 3.5 0 0 0 6.5 16.5H8" />
+      <path d="M12 20v-9m-3 3 3-3 3 3" />
+    </Icon>
+  );
+}

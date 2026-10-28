@@ -132,6 +132,8 @@ export const en = {
     title: "Bills and evidence",
     uploadTitle: "Upload bill or receipt",
     uploadDescription: "Attach a photo of the bill or a PDF document (up to 10 MB).",
+    malwareScannerNotice:
+      "No real malware scanner is integrated. Uploads are rejected until one is configured.",
     cameraButton: "Take photo",
     browseButton: "Choose file",
     vendorLabel: "Vendor name",

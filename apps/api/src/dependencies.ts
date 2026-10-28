@@ -13,7 +13,7 @@ import {
   type RateLimit,
   type RateLimitStore,
 } from "./stores.js";
-import { MemoryVirusScannerAdapter, type VirusScannerAdapter } from "./virus-scanner.js";
+import { UnconfiguredVirusScannerAdapter, type VirusScannerAdapter } from "./virus-scanner.js";
 
 export interface Principal {
   readonly id: string;
@@ -69,7 +69,7 @@ export function defaultDependencies(clock: () => number = Date.now): AppDependen
     waitlistBodyLimit: 8192,
     evidenceStore: new MemoryEvidenceStore(),
     storageAdapter: new MemoryStorageAdapter(),
-    virusScanner: new MemoryVirusScannerAdapter(),
+    virusScanner: new UnconfiguredVirusScannerAdapter(),
     clock,
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     waitlistMinResponseMs: 75,

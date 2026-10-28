@@ -9,6 +9,10 @@ export function isWaitlistRoute(path: string): boolean {
   return path.replace(/\/$/, "") === "/v1/waitlist";
 }
 
+export function isEvidenceRoute(path: string): boolean {
+  return /^\/v1\/funds\/[^/]+\/expenses\/[^/]+\/evidence\/?$/.test(path);
+}
+
 async function storeCall<T>(operation: () => Promise<T>): Promise<T> {
   try {
     return await operation();

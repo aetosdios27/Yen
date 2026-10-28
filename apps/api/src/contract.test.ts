@@ -6,6 +6,7 @@ import { createApp } from "./app.js";
 import { ApiError, errorCode, errorStatus } from "./errors.js";
 import { devPolicy } from "./policy.js";
 import { MemoryIdempotencyStore } from "./stores.js";
+import { MemoryVirusScannerAdapter } from "./test-utils/memory-virus-scanner.js";
 
 const responseSpec = z.object({
   headers: z.record(
@@ -80,6 +81,7 @@ it("validates every documented status and sent header against the committed Open
     clock: () => 0,
     logger: { log: () => undefined },
     policy: devPolicy,
+    virusScanner: new MemoryVirusScannerAdapter(),
   };
   const app = createApp(base);
   const post = {
@@ -226,6 +228,7 @@ it("validates every documented status and sent header against the committed Open
 
   const evidencePost = {
     method: "POST",
+    headers: { "Idempotency-Key": "evidence-contract-1" },
     body: evidenceFd,
   };
   const evidenceCreated = await app.request(evidenceUrl, evidencePost);
@@ -238,7 +241,11 @@ it("validates every documented status and sent header against the committed Open
 
   const badMimeFd = new FormData();
   badMimeFd.append("file", new File(["bad content"], "bad.txt", { type: "text/plain" }));
-  const badMimeRes = await app.request(evidenceUrl, { method: "POST", body: badMimeFd });
+  const badMimeRes = await app.request(evidenceUrl, {
+    method: "POST",
+    headers: { "Idempotency-Key": "evidence-contract-bad-mime" },
+    body: badMimeFd,
+  });
   expect(badMimeRes.status).toBe(400);
   await check(evidencePath, "post", badMimeRes);
 
@@ -258,7 +265,7 @@ it("validates every documented status and sent header against the committed Open
     "post",
     await app.request(
       `/v1/funds/00000000-0000-4000-8000-999999999999/expenses/${expenseId}/evidence`,
-      evidencePost,
+      { ...evidencePost, headers: { "Idempotency-Key": "evidence-invalid-fund" } },
     ),
   );
   await check(
@@ -274,7 +281,11 @@ it("validates every documented status and sent header against the committed Open
     "file",
     new File([new Uint8Array(11 * 1024 * 1024)], "oversized.pdf", { type: "application/pdf" }),
   );
-  const bigFileRes = await app.request(evidenceUrl, { method: "POST", body: bigFileFd });
+  const bigFileRes = await app.request(evidenceUrl, {
+    method: "POST",
+    headers: { "Idempotency-Key": "evidence-contract-big" },
+    body: bigFileFd,
+  });
   expect(bigFileRes.status).toBe(413);
   await check(evidencePath, "post", bigFileRes);
 

@@ -263,6 +263,7 @@ export interface StoredEvidence {
   readonly fileSha256: string;
   readonly mimeType: AllowedEvidenceMimeType;
   readonly fileSizeBytes: number;
+  readonly fileName: string;
   readonly objectKey?: string | undefined;
   readonly duplicateDetected: boolean;
   readonly isDuplicate: boolean;

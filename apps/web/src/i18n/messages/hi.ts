@@ -130,6 +130,8 @@ export const hi: Messages = {
     title: "बिल और प्रमाण",
     uploadTitle: "बिल या रसीद अपलोड करें",
     uploadDescription: "बिल की तस्वीर या पीडीएफ दस्तावेज़ संलग्न करें (10 MB तक)।",
+    malwareScannerNotice:
+      "अभी कोई वास्तविक मैलवेयर स्कैनर जुड़ा नहीं है। स्कैनर कॉन्फ़िगर होने तक अपलोड अस्वीकार होंगे।",
     cameraButton: "फ़ोटो लें",
     browseButton: "फ़ाइल चुनें",
     vendorLabel: "विक्रेता का नाम",

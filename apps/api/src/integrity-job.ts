@@ -35,6 +35,20 @@ export interface IntegrityJobSummary {
   }>;
 }
 
+export class EvidenceIntegrityError extends Error {
+  constructor() {
+    super("Stored evidence failed its SHA-256 integrity check");
+    this.name = "EvidenceIntegrityError";
+  }
+}
+
+export async function getVerifiedEvidenceObject(evidence: StoredEvidence, storage: StorageAdapter) {
+  const storageObj = await storage.getObject(evidence.objectKey ?? evidence.evidenceId);
+  const actualSha256 = crypto.createHash("sha256").update(storageObj.data).digest("hex");
+  if (actualSha256 !== evidence.fileSha256) throw new EvidenceIntegrityError();
+  return storageObj;
+}
+
 /**
  * Checks the cryptographic integrity of a stored evidence file by fetching its raw bytes
  * directly from durable storage, computing SHA-256 server-side, and verifying it against
