@@ -19,6 +19,111 @@ import { replayFundEvents } from "./replay.js";
 import { createTestFund, ledgerDatabaseSuite } from "./test/database.js";
 
 ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (sql) => {
+  it("uses the migrated fund event table and rejects a broken hash chain", async () => {
+    const migrations = await sql<{ name: string }[]>`
+      SELECT name FROM public.schema_migrations ORDER BY version
+    `;
+    expect(migrations.map(({ name }) => name)).toContain("0003_fund_events.sql");
+
+    const functionDefinition = await sql<{ definition: string }[]>`
+      SELECT pg_get_functiondef('public.yen_fund_lock_key(uuid)'::regprocedure) AS definition
+    `;
+    expect(functionDefinition[0]?.definition).toMatch(
+      /SET search_path TO ['"]?pg_catalog['"]?,\s*['"]?public['"]?,\s*['"]?pg_temp['"]?/i,
+    );
+
+    const fundId = await createTestFund(sql);
+    await sql.begin(async (tx) => {
+      await recordDonation(tx, {
+        fundId,
+        amount: paise(1000),
+        reference: "seed-broken-chain-test",
+      });
+    });
+
+    await expect(sql`
+      INSERT INTO public.fund_events (
+        fund_id, seq, version, type, actor, occurred_at, payload, prev_hash, hash, canonical_envelope
+      )
+      SELECT fund_id, seq + 1, version, type, actor, occurred_at, payload,
+        ${"0".repeat(64)}, ${"f".repeat(64)}, '{}'
+      FROM public.fund_events
+      WHERE fund_id = ${fundId}
+      ORDER BY seq DESC
+      LIMIT 1
+    `).rejects.toThrow(/prev_hash mismatch/i);
+  });
+
+  it("rolls back a newly created hold when event construction fails", async () => {
+    const fundId = await createTestFund(sql);
+    await sql.begin(async (tx) => {
+      await recordDonation(tx, {
+        fundId,
+        amount: paise(50000),
+        reference: "seed-atomic-hold-test",
+      });
+    });
+
+    await sql.begin(async (tx) => {
+      await expect(
+        reserveForExpense(tx, {
+          fundId,
+          amount: paise(20000),
+          occurredAt: "not-a-timestamp",
+        }),
+      ).rejects.toThrow(/Invalid event input/i);
+
+      const holds = await tx<{ count: number }[]>`
+        SELECT COUNT(*)::int AS count FROM konto_holds h
+        JOIN konto_accounts a ON a.id = h.account_id
+        WHERE a.name = ${`fund:${fundId}:bank`} AND h.status = 'PENDING'
+      `;
+      expect(holds[0]?.count).toBe(0);
+    });
+
+    expect(await available(sql, fundId)).toBe(50000n);
+  });
+
+  it("restores a released hold when its event cannot be constructed", async () => {
+    const fundId = await createTestFund(sql);
+    await sql.begin(async (tx) => {
+      await recordDonation(tx, {
+        fundId,
+        amount: paise(50000),
+        reference: "seed-atomic-release-test",
+      });
+    });
+
+    let holdId = "";
+    let expenseId = "";
+    await sql.begin(async (tx) => {
+      const result = await reserveForExpense(tx, {
+        fundId,
+        amount: paise(20000),
+      });
+      holdId = result.holdId;
+      expenseId = result.expenseId;
+    });
+
+    await sql.begin(async (tx) => {
+      await expect(
+        releaseExpense(tx, {
+          fundId,
+          holdId,
+          expenseId,
+          occurredAt: "not-a-timestamp",
+        }),
+      ).rejects.toThrow(/Invalid event input/i);
+
+      const holds = await tx<{ status: string }[]>`
+        SELECT status FROM konto_holds WHERE id = ${holdId}
+      `;
+      expect(holds[0]?.status).toBe("PENDING");
+    });
+
+    expect(await available(sql, fundId)).toBe(30000n);
+  });
+
   it("AC1: Killing the transaction between ledger write and event write leaves neither in DB", async () => {
     const fundId = await createTestFund(sql);
 

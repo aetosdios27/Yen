@@ -39,6 +39,23 @@ export function assertTransactionExecutor(tx: KontoTransactionExecutor): void {
   }
 }
 
+async function withTransactionSavepoint<T>(
+  tx: KontoTransactionExecutor,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const name = `yen_ledger_${uuidv7().replaceAll("-", "")}`;
+  await tx.unsafe(`SAVEPOINT ${name}`);
+  try {
+    const result = await operation();
+    await tx.unsafe(`RELEASE SAVEPOINT ${name}`);
+    return result;
+  } catch (error) {
+    await tx.unsafe(`ROLLBACK TO SAVEPOINT ${name}`);
+    await tx.unsafe(`RELEASE SAVEPOINT ${name}`);
+    throw error;
+  }
+}
+
 /**
  * Wraps a transaction executor so that Konto operations requiring a KontoQueryExecutor
  * (like hold()) execute within the caller's existing transaction without spawning a new one.
@@ -488,22 +505,61 @@ export async function reserveForExpense(
     }
   }
 
-  let holdId: string;
   try {
-    const holdRes = await hold(asTransactionQueryExecutor(tx), {
-      accountId: accounts.bankId,
-      recipientId: accounts.expensesId,
-      amount: amountBig,
-      idempotencyKey: input.idempotencyKey,
-      ttlMs: input.ttlMs,
-      metadata: {
-        fundId: input.fundId,
+    return await withTransactionSavepoint(tx, async () => {
+      const holdRes = await hold(asTransactionQueryExecutor(tx), {
+        accountId: accounts.bankId,
+        recipientId: accounts.expensesId,
+        amount: amountBig,
+        idempotencyKey: input.idempotencyKey,
+        ttlMs: input.ttlMs,
+        metadata: {
+          fundId: input.fundId,
+          expenseId,
+          description: input.description ?? "",
+          approverId: input.approverId ?? null,
+        },
+      });
+      const holdId = holdRes.holdId;
+
+      const time1 = input.occurredAt ?? nowUtcIso();
+      const submittedEvent = await appendFundEventInTx(
+        tx,
+        input.fundId,
+        toEventInput({
+          fund_id: input.fundId,
+          type: "expense.submitted",
+          actor,
+          occurred_at: time1,
+          payload: {
+            expense_id: expenseId,
+            amount_paise: Number(amountBig),
+          },
+        }),
+      );
+
+      const time2 = nowUtcIso(time1);
+      const approvedEvent = await appendFundEventInTx(
+        tx,
+        input.fundId,
+        toEventInput({
+          fund_id: input.fundId,
+          type: "expense.approved",
+          actor,
+          occurred_at: time2,
+          payload: {
+            expense_id: expenseId,
+          },
+        }),
+      );
+
+      return {
+        holdId,
         expenseId,
-        description: input.description ?? "",
-        approverId: input.approverId ?? null,
-      },
+        submittedEvent,
+        approvedEvent,
+      };
     });
-    holdId = holdRes.holdId;
   } catch (err) {
     if (err instanceof KontoDuplicateTransactionError && input.idempotencyKey) {
       const existingHolds = await tx<
@@ -572,44 +628,6 @@ export async function reserveForExpense(
     }
     throw err;
   }
-
-  const time1 = input.occurredAt ?? nowUtcIso();
-  const submittedEvent = await appendFundEventInTx(
-    tx,
-    input.fundId,
-    toEventInput({
-      fund_id: input.fundId,
-      type: "expense.submitted",
-      actor,
-      occurred_at: time1,
-      payload: {
-        expense_id: expenseId,
-        amount_paise: Number(amountBig),
-      },
-    }),
-  );
-
-  const time2 = nowUtcIso(time1);
-  const approvedEvent = await appendFundEventInTx(
-    tx,
-    input.fundId,
-    toEventInput({
-      fund_id: input.fundId,
-      type: "expense.approved",
-      actor,
-      occurred_at: time2,
-      payload: {
-        expense_id: expenseId,
-      },
-    }),
-  );
-
-  return {
-    holdId,
-    expenseId,
-    submittedEvent,
-    approvedEvent,
-  };
 }
 
 export interface SettleExpenseInput {
@@ -670,27 +688,30 @@ export async function settleExpense(
   const bankTransactionId = input.bankTransactionId ?? uuidv7();
   const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
 
-  const { journalId } = await commitHoldInTx(tx, input.holdId, {
-    fundId: input.fundId,
-    expenseId: input.expenseId,
-    receiptRef: input.receiptRef ?? null,
-  });
+  const { journalId, paidEvent } = await withTransactionSavepoint(tx, async () => {
+    const { journalId } = await commitHoldInTx(tx, input.holdId, {
+      fundId: input.fundId,
+      expenseId: input.expenseId,
+      receiptRef: input.receiptRef ?? null,
+    });
 
-  const time = input.occurredAt ?? nowUtcIso();
-  const paidEvent = await appendFundEventInTx(
-    tx,
-    input.fundId,
-    toEventInput({
-      fund_id: input.fundId,
-      type: "expense.paid",
-      actor,
-      occurred_at: time,
-      payload: {
-        expense_id: input.expenseId,
-        bank_transaction_id: bankTransactionId,
-      },
-    }),
-  );
+    const time = input.occurredAt ?? nowUtcIso();
+    const paidEvent = await appendFundEventInTx(
+      tx,
+      input.fundId,
+      toEventInput({
+        fund_id: input.fundId,
+        type: "expense.paid",
+        actor,
+        occurred_at: time,
+        payload: {
+          expense_id: input.expenseId,
+          bank_transaction_id: bankTransactionId,
+        },
+      }),
+    );
+    return { journalId, paidEvent };
+  });
 
   return {
     journalId,
@@ -753,23 +774,26 @@ export async function releaseExpense(
   }
 
   const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
-  const res = await rollbackHoldInTx(tx, input.holdId);
+  const { res, rejectedEvent } = await withTransactionSavepoint(tx, async () => {
+    const res = await rollbackHoldInTx(tx, input.holdId);
 
-  const time = input.occurredAt ?? nowUtcIso();
-  const rejectedEvent = await appendFundEventInTx(
-    tx,
-    input.fundId,
-    toEventInput({
-      fund_id: input.fundId,
-      type: "expense.rejected",
-      actor,
-      occurred_at: time,
-      payload: {
-        expense_id: input.expenseId,
-        reason: input.reason ?? "policy",
-      },
-    }),
-  );
+    const time = input.occurredAt ?? nowUtcIso();
+    const rejectedEvent = await appendFundEventInTx(
+      tx,
+      input.fundId,
+      toEventInput({
+        fund_id: input.fundId,
+        type: "expense.rejected",
+        actor,
+        occurred_at: time,
+        payload: {
+          expense_id: input.expenseId,
+          reason: input.reason ?? "policy",
+        },
+      }),
+    );
+    return { res, rejectedEvent };
+  });
 
   return {
     success: res.success,
@@ -831,22 +855,25 @@ export async function expireExpense(
   }
 
   const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
-  const res = await rollbackHoldInTx(tx, input.holdId);
+  const { res, expiredEvent } = await withTransactionSavepoint(tx, async () => {
+    const res = await rollbackHoldInTx(tx, input.holdId);
 
-  const time = input.occurredAt ?? nowUtcIso();
-  const expiredEvent = await appendFundEventInTx(
-    tx,
-    input.fundId,
-    toEventInput({
-      fund_id: input.fundId,
-      type: "expense.expired",
-      actor,
-      occurred_at: time,
-      payload: {
-        expense_id: input.expenseId,
-      },
-    }),
-  );
+    const time = input.occurredAt ?? nowUtcIso();
+    const expiredEvent = await appendFundEventInTx(
+      tx,
+      input.fundId,
+      toEventInput({
+        fund_id: input.fundId,
+        type: "expense.expired",
+        actor,
+        occurred_at: time,
+        payload: {
+          expense_id: input.expenseId,
+        },
+      }),
+    );
+    return { res, expiredEvent };
+  });
 
   return {
     success: res.success,
