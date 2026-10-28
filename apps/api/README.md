@@ -125,7 +125,9 @@ phone across channel changes in a five-minute window (or the configured OTP expi
 OTP hashes use the server-side `OTP_HASH_KEY`, which must be at least 32 characters
 in production. Losing or rotating the key invalidates outstanding codes. Session
 tokens are random opaque values; storage keeps only their SHA-256 hashes, and rotation
-preserves the original absolute expiry.
+preserves the original absolute expiry. The production entrypoint fails closed while
+no concrete WhatsApp/SMS adapter is configured; the in-memory delivery stub is limited
+to development and tests.
 
 ## Rate limits and logs
 

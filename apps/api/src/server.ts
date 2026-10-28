@@ -2,7 +2,7 @@ import { serve } from "@hono/node-server";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import { createSql } from "@yen/db";
 import { createApp } from "./app.js";
-import { PostgresAuthStore } from "./auth/index.js";
+import { createOtpDeliveryProvider, PostgresAuthStore } from "./auth/index.js";
 import { clientIp } from "./client-ip.js";
 import { rateLimits } from "./config.js";
 import { createDatabaseReady } from "./database-ready.js";
@@ -49,6 +49,7 @@ serve({
       ),
     rateLimits: rateLimits(env),
     otpHashKey: env.OTP_HASH_KEY ?? "development-only-otp-hash-key-change-me",
+    otpDeliveryProvider: createOtpDeliveryProvider(env.NODE_ENV),
     rateLimitStore: new MemoryRateLimitStore({ maxEntries: env.RATE_LIMIT_MAX_KEYS }),
   }).fetch,
   port: env.PORT,

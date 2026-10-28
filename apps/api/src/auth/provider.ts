@@ -19,6 +19,25 @@ export interface OtpDeliveryProvider {
   sendOtp(request: SendOtpRequest): Promise<SendOtpResult>;
 }
 
+export class UnconfiguredOtpDeliveryProvider implements OtpDeliveryProvider {
+  async sendOtp(request: SendOtpRequest): Promise<SendOtpResult> {
+    return {
+      success: false,
+      channel: request.preferredChannel ?? "whatsapp",
+      error: "OTP delivery provider is not configured",
+    };
+  }
+}
+
+export function createOtpDeliveryProvider(
+  environment: "development" | "test" | "production",
+  clock: () => number = Date.now,
+): OtpDeliveryProvider {
+  return environment === "production"
+    ? new UnconfiguredOtpDeliveryProvider()
+    : new DevStubOtpDeliveryProvider(clock);
+}
+
 export interface SentOtpRecord {
   readonly phone: PhoneE164;
   readonly code: string;

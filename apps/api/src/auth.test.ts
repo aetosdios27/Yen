@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as z from "zod";
 import { createApp } from "./app.js";
 import {
+  createOtpDeliveryProvider,
   DevStubOtpDeliveryProvider,
   generateOtpCode,
   generateSalt,
@@ -13,6 +14,12 @@ import {
   parseDeviceInfo,
   verifyOtp,
 } from "./auth/index.js";
+import {
+  listSessionsResponse,
+  rotateSessionResponse,
+  sendOtpResponse,
+  verifyOtpResponse,
+} from "./contract.js";
 import type { LogEntry } from "./logging.js";
 import { devPolicy } from "./policy.js";
 
@@ -21,12 +28,12 @@ if (!parsedTestPhone) throw new Error("Invalid test phone");
 const testPhone = parsedTestPhone;
 const otpHashKey = "test-only-otp-hash-key-with-at-least-32-bytes";
 
-import {
-  listSessionsResponse,
-  rotateSessionResponse,
-  sendOtpResponse,
-  verifyOtpResponse,
-} from "./contract.js";
+it("does not report fake OTP delivery as successful in production", async () => {
+  const provider = createOtpDeliveryProvider("production");
+  await expect(
+    provider.sendOtp({ phone: testPhone, code: "123456", preferredChannel: "sms" }),
+  ).resolves.toMatchObject({ success: false, channel: "sms" });
+});
 
 const errorResponseSchema = z.object({
   error: z.object({
@@ -221,7 +228,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     expect(setCookie).toContain("SameSite=Lax");
   });
 
-  it("supports SMS channel fallback when requested", async () => {
+  it("supports the selected SMS delivery channel", async () => {
     const { app, otpDeliveryProvider } = createTestSetup();
 
     const sendRes = await app.request("/v1/auth/otp/send", {
@@ -235,6 +242,18 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
 
     const delivery = getDelivery(otpDeliveryProvider);
     expect(delivery.channel).toBe("sms");
+  });
+
+  it("requires an explicit delivery channel", async () => {
+    const { app, otpDeliveryProvider } = createTestSetup();
+    const response = await app.request("/v1/auth/otp/send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210" }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(otpDeliveryProvider.getDeliveries()).toHaveLength(0);
   });
 
   it("does not persist a challenge when a provider silently switches channels", async () => {
