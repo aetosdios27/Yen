@@ -123,7 +123,7 @@ Each README claim that has a row carries a `<!-- claim: CLAIM-ID -->` marker. Th
 - **Mechanism:** `contracts/src/RootRegistry.sol` `publishRoot` accepts only a `bytes32` root. `packages/eventlog/src/model.ts` `parseEvent` rejects unknown payload fields and raw user IDs.
 - **Test:** `packages/eventlog/src/eventlog.test.ts` "rejects a raw user UUID as actor and unversioned payload additions"
 - **Reference:** `dpdp-act`, `ico-pseudonymisation`
-- **Missing:** No chain writer exists (CLAIM-10), so nothing is published yet. Payload schemas are provisional (packages/eventlog/README.md:9-36). No test scans a published artifact for personal data. Pseudonymisation alone does not make data anonymous. Real names, 9-digit private Yen IDs, and phone numbers live in erasable tables outside the log (YEN-46, YEN-70). Pseudonyms are strictly per person per fund to prevent cross-fund correlation.
+- **Missing:** No chain writer exists (CLAIM-10), so nothing is published yet. Payload schemas are provisional (packages/eventlog/README.md:9-36). No test scans a published artifact for personal data. Pseudonymisation alone does not make data anonymous. Real names and phone numbers are stored outside the log. Per-fund pseudonyms (#28) and private 9-digit Yen ID storage (#30) are planned protections in separate, unmerged PRs (YEN-46, YEN-70); this branch does not provide them.
 
 ### CLAIM-12 Spending needs the configured approvals
 
@@ -301,10 +301,10 @@ Each README claim that has a row carries a `<!-- claim: CLAIM-ID -->` marker. Th
 - **Status:** partial
 - **Wording:** "Names, phone numbers, VPAs, free-form notes, and raw evidence are not accepted."
 - **Where:** packages/eventlog/README.md:9
-- **Mechanism:** `packages/eventlog/src/model.ts` `parseEvent` rejects raw user UUIDs and unversioned payload fields. Private 9-digit Yen ID with check digit lives outside logs and public pages (YEN-70).
+- **Mechanism:** `packages/eventlog/src/model.ts` `parseEvent` rejects raw user UUIDs and unversioned payload fields. Private 9-digit Yen ID storage and exclusion from logs and public pages are planned under YEN-70 (#30, unmerged).
 - **Test:** `packages/eventlog/src/eventlog.test.ts` "rejects a raw user UUID as actor and unversioned payload additions"
 - **Reference:** `dpdp-act`, `dpdpa-transcription`
-- **Missing:** The parse check covers the eventlog package only. Real names, private 9-digit Yen IDs, and phone numbers are stored in application tables; UI donor visibility options (full name, initials, "a donor") and redaction tiers are unbuilt (YEN-31, YEN-70). No test scans receipts or API responses to verify absence of Yen IDs and real names. Named tests to be written: `apps/api/src/routes.test.ts` "never exposes 9-digit Yen ID in public endpoints, receipts, or event streams" and `apps/api/src/routes.test.ts` "redacts donor name according to selected visibility preference".
+- **Missing:** The parse check covers the eventlog package only. Real names and phone numbers are stored in application tables; private 9-digit Yen ID storage is planned in separate, unmerged PR #30; UI donor visibility options (full name, initials, "a donor") and redaction tiers are unbuilt (YEN-31, YEN-70). No test scans receipts or API responses to verify absence of Yen IDs and real names. Named tests to be written: `apps/api/src/routes.test.ts` "never exposes 9-digit Yen ID in public endpoints, receipts, or event streams" and `apps/api/src/routes.test.ts` "redacts donor name according to selected visibility preference".
 
 ### CLAIM-30 Money actions require server-verified 6-digit PIN with lockout and cooling-off
 
