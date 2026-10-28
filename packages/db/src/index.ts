@@ -2,6 +2,8 @@ export { createSql, type Sql } from "./client.js";
 export { parseDatabaseUrl } from "./env.js";
 export { migrate } from "./migrate.js";
 export {
+  type AuthOtpRow,
+  authOtpRowSchema,
   type FundRow,
   fundRowSchema,
   type IdempotencyKeyRow,
@@ -12,6 +14,8 @@ export {
   orgRowSchema,
   type PseudonymRow,
   pseudonymRowSchema,
+  type SessionRow,
+  sessionRowSchema,
   type UserRow,
   userRowSchema,
 } from "./rows.js";
