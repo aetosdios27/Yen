@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import { createSql } from "@yen/db";
 import { createApp } from "./app.js";
+import { PostgresAuthStore } from "./auth/index.js";
 import { clientIp } from "./client-ip.js";
 import { rateLimits } from "./config.js";
 import { createDatabaseReady } from "./database-ready.js";
@@ -30,7 +31,9 @@ if (!(await readiness())) {
 
 serve({
   fetch: createApp({
-    ...(sql ? { waitlistStore: new PostgresWaitlistStore(sql) } : {}),
+    ...(sql
+      ? { waitlistStore: new PostgresWaitlistStore(sql), authStore: new PostgresAuthStore(sql) }
+      : {}),
     waitlistLimit: {
       capacity: env.WAITLIST_RATE_LIMIT_CAPACITY,
       refillMs: env.WAITLIST_RATE_LIMIT_REFILL_MS,
