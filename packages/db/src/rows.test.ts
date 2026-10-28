@@ -89,4 +89,85 @@ describe("row parsing at the database boundary", () => {
       }).success,
     ).toBe(false);
   });
+
+  it("validates notification outbox and preference rows", async () => {
+    const {
+      notificationOutboxRowSchema,
+      userNotificationPreferencesRowSchema,
+      fundNotificationDailyUsageRowSchema,
+      notificationDeadLetterRowSchema,
+    } = await import("./rows.js");
+
+    const validOutbox = {
+      id,
+      fund_id: id,
+      user_id: id,
+      event_id: "evt-123",
+      idempotency_key: "notify:f1:u1:test",
+      template_id: "approval_needed",
+      template_data: { expense_id: id, amount_paise: 5000 },
+      preferred_channel: "whatsapp",
+      status: "pending",
+      attempts: 0,
+      max_attempts: 3,
+      next_attempt_at: now,
+      lease_expires_at: null,
+      delivered_at: null,
+      channel_used: null,
+      cost_paise: 0n,
+      last_error: null,
+      created_at: now,
+      updated_at: now,
+    };
+    expect(notificationOutboxRowSchema.safeParse(validOutbox).success).toBe(true);
+    expect(
+      notificationOutboxRowSchema.safeParse({ ...validOutbox, status: "unknown" }).success,
+    ).toBe(false);
+    expect(
+      notificationOutboxRowSchema.safeParse({ ...validOutbox, template_id: "invalid" }).success,
+    ).toBe(false);
+
+    const validPrefs = {
+      user_id: id,
+      whatsapp_enabled: true,
+      sms_enabled: true,
+      email_enabled: false,
+      opted_out: false,
+      locale: "hi",
+      quiet_hours_enabled: true,
+      quiet_hours_start: "22:00",
+      quiet_hours_end: "07:00",
+      timezone: "Asia/Kolkata",
+      updated_at: now,
+    };
+    expect(userNotificationPreferencesRowSchema.safeParse(validPrefs).success).toBe(true);
+    expect(
+      userNotificationPreferencesRowSchema.safeParse({ ...validPrefs, locale: "fr" }).success,
+    ).toBe(false);
+
+    const validUsage = {
+      fund_id: id,
+      usage_date: "2026-10-28",
+      sent_count: 5,
+      total_cost_paise: 150n,
+      cap_count: 100,
+      updated_at: now,
+    };
+    expect(fundNotificationDailyUsageRowSchema.safeParse(validUsage).success).toBe(true);
+
+    const validDeadLetter = {
+      id,
+      notification_id: id,
+      fund_id: id,
+      user_id: id,
+      idempotency_key: "notify:key",
+      template_id: "approval_needed",
+      template_data: {},
+      attempts: 3,
+      last_error: "Provider failed",
+      cost_paise: 0n,
+      dead_lettered_at: now,
+    };
+    expect(notificationDeadLetterRowSchema.safeParse(validDeadLetter).success).toBe(true);
+  });
 });
