@@ -20,6 +20,41 @@ import { replayFundEvents } from "./replay.js";
 import { ledgerDatabaseSuite } from "./test/database.js";
 
 ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (sql) => {
+  it("uses the migrated fund event table and rejects a broken hash chain", async () => {
+    const migrations = await sql<{ name: string }[]>`
+      SELECT name FROM public.schema_migrations ORDER BY version
+    `;
+    expect(migrations.map(({ name }) => name)).toContain("0003_fund_events.sql");
+
+    const functionDefinition = await sql<{ definition: string }[]>`
+      SELECT pg_get_functiondef('public.yen_fund_lock_key(uuid)'::regprocedure) AS definition
+    `;
+    expect(functionDefinition[0]?.definition).toMatch(
+      /SET search_path TO pg_catalog, public, pg_temp/i,
+    );
+
+    const fundId = uuidv7();
+    await sql.begin(async (tx) => {
+      await recordDonation(tx, {
+        fundId,
+        amount: paise(1000),
+        reference: "seed-broken-chain-test",
+      });
+    });
+
+    await expect(sql`
+      INSERT INTO public.fund_events (
+        fund_id, seq, version, type, actor, occurred_at, payload, prev_hash, hash, canonical_envelope
+      )
+      SELECT fund_id, seq + 1, version, type, actor, occurred_at, payload,
+        ${"0".repeat(64)}, ${"f".repeat(64)}, '{}'
+      FROM public.fund_events
+      WHERE fund_id = ${fundId}
+      ORDER BY seq DESC
+      LIMIT 1
+    `).rejects.toThrow(/prev_hash mismatch/i);
+  });
+
   it("rolls back a newly created hold when event construction fails", async () => {
     const fundId = uuidv7();
     await sql.begin(async (tx) => {
