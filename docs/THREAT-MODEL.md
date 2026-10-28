@@ -52,7 +52,7 @@ No threat in this model is fully mitigated today. Most money paths have no code.
 | X8  | SIM swap or recycled phone number inherits roles      | S, E   | high     | Accounts belong to account, not phone; re-auth unbuilt                                               | planned |
 | X9  | PIN online brute force                                | S      | high     | 5-attempt lockout for 30m, 10-attempt support reset; unbuilt                                         | planned |
 | X10 | PIN offline cracking after database leak              | I, S   | high     | Keyed hash with external secret pepper outside DB; unbuilt                                           | planned |
-| X11 | PIN phishing on lookalike site                        | S      | high     | Reusable PIN can be phished; only action proofs expire and are single-use; device-signing planned                                          | planned |
+| X11 | PIN phishing on lookalike site                        | S      | high     | Reusable PIN can be phished; only action proofs expire and are single-use; device-signing planned    | planned |
 | X12 | Owner-vouched invite interception                     | S, E   | medium   | Vouched in-person invite with short expiry; unbuilt                                                  | planned |
 
 Counts. High: 20 (D1, D4, E1, E3, E4, P1, P2, R1, R2, R4, V1, V2, V3, X4, X5, X7, X8, X9, X10, X11). Medium: 13 (D2, D3, E2, E5, P3, R3, V4, V5, V6, X1, X2, X3, X12). Low: 1 (X6).
