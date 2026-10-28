@@ -43,7 +43,7 @@ databaseSuite("migration runner", (sql, url) => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it("creates exactly the six app tables and records the file checksum", async () => {
+  it("creates the app tables and records the file checksums", async () => {
     await migrate(sql);
     const tables = z
       .array(z.object({ tablename: z.string() }))
@@ -58,14 +58,22 @@ databaseSuite("migration runner", (sql, url) => {
       "pseudonyms",
       "schema_migrations",
       "users",
+      "waitlist_entries",
     ]);
     const source = await readFile(join(defaultDir, "0001_app_tables.sql"));
-    const applied = records.parse(await sql`SELECT * FROM schema_migrations`);
+    const waitlistSource = await readFile(join(defaultDir, "0002_waitlist.sql"));
+    const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
         version: 1,
         name: "0001_app_tables.sql",
         checksum: createHash("sha256").update(source).digest("hex"),
+        applied_at: expect.any(Date),
+      },
+      {
+        version: 2,
+        name: "0002_waitlist.sql",
+        checksum: createHash("sha256").update(waitlistSource).digest("hex"),
         applied_at: expect.any(Date),
       },
     ]);
@@ -101,7 +109,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(1);
+    expect(before).toHaveLength(2);
   });
 
   it("rejects an edited applied file and names it", async () => {
@@ -514,7 +522,7 @@ databaseSuite("migration runner", (sql, url) => {
 
   it("rejects an out-of-order applied history", async () => {
     await migrate(sql);
-    await sql`UPDATE schema_migrations SET version = 2`;
+    await sql`UPDATE schema_migrations SET version = 3 WHERE version = 1`;
     await expect(migrate(sql)).rejects.toThrow("Missing or out-of-order applied migration");
   });
 

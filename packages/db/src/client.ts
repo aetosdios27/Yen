@@ -1,11 +1,18 @@
 import postgres from "postgres";
 
-export function createSql(url: string) {
+export function createSql(
+  url: string,
+  options: {
+    readonly max?: number;
+    readonly connectTimeout?: number;
+    readonly idleTimeout?: number;
+  } = {},
+) {
   return postgres(url, {
-    max: 10,
+    max: options.max ?? 10,
     prepare: true,
-    idle_timeout: 20,
-    connect_timeout: 10,
+    idle_timeout: options.idleTimeout ?? 20,
+    connect_timeout: options.connectTimeout ?? 10,
     onnotice: () => {},
     connection: { TimeZone: "UTC" },
     types: { bigint: postgres.BigInt },

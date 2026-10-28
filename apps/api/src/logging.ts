@@ -13,7 +13,14 @@ const failureLog = z.object({
   requestId: z.string().uuid(),
   method: requestLog.shape.method,
   route: z.string(),
-  errorKind: z.enum(["readiness", "store", "handler", "validation", "unknown"]),
+  errorKind: z.enum([
+    "readiness",
+    "store",
+    "handler",
+    "validation",
+    "unknown",
+    "rate_limit_store_full",
+  ]),
   errorName: z.string(),
 });
 
