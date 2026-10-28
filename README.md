@@ -112,29 +112,68 @@ contracts/        Placeholder; RootRegistry is planned in YEN-16
 
 Money is always **integer paise** with the branded `Paise` type, never floats. <!-- claim: CLAIM-16 -->
 
-## Getting started
+## Getting started: Zero to Dev in 5 minutes
+
+Get a complete local development environment running with containers, migrations, verified demo data, and live services in one command.
+
+### Prerequisites
+
+- **Node.js**: >= 24 (run `nvm use`, see `.nvmrc`)
+- **Package Manager**: `pnpm` >= 12 (`corepack enable pnpm`)
+- **Containers**: Docker Compose v2 or Podman Compose
+
+### Quickstart (One Command)
 
 ```sh
+# 1. Clone repository and install dependencies
+git clone https://github.com/aetosdios27/Yen.git && cd Yen
 nvm use                # Node 24.21.0 (see .nvmrc)
 pnpm install
-pnpm verify            # biome ci + typecheck + test + build
+
+# 2. Copy documented environment variables
+cp .env.example .env
+
+# 3. Boot everything in one command
+pnpm dev:full
 ```
 
-To run the apps locally, first run `pnpm verify` above to build the API, then copy the example environment files:
+`pnpm dev:full` will:
+1. Start PostgreSQL 16 (matching CI) and Redis via `docker-compose.yml` with healthchecks and persistent local volumes.
+2. Run database migrations forward (`pnpm db:migrate`).
+3. Seed the complete development dataset (`pnpm db:seed`):
+   - **Demo Organization**: IIT Delhi Robotics Club
+   - **Active Fund**: RoboCup 2026 Asia Fund with payee VPA (`iitd.robotics@sbi`) and UPI details
+   - **Users & Personas**: 1 treasurer, 2 approvers, and 3 donors with valid mock sessions
+   - **Expense Requests**: 3 realistic requests (1 approved with invoice evidence, 1 pending approval, 1 paid)
+   - **Double-Entry Ledger**: Initial verified balance (₹4,65,000) with double-entry zero-sum invariant
+   - **Append-Only Event Log**: 23 chained audit events verified by database triggers
+4. Boot the Next.js frontend (`http://localhost:3000`) and Hono API (`http://localhost:3001`) in parallel.
 
-```sh
-cp apps/api/.env.example apps/api/.env
-cp apps/web/.env.example apps/web/.env
-pnpm --filter @yen/api start  # API on port 3001
-```
+### Development Commands
 
-In a second terminal, start the web app on port 3000:
+| Command            | Description                                                      |
+| ------------------ | ---------------------------------------------------------------- |
+| `pnpm dev:full`    | Start containers, migrate, seed, and boot all dev servers        |
+| `pnpm dev`         | Start web and API dev servers with hot reloading                 |
+| `pnpm db:seed`     | Run `scripts/seed.ts` to idempotently seed the demo dataset      |
+| `pnpm db:reset`    | Tear down schema, re-run all migrations from scratch, and reseed |
+| `pnpm db:migrate`  | Run pending database migrations forward                          |
+| `pnpm docker:up`   | Spin up PostgreSQL 16 and Redis containers in background         |
+| `pnpm docker:down` | Stop running development containers                              |
+| `pnpm verify`      | Run Biome lint/format checks, typecheck, test suites, and build  |
 
-```sh
-pnpm --filter @yen/web dev
-```
+### Demo Personas and Mock Sessions
 
-The API requires `PORT`, and the web app requires an HTTP(S) `NEXT_PUBLIC_API_URL`. The example files provide local values. `pnpm format` auto-fixes formatting and safe lint issues.
+The seed script creates ready-to-use personas with valid mock sessions:
+
+| Persona        | Name            | Phone (E.164)   | Role        | Mock Session Token                 |
+| -------------- | --------------- | --------------- | ----------- | ---------------------------------- |
+| **Treasurer**  | Aarav Sharma    | `+919876543210` | `treasurer` | `yen_mock_session_treasurer_token` |
+| **Approver 1** | Priya Verma     | `+919876543211` | `approver`  | `yen_mock_session_approver1_token` |
+| **Approver 2** | Rohan Iyer      | `+919876543212` | `approver`  | `yen_mock_session_approver2_token` |
+| **Donor 1**    | Ananya Sen      | `+919876543213` | `member`    | `yen_mock_session_donor1_token`    |
+| **Donor 2**    | Vikram Malhotra | `+919876543214` | `member`    | `yen_mock_session_donor2_token`    |
+| **Donor 3**    | Sunita Rao      | `+919876543215` | `member`    | `yen_mock_session_donor3_token`    |
 
 The shared design system lives in `apps/web`; open `http://localhost:3000/design-system` for its 375 px review page. See [`apps/web/README.md`](apps/web/README.md) for tokens, components, language switching and accessibility checks.
 
