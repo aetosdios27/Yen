@@ -1,6 +1,12 @@
 export { AppShell } from "./app-shell";
 export { Button, type ButtonProps, type ButtonVariant } from "./button";
 export { EmptyState, type EmptyStateProps } from "./empty-state";
+export {
+  ExpenseTimeline,
+  type ExpenseTimelineApproval,
+  type ExpenseTimelineProps,
+  type ExpenseTimelineStatus,
+} from "./expense-timeline";
 export { Input, type InputProps } from "./input";
 export { InstallPrompt, type InstallPromptProps } from "./install-prompt";
 export { LocaleSwitcher, type LocaleSwitcherProps } from "./locale-switcher";
