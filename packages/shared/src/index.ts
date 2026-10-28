@@ -3,9 +3,12 @@ export {
   fundIdSchema,
   type OrgId,
   orgIdSchema,
+  type PseudonymId,
   parseFundId,
   parseOrgId,
+  parsePseudonymId,
   parseUserId,
+  pseudonymIdSchema,
   type UserId,
   userIdSchema,
 } from "./ids.js";

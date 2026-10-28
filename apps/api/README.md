@@ -208,3 +208,13 @@ Readiness uses a dedicated database connection, a two-second deadline and a
 server-side statement timeout. `READINESS_CACHE_MS` controls result caching
 (default 1,000 ms, range 0–60,000; 0 disables caching). Concurrent probes share
 one check.
+
+## Prior art
+
+- [AWS idempotent APIs](../../docs/REFERENCES.md#aws-idempotency) explain atomic coordination of a request identifier and mutations, which the current store does not provide.
+- [RFC 9457](../../docs/REFERENCES.md#rfc-9457) describes machine-readable errors; Yen uses a different envelope.
+- [RFC 6585](../../docs/REFERENCES.md#rfc-6585) defines 429 and describes Retry-After.
+- [Stripe idempotency](../../docs/REFERENCES.md#stripe-idempotency) motivates safe retries; Yen scopes keys to principals and hashes exact request bytes, and its in-memory store is not durable.
+- [Stripe rate limiters](../../docs/REFERENCES.md#stripe-rate-limiters) describes token buckets; Yen’s default buckets are per process.
+- [Square Money](../../docs/REFERENCES.md#square-money) uses minor units; Yen encodes paise as decimal strings to preserve large integers.
+- [WebAuthn Level 2](../../docs/REFERENCES.md#webauthn-2) is relevant to planned authentication, which the current bearer contract does not implement.
