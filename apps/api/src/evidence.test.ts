@@ -76,7 +76,12 @@ async function createTestFund(app: ReturnType<typeof createApp>) {
       "content-type": "application/json",
       "Idempotency-Key": `fund-${crypto.randomUUID()}`,
     },
-    body: JSON.stringify({ name: "Solar Initiative", targetPaise: "500000" }),
+    body: JSON.stringify({
+      name: "Solar Initiative",
+      targetPaise: "500000",
+      upiVpa: "solar@yenbank",
+      upiPayeeName: "Solar Initiative",
+    }),
   });
   expect(res.status).toBe(201);
   const fund = (await res.json()) as { id: string };

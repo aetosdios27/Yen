@@ -7,10 +7,12 @@ export const errorCode = z.enum([
   "not_found",
   "conflict",
   "idempotency_conflict",
+  "donation_utr_claimed",
   "rate_limited",
   "overloaded",
   "payload_too_large",
   "internal",
+  "gateway_timeout",
 ]);
 
 export const errorStatus = {
@@ -20,10 +22,12 @@ export const errorStatus = {
   not_found: 404,
   conflict: 409,
   idempotency_conflict: 409,
+  donation_utr_claimed: 409,
   rate_limited: 429,
   overloaded: 503,
   payload_too_large: 413,
   internal: 500,
+  gateway_timeout: 504,
 } as const satisfies Record<z.infer<typeof errorCode>, number>;
 
 export type ErrorCode = keyof typeof errorStatus;
@@ -35,10 +39,12 @@ const messages: Record<ErrorCode, string> = {
   not_found: "Resource not found",
   conflict: "Resource conflict",
   idempotency_conflict: "Idempotency key already used or in progress",
+  donation_utr_claimed: "This UPI reference is already recorded",
   rate_limited: "Rate limit exceeded",
   overloaded: "Service temporarily unavailable",
   payload_too_large: "Request body too large",
   internal: "Internal server error",
+  gateway_timeout: "Gateway timeout",
 };
 
 export const validationDetail = z.object({

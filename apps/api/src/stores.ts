@@ -35,7 +35,7 @@ type Completion = {
   readonly expiresAt: number;
 };
 
-interface IdempotencyOptions {
+export interface IdempotencyOptions {
   readonly clock?: () => number;
   readonly inProgressTtlMs?: number;
   readonly replayRetentionMs?: number;
@@ -175,13 +175,15 @@ export class MemoryRateLimitStore implements RateLimitStore {
         retryAfterSeconds: Math.min(86400, Math.max(1, Math.ceil((oldest - now) / 1000))),
       } as const;
     }
+    // A delayed caller can pass an earlier `now`; the bucket clock must never move backwards.
+    const effectiveNow = previous ? Math.max(now, previous.updatedAt) : now;
     const tokens = previous
       ? limit.expiresAt !== undefined
         ? previous.tokens
         : Math.min(
             limit.capacity,
             previous.tokens +
-              (Math.max(0, now - previous.updatedAt) * limit.capacity) / limit.refillMs,
+              (Math.max(0, effectiveNow - previous.updatedAt) * limit.capacity) / limit.refillMs,
           )
       : limit.capacity;
     if (previous) this.remove(previous);
@@ -190,9 +192,10 @@ export class MemoryRateLimitStore implements RateLimitStore {
       key,
       index: this.heap.length,
       tokens: remaining,
-      updatedAt: now,
+      updatedAt: effectiveNow,
       fullAt:
-        limit.expiresAt ?? now + ((limit.capacity - remaining) * limit.refillMs) / limit.capacity,
+        limit.expiresAt ??
+        effectiveNow + ((limit.capacity - remaining) * limit.refillMs) / limit.capacity,
     };
     this.buckets.set(key, bucket);
     this.heap.push(bucket);
@@ -254,6 +257,12 @@ export class MemoryRateLimitStore implements RateLimitStore {
   }
 }
 
+export {
+  type PostgresIdempotencyOptions,
+  PostgresIdempotencyStore,
+  type PostgresRateLimitOptions,
+  PostgresRateLimitStore,
+} from "./postgres-stores.js";
 export type AllowedEvidenceMimeType = "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
 
 export interface StoredEvidence {
