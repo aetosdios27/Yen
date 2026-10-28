@@ -65,7 +65,7 @@ jobs:
           pnpm --filter @yen/api-client generate:check
 
       - name: Governance guard
-        run: node --test .github/scripts/governance.test.mjs .github/scripts/references.test.mjs
+        run: node --test .github/scripts/governance.test.mjs .github/scripts/references.test.mjs .github/scripts/trust-claims.test.mjs
 
       - name: Foreign key index check
         run: pnpm --filter @yen/db check:fk-indexes
