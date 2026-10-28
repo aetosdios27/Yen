@@ -26,6 +26,13 @@ export interface SignedApproval {
   readonly approvedAt: string;
 }
 
+export type ApprovalProofVerifier = (
+  signature: PasskeySignatureData,
+  expense: Pick<ExpenseRequest, "id" | "fundId" | "amountPaise">,
+) => boolean;
+
+export const rejectUnverifiedApprovalProof: ApprovalProofVerifier = () => false;
+
 export interface ExpenseEvidence {
   readonly evidenceId: string;
   readonly contentSha256: string;

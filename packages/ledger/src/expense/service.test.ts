@@ -57,6 +57,7 @@ describe("expense transaction transition guards", () => {
             approvedAt: "2026-10-29T00:00:00.000Z",
           },
           policy,
+          verifyApprovalProof: () => false,
         }),
     ],
     [

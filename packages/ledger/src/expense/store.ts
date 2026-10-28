@@ -1,5 +1,6 @@
 import { addSignedApproval } from "./state-machine.js";
 import {
+  type ApprovalProofVerifier,
   ExpenseNotFoundError,
   type ExpenseRequest,
   type FundPolicy,
@@ -14,6 +15,7 @@ export interface ExpenseStore {
     expenseId: string,
     approval: SignedApproval,
     policy: FundPolicy,
+    verifyApprovalProof: ApprovalProofVerifier,
     nowUtc?: string,
   ): Promise<{ expense: ExpenseRequest; reachedQuorum: boolean }>;
 }
@@ -66,6 +68,7 @@ export class InMemoryExpenseStore implements ExpenseStore {
     expenseId: string,
     approval: SignedApproval,
     policy: FundPolicy,
+    verifyApprovalProof: ApprovalProofVerifier,
     nowUtc?: string,
   ): Promise<{ expense: ExpenseRequest; reachedQuorum: boolean }> {
     return this.acquireLock(expenseId, async () => {
@@ -73,7 +76,7 @@ export class InMemoryExpenseStore implements ExpenseStore {
       if (!current) {
         throw new ExpenseNotFoundError(expenseId);
       }
-      const res = addSignedApproval(current, approval, policy, nowUtc);
+      const res = addSignedApproval(current, approval, policy, verifyApprovalProof, nowUtc);
       this.items.set(expenseId, res.expense);
       return res;
     });

@@ -383,6 +383,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         expenseId,
         approval,
         defaultFundPolicy,
+        deps.approvalProofVerifier,
         now,
       );
       const updatedView = toExpenseView(res.expense);

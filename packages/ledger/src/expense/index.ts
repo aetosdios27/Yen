@@ -52,6 +52,7 @@ export {
 } from "./store.js";
 export {
   type AmountThreshold,
+  type ApprovalProofVerifier,
   DuplicateApprovalError,
   type ExpenseEvidence,
   ExpenseNotEditableError,
@@ -64,6 +65,7 @@ export {
   ObjectionWindowActiveError,
   type PasskeySignatureData,
   type PseudonymId,
+  rejectUnverifiedApprovalProof,
   SeparationOfDutiesError,
   type SignedApproval,
 } from "./types.js";

@@ -20,6 +20,8 @@ export function verifyPasskeyBinding(
   signatureData: PasskeySignatureData,
   expense: Pick<ExpenseRequest, "id" | "fundId" | "amountPaise">,
 ): boolean {
+  // This checks challenge binding only. It does not verify WebAuthn signatures or credentials and
+  // must only be used by tests until a real ApprovalProofVerifier is wired into the application.
   if (!signatureData.credentialId || !signatureData.signatureHex || !signatureData.clientDataJson) {
     return false;
   }

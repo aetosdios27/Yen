@@ -3,7 +3,7 @@ import { paise } from "@yen/shared";
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { findStaleExpenses, processStaleExpenses } from "./expiry-job.js";
-import { createMockPasskeyApproval } from "./passkey.js";
+import { createMockPasskeyApproval, verifyPasskeyBinding } from "./passkey.js";
 import {
   addSignedApproval,
   canTransition,
@@ -19,6 +19,7 @@ import {
 } from "./state-machine.js";
 import { InMemoryExpenseStore } from "./store.js";
 import {
+  type ApprovalProofVerifier,
   DuplicateApprovalError,
   ExpenseNotEditableError,
   type FundPolicy,
@@ -37,6 +38,7 @@ const DEFAULT_POLICY: FundPolicy = {
   objectionWindowHours: 0,
   autoExpireHours: 72,
 };
+const TEST_APPROVAL_PROOF_VERIFIER: ApprovalProofVerifier = verifyPasskeyBinding;
 
 describe("Expense Request State Machine", () => {
   it("completes full happy path lifecycle: draft -> submitted -> approved -> paid -> reconciled", () => {
@@ -75,7 +77,13 @@ describe("Expense Request State Machine", () => {
     // Approver 1 signs
     const t2 = "2026-10-28T10:10:00.000Z";
     const approval1 = createMockPasskeyApproval(APPROVER_1, submitted, t2);
-    const step1 = addSignedApproval(submitted, approval1, DEFAULT_POLICY, t2);
+    const step1 = addSignedApproval(
+      submitted,
+      approval1,
+      DEFAULT_POLICY,
+      TEST_APPROVAL_PROOF_VERIFIER,
+      t2,
+    );
     expect(step1.reachedQuorum).toBe(false);
     expect(step1.expense.status).toBe("submitted");
     expect(step1.expense.approvals).toHaveLength(1);
@@ -83,7 +91,13 @@ describe("Expense Request State Machine", () => {
     // Approver 2 signs: reaches quorum of 2!
     const t3 = "2026-10-28T10:15:00.000Z";
     const approval2 = createMockPasskeyApproval(APPROVER_2, step1.expense, t3);
-    const step2 = addSignedApproval(step1.expense, approval2, DEFAULT_POLICY, t3);
+    const step2 = addSignedApproval(
+      step1.expense,
+      approval2,
+      DEFAULT_POLICY,
+      TEST_APPROVAL_PROOF_VERIFIER,
+      t3,
+    );
     expect(step2.reachedQuorum).toBe(true);
     expect(step2.expense.status).toBe("approved");
     expect(step2.expense.approvedAt).toBe(t3);
@@ -164,9 +178,9 @@ describe("Expense Request State Machine", () => {
       submitted,
       "2026-10-28T10:00:00.000Z",
     );
-    expect(() => addSignedApproval(submitted, selfApproval, DEFAULT_POLICY)).toThrow(
-      SeparationOfDutiesError,
-    );
+    expect(() =>
+      addSignedApproval(submitted, selfApproval, DEFAULT_POLICY, TEST_APPROVAL_PROOF_VERIFIER),
+    ).toThrow(SeparationOfDutiesError);
   });
 
   it("rejects duplicate approval from the same approver", () => {
@@ -184,16 +198,26 @@ describe("Expense Request State Machine", () => {
     });
 
     const approval1 = createMockPasskeyApproval(APPROVER_1, submitted, "2026-10-28T10:00:00.000Z");
-    const step1 = addSignedApproval(submitted, approval1, DEFAULT_POLICY);
+    const step1 = addSignedApproval(
+      submitted,
+      approval1,
+      DEFAULT_POLICY,
+      TEST_APPROVAL_PROOF_VERIFIER,
+    );
 
     const duplicateApproval = createMockPasskeyApproval(
       APPROVER_1,
       step1.expense,
       "2026-10-28T10:01:00.000Z",
     );
-    expect(() => addSignedApproval(step1.expense, duplicateApproval, DEFAULT_POLICY)).toThrow(
-      DuplicateApprovalError,
-    );
+    expect(() =>
+      addSignedApproval(
+        step1.expense,
+        duplicateApproval,
+        DEFAULT_POLICY,
+        TEST_APPROVAL_PROOF_VERIFIER,
+      ),
+    ).toThrow(DuplicateApprovalError);
   });
 
   it("rejects forged or unbound passkey signatures", () => {
@@ -217,9 +241,9 @@ describe("Expense Request State Machine", () => {
       "2026-10-28T10:00:00.000Z",
     );
 
-    expect(() => addSignedApproval(submitted, forgedApproval, DEFAULT_POLICY)).toThrow(
-      InvalidPasskeySignatureError,
-    );
+    expect(() =>
+      addSignedApproval(submitted, forgedApproval, DEFAULT_POLICY, TEST_APPROVAL_PROOF_VERIFIER),
+    ).toThrow(InvalidPasskeySignatureError);
   });
 
   it("enforces immutability: request cannot be edited after submission (new version = new request, linked)", () => {
@@ -275,8 +299,8 @@ describe("Expense Request State Machine", () => {
 
     // Run simultaneous approvals
     const [res1, res2] = await Promise.all([
-      store.atomicApprove(submitted.id, approval1, DEFAULT_POLICY),
-      store.atomicApprove(submitted.id, approval2, DEFAULT_POLICY),
+      store.atomicApprove(submitted.id, approval1, DEFAULT_POLICY, TEST_APPROVAL_PROOF_VERIFIER),
+      store.atomicApprove(submitted.id, approval2, DEFAULT_POLICY, TEST_APPROVAL_PROOF_VERIFIER),
     ]);
 
     // Exactly one reaches quorum!
@@ -317,7 +341,12 @@ describe("Expense Request State Machine", () => {
       smallSubmitted,
       "2026-10-28T10:00:00Z",
     );
-    const smallResult = addSignedApproval(smallSubmitted, smallApproval, tieredPolicy);
+    const smallResult = addSignedApproval(
+      smallSubmitted,
+      smallApproval,
+      tieredPolicy,
+      TEST_APPROVAL_PROOF_VERIFIER,
+    );
     expect(smallResult.reachedQuorum).toBe(true);
     expect(smallResult.expense.status).toBe("approved");
 
@@ -334,11 +363,21 @@ describe("Expense Request State Machine", () => {
       policy: tieredPolicy,
     });
     const medApp1 = createMockPasskeyApproval(APPROVER_1, medSubmitted, "2026-10-28T10:00:00Z");
-    const medRes1 = addSignedApproval(medSubmitted, medApp1, tieredPolicy);
+    const medRes1 = addSignedApproval(
+      medSubmitted,
+      medApp1,
+      tieredPolicy,
+      TEST_APPROVAL_PROOF_VERIFIER,
+    );
     expect(medRes1.reachedQuorum).toBe(false);
 
     const medApp2 = createMockPasskeyApproval(APPROVER_2, medRes1.expense, "2026-10-28T10:01:00Z");
-    const medRes2 = addSignedApproval(medRes1.expense, medApp2, tieredPolicy);
+    const medRes2 = addSignedApproval(
+      medRes1.expense,
+      medApp2,
+      tieredPolicy,
+      TEST_APPROVAL_PROOF_VERIFIER,
+    );
     expect(medRes2.reachedQuorum).toBe(true);
     expect(medRes2.expense.status).toBe("approved");
   });
@@ -370,7 +409,13 @@ describe("Expense Request State Machine", () => {
     // Approving while window is active records approval, but does not transition to approved yet
     const tApprove = "2026-10-28T15:00:00.000Z";
     const app = createMockPasskeyApproval(APPROVER_1, submitted, tApprove);
-    const step1 = addSignedApproval(submitted, app, policyWithWindow, tApprove);
+    const step1 = addSignedApproval(
+      submitted,
+      app,
+      policyWithWindow,
+      TEST_APPROVAL_PROOF_VERIFIER,
+      tApprove,
+    );
     expect(step1.reachedQuorum).toBe(false);
     expect(step1.expense.status).toBe("submitted");
     expect(step1.expense.approvals).toHaveLength(1);
@@ -552,7 +597,12 @@ describe("Expense Request State Machine", () => {
                     target,
                     new Date().toISOString(),
                   );
-                  const res = addSignedApproval(expense, approval, DEFAULT_POLICY);
+                  const res = addSignedApproval(
+                    expense,
+                    approval,
+                    DEFAULT_POLICY,
+                    TEST_APPROVAL_PROOF_VERIFIER,
+                  );
                   expense = res.expense;
                   expect(initialStatus).toBe("submitted");
                   break;

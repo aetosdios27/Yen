@@ -19,7 +19,7 @@ import {
   rejectExpense,
   submitExpense,
 } from "./state-machine.js";
-import type { ExpenseRequest, FundPolicy, SignedApproval } from "./types.js";
+import type { ApprovalProofVerifier, ExpenseRequest, FundPolicy, SignedApproval } from "./types.js";
 
 export const SYSTEM_ACTOR: PseudonymId = "psn_00000000-0000-7000-8000-000000000000" as PseudonymId;
 
@@ -111,6 +111,7 @@ export interface ApproveExpenseInTxInput {
   readonly expense: ExpenseRequest;
   readonly approval: SignedApproval;
   readonly policy: FundPolicy;
+  readonly verifyApprovalProof: ApprovalProofVerifier;
   readonly actorPseudonym?: PseudonymId | string;
   readonly nowUtc?: string;
 }
@@ -133,6 +134,7 @@ export async function approveExpenseInTx(
     expense,
     approval,
     policy,
+    input.verifyApprovalProof,
     time,
   );
 

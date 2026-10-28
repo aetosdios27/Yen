@@ -1,8 +1,8 @@
 import { uuidv7 } from "@yen/db";
 import type { PseudonymId } from "@yen/eventlog";
 import { type Paise, paise } from "@yen/shared";
-import { verifyPasskeyBinding } from "./passkey.js";
 import {
+  type ApprovalProofVerifier,
   DuplicateApprovalError,
   type ExpenseEvidence,
   ExpenseNotEditableError,
@@ -183,6 +183,7 @@ export function addSignedApproval(
   expense: ExpenseRequest,
   approval: SignedApproval,
   policy: FundPolicy,
+  verifyApprovalProof: ApprovalProofVerifier,
   nowUtc?: string,
 ): AddApprovalResult {
   if (expense.status !== "submitted") {
@@ -203,8 +204,7 @@ export function addSignedApproval(
     throw new DuplicateApprovalError();
   }
 
-  // Passkey cryptographic binding verification
-  if (!verifyPasskeyBinding(approval.passkeySignature, expense)) {
+  if (!verifyApprovalProof(approval.passkeySignature, expense)) {
     throw new InvalidPasskeySignatureError();
   }
 

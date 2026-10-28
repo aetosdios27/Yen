@@ -1,4 +1,10 @@
-import { createMockPasskeyApproval, InMemoryExpenseStore, type PseudonymId } from "@yen/ledger";
+import {
+  computeExpenseApprovalChallenge,
+  createMockPasskeyApproval,
+  InMemoryExpenseStore,
+  type PseudonymId,
+  verifyPasskeyBinding,
+} from "@yen/ledger";
 import { paise } from "@yen/shared";
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
@@ -21,6 +27,8 @@ function setup(overrides: Partial<AppDependencies> = {}) {
     clock: () => now,
     idGenerator,
     policy: devPolicy,
+    // Test-only: this validates challenge binding but does not verify a real signature.
+    approvalProofVerifier: verifyPasskeyBinding,
     ...overrides,
   });
   return {
@@ -310,6 +318,45 @@ describe("Expense Requests API Routes (YEN-30)", () => {
     const reconciledBody = await json(reconcileRes);
     expect(reconciledBody.status).toBe("reconciled");
     expect(reconciledBody.reconciledAt).toBeDefined();
+  });
+
+  it("rejects approval when no cryptographic proof verifier is configured", async () => {
+    const expenseStore = new InMemoryExpenseStore();
+    const app = createApp({ principal: REQUESTER, policy: devPolicy, expenseStore });
+    const createRes = await app.request(
+      req(
+        "POST",
+        `/v1/funds/${FUND_ID}/expenses`,
+        { amountPaise: "50000", description: "Supplies", recipientRef: "recipient-1" },
+        "proof-create",
+      ),
+    );
+    const created = await json(createRes);
+    await app.request(
+      req("POST", `/v1/funds/${FUND_ID}/expenses/${created.id}/submit`, undefined, "proof-submit"),
+    );
+
+    const approverApp = createApp({ principal: APPROVER_1, policy: devPolicy, expenseStore });
+    const forgedProof = {
+      credentialId: "attacker-controlled-credential",
+      signatureHex: "00",
+      clientDataJson: JSON.stringify({
+        type: "webauthn.get",
+        challenge: computeExpenseApprovalChallenge(created.id, FUND_ID, paise(50000)),
+      }),
+      authenticatorDataHex: "00",
+    };
+    const result = await approverApp.request(
+      req(
+        "POST",
+        `/v1/funds/${FUND_ID}/expenses/${created.id}/approve`,
+        forgedProof,
+        "proof-forgery",
+      ),
+    );
+
+    expect(result.status).toBe(400);
+    expect((await expenseStore.get(created.id))?.approvals).toHaveLength(0);
   });
 
   it("handles rejection flow: draft -> submitted -> rejected", async () => {
