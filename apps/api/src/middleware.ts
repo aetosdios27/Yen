@@ -3,10 +3,16 @@ import type { MiddlewareHandler } from "hono";
 import { routePath } from "hono/route";
 import { idempotencyKey } from "./contract.js";
 import type { ApiEnv, AppDependencies } from "./dependencies.js";
-import { ApiError, StoreError } from "./errors.js";
+import { ApiError, errorBody, errorStatus, StoreError } from "./errors.js";
+import { logMethod } from "./logging.js";
 
 export function isWaitlistRoute(path: string): boolean {
   return path.replace(/\/$/, "") === "/v1/waitlist";
+}
+
+export function isHealthRoute(path: string): boolean {
+  const normalized = path.replace(/\/$/, "");
+  return normalized === "/health" || normalized === "/ready";
 }
 
 async function storeCall<T>(operation: () => Promise<T>): Promise<T> {
@@ -49,6 +55,66 @@ export function requestContext(deps: AppDependencies): MiddlewareHandler<ApiEnv>
       status: c.res.status,
       durationMs: Math.max(0, deps.clock() - started),
     });
+  };
+}
+
+// Backpressure and load shedding middleware. Only admitted, non-health requests hold an
+// in-flight slot. The slot is released when `next()` settles, so a request that timed out
+// (see requestTimeout) keeps its slot until its handler actually finishes. A rejected request
+// never takes a slot, so a burst of rejections cannot keep the limiter tripped.
+// Rejections return 503 with Retry-After: 1 and are logged as warnings.
+// Primary doc: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/503
+export function concurrencyLimit(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
+  return async (c, next) => {
+    if (isHealthRoute(c.req.path)) {
+      return next();
+    }
+    if (deps.inFlightTracker.count >= deps.concurrencyLimit) {
+      deps.logger.log({
+        event: "http_overloaded",
+        level: "warn",
+        reason: "overloaded",
+        requestId: c.get("requestId"),
+        method: logMethod(c.req.method),
+        route: routePath(c, -1) || "unmatched",
+        inFlight: deps.inFlightTracker.count,
+      });
+      c.header("retry-after", "1");
+      return c.json(
+        errorBody(new ApiError("overloaded"), c.get("requestId")),
+        errorStatus.overloaded,
+      );
+    }
+    deps.inFlightTracker.inc();
+    try {
+      await next();
+    } finally {
+      deps.inFlightTracker.dec();
+    }
+  };
+}
+
+// Per-request timeout middleware. When deps.requestTimeoutMs elapses the client receives
+// 504 gateway_timeout, but the handler is NOT cancelled: it keeps running, and it keeps its
+// in-flight slot (see concurrencyLimit) until it settles. Handlers that write must therefore
+// be idempotent. Health checks are excluded so that probes never time out under load.
+// Primary doc: https://hono.dev/docs/middleware/builtin/timeout
+export function requestTimeout(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
+  return async (c, next) => {
+    if (isHealthRoute(c.req.path) || deps.requestTimeoutMs <= 0) {
+      return next();
+    }
+    let timer: NodeJS.Timeout | undefined;
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new ApiError("gateway_timeout"));
+      }, deps.requestTimeoutMs);
+    });
+    try {
+      await Promise.race([next(), deadline]);
+    } finally {
+      clearTimeout(timer);
+    }
   };
 }
 

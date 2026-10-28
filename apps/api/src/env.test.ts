@@ -7,6 +7,19 @@ beforeEach(() => {
   vi.stubEnv("RATE_LIMIT_IP_CAPACITY", undefined);
   vi.stubEnv("RATE_LIMIT_PRINCIPAL_CAPACITY", undefined);
   vi.stubEnv("RATE_LIMIT_REFILL_MS", undefined);
+  vi.stubEnv("TRUSTED_PROXY_HOPS", undefined);
+  vi.stubEnv("TRUSTED_PROXY_HEADER", undefined);
+  vi.stubEnv("CLEANUP_INTERVAL_MS", undefined);
+  vi.stubEnv("DATABASE_POOL_MAX", undefined);
+  vi.stubEnv("DATABASE_POOL_IDLE_TIMEOUT_SECONDS", undefined);
+  vi.stubEnv("DATABASE_POOL_ACQUIRE_TIMEOUT_SECONDS", undefined);
+  vi.stubEnv("CONCURRENCY_LIMIT", undefined);
+  vi.stubEnv("REQUEST_TIMEOUT_MS", undefined);
+  vi.stubEnv("SHUTDOWN_TIMEOUT_MS", undefined);
+  vi.stubEnv("SERVER_HEADERS_TIMEOUT_MS", undefined);
+  vi.stubEnv("SERVER_REQUEST_TIMEOUT_MS", undefined);
+  vi.stubEnv("SERVER_KEEP_ALIVE_TIMEOUT_MS", undefined);
+  vi.stubEnv("SERVER_MAX_HEADER_SIZE_BYTES", undefined);
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -21,6 +34,19 @@ it("exports typed env and parses it only once per startup", async () => {
     RATE_LIMIT_IP_CAPACITY: 120,
     RATE_LIMIT_PRINCIPAL_CAPACITY: 60,
     RATE_LIMIT_REFILL_MS: 60000,
+    TRUSTED_PROXY_HOPS: 0,
+    TRUSTED_PROXY_HEADER: "x-forwarded-for",
+    CLEANUP_INTERVAL_MS: 60000,
+    DATABASE_POOL_MAX: 10,
+    DATABASE_POOL_IDLE_TIMEOUT_SECONDS: 20,
+    DATABASE_POOL_ACQUIRE_TIMEOUT_SECONDS: 10,
+    CONCURRENCY_LIMIT: 100,
+    REQUEST_TIMEOUT_MS: 15000,
+    SHUTDOWN_TIMEOUT_MS: 10000,
+    SERVER_HEADERS_TIMEOUT_MS: 20000,
+    SERVER_REQUEST_TIMEOUT_MS: 15000,
+    SERVER_KEEP_ALIVE_TIMEOUT_MS: 5000,
+    SERVER_MAX_HEADER_SIZE_BYTES: 16384,
   });
   vi.stubEnv("PORT", "invalid");
   expect((await import("./env.js")).env).toBe(env);
@@ -91,10 +117,59 @@ it.each([
   ["WAITLIST_MIN_RESPONSE_MS", "-1"],
   ["WAITLIST_MIN_RESPONSE_MS", "2001"],
   ["WAITLIST_MIN_RESPONSE_MS", "1.5"],
+  ["DATABASE_POOL_MAX", "0"],
+  ["DATABASE_POOL_MAX", "1001"],
+  ["DATABASE_POOL_MAX", "1.5"],
+  ["DATABASE_POOL_IDLE_TIMEOUT_SECONDS", "-1"],
+  ["DATABASE_POOL_IDLE_TIMEOUT_SECONDS", "86401"],
+  ["DATABASE_POOL_ACQUIRE_TIMEOUT_SECONDS", "0"],
+  ["DATABASE_POOL_ACQUIRE_TIMEOUT_SECONDS", "301"],
+  ["CONCURRENCY_LIMIT", "0"],
+  ["CONCURRENCY_LIMIT", "10001"],
+  ["REQUEST_TIMEOUT_MS", "99"],
+  ["REQUEST_TIMEOUT_MS", "300001"],
+  ["SHUTDOWN_TIMEOUT_MS", "99"],
+  ["SHUTDOWN_TIMEOUT_MS", "60001"],
+  ["SERVER_KEEP_ALIVE_TIMEOUT_MS", "-1"],
+  ["SERVER_KEEP_ALIVE_TIMEOUT_MS", "60001"],
+  ["SERVER_MAX_HEADER_SIZE_BYTES", "1023"],
+  ["SERVER_MAX_HEADER_SIZE_BYTES", "1048577"],
 ])("rejects out of range %s=%s", async (key, value) => {
   vi.stubEnv("PORT", "3001");
   vi.stubEnv(key, value);
   await expect(import("./env.js")).rejects.toThrow(key);
+});
+
+it.each(["x-forwarded-for", "forwarded"])("accepts TRUSTED_PROXY_HEADER %s", async (value) => {
+  vi.stubEnv("PORT", "3001");
+  vi.stubEnv("TRUSTED_PROXY_HEADER", value);
+  expect((await import("./env.js")).env.TRUSTED_PROXY_HEADER).toBe(value);
+});
+
+it.each(["Forwarded", "x-real-ip", "x-forwarded-for,forwarded", ""])(
+  "rejects unsupported TRUSTED_PROXY_HEADER %s without exposing its value",
+  async (value) => {
+    vi.stubEnv("PORT", "3001");
+    vi.stubEnv("TRUSTED_PROXY_HEADER", value);
+    await expect(import("./env.js")).rejects.toThrow("TRUSTED_PROXY_HEADER");
+    await expect(import("./env.js")).rejects.not.toThrow("x-real-ip");
+  },
+);
+
+it.each(["999", "3600001", "1.5", "invalid"])(
+  "rejects out of range CLEANUP_INTERVAL_MS %s",
+  async (value) => {
+    vi.stubEnv("PORT", "3001");
+    vi.stubEnv("CLEANUP_INTERVAL_MS", value);
+    await expect(import("./env.js")).rejects.toThrow("CLEANUP_INTERVAL_MS");
+  },
+);
+
+it("rejects SERVER_HEADERS_TIMEOUT_MS <= SERVER_KEEP_ALIVE_TIMEOUT_MS", async () => {
+  vi.stubEnv("PORT", "3001");
+  vi.stubEnv("SERVER_KEEP_ALIVE_TIMEOUT_MS", "10000");
+  vi.stubEnv("SERVER_HEADERS_TIMEOUT_MS", "10000");
+  await expect(import("./env.js")).rejects.toThrow("SERVER_HEADERS_TIMEOUT_MS");
 });
 
 it.each(["999", "1000001", "1.5", "invalid"])(
