@@ -1,0 +1,9 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "test": {
+      "env": ["YEN_TEST_DATABASE_URL", "CI"],
+      "cache": false
+    }
+  }
+}
