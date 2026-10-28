@@ -1,4 +1,5 @@
 import type { WaitlistEntry } from "@yen/db";
+import { type ExpenseStore, InMemoryExpenseStore } from "@yen/ledger";
 import type { Context } from "hono";
 import { rateLimitEnv, rateLimits } from "./config.js";
 import { jsonLogger, type Logger } from "./logging.js";
@@ -37,6 +38,7 @@ export class MemoryWaitlistStore implements WaitlistStore {
 
 export interface AppDependencies {
   readonly waitlistStore: WaitlistStore;
+  readonly expenseStore: ExpenseStore;
   readonly waitlistLimit: RateLimit;
   readonly waitlistBodyLimit: number;
   readonly clock: () => number;
@@ -57,6 +59,7 @@ export interface AppDependencies {
 export function defaultDependencies(clock: () => number = Date.now): AppDependencies {
   return {
     waitlistStore: new MemoryWaitlistStore(),
+    expenseStore: new InMemoryExpenseStore(),
     waitlistLimit: { capacity: 5, refillMs: 3600000 },
     waitlistBodyLimit: 8192,
     clock,
