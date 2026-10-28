@@ -60,3 +60,13 @@ Changelog: YEN-21 tightened chain verification, unsigned hashing, pseudonym IDs,
 After YEN-18, create an event table with `fund_id uuid`, `seq bigint`, `type text`, `version integer`, `actor text`, `occurred_at text`, `payload jsonb`, `prev_hash text`, `hash text`, and `canonical_envelope text`. Use `(fund_id, seq)` as the primary key; validate sequence bounds and lowercase 64-character hash strings. Keep `occurred_at` as the canonical UTC millisecond string so PostgreSQL session time zones cannot alter hash input. `payload` must preserve JSON value semantics and be validated against the selected version's schema. The database must independently verify that `canonical_envelope` is RFC 8785 canonical JSON for precisely the eight envelope fields other than `hash`, and recompute the hash from its UTF-8 bytes. Prove the database canonicalizer against these vectors; PostgreSQL `jsonb::text` is not a substitute.
 
 `appendEvent(fundId, input)` should run in one transaction: take a transaction-scoped advisory lock keyed by fund ID, read the latest event, parse it, call `makeNextEvent`, insert the complete row, and return that row. The insert trigger must independently enforce the fund-local gapless sequence, genesis or preceding hash, canonical UTC time order, known type/version and payload schema, and `hash = SHA-256(domain || canonical envelope)`. Update, delete, and truncate triggers must always reject; revoke those privileges and direct insert from application roles so only the append path can write. The table and append function must share the same pinned golden vectors. Use the same transaction for any outbox record that announces an appended event.
+
+## Prior art
+
+- [Schneier and Kelsey](../../docs/REFERENCES.md#schneier-kelsey) address compromise of a logging machine; Yen does not implement their encryption scheme.
+- [Transactionally staged job drains](../../docs/REFERENCES.md#brandur-job-drain) motivate the proposed transactional outbox.
+- [PostgreSQL triggers](../../docs/REFERENCES.md#pg-trigger) distinguish statement-level TRUNCATE triggers from row triggers.
+- [RFC 8785](../../docs/REFERENCES.md#rfc-8785) defines canonical JSON; Yen adds a versioned hash domain and strict event schemas.
+- [Crosby and Wallach](../../docs/REFERENCES.md#crosby-wallach) describe auditing untrusted logs; Yen requires an externally authenticated head to verify a complete chain.
+- [DPDP Act](../../docs/REFERENCES.md#dpdp-act) informs minimizing personal data; pseudonyms alone do not establish compliance.
+- [PostgreSQL explicit locking](../../docs/REFERENCES.md#pg-locking) describes transaction-scoped advisory locks proposed for the pending append path.

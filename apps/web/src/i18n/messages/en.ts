@@ -145,6 +145,23 @@ export const en = {
     completed: "Completed",
     step: "Step {current} of {total}: {label}",
   },
+  offline: {
+    title: "You are offline",
+    message: "You are offline. Yen needs a connection to show records or confirm anything.",
+    retry: "Check connection again",
+  },
+  pwa: {
+    installTitle: "Install Yen",
+    installDescription:
+      "Add Yen to your home screen for quick access. It takes almost no storage and works even on slow connections.",
+    installButton: "Install app",
+    dismissButton: "Not now",
+    iosTrigger: "Add to Home Screen on iPhone",
+    iosStep1: "1. Tap the Share button in Safari at the bottom of the screen.",
+    iosStep2: "2. Scroll down and tap 'Add to Home Screen'.",
+    iosStep3: "3. Tap 'Add' in the top right corner.",
+    iosClose: "Close instructions",
+  },
 } as const;
 
 type DeepString<T> = T extends string ? string : { readonly [K in keyof T]: DeepString<T[K]> };

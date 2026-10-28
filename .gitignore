@@ -2,6 +2,7 @@ node_modules/
 .turbo/
 dist/
 .next/
+.vercel/
 next-env.d.ts
 *.tsbuildinfo
 coverage/

@@ -1,4 +1,5 @@
 import type { z } from "@hono/zod-openapi";
+import { type Redacted, unsafeMarkRedactedForDevPolicy } from "@yen/policy";
 import type { donationDetailsSchema, fundSchema } from "./contract.js";
 import type { Principal } from "./dependencies.js";
 
@@ -14,7 +15,7 @@ export type DonationDetailsView = z.infer<typeof donationDetailsSchema>;
 
 export interface Policy {
   can(principal: Principal, action: FundAction, resource: FundResource): boolean;
-  redact(viewer: Principal, resource: ExistingFundResource): FundView;
+  redact(viewer: Principal, resource: ExistingFundResource): Redacted<FundView>;
   /** Donors are anonymous, so paying in is decided from the fund alone. */
   canDonate(resource: ExistingFundResource): boolean;
   /** The single public view of a fund's payment details. */
@@ -37,7 +38,7 @@ export const devPolicy: Policy = {
     resource.fund === undefined
       ? action === "fund:create"
       : action === "fund:read" && resource.fund.owner === principal.id,
-  redact: (_viewer, resource) => resource.fund.fund,
+  redact: (_viewer, resource) => unsafeMarkRedactedForDevPolicy(resource.fund.fund),
   canDonate: (resource) => resource.fund.fund.id.length > 0,
   redactDonationDetails: (resource) => ({
     fundId: resource.fund.fund.id,
