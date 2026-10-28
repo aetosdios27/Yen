@@ -122,6 +122,19 @@ purges expired completed entries and abandoned leases without lock contention us
 Migration `0004` backfills `replay_expires_at` as `created_at + 24 hours` for existing completed rows, so they expire like new ones.
 In PostgreSQL mode the process calls `sweep()` and the rate-limit `prune()` on the schedule described under "Retention" below.
 
+## Phone OTP and sessions
+
+`POST /v1/auth/otp/send` requires a selected `channel` (`whatsapp` or `sms`). Delivery
+must use that channel exactly; failures do not fall back to the other provider. Only
+one active code is kept for a phone number. Verification attempts are counted per
+phone across channel changes in a five-minute window (or the configured OTP expiry).
+OTP hashes use the server-side `OTP_HASH_KEY`, which must be at least 32 characters
+in production. Losing or rotating the key invalidates outstanding codes. Session
+tokens are random opaque values; storage keeps only their SHA-256 hashes, and rotation
+preserves the original absolute expiry. The production entrypoint fails closed while
+no concrete WhatsApp/SMS adapter is configured; the in-memory delivery stub is limited
+to development and tests.
+
 ## Rate limits and logs
 
 Both token buckets apply to `/v1` requests. The default per-IP capacity is 120;

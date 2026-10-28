@@ -2,6 +2,7 @@ import type { Server } from "node:http";
 import { serve } from "@hono/node-server";
 import { createSql, type Sql } from "@yen/db";
 import { createApp } from "./app.js";
+import { createOtpDeliveryProvider, PostgresAuthStore } from "./auth/index.js";
 import { type CleanupScheduler, startCleanupScheduler } from "./cleanup-scheduler.js";
 import { createClientIpResolver, type TrustedProxyHeader } from "./client-ip.js";
 import { rateLimits } from "./config.js";
@@ -20,6 +21,7 @@ export interface ServerConfig {
   readonly NODE_ENV: "development" | "test" | "production";
   readonly PORT: number;
   readonly DATABASE_URL?: string | undefined;
+  readonly OTP_HASH_KEY?: string | undefined;
   readonly YEN_ALLOW_MEMORY_STORES?: "true" | "false" | undefined;
   readonly READINESS_CACHE_MS: number;
   readonly TRUSTED_PROXY_HOPS: number;
@@ -133,6 +135,9 @@ export async function startServer(
         maxEntries: resolvedConfig.RATE_LIMIT_MAX_KEYS,
       }),
     }),
+    ...(sql ? { authStore: new PostgresAuthStore(sql) } : {}),
+    otpHashKey: resolvedConfig.OTP_HASH_KEY ?? "development-only-otp-hash-key-change-me",
+    otpDeliveryProvider: createOtpDeliveryProvider(resolvedConfig.NODE_ENV),
     waitlistLimit: {
       capacity: resolvedConfig.WAITLIST_RATE_LIMIT_CAPACITY,
       refillMs: resolvedConfig.WAITLIST_RATE_LIMIT_REFILL_MS,

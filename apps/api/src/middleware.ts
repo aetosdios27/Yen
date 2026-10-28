@@ -1,6 +1,8 @@
 import { z } from "@hono/zod-openapi";
 import type { MiddlewareHandler } from "hono";
+import { getCookie } from "hono/cookie";
 import { routePath } from "hono/route";
+import { hashSessionToken } from "./auth/index.js";
 import { idempotencyKey } from "./contract.js";
 import type { ApiEnv, AppDependencies } from "./dependencies.js";
 import { ApiError, errorBody, errorStatus, StoreError } from "./errors.js";
@@ -8,6 +10,15 @@ import { logMethod } from "./logging.js";
 
 export function isWaitlistRoute(path: string): boolean {
   return path.replace(/\/$/, "") === "/v1/waitlist";
+}
+
+export function isAuthRoute(path: string): boolean {
+  return path.replace(/\/$/, "").startsWith("/v1/auth");
+}
+
+export function isPublicAuthRoute(path: string): boolean {
+  const clean = path.replace(/\/$/, "");
+  return clean === "/v1/auth/otp/send" || clean === "/v1/auth/otp/verify";
 }
 
 export function isHealthRoute(path: string): boolean {
@@ -37,7 +48,33 @@ export function requestContext(deps: AppDependencies): MiddlewareHandler<ApiEnv>
   return async (c, next) => {
     const inbound = requestId.safeParse(c.req.header("x-request-id"));
     c.set("requestId", inbound.success ? inbound.data : requestId.parse(deps.idGenerator()));
-    c.set("principal", deps.principal);
+
+    const authHeader = c.req.header("authorization");
+    let sessionToken: string | undefined;
+    if (authHeader?.toLowerCase().startsWith("bearer ")) {
+      sessionToken = authHeader.slice(7).trim();
+    } else {
+      sessionToken = getCookie(c, deps.sessionCookieName);
+    }
+
+    if (sessionToken) {
+      const tokenHash = hashSessionToken(sessionToken);
+      const session = await storeCall(() =>
+        deps.authStore.findSessionByTokenHash(tokenHash, deps.clock()),
+      );
+      if (session) {
+        c.set("principal", { id: session.userId });
+        c.set("session", session);
+        await storeCall(() => deps.authStore.touchSession(session.id, deps.clock()));
+      } else {
+        c.set("principal", deps.principal);
+        c.set("session", null);
+      }
+    } else {
+      c.set("principal", deps.principal);
+      c.set("session", null);
+    }
+
     c.header("x-request-id", c.get("requestId"));
     const started = deps.clock();
     await next();
@@ -175,7 +212,11 @@ export function rateLimit(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
 
 export function idempotency(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
   return async (c, next) => {
-    if (["GET", "HEAD", "OPTIONS"].includes(c.req.method) || isWaitlistRoute(c.req.path))
+    if (
+      ["GET", "HEAD", "OPTIONS"].includes(c.req.method) ||
+      isWaitlistRoute(c.req.path) ||
+      isAuthRoute(c.req.path)
+    )
       return next();
     const principal = c.get("principal");
     if (!principal) throw new ApiError("unauthenticated");

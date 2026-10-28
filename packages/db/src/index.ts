@@ -45,6 +45,8 @@ export {
   type SampleQueryContext,
 } from "./query-registry.js";
 export {
+  type AuthOtpRow,
+  authOtpRowSchema,
   type FundEventRow,
   type FundPseudonymRow,
   type FundRow,
@@ -61,6 +63,8 @@ export {
   pseudonymRowSchema,
   type RateLimitRow,
   rateLimitRowSchema,
+  type SessionRow,
+  sessionRowSchema,
   type UserRow,
   userRowSchema,
 } from "./rows.js";

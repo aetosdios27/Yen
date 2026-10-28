@@ -100,6 +100,7 @@ it("requires a valid database URL in production", async () => {
 it("accepts a PostgreSQL URL in production and rejects invalid URLs without exposing them", async () => {
   vi.stubEnv("PORT", "3001");
   vi.stubEnv("NODE_ENV", "production");
+  vi.stubEnv("OTP_HASH_KEY", "test-production-secret-with-at-least-32-characters");
   vi.stubEnv("DATABASE_URL", "postgres://postgres:pw@localhost:55432/postgres");
   expect((await import("./env.js")).env.DATABASE_URL).toBe(
     "postgres://postgres:pw@localhost:55432/postgres",
@@ -108,6 +109,15 @@ it("accepts a PostgreSQL URL in production and rejects invalid URLs without expo
   vi.stubEnv("DATABASE_URL", "private-invalid-value");
   await expect(import("./env.js")).rejects.toThrow("DATABASE_URL");
   await expect(import("./env.js")).rejects.not.toThrow("private-invalid-value");
+});
+
+it("requires a long OTP hash key in production", async () => {
+  vi.stubEnv("PORT", "3001");
+  vi.stubEnv("NODE_ENV", "production");
+  vi.stubEnv("DATABASE_URL", "postgres://postgres:pw@localhost:55432/postgres");
+  vi.stubEnv("OTP_HASH_KEY", "short");
+  await expect(import("./env.js")).rejects.toThrow("OTP_HASH_KEY");
+  await expect(import("./env.js")).rejects.not.toThrow("short");
 });
 
 it.each([

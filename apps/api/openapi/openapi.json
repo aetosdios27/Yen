@@ -10,7 +10,7 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "Reserved for YEN-22. Only injected principals authenticate today."
+        "description": "Session token authentication via Bearer header or yen_session httpOnly cookie."
       }
     },
     "schemas": {
@@ -87,8 +87,123 @@
       },
       "Principal": {
         "type": "object",
-        "properties": { "id": { "type": "string", "format": "uuid" } },
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "phone": { "type": "string" },
+          "displayName": { "type": "string" },
+          "locale": { "type": "string" }
+        },
         "required": ["id"]
+      },
+      "SendOtpResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["sent"] },
+          "channel": { "type": "string", "enum": ["whatsapp", "sms"] },
+          "resendAfterSeconds": { "type": "integer", "minimum": 0 },
+          "expiresAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["status", "channel", "resendAfterSeconds", "expiresAt"],
+        "additionalProperties": false
+      },
+      "SendOtpInput": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Phone number (E.164 or 10-digit Indian mobile)"
+          },
+          "channel": {
+            "type": "string",
+            "enum": ["whatsapp", "sms"],
+            "description": "Selected delivery channel; delivery never switches channels"
+          }
+        },
+        "required": ["phone", "channel"],
+        "additionalProperties": false
+      },
+      "VerifyOtpResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["authenticated"] },
+          "session": { "$ref": "#/components/schemas/AuthSession" }
+        },
+        "required": ["status", "session"],
+        "additionalProperties": false
+      },
+      "AuthSession": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "token": { "type": "string" },
+          "expiresAt": { "type": "string", "format": "date-time" },
+          "user": { "$ref": "#/components/schemas/AuthUser" }
+        },
+        "required": ["id", "token", "expiresAt", "user"],
+        "additionalProperties": false
+      },
+      "AuthUser": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "phone": { "type": "string" },
+          "displayName": { "type": "string" },
+          "locale": { "type": "string" }
+        },
+        "required": ["id", "phone", "displayName", "locale"],
+        "additionalProperties": false
+      },
+      "VerifyOtpInput": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Phone number (E.164 or 10-digit Indian mobile)"
+          },
+          "code": { "type": "string", "pattern": "^\\d{6}$", "description": "6-digit OTP code" }
+        },
+        "required": ["phone", "code"],
+        "additionalProperties": false
+      },
+      "RotateSessionResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["rotated"] },
+          "session": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "format": "uuid" },
+              "token": { "type": "string" },
+              "expiresAt": { "type": "string", "format": "date-time" }
+            },
+            "required": ["id", "token", "expiresAt"]
+          }
+        },
+        "required": ["status", "session"],
+        "additionalProperties": false
+      },
+      "ListSessionsResponse": {
+        "type": "object",
+        "properties": {
+          "sessions": { "type": "array", "items": { "$ref": "#/components/schemas/SessionItem" } }
+        },
+        "required": ["sessions"],
+        "additionalProperties": false
+      },
+      "SessionItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "deviceInfo": { "type": "string" },
+          "ip": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "lastActiveAt": { "type": "string", "format": "date-time" },
+          "isCurrent": { "type": "boolean" }
+        },
+        "required": ["id", "deviceInfo", "ip", "createdAt", "lastActiveAt", "isCurrent"],
+        "additionalProperties": false
       },
       "Fund": {
         "type": "object",
@@ -471,6 +586,502 @@
           },
           "504": {
             "description": "Gateway timeout",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/otp/send": {
+      "post": {
+        "operationId": "sendOtp",
+        "tags": ["auth"],
+        "description": "Send a 6-digit OTP to a phone number via WhatsApp or SMS fallback.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/SendOtpInput" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OTP challenge dispatched",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/SendOtpResponse" } }
+            }
+          },
+          "400": {
+            "description": "Validation failed; details contain field paths",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/otp/verify": {
+      "post": {
+        "operationId": "verifyOtp",
+        "tags": ["auth"],
+        "description": "Verify a 6-digit OTP, authenticate or register the user, and issue an httpOnly session cookie.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/VerifyOtpInput" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authenticated session created",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "set-cookie": {
+                "schema": { "type": "string" },
+                "description": "Session cookie for browser clients"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/VerifyOtpResponse" } }
+            }
+          },
+          "400": {
+            "description": "Validation failed; details contain field paths",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/session/rotate": {
+      "post": {
+        "operationId": "rotateSession",
+        "tags": ["auth"],
+        "security": [{ "bearerAuth": [] }],
+        "description": "Rotates the active session token, invalidating the previous token.",
+        "responses": {
+          "200": {
+            "description": "Session token rotated",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "set-cookie": {
+                "schema": { "type": "string" },
+                "description": "Session cookie for browser clients"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RotateSessionResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/sessions": {
+      "get": {
+        "operationId": "getSessions",
+        "tags": ["auth"],
+        "security": [{ "bearerAuth": [] }],
+        "description": "Lists active sessions and devices for the authenticated user.",
+        "responses": {
+          "200": {
+            "description": "List of active user sessions",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ListSessionsResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "tags": ["auth"],
+        "security": [{ "bearerAuth": [] }],
+        "description": "Revokes current session and clears session cookie.",
+        "responses": {
+          "200": {
+            "description": "Session revoked",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "set-cookie": {
+                "schema": { "type": "string" },
+                "description": "Session cookie for browser clients"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "status": { "type": "string", "enum": ["logged_out"] } },
+                  "required": ["status"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/logout-all": {
+      "post": {
+        "operationId": "logoutAll",
+        "tags": ["auth"],
+        "security": [{ "bearerAuth": [] }],
+        "description": "Revokes all sessions across all devices for the authenticated user.",
+        "responses": {
+          "200": {
+            "description": "All sessions revoked",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "set-cookie": {
+                "schema": { "type": "string" },
+                "description": "Session cookie for browser clients"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "status": { "type": "string", "enum": ["logged_out_all"] } },
+                  "required": ["status"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/sessions/{sessionId}": {
+      "delete": {
+        "operationId": "revokeSession",
+        "tags": ["auth"],
+        "security": [{ "bearerAuth": [] }],
+        "description": "Revokes a specific session belonging to the authenticated user.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Session UUID to revoke"
+            },
+            "required": true,
+            "description": "Session UUID to revoke",
+            "name": "sessionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session revoked",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "set-cookie": {
+                "schema": { "type": "string" },
+                "description": "Session cookie for browser clients"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "status": { "type": "string", "enum": ["revoked"] } },
+                  "required": ["status"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },

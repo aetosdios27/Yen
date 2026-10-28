@@ -22,8 +22,23 @@ const retryHeader = {
   },
 };
 
+const cookieHeader = {
+  "set-cookie": {
+    schema: { type: "string" },
+    description: "Session cookie for browser clients",
+  },
+} as const;
+
 function jsonResponse<T extends z.ZodType>(schema: T, description: string) {
   return { description, headers: responseHeaders, content: { "application/json": { schema } } };
+}
+
+function jsonCookieResponse<T extends z.ZodType>(schema: T, description: string) {
+  return {
+    description,
+    headers: { ...responseHeaders, ...cookieHeader },
+    content: { "application/json": { schema } },
+  };
 }
 
 function withReplay<T extends { headers: object }>(response: T) {
@@ -62,7 +77,14 @@ const protectedErrors = {
 };
 const security = [{ bearerAuth: [] }];
 
-export const principalSchema = z.object({ id: z.string().uuid() }).openapi("Principal");
+export const principalSchema = z
+  .object({
+    id: z.string().uuid(),
+    phone: z.string().optional(),
+    displayName: z.string().optional(),
+    locale: z.string().optional(),
+  })
+  .openapi("Principal");
 const fundFields = { name: z.string().trim().min(1).max(120), targetPaise: paiseWire };
 export const fundInput = z.object(fundFields).strict().openapi("CreateFund");
 export const fundSchema = z
@@ -238,5 +260,222 @@ export const waitlistRoute = createRoute({
     503: overloadedResponse,
     500: internalResponse,
     504: gatewayTimeoutResponse,
+  },
+});
+
+export const sendOtpInput = z
+  .object({
+    phone: z
+      .string()
+      .min(1)
+      .openapi({ description: "Phone number (E.164 or 10-digit Indian mobile)" }),
+    channel: z
+      .enum(["whatsapp", "sms"])
+      .openapi({ description: "Selected delivery channel; delivery never switches channels" }),
+  })
+  .strict()
+  .openapi("SendOtpInput");
+
+export const sendOtpResponse = z
+  .object({
+    status: z.literal("sent"),
+    channel: z.enum(["whatsapp", "sms"]),
+    resendAfterSeconds: z.number().int().nonnegative(),
+    expiresAt: z.iso.datetime(),
+  })
+  .strict()
+  .openapi("SendOtpResponse");
+
+export const verifyOtpInput = z
+  .object({
+    phone: z
+      .string()
+      .min(1)
+      .openapi({ description: "Phone number (E.164 or 10-digit Indian mobile)" }),
+    code: z
+      .string()
+      .regex(/^\d{6}$/)
+      .openapi({ description: "6-digit OTP code" }),
+  })
+  .strict()
+  .openapi("VerifyOtpInput");
+
+export const authUserSchema = z
+  .object({
+    id: z.string().uuid(),
+    phone: z.string(),
+    displayName: z.string(),
+    locale: z.string(),
+  })
+  .strict()
+  .openapi("AuthUser");
+
+export const authSessionSchema = z
+  .object({
+    id: z.string().uuid(),
+    token: z.string(),
+    expiresAt: z.iso.datetime(),
+    user: authUserSchema,
+  })
+  .strict()
+  .openapi("AuthSession");
+
+export const verifyOtpResponse = z
+  .object({
+    status: z.literal("authenticated"),
+    session: authSessionSchema,
+  })
+  .strict()
+  .openapi("VerifyOtpResponse");
+
+export const rotateSessionResponse = z
+  .object({
+    status: z.literal("rotated"),
+    session: z.object({
+      id: z.string().uuid(),
+      token: z.string(),
+      expiresAt: z.iso.datetime(),
+    }),
+  })
+  .strict()
+  .openapi("RotateSessionResponse");
+
+export const sessionItemSchema = z
+  .object({
+    id: z.string().uuid(),
+    deviceInfo: z.string(),
+    ip: z.string(),
+    createdAt: z.iso.datetime(),
+    lastActiveAt: z.iso.datetime(),
+    isCurrent: z.boolean(),
+  })
+  .strict()
+  .openapi("SessionItem");
+
+export const listSessionsResponse = z
+  .object({
+    sessions: z.array(sessionItemSchema),
+  })
+  .strict()
+  .openapi("ListSessionsResponse");
+
+export const statusLoggedOut = z.object({ status: z.literal("logged_out") }).strict();
+export const statusLoggedOutAll = z.object({ status: z.literal("logged_out_all") }).strict();
+export const statusRevoked = z.object({ status: z.literal("revoked") }).strict();
+
+export const sendOtpRoute = createRoute({
+  method: "post",
+  path: "/v1/auth/otp/send",
+  operationId: "sendOtp",
+  tags: ["auth"],
+  description: "Send a 6-digit OTP to a phone number via WhatsApp or SMS fallback.",
+  request: { body: { required: true, content: { "application/json": { schema: sendOtpInput } } } },
+  responses: {
+    200: jsonResponse(sendOtpResponse, "OTP challenge dispatched"),
+    400: protectedErrors[400],
+    429: limitedResponse,
+    500: internalResponse,
+    503: overloadedResponse,
+  },
+});
+
+export const verifyOtpRoute = createRoute({
+  method: "post",
+  path: "/v1/auth/otp/verify",
+  operationId: "verifyOtp",
+  tags: ["auth"],
+  description:
+    "Verify a 6-digit OTP, authenticate or register the user, and issue an httpOnly session cookie.",
+  request: {
+    body: { required: true, content: { "application/json": { schema: verifyOtpInput } } },
+  },
+  responses: {
+    200: jsonCookieResponse(verifyOtpResponse, "Authenticated session created"),
+    400: protectedErrors[400],
+    429: limitedResponse,
+    500: internalResponse,
+    503: overloadedResponse,
+  },
+});
+
+export const rotateSessionRoute = createRoute({
+  method: "post",
+  path: "/v1/auth/session/rotate",
+  operationId: "rotateSession",
+  tags: ["auth"],
+  security,
+  description: "Rotates the active session token, invalidating the previous token.",
+  responses: {
+    200: jsonCookieResponse(rotateSessionResponse, "Session token rotated"),
+    401: protectedErrors[401],
+    500: internalResponse,
+  },
+});
+
+export const getSessionsRoute = createRoute({
+  method: "get",
+  path: "/v1/auth/sessions",
+  operationId: "getSessions",
+  tags: ["auth"],
+  security,
+  description: "Lists active sessions and devices for the authenticated user.",
+  responses: {
+    200: jsonResponse(listSessionsResponse, "List of active user sessions"),
+    401: protectedErrors[401],
+    500: internalResponse,
+  },
+});
+
+export const logoutRoute = createRoute({
+  method: "post",
+  path: "/v1/auth/logout",
+  operationId: "logout",
+  tags: ["auth"],
+  security,
+  description: "Revokes current session and clears session cookie.",
+  responses: {
+    200: jsonCookieResponse(statusLoggedOut, "Session revoked"),
+    401: protectedErrors[401],
+    500: internalResponse,
+  },
+});
+
+export const logoutAllRoute = createRoute({
+  method: "post",
+  path: "/v1/auth/logout-all",
+  operationId: "logoutAll",
+  tags: ["auth"],
+  security,
+  description: "Revokes all sessions across all devices for the authenticated user.",
+  responses: {
+    200: jsonCookieResponse(statusLoggedOutAll, "All sessions revoked"),
+    401: protectedErrors[401],
+    500: internalResponse,
+  },
+});
+
+export const revokeSessionRoute = createRoute({
+  method: "delete",
+  path: "/v1/auth/sessions/{sessionId}",
+  operationId: "revokeSession",
+  tags: ["auth"],
+  security,
+  description: "Revokes a specific session belonging to the authenticated user.",
+  request: {
+    params: z.object({
+      sessionId: z
+        .string()
+        .uuid()
+        .openapi({
+          description: "Session UUID to revoke",
+          param: { name: "sessionId", in: "path" },
+        }),
+    }),
+  },
+  responses: {
+    200: jsonCookieResponse(statusRevoked, "Session revoked"),
+    401: protectedErrors[401],
+    404: protectedErrors[404],
+    500: internalResponse,
   },
 });
