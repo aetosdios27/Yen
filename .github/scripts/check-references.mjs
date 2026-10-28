@@ -35,7 +35,13 @@ export function checkReferences(document, readmes) {
     anchors.add(match[1]);
   }
   for (const [name, contents] of Object.entries(readmes)) {
-    for (const match of contents.matchAll(/\]\(([^\s)]+REFERENCES\.md)#([^\s)]+)\)/g)) {
+    const links = [
+      ...contents.matchAll(/\]\(([^\s)]+REFERENCES\.md)#([^\s)]+)\)/g),
+      ...contents.matchAll(
+        /^ {0,3}\[[^\]\n]+\]:\s*<?([^\s>]+REFERENCES\.md)#([^\s>]+)>?(?:\s|$)/gm,
+      ),
+    ];
+    for (const match of links) {
       const target = resolve(root, dirname(name), match[1]);
       if (target !== resolve(root, "docs/REFERENCES.md"))
         errors.push(`${name}: incorrect references path ${match[1]}`);

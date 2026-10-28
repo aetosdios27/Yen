@@ -49,3 +49,26 @@ test("does not take missing fields from a later area", () => {
     /missing Where in this repo/,
   );
 });
+
+test("checks reference-style citation paths and anchors", () => {
+  for (const target of ["../../docs/REFERENCES.md#missing", "<../../docs/REFERENCES.md#missing>"]) {
+    assert.match(
+      checkReferences(entry, {
+        "packages/db/README.md": `[Source][paper]\n\n[paper]: ${target}\n`,
+      }).join(),
+      /unknown reference anchor/,
+    );
+  }
+  assert.match(
+    checkReferences(entry, {
+      "packages/db/README.md": "[paper]: ../docs/REFERENCES.md#example\n",
+    }).join(),
+    /incorrect references path/,
+  );
+  assert.deepEqual(
+    checkReferences(entry, {
+      "packages/db/README.md": "[Source][paper]\n[paper]: ../../docs/REFERENCES.md#example\n",
+    }),
+    [],
+  );
+});
