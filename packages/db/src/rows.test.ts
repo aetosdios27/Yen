@@ -1,6 +1,7 @@
 import type { PhoneE164 } from "@yen/shared";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
+  fundEventRowSchema,
   fundRowSchema,
   idempotencyKeyRowSchema,
   membershipRowSchema,
@@ -91,6 +92,25 @@ describe("row parsing at the database boundary", () => {
     ).toBe(false);
   });
 
+  it("parses fundEventRowSchema transforming bigint seq to number", () => {
+    const rawEvent = {
+      fund_id: id,
+      seq: 1n,
+      type: "fund.created",
+      version: 1,
+      actor: `psn_${id}`,
+      occurred_at: "2026-01-01T00:00:00.000Z",
+      payload: { org_id: id, visibility: "private" },
+      prev_hash: "0".repeat(64),
+      hash: "a".repeat(64),
+      canonical_envelope: "{}",
+    };
+    const parsed = fundEventRowSchema.parse(rawEvent);
+    expect(parsed.seq).toBe(1);
+    expect(parsed.fund_id).toBe(id);
+    expect(fundEventRowSchema.safeParse({ ...rawEvent, fund_id: "invalid" }).success).toBe(false);
+    expect(fundEventRowSchema.safeParse({ ...rawEvent, version: 2 }).success).toBe(false);
+  });
   it("validates approval pin rows and rejects invalid statuses or negative attempts", () => {
     const pin = {
       user_id: id,

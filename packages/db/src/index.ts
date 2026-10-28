@@ -9,6 +9,14 @@ export {
 export { createSql, type Sql } from "./client.js";
 export { parseDatabaseUrl } from "./env.js";
 export {
+  type AppendEventInput,
+  appendEvent,
+  checkStoredChainStructure,
+  type StoredFundEvent,
+  streamFundEvents,
+  verifyStoredChain,
+} from "./events.js";
+export {
   assertForeignKeyIndexes,
   type ForeignKeyAllowlistEntry,
   type ForeignKeyViolation,
@@ -35,7 +43,9 @@ export {
   type SampleQueryContext,
 } from "./query-registry.js";
 export {
+  type FundEventRow,
   type FundRow,
+  fundEventRowSchema,
   fundRowSchema,
   type IdempotencyKeyRow,
   idempotencyKeyRowSchema,
