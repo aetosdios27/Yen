@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  :root {
+    --chart-1: #3b82f6;
+    --chart-2: #10b981;
+    --chart-3: #f59e0b;
+    --chart-4: #ef4444;
+    --chart-5: #8b5cf6;
+    --chart-6: #ec4899;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+    color: var(--foreground, #e5e7eb);
+    padding: 0;
+    margin: 0;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    width: 100%;
+  }
+  .card {
+    background: var(--card, #1f2937);
+    border: 1px solid var(--border, #374151);
+    border-radius: var(--radius, 8px);
+    padding: 16px;
+  }
+  .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--primary, #60a5fa);
+    font-weight: 500;
+  }
+  .badge-success {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+  }
+  .chart-container {
+    height: 180px;
+    width: 100%;
+    position: relative;
+  }
+  svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+  .legend {
+    display: flex;
+    gap: 16px;
+    margin-top: 10px;
+    font-size: 12px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+  }
+  .table-metric {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-top: 8px;
+  }
+  .table-metric th, .table-metric td {
+    padding: 6px 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--border, #374151);
+  }
+  .table-metric th {
+    color: var(--muted-foreground, #9ca3af);
+    font-weight: 500;
+  }
+  .num {
+    font-family: var(--font-mono, monospace);
+    text-align: right;
+  }
+</style>
+</head>
+<body>
+<div class="grid">
+  <!-- Chart 1: Append Throughput vs Concurrency -->
+  <div class="card">
+    <div class="card-title">
+      <span>Append Throughput: Hot Fund vs Spread Funds (Postgres 16)</span>
+      <span class="badge">Lock Contention</span>
+    </div>
+    <div class="chart-container">
+      <svg viewBox="0 0 500 150">
+        <title>Append Throughput: Hot Fund vs Spread Funds (Postgres 16)</title>
+        <!-- Grid lines -->
+        <line x1="40" y1="20" x2="480" y2="20" stroke="#374151" stroke-dasharray="2,2" stroke-width="1"/>
+        <line x1="40" y1="60" x2="480" y2="60" stroke="#374151" stroke-dasharray="2,2" stroke-width="1"/>
+        <line x1="40" y1="100" x2="480" y2="100" stroke="#374151" stroke-dasharray="2,2" stroke-width="1"/>
+        <line x1="40" y1="130" x2="480" y2="130" stroke="#4b5563" stroke-width="1"/>
+
+        <!-- Y Axis labels -->
+        <text x="35" y="24" fill="#9ca3af" font-size="10" text-anchor="end">2400</text>
+        <text x="35" y="64" fill="#9ca3af" font-size="10" text-anchor="end">1600</text>
+        <text x="35" y="104" fill="#9ca3af" font-size="10" text-anchor="end">800</text>
+        <text x="35" y="134" fill="#9ca3af" font-size="10" text-anchor="end">0</text>
+
+        <!-- X Axis labels -->
+        <text x="70" y="145" fill="#9ca3af" font-size="10" text-anchor="middle">c=1</text>
+        <text x="190" y="145" fill="#9ca3af" font-size="10" text-anchor="middle">c=4</text>
+        <text x="310" y="145" fill="#9ca3af" font-size="10" text-anchor="middle">c=8</text>
+        <text x="430" y="145" fill="#9ca3af" font-size="10" text-anchor="middle">c=16</text>
+
+        <!-- Spread Funds Line (Linear scaling then saturation at 2210) -->
+        <!-- Coordinates: c1=(70, 112), c4=(190, 62), c8=(310, 36), c16=(430, 32) -->
+        <path d="M 70 112 L 190 62 L 310 36 L 430 32" fill="none" stroke="#10b981" stroke-width="3"/>
+        <circle cx="70" cy="112" r="4" fill="#10b981"/>
+        <circle cx="190" cy="62" r="4" fill="#10b981"/>
+        <circle cx="310" cy="36" r="4" fill="#10b981"/>
+        <circle cx="430" cy="32" r="4" fill="#10b981"/>
+        <text x="435" y="27" fill="#10b981" font-size="10" font-weight="bold">2,210/s</text>
+
+        <!-- Hot Fund Line (Capped at ~400-500) -->
+        <!-- Coordinates: c1=(70, 106), c4=(190, 108), c8=(310, 113), c16=(430, 112) -->
+        <path d="M 70 106 L 190 108 L 310 113 L 430 112" fill="none" stroke="#ef4444" stroke-width="2" stroke-dasharray="4,3"/>
+        <circle cx="70" cy="106" r="4" fill="#ef4444"/>
+        <circle cx="190" cy="108" r="4" fill="#ef4444"/>
+        <circle cx="310" cy="113" r="4" fill="#ef4444"/>
+        <circle cx="430" cy="112" r="4" fill="#ef4444"/>
+        <text x="435" y="116" fill="#ef4444" font-size="10">387/s</text>
+      </svg>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="dot" style="background:#10b981"></span>Spread Funds (group commit scales to 2,210 appends/sec)</div>
+      <div class="legend-item"><span class="dot" style="background:#ef4444"></span>Single Hot Fund (serialized by advisory lock: ~400-500/sec)</div>
+    </div>
+  </div>
+
+  <!-- Chart 2: Hot Fund Isolation Verification -->
+  <div class="card">
+    <div class="card-title">
+      <span>Hot-Fund Isolation Guarantee: Fund B vs Saturated Fund A</span>
+      <span class="badge badge-success">Isolated (p99 &lt; 5.0ms)</span>
+    </div>
+    <table class="table-metric">
+      <thead>
+        <tr>
+          <th>Condition</th>
+          <th>Workload</th>
+          <th class="num">Throughput</th>
+          <th class="num">p50 Latency</th>
+          <th class="num">p99 Latency</th>
+          <th class="num">Max Latency</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="color:#ef4444; font-weight:600;">Fund A (Hot, Saturated)</td>
+          <td>8 workers hammering lock</td>
+          <td class="num">381.2 /s</td>
+          <td class="num">20.41 ms</td>
+          <td class="num">34.06 ms</td>
+          <td class="num">41.14 ms</td>
+        </tr>
+        <tr>
+          <td style="color:#10b981; font-weight:600;">Fund B (Unrelated, Unpart)</td>
+          <td>Concurrent probe</td>
+          <td class="num">395.2 /s</td>
+          <td class="num">2.40 ms</td>
+          <td class="num">4.20 ms</td>
+          <td class="num">4.23 ms</td>
+        </tr>
+        <tr>
+          <td style="color:#3b82f6; font-weight:600;">Fund B (Unrelated, Hash-16)</td>
+          <td>Concurrent probe</td>
+          <td class="num">368.7 /s</td>
+          <td class="num">2.57 ms</td>
+          <td class="num">4.80 ms</td>
+          <td class="num">5.24 ms</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Chart 3: Streaming Chain Verification Scaling -->
+  <div class="card">
+    <div class="card-title">
+      <span>verifyChainStream: Scale to 1,000,000 Events (Memory & Throughput)</span>
+      <span class="badge">O(1) Heap</span>
+    </div>
+    <table class="table-metric">
+      <thead>
+        <tr>
+          <th>Event Count</th>
+          <th class="num">Duration</th>
+          <th class="num">Throughput</th>
+          <th class="num">Latency/Event</th>
+          <th class="num">Peak Heap</th>
+          <th class="num">Heap Delta</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1,000 events</td>
+          <td class="num">0.165 s</td>
+          <td class="num">6,052.5 ev/s</td>
+          <td class="num">165.2 µs</td>
+          <td class="num">11.60 MB</td>
+          <td class="num">+0.50 MB</td>
+        </tr>
+        <tr>
+          <td>10,000 events</td>
+          <td class="num">1.713 s</td>
+          <td class="num">5,838.6 ev/s</td>
+          <td class="num">171.3 µs</td>
+          <td class="num">14.98 MB</td>
+          <td class="num">+0.00 MB</td>
+        </tr>
+        <tr>
+          <td>100,000 events</td>
+          <td class="num">16.190 s</td>
+          <td class="num">6,176.8 ev/s</td>
+          <td class="num">161.9 µs</td>
+          <td class="num">22.18 MB</td>
+          <td class="num">+10.52 MB</td>
+        </tr>
+        <tr style="font-weight:600; color:#3b82f6;">
+          <td>1,000,000 events</td>
+          <td class="num">188.884 s</td>
+          <td class="num">5,294.3 ev/s</td>
+          <td class="num">188.9 µs</td>
+          <td class="num">34.97 MB</td>
+          <td class="num">+19.14 MB</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>
