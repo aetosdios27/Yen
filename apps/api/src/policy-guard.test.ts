@@ -191,6 +191,8 @@ describe("API route redaction guard (tripwire)", () => {
       id: asFundId("00000000-0000-4000-8000-000000000001"),
       name: "Test Fund",
       targetPaise: "100000",
+      upiVpa: "test@yenbank",
+      upiPayeeName: "Test Payee",
       createdAt: "2026-10-27T00:00:00.000Z",
     };
 
