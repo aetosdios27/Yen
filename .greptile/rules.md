@@ -7,3 +7,5 @@
 5. Is the failure visible? Silent catch blocks and swallowed errors are bugs here.
 
 Do not comment on formatting; Biome enforces it.
+
+6. Design rationale that claims industry practice or security properties must cite a source in docs/REFERENCES.md; flag unsourced “industry standard” or “best practice” claims in ADRs, READMEs and PR descriptions for design changes.
