@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { createSql, type Sql } from "@yen/db";
+import { createSql, migrate, type Sql } from "@yen/db";
 import { afterAll, beforeAll, describe, it } from "vitest";
 import * as z from "zod";
 import { initLedgerSchema } from "../schema.js";
@@ -36,6 +36,8 @@ export function ledgerDatabaseSuite(name: string, tests: (sql: Sql, url: string)
 
     beforeAll(async () => {
       await admin`CREATE DATABASE ${admin(dbName)}`;
+      // Ledger tests need the app tables too: pledges live in a db-owned table.
+      await migrate(sql);
       await initLedgerSchema(sql);
     });
 
