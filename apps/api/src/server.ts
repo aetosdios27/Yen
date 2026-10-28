@@ -48,6 +48,7 @@ serve({
         env.TRUSTED_PROXY_HOPS,
       ),
     rateLimits: rateLimits(env),
+    otpHashKey: env.OTP_HASH_KEY ?? "development-only-otp-hash-key-change-me",
     rateLimitStore: new MemoryRateLimitStore({ maxEntries: env.RATE_LIMIT_MAX_KEYS }),
   }).fetch,
   port: env.PORT,

@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 
 /**
  * Generates a cryptographically secure 6-digit numeric OTP string.
@@ -15,17 +15,17 @@ export function generateSalt(): string {
 }
 
 /**
- * Hashes an OTP code at rest with salt using SHA-256.
+ * Hashes an OTP code with a server secret so database-only access cannot brute-force codes.
  */
-export function hashOtp(salt: string, code: string): string {
-  return createHash("sha256").update(`${salt}:${code}`).digest("hex");
+export function hashOtp(key: string, salt: string, code: string): string {
+  return createHmac("sha256", key).update(`${salt}:${code}`).digest("hex");
 }
 
 /**
  * Constant-time verification of an entered OTP code against the stored hash.
  */
-export function verifyOtp(salt: string, code: string, expectedHash: string): boolean {
-  const computed = hashOtp(salt, code);
+export function verifyOtp(key: string, salt: string, code: string, expectedHash: string): boolean {
+  const computed = hashOtp(key, salt, code);
   if (computed.length !== expectedHash.length) return false;
   return timingSafeEqual(Buffer.from(computed), Buffer.from(expectedHash));
 }

@@ -61,10 +61,16 @@ export interface CreateSessionInput {
 }
 
 export interface AuthStore {
+  consumeOtpAttempt(
+    phone: PhoneE164,
+    maxAttempts: number,
+    now: number,
+    windowMs: number,
+  ): Promise<boolean>;
   createOtpChallenge(input: CreateChallengeInput): Promise<OtpChallenge>;
   getLatestActiveOtpChallenge(phone: PhoneE164, now: number): Promise<OtpChallenge | null>;
-  incrementOtpAttempts(challengeId: string): Promise<OtpChallenge | null>;
-  consumeOtpChallenge(challengeId: string, now: number): Promise<void>;
+  incrementOtpAttempts(challengeId: string, now: number): Promise<OtpChallenge | null>;
+  consumeOtpChallenge(challengeId: string, now: number): Promise<boolean>;
 
   findOrCreateUserByPhone(phone: PhoneE164, now: number): Promise<User>;
   getUserById(userId: string): Promise<User | null>;
@@ -72,18 +78,14 @@ export interface AuthStore {
   createSession(input: CreateSessionInput): Promise<Session>;
   findSessionByTokenHash(tokenHash: string, now: number): Promise<Session | null>;
   touchSession(sessionId: string, now: number): Promise<void>;
-  rotateSession(
-    sessionId: string,
-    newTokenHash: string,
-    newExpiresAt: number,
-    now: number,
-  ): Promise<Session | null>;
+  rotateSession(sessionId: string, newTokenHash: string, now: number): Promise<Session | null>;
   revokeSession(sessionId: string, now: number): Promise<boolean>;
   revokeAllUserSessions(userId: string, now: number): Promise<number>;
   listUserSessions(userId: string, now: number): Promise<readonly Session[]>;
 }
 
 export class MemoryAuthStore implements AuthStore {
+  private readonly otpAttempts = new Map<string, { startedAt: number; count: number }>();
   private readonly challenges = new Map<string, OtpChallenge>();
   private readonly users = new Map<string, User>(); // key: userId
   private readonly usersByPhone = new Map<string, string>(); // phone -> userId
@@ -92,7 +94,32 @@ export class MemoryAuthStore implements AuthStore {
 
   constructor(private readonly idGenerator: () => string = () => crypto.randomUUID()) {}
 
+  async consumeOtpAttempt(
+    phone: PhoneE164,
+    maxAttempts: number,
+    now: number,
+    windowMs: number,
+  ): Promise<boolean> {
+    const current = this.otpAttempts.get(phone);
+    if (!current || now >= current.startedAt + windowMs) {
+      this.otpAttempts.set(phone, { startedAt: now, count: 1 });
+      return true;
+    }
+    if (current.count >= maxAttempts) return false;
+    this.otpAttempts.set(phone, { ...current, count: current.count + 1 });
+    return true;
+  }
+
   async createOtpChallenge(input: CreateChallengeInput): Promise<OtpChallenge> {
+    for (const [id, challenge] of this.challenges) {
+      if (
+        challenge.phone === input.phone &&
+        challenge.consumedAt === null &&
+        input.createdAt < challenge.expiresAt
+      ) {
+        this.challenges.set(id, { ...challenge, consumedAt: input.createdAt });
+      }
+    }
     const challenge: OtpChallenge = {
       id: input.id,
       phone: input.phone,
@@ -122,9 +149,15 @@ export class MemoryAuthStore implements AuthStore {
     return latest;
   }
 
-  async incrementOtpAttempts(challengeId: string): Promise<OtpChallenge | null> {
+  async incrementOtpAttempts(challengeId: string, now: number): Promise<OtpChallenge | null> {
     const challenge = this.challenges.get(challengeId);
-    if (!challenge) return null;
+    if (
+      !challenge ||
+      challenge.consumedAt !== null ||
+      now >= challenge.expiresAt ||
+      challenge.attempts >= challenge.maxAttempts
+    )
+      return null;
     const updated: OtpChallenge = {
       ...challenge,
       attempts: challenge.attempts + 1,
@@ -133,14 +166,11 @@ export class MemoryAuthStore implements AuthStore {
     return updated;
   }
 
-  async consumeOtpChallenge(challengeId: string, now: number): Promise<void> {
+  async consumeOtpChallenge(challengeId: string, now: number): Promise<boolean> {
     const challenge = this.challenges.get(challengeId);
-    if (challenge) {
-      this.challenges.set(challengeId, {
-        ...challenge,
-        consumedAt: now,
-      });
-    }
+    if (!challenge || challenge.consumedAt !== null || now >= challenge.expiresAt) return false;
+    this.challenges.set(challengeId, { ...challenge, consumedAt: now });
+    return true;
   }
 
   async findOrCreateUserByPhone(phone: PhoneE164, now: number): Promise<User> {
@@ -205,7 +235,6 @@ export class MemoryAuthStore implements AuthStore {
   async rotateSession(
     sessionId: string,
     newTokenHash: string,
-    newExpiresAt: number,
     now: number,
   ): Promise<Session | null> {
     const session = this.sessions.get(sessionId);
@@ -214,7 +243,6 @@ export class MemoryAuthStore implements AuthStore {
     const updated: Session = {
       ...session,
       tokenHash: newTokenHash,
-      expiresAt: newExpiresAt,
       lastActiveAt: now,
     };
     this.sessions.set(sessionId, updated);
@@ -306,19 +334,55 @@ function parseUserRow(row: unknown): User {
 export class PostgresAuthStore implements AuthStore {
   constructor(private readonly sql: Sql) {}
 
-  async createOtpChallenge(input: CreateChallengeInput): Promise<OtpChallenge> {
+  async consumeOtpAttempt(
+    phone: PhoneE164,
+    maxAttempts: number,
+    now: number,
+    windowMs: number,
+  ): Promise<boolean> {
     const rows = await this.sql`
-      INSERT INTO auth_otps (
-        id, phone, otp_hash, salt, attempts, max_attempts, channel,
-        expires_at, resend_available_at, created_at
-      ) VALUES (
-        ${input.id}, ${input.phone}, ${input.otpHash}, ${input.salt}, 0,
-        ${input.maxAttempts ?? 3}, ${input.channel},
-        ${new Date(input.expiresAt)}, ${new Date(input.resendAvailableAt)},
-        ${new Date(input.createdAt)}
-      ) RETURNING *
+      INSERT INTO auth_otp_attempt_limits (phone, attempts, window_started_at, updated_at)
+      VALUES (${phone}, 1, ${new Date(now)}, ${new Date(now)})
+      ON CONFLICT (phone) DO UPDATE
+      SET attempts = CASE
+            WHEN auth_otp_attempt_limits.window_started_at <= ${new Date(now)} - (${windowMs} * interval '1 millisecond') THEN 1
+            ELSE auth_otp_attempt_limits.attempts + 1
+          END,
+          window_started_at = CASE
+            WHEN auth_otp_attempt_limits.window_started_at <= ${new Date(now)} - (${windowMs} * interval '1 millisecond') THEN ${new Date(now)}
+            ELSE auth_otp_attempt_limits.window_started_at
+          END,
+          updated_at = ${new Date(now)}
+      WHERE auth_otp_attempt_limits.window_started_at <= ${new Date(now)} - (${windowMs} * interval '1 millisecond')
+         OR auth_otp_attempt_limits.attempts < ${maxAttempts}
+      RETURNING phone
     `;
-    return parseAuthOtpRow(rows[0]);
+    return rows.length > 0;
+  }
+
+  async createOtpChallenge(input: CreateChallengeInput): Promise<OtpChallenge> {
+    return this.sql.begin(async (tx) => {
+      await tx`SELECT pg_advisory_xact_lock(pg_catalog.hashtextextended(${input.phone}, 0))`;
+      await tx`
+        UPDATE auth_otps
+        SET consumed_at = ${new Date(input.createdAt)}
+        WHERE phone = ${input.phone}
+          AND consumed_at IS NULL
+          AND expires_at > ${new Date(input.createdAt)}
+      `;
+      const rows = await tx`
+        INSERT INTO auth_otps (
+          id, phone, otp_hash, salt, attempts, max_attempts, channel,
+          expires_at, resend_available_at, created_at
+        ) VALUES (
+          ${input.id}, ${input.phone}, ${input.otpHash}, ${input.salt}, 0,
+          ${input.maxAttempts ?? 3}, ${input.channel},
+          ${new Date(input.expiresAt)}, ${new Date(input.resendAvailableAt)},
+          ${new Date(input.createdAt)}
+        ) RETURNING *
+      `;
+      return parseAuthOtpRow(rows[0]);
+    });
   }
 
   async getLatestActiveOtpChallenge(phone: PhoneE164, now: number): Promise<OtpChallenge | null> {
@@ -333,22 +397,28 @@ export class PostgresAuthStore implements AuthStore {
     return rows.length > 0 ? parseAuthOtpRow(rows[0]) : null;
   }
 
-  async incrementOtpAttempts(challengeId: string): Promise<OtpChallenge | null> {
+  async incrementOtpAttempts(challengeId: string, now: number): Promise<OtpChallenge | null> {
     const rows = await this.sql`
       UPDATE auth_otps
       SET attempts = attempts + 1
       WHERE id = ${challengeId}
+        AND consumed_at IS NULL
+        AND expires_at > ${new Date(now)}
+        AND attempts < max_attempts
       RETURNING *
     `;
     return rows.length > 0 ? parseAuthOtpRow(rows[0]) : null;
   }
 
-  async consumeOtpChallenge(challengeId: string, now: number): Promise<void> {
-    await this.sql`
+  async consumeOtpChallenge(challengeId: string, now: number): Promise<boolean> {
+    const result = await this.sql`
       UPDATE auth_otps
       SET consumed_at = ${new Date(now)}
       WHERE id = ${challengeId}
+        AND consumed_at IS NULL
+        AND expires_at > ${new Date(now)}
     `;
+    return result.count > 0;
   }
 
   async findOrCreateUserByPhone(phone: PhoneE164, now: number): Promise<User> {
@@ -414,15 +484,13 @@ export class PostgresAuthStore implements AuthStore {
   async rotateSession(
     sessionId: string,
     newTokenHash: string,
-    newExpiresAt: number,
     now: number,
   ): Promise<Session | null> {
     const rows = await this.sql`
       UPDATE sessions
       SET token_hash = ${newTokenHash},
-          expires_at = ${new Date(newExpiresAt)},
           last_active_at = ${new Date(now)}
-      WHERE id = ${sessionId} AND revoked_at IS NULL
+      WHERE id = ${sessionId} AND revoked_at IS NULL AND expires_at > ${new Date(now)}
       RETURNING *
     `;
     return rows.length > 0 ? parseSessionRow(rows[0]) : null;

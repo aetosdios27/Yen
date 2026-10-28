@@ -19,6 +19,7 @@ import { devPolicy } from "./policy.js";
 const parsedTestPhone = normalizePhone("+919876543210");
 if (!parsedTestPhone) throw new Error("Invalid test phone");
 const testPhone = parsedTestPhone;
+const otpHashKey = "test-only-otp-hash-key-with-at-least-32-bytes";
 
 import {
   listSessionsResponse,
@@ -88,13 +89,14 @@ describe("Cryptographic Hashing and Verification", () => {
   it("hashes OTP at rest and verifies matching salt+code using constant-time check", () => {
     const salt = generateSalt();
     const code = "741258";
-    const hash = hashOtp(salt, code);
+    const hash = hashOtp(otpHashKey, salt, code);
 
     expect(hash).not.toBe(code);
     expect(hash).toHaveLength(64); // SHA-256 hex
-    expect(verifyOtp(salt, code, hash)).toBe(true);
-    expect(verifyOtp(salt, "000000", hash)).toBe(false);
-    expect(verifyOtp(generateSalt(), code, hash)).toBe(false);
+    expect(verifyOtp(otpHashKey, salt, code, hash)).toBe(true);
+    expect(verifyOtp(`${otpHashKey}!`, salt, code, hash)).toBe(false);
+    expect(verifyOtp(otpHashKey, salt, "000000", hash)).toBe(false);
+    expect(verifyOtp(otpHashKey, generateSalt(), code, hash)).toBe(false);
   });
 
   it("hashes session tokens using SHA-256", () => {
@@ -153,6 +155,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
       otpCooldownMs: 60_000,
       otpExpiryMs: 300_000,
       otpMaxAttempts: 3,
+      otpHashKey,
       otpRateLimitIp: { capacity: 5, refillMs: 600_000 },
       otpRateLimitPhone: { capacity: 3, refillMs: 600_000 },
       clientIp: () => "203.0.113.195",
@@ -176,7 +179,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     const sendRes = await app.request("/v1/auth/otp/send", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ phone: "9876543210" }),
+      body: JSON.stringify({ phone: "9876543210", channel: "whatsapp" }),
     });
     expect(sendRes.status).toBe(200);
     const sendData = sendOtpResponse.parse(await sendRes.json());
@@ -192,7 +195,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     expect(challenge).toBeDefined();
     if (!challenge) throw new Error("Challenge must exist");
     expect(challenge.otpHash).not.toBe(delivery.code);
-    expect(verifyOtp(challenge.salt, delivery.code, challenge.otpHash)).toBe(true);
+    expect(verifyOtp(otpHashKey, challenge.salt, delivery.code, challenge.otpHash)).toBe(true);
 
     // Verify with code
     const verifyRes = await app.request("/v1/auth/otp/verify", {
@@ -234,6 +237,25 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     expect(delivery.channel).toBe("sms");
   });
 
+  it("does not persist a challenge when a provider silently switches channels", async () => {
+    const { authStore } = createTestSetup();
+    const mismatched = createApp({
+      authStore,
+      otpHashKey,
+      otpDeliveryProvider: {
+        sendOtp: async () => ({ success: true, channel: "whatsapp" as const }),
+      },
+    });
+    const response = await mismatched.request("/v1/auth/otp/send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", channel: "sms" }),
+    });
+
+    expect(response.status).toBe(500);
+    expect(await authStore.getLatestActiveOtpChallenge(testPhone, Date.now())).toBeNull();
+  });
+
   it("enforces 60-second resend cooldown with Retry-After header", async () => {
     const { app, advanceClock } = createTestSetup();
 
@@ -241,7 +263,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     const res1 = await app.request("/v1/auth/otp/send", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ phone: "+919876543210" }),
+      body: JSON.stringify({ phone: "+919876543210", channel: "whatsapp" }),
     });
     expect(res1.status).toBe(200);
 
@@ -249,7 +271,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     const res2 = await app.request("/v1/auth/otp/send", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ phone: "+919876543210" }),
+      body: JSON.stringify({ phone: "+919876543210", channel: "whatsapp" }),
     });
     expect(res2.status).toBe(429);
     expect(res2.headers.get("retry-after")).toBe("60");
@@ -259,7 +281,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     const res3 = await app.request("/v1/auth/otp/send", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ phone: "+919876543210" }),
+      body: JSON.stringify({ phone: "+919876543210", channel: "whatsapp" }),
     });
     expect(res3.status).toBe(429);
     expect(res3.headers.get("retry-after")).toBe("30");
@@ -269,9 +291,73 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     const res4 = await app.request("/v1/auth/otp/send", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ phone: "+919876543210" }),
+      body: JSON.stringify({ phone: "+919876543210", channel: "whatsapp" }),
     });
     expect(res4.status).toBe(200);
+  });
+
+  it("keeps one live code and limits attempts per phone across channels", async () => {
+    const { app, otpDeliveryProvider, advanceClock } = createTestSetup();
+    await app.request("/v1/auth/otp/send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", channel: "whatsapp" }),
+    });
+    const whatsappCode = getDelivery(otpDeliveryProvider).code;
+
+    for (const code of ["000000", "111111"]) {
+      await app.request("/v1/auth/otp/verify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ phone: "+919876543210", code }),
+      });
+    }
+
+    advanceClock(60_000);
+    await app.request("/v1/auth/otp/send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", channel: "sms" }),
+    });
+    const smsCode = getDelivery(otpDeliveryProvider).code;
+
+    const oldCode = await app.request("/v1/auth/otp/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", code: whatsappCode }),
+    });
+    expect(oldCode.status).toBe(400);
+
+    const active = await app.request("/v1/auth/otp/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", code: smsCode }),
+    });
+    expect(active.status).toBe(429);
+  });
+
+  it("returns the same error for an unknown number and an invalid code", async () => {
+    const { app } = createTestSetup();
+    await app.request("/v1/auth/otp/send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", channel: "whatsapp" }),
+    });
+    const known = await app.request("/v1/auth/otp/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", code: "000000" }),
+    });
+    const unknown = await app.request("/v1/auth/otp/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+14155552671", code: "000000" }),
+    });
+    expect(known.status).toBe(400);
+    expect(unknown.status).toBe(400);
+    expect(errorResponseSchema.parse(await known.json())).toEqual(
+      errorResponseSchema.parse(await unknown.json()),
+    );
   });
 
   it("enforces 5-minute expiry on OTP codes", async () => {
@@ -280,7 +366,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     await app.request("/v1/auth/otp/send", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ phone: "+919876543210" }),
+      body: JSON.stringify({ phone: "+919876543210", channel: "whatsapp" }),
     });
     const delivery = getDelivery(otpDeliveryProvider);
 
@@ -294,7 +380,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     });
     expect(verifyRes.status).toBe(400);
     const err = errorResponseSchema.parse(await verifyRes.json());
-    expect(err.error.details[0]?.message).toContain("expired");
+    expect(err.error.details[0]?.message).toBe("Invalid or expired code");
   });
 
   it("limits incorrect verification attempts and brute-force attacks", async () => {
@@ -303,7 +389,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     await app.request("/v1/auth/otp/send", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ phone: "+919876543210" }),
+      body: JSON.stringify({ phone: "+919876543210", channel: "whatsapp" }),
     });
 
     // Attempt 1: wrong code -> 400 with "Wrong code, try again"
@@ -314,7 +400,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     });
     expect(try1.status).toBe(400);
     const err1 = errorResponseSchema.parse(await try1.json());
-    expect(err1.error.details[0]?.message).toBe("Wrong code, try again");
+    expect(err1.error.details[0]?.message).toBe("Invalid or expired code");
 
     // Attempt 2: wrong code -> 400
     const try2 = await app.request("/v1/auth/otp/verify", {
@@ -341,7 +427,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     await app.request("/v1/auth/otp/send", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ phone: "+919876543210" }),
+      body: JSON.stringify({ phone: "+919876543210", channel: "whatsapp" }),
     });
     const delivery = getDelivery(otpDeliveryProvider);
 
@@ -362,13 +448,32 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     expect(verify2.status).toBe(400);
   });
 
+  it("allows only one concurrent verification to consume an OTP", async () => {
+    const { app, otpDeliveryProvider } = createTestSetup();
+    await app.request("/v1/auth/otp/send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", channel: "whatsapp" }),
+    });
+    const code = getDelivery(otpDeliveryProvider).code;
+    const verify = () =>
+      app.request("/v1/auth/otp/verify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ phone: "+919876543210", code }),
+      });
+
+    const responses = await Promise.all([verify(), verify()]);
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 400]);
+  });
+
   it("authenticates using either Bearer token or httpOnly session cookie", async () => {
     const { app, otpDeliveryProvider } = createTestSetup();
 
     await app.request("/v1/auth/otp/send", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ phone: "+919876543210" }),
+      body: JSON.stringify({ phone: "+919876543210", channel: "whatsapp" }),
     });
     const delivery = getDelivery(otpDeliveryProvider);
 
@@ -402,12 +507,12 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
   });
 
   it("supports session token rotation, invalidating old token", async () => {
-    const { app, otpDeliveryProvider } = createTestSetup();
+    const { app, otpDeliveryProvider, advanceClock } = createTestSetup();
 
     await app.request("/v1/auth/otp/send", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ phone: "+919876543210" }),
+      body: JSON.stringify({ phone: "+919876543210", channel: "whatsapp" }),
     });
     const delivery = getDelivery(otpDeliveryProvider);
     const verifyRes = await app.request("/v1/auth/otp/verify", {
@@ -417,6 +522,8 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     });
     const authData = verifyOtpResponse.parse(await verifyRes.json());
     const oldToken = authData.session.token;
+    const absoluteExpiry = authData.session.expiresAt;
+    advanceClock(29 * 24 * 60 * 60 * 1000);
 
     // Rotate session
     const rotateRes = await app.request("/v1/auth/session/rotate", {
@@ -426,6 +533,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     expect(rotateRes.status).toBe(200);
     const rotateData = rotateSessionResponse.parse(await rotateRes.json());
     const newToken = rotateData.session.token;
+    expect(rotateData.session.expiresAt).toBe(absoluteExpiry);
     expect(newToken).not.toBe(oldToken);
 
     // New token works
@@ -439,6 +547,12 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
       headers: { authorization: `Bearer ${oldToken}` },
     });
     expect(testOld.status).toBe(401);
+
+    advanceClock(24 * 60 * 60 * 1000);
+    const afterAbsoluteExpiry = await app.request("/v1/me", {
+      headers: { authorization: `Bearer ${newToken}` },
+    });
+    expect(afterAbsoluteExpiry.status).toBe(401);
   });
 
   it("provides device list and supports sign out everywhere", async () => {
@@ -448,7 +562,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     await app.request("/v1/auth/otp/send", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ phone: "+919876543210" }),
+      body: JSON.stringify({ phone: "+919876543210", channel: "whatsapp" }),
     });
     const d1 = getDelivery(otpDeliveryProvider);
     const v1 = await app.request("/v1/auth/otp/verify", {
@@ -467,7 +581,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     await app.request("/v1/auth/otp/send", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ phone: "+919876543210" }),
+      body: JSON.stringify({ phone: "+919876543210", channel: "whatsapp" }),
     });
     const d2 = getDelivery(otpDeliveryProvider);
     const v2 = await app.request("/v1/auth/otp/verify", {
@@ -517,7 +631,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     await app.request("/v1/auth/otp/send", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ phone: "+919876543210" }),
+      body: JSON.stringify({ phone: "+919876543210", channel: "whatsapp" }),
     });
     const delivery = getDelivery(otpDeliveryProvider);
     const plainOtp = delivery.code;
@@ -553,7 +667,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
         "content-type": "application/json",
         "user-agent": "Mozilla/5.0 (Linux; Android 9; SM-J260G) Chrome/80.0 Mobile",
       },
-      body: JSON.stringify({ phone: "+919876543210" }),
+      body: JSON.stringify({ phone: "+919876543210", channel: "whatsapp" }),
     });
     const d = getDelivery(otpDeliveryProvider);
 

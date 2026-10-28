@@ -84,6 +84,35 @@ describe("LoginPage", () => {
     });
   });
 
+  it("sends the selected SMS channel explicitly", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, channel: "sms", resendCooldownSeconds: 60 }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <LocaleProvider initialLocale="en">
+        <LoginPage />
+      </LocaleProvider>,
+    );
+
+    fireEvent.change(screen.getByLabelText("Phone number"), {
+      target: { value: "9876543210" },
+    });
+    fireEvent.change(screen.getByLabelText("Send code by"), { target: { value: "sms" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send code" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          body: JSON.stringify({ phone: "9876543210", channel: "sms" }),
+        }),
+      );
+    });
+  });
+
   it("displays 'Wrong code, try again.' on invalid OTP code", async () => {
     vi.stubGlobal(
       "fetch",

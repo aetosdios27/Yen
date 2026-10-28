@@ -116,10 +116,10 @@
           "channel": {
             "type": "string",
             "enum": ["whatsapp", "sms"],
-            "description": "Preferred delivery channel"
+            "description": "Selected delivery channel; delivery never switches channels"
           }
         },
-        "required": ["phone"],
+        "required": ["phone", "channel"],
         "additionalProperties": false
       },
       "VerifyOtpResponse": {

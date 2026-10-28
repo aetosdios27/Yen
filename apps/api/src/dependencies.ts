@@ -65,6 +65,7 @@ export interface AppDependencies {
   readonly otpCooldownMs: number;
   readonly otpExpiryMs: number;
   readonly otpMaxAttempts: number;
+  readonly otpHashKey: string;
   readonly otpRateLimitIp: RateLimit;
   readonly otpRateLimitPhone: RateLimit;
   readonly sessionCookieName: string;
@@ -94,6 +95,7 @@ export function defaultDependencies(clock: () => number = Date.now): AppDependen
     otpCooldownMs: 60_000,
     otpExpiryMs: 300_000,
     otpMaxAttempts: 3,
+    otpHashKey: "development-only-otp-hash-key-change-me",
     otpRateLimitIp: { capacity: 10, refillMs: 600_000 },
     otpRateLimitPhone: { capacity: 5, refillMs: 600_000 },
     sessionCookieName: "yen_session",

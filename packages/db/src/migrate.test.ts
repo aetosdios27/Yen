@@ -51,6 +51,7 @@ databaseSuite("migration runner", (sql, url) => {
         await sql`SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename`,
       );
     expect(tables.map((row) => row.tablename)).toEqual([
+      "auth_otp_attempt_limits",
       "auth_otps",
       "fund_events",
       "funds",
@@ -67,6 +68,7 @@ databaseSuite("migration runner", (sql, url) => {
     const waitlistSource = await readFile(join(defaultDir, "0002_waitlist.sql"));
     const fundEventsSource = await readFile(join(defaultDir, "0003_fund_events.sql"));
     const authSource = await readFile(join(defaultDir, "0004_auth_sessions.sql"));
+    const authAttemptsSource = await readFile(join(defaultDir, "0005_auth_otp_attempt_limits.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -91,6 +93,12 @@ databaseSuite("migration runner", (sql, url) => {
         version: 4,
         name: "0004_auth_sessions.sql",
         checksum: createHash("sha256").update(authSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
+      {
+        version: 5,
+        name: "0005_auth_otp_attempt_limits.sql",
+        checksum: createHash("sha256").update(authAttemptsSource).digest("hex"),
         applied_at: expect.any(Date),
       },
     ]);
@@ -126,7 +134,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(4);
+    expect(before).toHaveLength(5);
   });
 
   it("rejects an edited applied file and names it", async () => {

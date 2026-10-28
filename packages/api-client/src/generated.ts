@@ -296,10 +296,10 @@ export interface components {
       /** @description Phone number (E.164 or 10-digit Indian mobile) */
       phone: string;
       /**
-       * @description Preferred delivery channel
+       * @description Selected delivery channel; delivery never switches channels
        * @enum {string}
        */
-      channel?: "whatsapp" | "sms";
+      channel: "whatsapp" | "sms";
     };
     VerifyOtpResponse: {
       /** @enum {string} */

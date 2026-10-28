@@ -266,8 +266,7 @@ export const sendOtpInput = z
       .openapi({ description: "Phone number (E.164 or 10-digit Indian mobile)" }),
     channel: z
       .enum(["whatsapp", "sms"])
-      .optional()
-      .openapi({ description: "Preferred delivery channel" }),
+      .openapi({ description: "Selected delivery channel; delivery never switches channels" }),
   })
   .strict()
   .openapi("SendOtpInput");

@@ -116,6 +116,17 @@ These defaults are injectable as `inProgressTtlMs`, `replayRetentionMs`, and
 processes. A released or expired key can execute again, so operations with durable
 side effects still need transactional coordination in that store.
 
+## Phone OTP and sessions
+
+`POST /v1/auth/otp/send` requires a selected `channel` (`whatsapp` or `sms`). Delivery
+must use that channel exactly; failures do not fall back to the other provider. Only
+one active code is kept for a phone number. Verification attempts are counted per
+phone across channel changes in a five-minute window (or the configured OTP expiry).
+OTP hashes use the server-side `OTP_HASH_KEY`, which must be at least 32 characters
+in production. Losing or rotating the key invalidates outstanding codes. Session
+tokens are random opaque values; storage keeps only their SHA-256 hashes, and rotation
+preserves the original absolute expiry.
+
 ## Rate limits and logs
 
 Both token buckets apply to `/v1` requests. The default per-IP capacity is 120;

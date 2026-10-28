@@ -224,8 +224,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
     const code = generateOtpCode();
     const salt = generateSalt();
-    const otpHash = hashOtp(salt, code);
-    const channel = input.channel ?? "whatsapp";
+    const otpHash = hashOtp(deps.otpHashKey, salt, code);
+    const channel = input.channel;
     const expiresAt = now + deps.otpExpiryMs;
     const resendAvailableAt = now + deps.otpCooldownMs;
 
@@ -237,6 +237,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     if (!deliveryResult.success) {
       throw new ApiError("internal");
     }
+    if (deliveryResult.channel !== channel) throw new ApiError("internal");
 
     await deps.authStore.createOtpChallenge({
       id: deps.idGenerator(),
@@ -270,11 +271,15 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     }
     const now = deps.clock();
 
+    if (
+      !(await deps.authStore.consumeOtpAttempt(phone, deps.otpMaxAttempts, now, deps.otpExpiryMs))
+    ) {
+      throw new ApiError("rate_limited");
+    }
+
     const challenge = await deps.authStore.getLatestActiveOtpChallenge(phone, now);
     if (!challenge) {
-      throw new ApiError("validation_failed", [
-        { path: ["body", "code"], message: "Code expired. Request a new code." },
-      ]);
+      throw invalidOrExpiredCode();
     }
 
     if (challenge.attempts >= challenge.maxAttempts) {
@@ -283,20 +288,21 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       ]);
     }
 
-    const matches = verifyOtp(challenge.salt, input.code, challenge.otpHash);
+    const matches = verifyOtp(deps.otpHashKey, challenge.salt, input.code, challenge.otpHash);
     if (!matches) {
-      const updated = await deps.authStore.incrementOtpAttempts(challenge.id);
+      const updated = await deps.authStore.incrementOtpAttempts(challenge.id, now);
+      if (!updated) throw new ApiError("rate_limited");
       if (updated && updated.attempts >= updated.maxAttempts) {
         throw new ApiError("rate_limited", [
           { path: ["body", "code"], message: "Too many failed attempts. Request a new code." },
         ]);
       }
-      throw new ApiError("validation_failed", [
-        { path: ["body", "code"], message: "Wrong code, try again" },
-      ]);
+      throw invalidOrExpiredCode();
     }
 
-    await deps.authStore.consumeOtpChallenge(challenge.id, now);
+    if (!(await deps.authStore.consumeOtpChallenge(challenge.id, now))) {
+      throw invalidOrExpiredCode();
+    }
     const user = await deps.authStore.findOrCreateUserByPhone(phone, now);
 
     const sessionToken = generateSessionToken();
@@ -352,14 +358,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
     const newSessionToken = generateSessionToken();
     const newTokenHash = hashSessionToken(newSessionToken);
-    const newExpiresAt = now + deps.sessionMaxAgeSeconds * 1000;
-
-    const rotated = await deps.authStore.rotateSession(
-      currentSession.id,
-      newTokenHash,
-      newExpiresAt,
-      now,
-    );
+    const rotated = await deps.authStore.rotateSession(currentSession.id, newTokenHash, now);
     if (!rotated) throw new ApiError("unauthenticated");
 
     setCookie(c, deps.sessionCookieName, newSessionToken, {
@@ -462,6 +461,12 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     description: "Session token authentication via Bearer header or yen_session httpOnly cookie.",
   });
   return app;
+}
+
+function invalidOrExpiredCode(): ApiError {
+  return new ApiError("validation_failed", [
+    { path: ["body", "code"], message: "Invalid or expired code" },
+  ]);
 }
 
 export function openApiDocument(

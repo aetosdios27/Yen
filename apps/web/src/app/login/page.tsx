@@ -15,6 +15,7 @@ export default function LoginPage() {
 
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
+  const [channel, setChannel] = useState<"whatsapp" | "sms">("whatsapp");
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -49,7 +50,7 @@ export default function LoginPage() {
       const res = await fetch(`${apiUrl}/v1/auth/otp/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: cleanPhone }),
+        body: JSON.stringify({ phone: cleanPhone, channel }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -148,6 +149,19 @@ export default function LoginPage() {
               {...(errorMessage ? { error: errorMessage } : {})}
               required
             />
+
+            <label className="flex flex-col gap-2 text-sm font-medium text-ink">
+              {t("auth.channelLabel")}
+              <select
+                aria-label={t("auth.channelLabel")}
+                className="min-h-11 rounded-md border border-line bg-surface px-3 text-ink"
+                value={channel}
+                onChange={(event) => setChannel(event.target.value as "whatsapp" | "sms")}
+              >
+                <option value="whatsapp">{t("auth.channelWhatsapp")}</option>
+                <option value="sms">{t("auth.channelSms")}</option>
+              </select>
+            </label>
 
             <Button
               type="submit"

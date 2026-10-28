@@ -224,7 +224,7 @@ it("validates every documented status and sent header against the committed Open
   const sendRes = await app.request("/v1/auth/otp/send", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ phone: testPhone }),
+    body: JSON.stringify({ phone: testPhone, channel: "whatsapp" }),
   });
   expect(sendRes.status).toBe(200);
   await check("/v1/auth/otp/send", "post", sendRes);
@@ -262,7 +262,7 @@ it("validates every documented status and sent header against the committed Open
   await app.request("/v1/auth/otp/send", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ phone: testPhone }),
+    body: JSON.stringify({ phone: testPhone, channel: "whatsapp" }),
   });
   const delivered2 = otpDeliveryProvider.getLastDeliveryFor(testPhone);
   const verifyRes2 = await app.request("/v1/auth/otp/verify", {
@@ -294,7 +294,7 @@ it("validates every documented status and sent header against the committed Open
   await app.request("/v1/auth/otp/send", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ phone: testPhone }),
+    body: JSON.stringify({ phone: testPhone, channel: "whatsapp" }),
   });
   const delivered3 = otpDeliveryProvider.getLastDeliveryFor(testPhone);
   const verifyRes3 = await app.request("/v1/auth/otp/verify", {
