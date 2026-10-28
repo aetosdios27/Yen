@@ -4,7 +4,8 @@ import { defaultDependencies } from "../dependencies.js";
 import { type LogEntry, serializeRequestLog } from "../logging.js";
 import { computeActionHash } from "./crypto.js";
 import { MemoryPinNotificationService } from "./notifications.js";
-import { MemoryPinOtpVerifier, type PinOtpVerifier } from "./otp.js";
+import type { PinOtpVerifier } from "./otp.js";
+import { MemoryPinOtpVerifier } from "./otp.test-helper.js";
 import { PinService } from "./service.js";
 import { MemoryActionTokenStore, MemoryPinStore } from "./store.js";
 

@@ -10,12 +10,7 @@ export {
   type PinNotificationEvent,
   type PinNotificationService,
 } from "./notifications.js";
-export {
-  MemoryPinOtpVerifier,
-  type MemoryPinOtpVerifierOptions,
-  type PinOtpVerifier,
-  type PinResetChallenge,
-} from "./otp.js";
+export type { PinOtpVerifier } from "./otp.js";
 export {
   type PinValidationContext,
   type PinValidationResult,
