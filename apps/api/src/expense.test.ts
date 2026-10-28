@@ -220,6 +220,18 @@ describe("Expense Requests API Routes (YEN-30)", () => {
     expect(submitted.status).toBe("submitted");
     expect(submitted.holdId).toBeDefined();
 
+    const submitRetry = await app.request(
+      req(
+        "POST",
+        `/v1/funds/${FUND_ID}/expenses/${created.id}/submit`,
+        undefined,
+        "lifecycle-submit",
+      ),
+    );
+    expect(submitRetry.status).toBe(200);
+    expect(submitRetry.headers.get("idempotent-replayed")).toBe("true");
+    expect(await json(submitRetry)).toEqual(submitted);
+
     // Cannot submit again
     const reSubmitRes = await app.request(
       req(
@@ -268,6 +280,18 @@ describe("Expense Requests API Routes (YEN-30)", () => {
     expect(app1Body.status).toBe("submitted"); // Quorum is 2
     expect(app1Body.approvalsCount).toBe(1);
 
+    const approvalRetry = await app1.request(
+      req(
+        "POST",
+        `/v1/funds/${FUND_ID}/expenses/${created.id}/approve`,
+        app1Data.passkeySignature,
+        "lifecycle-app-1",
+      ),
+    );
+    expect(approvalRetry.status).toBe(200);
+    expect(approvalRetry.headers.get("idempotent-replayed")).toBe("true");
+    expect(await json(approvalRetry)).toEqual(app1Body);
+
     // Approver 2 signs: reaches quorum of 2!
     const app2 = setup({ principal: APPROVER_2, expenseStore }).app;
     const app2Data = createMockPasskeyApproval(
@@ -304,6 +328,18 @@ describe("Expense Requests API Routes (YEN-30)", () => {
     expect(paidBody.status).toBe("paid");
     expect(paidBody.paidAt).toBeDefined();
     expect(paidBody.bankTransactionId).toBe(bankTxId);
+
+    const payRetry = await app.request(
+      req(
+        "POST",
+        `/v1/funds/${FUND_ID}/expenses/${created.id}/pay`,
+        { bankTransactionId: bankTxId },
+        "lifecycle-pay",
+      ),
+    );
+    expect(payRetry.status).toBe(200);
+    expect(payRetry.headers.get("idempotent-replayed")).toBe("true");
+    expect(await json(payRetry)).toEqual(paidBody);
 
     const mismatchedReconcile = await app.request(
       req(
