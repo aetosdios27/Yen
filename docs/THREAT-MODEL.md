@@ -23,9 +23,10 @@ No threat in this model is fully mitigated today. Most money paths have no code.
 | D1  | Donation marked verified without a bank credit        | S, T   | high     | Verified donations drive public totals, and no bank check exists                                     | none    |
 | D2  | Replayed pledge creates a duplicate                   | R, T   | medium   | HTTP idempotency exists but is in memory, and no donation route exists                               | partial |
 | D3  | Amount or fund changed before verification            | T      | medium   | Money wire rules exist, but no append path binds the amount yet                                      | partial |
-| E1  | Forged approval                                       | S      | high     | Approval releases money, and passkeys are not built                                                  | none    |
+| D4  | QR swap at collection point                           | T, S   | high     | Payee UPI ID hash committed to events; no QR intake code exists                                      | planned |
+| E1  | Forged approval                                       | S      | high     | Approvals confirmed by server PIN check, not device-signed; no PIN code exists                       | none    |
 | E2  | Replayed request or approval action                   | R, T   | medium   | Only HTTP-level idempotency exists, not domain-level                                                 | partial |
-| E3  | Treasurer approves own request                        | E      | high     | Memberships allow several roles, and no rule separates them                                          | none    |
+| E3  | Treasurer approves own request (self-approval)        | E      | high     | Memberships allow multiple roles, and no submitter-approver separation exists                        | none    |
 | E4  | Evidence swapped after approval                       | T      | high     | The event carries a hash field, but nothing stores or checks the bytes                               | none    |
 | E5  | Objection suppressed or resolved silently             | R, D   | medium   | The envelope actor names who resolves, but nothing checks who may, and no window is built            | none    |
 | P1  | Payout without an approved request                    | S, E   | high     | `expense.paid` links to no approval, and no payout code exists                                       | none    |
@@ -39,17 +40,24 @@ No threat in this model is fully mitigated today. Most money paths have no code.
 | V2  | Publisher key compromise                              | S, E   | high     | One key with a two-step transfer, but no timelock, multisig, or key policy                           | partial |
 | V3  | PII or sensitive linkage on chain                     | I      | high     | Payloads are strict, and leaves are salted, but disclosed proofs and public roots still leak linkage | partial |
 | V4  | Verify page shows an unqualified "verified" badge     | T      | medium   | The rule is written, but no verify page exists                                                       | planned |
-| X1  | Phone or waitlist enumeration                         | I      | medium   | A uniqueness constraint exists, but no lookup endpoint exists yet                                    | none    |
+| V5  | Cross-fund linking through pseudonyms                 | I      | medium   | Single global pseudonym in schema; per-fund pseudonyms unmerged                                      | planned |
+| V6  | Erasure request conflicts with statutory retention    | R, I   | medium   | Erasable identity tables; statutory retention marking unbuilt                                        | planned |
+| X1  | Phone or waitlist enumeration                         | I      | medium   | Phone uniqueness constraint exists; uniform WhatsApp/SMS OTP planned; no code exists                 | none    |
 | X2  | Rate-limit evasion                                    | D      | medium   | Per-IP and per-principal buckets exist, but they are per process and evictable                       | partial |
 | X3  | External attacker on the public API                   | S, E   | medium   | Default deny and `requireAuth` apply, but the bearer token is not validated                          | partial |
 | X4  | Member grants self a role                             | E      | high     | Membership inserts have no authorization rule                                                        | none    |
-| X5  | Compromised platform operator                         | T, R   | high     | Published roots resist rewrites, but the operator can withhold publication                           | partial |
+| X5  | Compromised platform operator                         | T, R   | high     | Roots resist rewrites, but operator can fabricate PIN approvals at write time                        | partial |
 | X6  | Dev principal reaches production                      | E      | low      | The mock server refuses production, but `createApp` deps accept any principal                        | partial |
-| X7  | Approver credential or passkey compromise             | S      | high     | Passkeys are planned, and no authentication code exists                                              | none    |
+| X7  | Approver credential or PIN compromise                 | S      | high     | 6-digit PIN and OTP planned; PIN alone never authorizes a new device; no code exists                 | none    |
+| X8  | SIM swap or recycled phone number inherits roles      | S, E   | high     | Accounts belong to account, not phone; re-auth unbuilt                                               | planned |
+| X9  | PIN online brute force                                | S      | high     | 5-attempt lockout for 30m, 10-attempt support reset; unbuilt                                         | planned |
+| X10 | PIN offline cracking after database leak              | I, S   | high     | Keyed hash with external secret pepper outside DB; unbuilt                                           | planned |
+| X11 | PIN phishing on lookalike site                        | S      | high     | Short-lived single-use PIN; device-signing planned; unbuilt                                          | planned |
+| X12 | Owner-vouched invite interception                     | S, E   | medium   | Vouched in-person invite with short expiry; unbuilt                                                  | planned |
 
-Counts. High: 15 (D1, E1, E3, E4, P1, P2, R1, R2, R4, V1, V2, V3, X4, X5, X7). Medium: 10 (D2, D3, E2, E5, P3, R3, V4, X1, X2, X3). Low: 1 (X6).
+Counts. High: 20 (D1, D4, E1, E3, E4, P1, P2, R1, R2, R4, V1, V2, V3, X4, X5, X7, X8, X9, X10, X11). Medium: 13 (D2, D3, E2, E5, P3, R3, V4, V5, V6, X1, X2, X3, X12). Low: 1 (X6).
 
-Status: `exists` 0, `partial` 13, `planned` 1, `none` 12.
+Status: `exists` 0, `partial` 13, `planned` 9, `none` 12.
 
 ## Assets
 
@@ -59,13 +67,15 @@ Status: `exists` 0, `partial` 13, `planned` 1, `none` 12.
 - **Evidence files.** Bills and receipts. No storage, upload, or table exists. The `evidence_id` and `content_sha256` fields in `expense.evidence_added` are the only planned link.
 - **PII.** `users.phone` and `users.display_name` in `packages/db/migrations/0001_app_tables.sql`. The `pseudonyms` table maps a public UUID to a user, so it can be erased.
 - **Signing and anchoring keys.** The publisher address comes from `ROOT_REGISTRY_PUBLISHER`, and a deployer keystore signs deployments. The repo has no key management. Event hashes are unsigned, so no event signing key exists.
-- **Approver credentials and passkeys.** Planned under YEN-22. The bearer scheme is a placeholder that validates nothing.
+- **Approver credentials and PIN.** 6-digit Yen PIN for MVP money action confirmations (YEN-25), checked by server with keyed hash and pepper held outside database. WebAuthn passkeys (YEN-71) planned before money movement. The bearer scheme in code is a placeholder that validates nothing.
+- **Payee UPI ID and QR collection points.** Planned payee UPI IDs for club intake. Published on verify pages; event logs commit only a hash of the payee ID.
+- **PII and pseudonyms.** `users.phone` and `users.display_name` in application tables. Pseudonyms are strictly per person per fund (YEN-70, planned) so public records cannot link one person across funds. The private Yen ID is a 9-digit number with a check digit, never in events, receipts, or public pages. Identity tables are erasable, while logs hold only pseudonyms (YEN-46).
 - **Operational state.** Idempotency responses and rate-limit buckets live in memory, per process.
 
 ## Actors
 
 - **Treasurer.** Records donations and submits expense requests. Trusted for intent. Not trusted to approve own requests.
-- **Approver.** Confirms requests with a passkey. Trusted to approve honestly within the quorum.
+- **Approver.** Confirms money actions with a 6-digit Yen PIN for MVP (server-attested); device-signed approvals via WebAuthn (YEN-71) are planned before moving money. Trusted to approve honestly within the quorum.
 - **Donor.** Pledges and objects. Sees only what the visibility tier allows.
 - **Platform operator.** Runs the API, the database, and the publisher. Trusted with availability. Not trusted with history after publication is the design goal.
 - **Compromised operator.** An attacker with operator-level access. Covered by X5.
@@ -149,6 +159,15 @@ Stages: pledge, bank verification, and the verified total.
 - **Residual risk.** A changed amount is detected only after the event is appended and anchored. Before that, the record is editable.
 - **Sources.** [Square Money](REFERENCES.md#square-money), [Fowler Money](REFERENCES.md#fowler-money).
 
+#### D4. QR swap at collection point
+
+- **STRIDE.** Tampering, spoofing.
+- **Abuse case.** An attacker replaces a club's printed or posted QR code at a collection point with a fraudulent QR code pointing to the attacker's own UPI VPA. Donors scanning the altered physical QR transfer money to the attacker, which never reaches the club's account and never appears in the bank feed.
+- **Exists today.** None. No QR code generation, payee VPA publishing, or payment intake route exists in code.
+- **Planned.** The club's official payee UPI ID is published on public fund and verification pages. Any change to the official payee UPI ID is treated as a high-risk, multi-approver-confirmed, publicly announced event. The payee ID itself stays out of event payloads; only a hash is committed to the public event log.
+- **Residual risk.** Physical QR placards in public venues cannot be cryptographically protected from physical tampering. Donors who scan a fraudulent QR code without verifying that the destination UPI ID matches the club's published official payee ID will transfer money off-platform to the attacker.
+- **Sources.** Design decision (planned QR/UPI payment path plan).
+
 ### Expense request and approval path
 
 Stages: submit with evidence, approve by quorum, objection window, and final status.
@@ -156,11 +175,11 @@ Stages: submit with evidence, approve by quorum, objection window, and final sta
 #### E1. Forged approval
 
 - **STRIDE.** Spoofing.
-- **Abuse case.** An approval is recorded without the approver's own consent. The forger uses a stolen session, a shared device, or a write to the event table.
-- **Exists today.** None. `expense.approved` has a payload of `expense_id` only (`packages/eventlog/README.md`). Every event envelope carries an `actor` pseudonym (`packages/eventlog/src/model.ts`), so the approver is whoever appended the event. Nothing checks that the actor holds the approver role, that the approval is signed by a passkey, or that approvals are distinct. `parseEvent` checks format, not authority. The bearer security scheme in `apps/api/src/app.ts` reserves a contract and validates nothing.
-- **Planned.** Passkeys are YEN-22. Roles and approvals are YEN-26.
-- **Residual risk.** Passkeys bind an approval to a device and a challenge. They do not prove the approver read the request. A tricked approver can approve the wrong request. A compromised device can approve if the user confirms it.
-- **Sources.** [WebAuthn Level 3](REFERENCES.md#webauthn-3) requires relying parties to use random challenges and verify returned values. [OWASP Transaction Authorization](REFERENCES.md#owasp-transaction) says users should see significant transaction data before they authorize.
+- **Abuse case.** An approval is recorded without the approver's authentic consent. The attacker uses a compromised session, steals or guesses the approver's PIN, or an operator/server injects a forged approval event.
+- **Exists today.** None. `expense.approved` has a payload of `expense_id` only (`packages/eventlog/README.md`). Every event envelope carries an `actor` pseudonym (`packages/eventlog/src/model.ts`), so the approver is whoever appended the event. No PIN verification, quorum check, or actor role validation exists in code. The bearer security scheme in `apps/api/src/app.ts` is a placeholder.
+- **Planned.** For MVP, money actions are confirmed with a 6-digit Yen PIN (YEN-25), checked by Yen's server using a keyed hash with an external secret outside the database. Verification is bound to the exact action payload, is strictly single-use, and expires within 60 seconds. Rate limiting locks out after 5 consecutive failures for 30 minutes; 10 failures in 24 hours require owner/support reset with an OTP and a 24-hour cooling-off period notifying all members. WebAuthn device-signed approvals (YEN-71, fingerprint/face) are planned for later, labelled "Signed on device" versus "Confirmed with PIN". Invariant: PIN confirmation is acceptable while Yen only records; before Yen ever moves money, approvals must be device-signed.
+- **Residual risk.** Because MVP approvals are attested by the server after PIN confirmation rather than signed by the approver's hardware device, a compromised platform server or operator could record an approval nobody gave. The Merkle event log prevents retrospective alterations, but cannot prevent write-time fabrication of server-attested approvals. Furthermore, a 6-digit PIN is susceptible to phishing, shoulder-surfing, or coercion. [NIST SP 800-63B](REFERENCES.md#nist-800-63b) Section 5.1.1.2 requires rate-limiting for memorized secrets. [OWASP Transaction Authorization](REFERENCES.md#owasp-transaction) requires users to identify transaction data before authorizing.
+- **Sources.** [NIST SP 800-63B](REFERENCES.md#nist-800-63b), [OWASP Transaction Authorization](REFERENCES.md#owasp-transaction), [OWASP Authentication](REFERENCES.md#owasp-auth).
 
 #### E2. Replayed request or approval action
 
@@ -176,8 +195,8 @@ Stages: submit with evidence, approve by quorum, objection window, and final sta
 - **STRIDE.** Elevation of privilege.
 - **Abuse case.** A treasurer submits an expense and then approves it. Or one person holds both the treasurer and approver roles in the same fund.
 - **Exists today.** None. The `memberships` table in `packages/db/migrations/0001_app_tables.sql` lets one user hold several roles in a fund. `packages/db/README.md` states, "Multiple roles per user and fund are valid." No rule separates submitter and approver.
-- **Planned.** Role checks are YEN-26.
-- **Residual risk.** Separation of duties is a design choice. This model cites no source for it. Even with separation, approvers can collude, and the chain cannot detect collusion.
+- **Planned.** Separation of duties under YEN-26 will forbid a treasurer from approving their own expense submissions, and require independent approver quorum.
+- **Residual risk.** Separation of duties enforces organizational process in code. Even with separation, collusion between the treasurer and sufficient approvers cannot be detected by cryptographic checks alone; the chain only proves that the configured quorum confirmed the transaction.
 
 #### E4. Evidence swapped after approval
 
@@ -297,15 +316,34 @@ Stages: root computation, publication to the registry, publisher transfer, and c
 - **Planned.** The root README lists client-side verification as in progress. No Linear id is named, so the page is untracked.
 - **Residual risk.** An authentic checkpoint can still be stale. Clients must read the checkpoint time, and the design only works if the UI shows it.
 
+#### V5. Cross-fund linking through pseudonyms
+
+- **STRIDE.** Information disclosure.
+- **Abuse case.** An observer analyzes public event logs across multiple funds and correlates pseudonym identifiers to track an individual's financial activity, donations, and role memberships across independent clubs.
+- **Exists today.** None. `packages/db/migrations/0001_app_tables.sql` defines a single global `pseudonyms` table mapping `user_id` to a single pseudonym UUID. The per-fund pseudonym schema and helper (`fund_pseudonyms`, `ensureFundPseudonym`) are developed in branch `origin/aetosdios27/yen-70-fund-pseudonyms` but remain unmerged on this branch, and no application route calls per-fund pseudonyms.
+- **Planned.** YEN-70 establishes that pseudonyms are strictly per person per fund. Each `(user_id, fund_id)` pair receives an independent, random UUIDv4 pseudonym (`fund_pseudonyms` table), ensuring public records from one fund cannot be linked to another fund. The Yen ID is a private 9-digit number with a check digit, stored in application tables and never exposed in event logs, receipts, or public pages. Donor names live outside the log, with donor choice between full name, initials, or "a donor".
+- **Residual risk.** Per-fund pseudonyms prevent identifier linkage. However, external observers may attempt correlation via side-channels (e.g. matching identical paise amounts, public bank statement timestamps, or donation patterns).
+- **Sources.** [ICO Pseudonymisation](REFERENCES.md#ico-pseudonymisation), [DPDP Act](REFERENCES.md#dpdp-act).
+
+#### V6. Erasure request conflicts with statutory retention
+
+- **STRIDE.** Repudiation, information disclosure.
+- **Abuse case.** A member or donor submits a request for personal data erasure under Section 12(3) of the DPDP Act 2023. Deleting all records could violate statutory tax, accounting, or audit log retention requirements under Indian law (e.g. Section 8(7) retention exception). Conversely, retaining data without statutory grounds violates DPDP principles.
+- **Exists today.** None. No user data erasure workflow, retention flag, or log retention scheduler exists in code.
+- **Planned.** DPDP research note (YEN-46): under DPDP Act Sections 12(3) and 8(7), the right to erasure yields to retention required by applicable law for the time being in force. Yen's architecture stores personal identity in erasable database tables (`users`, `fund_pseudonyms`) while committing only pseudonyms and cryptographic hashes to the permanent, immutable event log. Clubs can flag records as "retention required" when statutory retention applies. Audit logs must be retained for at least one year per commentary (secondary legal source, unverified against the official Gazette). Not legal advice.
+- **Residual risk.** Sectoral retention rules in India vary. If a club fails to flag records or if secondary commentary on log retention periods differs from final gazetted rules, the platform could either violate erasure rights or unlawfully destroy required financial audit trails.
+- **Sources.** [DPDP Act Transcription](REFERENCES.md#dpdpa-transcription), [DPDP Act](REFERENCES.md#dpdp-act).
+
 ### Cross-cutting threats
 
 #### X1. Phone or waitlist enumeration
 
 - **STRIDE.** Information disclosure.
-- **Abuse case.** An attacker learns which phone numbers have accounts or waitlist entries, through login, OTP, or waitlist responses that differ.
-- **Exists today.** None. `users.phone` is `UNIQUE` with an E.164 check in `packages/db/migrations/0001_app_tables.sql`. The uniqueness constraint creates the collision that an enumeration oracle would need. No login, OTP, or waitlist route exists. `apps/api/README.md` lists the six routes, and none serves these flows.
-- **Planned.** Phone OTP is YEN-22. The waitlist is not named in any doc, so it is untracked.
-- **Residual risk.** The unique constraint stays, so the response shape and timing decide whether enumeration works. No design yet makes responses uniform.
+- **Abuse case.** An attacker systematically queries login, OTP request, recovery, or waitlist endpoints to map registered phone numbers.
+- **Exists today.** None. `users.phone` has a UNIQUE constraint in `packages/db/migrations/0001_app_tables.sql`, but no login, OTP, or waitlist endpoint exists in code.
+- **Planned.** Sign-in policy (YEN-72): OTP is delivered via WhatsApp or SMS based on user choice, with no silent fallback and a single live code. Strict cross-channel rate limits apply per phone number. Login and recovery endpoints return uniform response shapes, error messages, and timing regardless of whether a number is registered. Accounts belong to the account, not the phone number, mitigating recycled number enumeration.
+- **Residual risk.** Differences in third-party delivery latency (WhatsApp delivery receipts vs SMS gateway delays) can create a side-channel timing oracle unless equalized by the server.
+- **Sources.** [NIST SP 800-63B](REFERENCES.md#nist-800-63b), [OWASP Authentication](REFERENCES.md#owasp-auth).
 
 #### X2. Rate-limit evasion
 
@@ -334,10 +372,11 @@ Stages: root computation, publication to the registry, publisher transfer, and c
 #### X5. Compromised platform operator
 
 - **STRIDE.** Tampering, repudiation.
-- **Abuse case.** The operator rewrites events before publication, withholds publication, or shows clients a different history.
-- **Exists today.** Partial. Published roots resist rewrite (V1, V2). The verify rule requires a head from outside the API (`packages/eventlog/README.md`). `packages/shared/src/merkle/README.md` states that a root alone does not guarantee data availability. Nothing detects withheld publication.
-- **Planned.** Publication is YEN-16, and its job is untracked.
-- **Residual risk.** A compromised operator can rewrite anything it has not yet published. It can also refuse to publish. Yen's design relies on clients or monitors noticing a gap in the sequence, and nothing in the repo does that. [RFC 9162](REFERENCES.md#rfc-9162) and [Crosby and Wallach](REFERENCES.md#crosby-wallach) describe auditors for untrusted logs. Yen has none.
+- **Abuse case.** An operator rewrites events before publication, withholds publication, presents split histories to different clients, or fabricates server-confirmed PIN approvals at write time.
+- **Exists today.** Partial. Published roots on Polygon Amoy resist rewrite (V1, V2). Verify rules require a head outside the API (`packages/eventlog/README.md`). However, because MVP approvals are confirmed via server-side PIN checks (YEN-25) rather than device-bound cryptographic signatures, a compromised operator can forge approvals at write time that satisfy all schema and hash checks.
+- **Planned.** YEN-16 for root publication. Independent log auditing ([RFC 9162](REFERENCES.md#rfc-9162)). YEN-71 requires WebAuthn device-signed approvals before Yen moves money, closing the write-time fabrication window.
+- **Residual risk.** While Yen operates in recording-only mode with server-attested PIN approvals, the platform operator cannot be prevented from creating synthetic approvals at write time; the Merkle log only prevents retrospective modification. Before any money movement, device-signed approvals must be strictly enforced.
+- **Sources.** [RFC 9162](REFERENCES.md#rfc-9162), [Crosby and Wallach](REFERENCES.md#crosby-wallach), [NIST SP 800-63B](REFERENCES.md#nist-800-63b).
 
 #### X6. Dev principal reaches production
 
@@ -347,26 +386,76 @@ Stages: root computation, publication to the registry, publisher transfer, and c
 - **Planned.** None named.
 - **Residual risk.** The guard covers the mock entrypoint only. A future production entrypoint that copies the mock's deps would not be guarded.
 
-#### X7. Approver credential or passkey compromise
+#### X7. Approver credential or PIN compromise
 
 - **STRIDE.** Spoofing.
-- **Abuse case.** An attacker takes over an approver's session or passkey, and approves requests as that approver.
-- **Exists today.** None. No authentication code exists. The bearer scheme in `apps/api/src/app.ts` is a placeholder.
-- **Planned.** Phone OTP and WebAuthn passkeys are YEN-22. The README says passkeys are "planned".
-- **Residual risk.** Passkeys make phishing and credential theft harder. They do not stop an approver from approving a compromised device's request, or an approver who is coerced. Account recovery is not designed. [WebAuthn Level 2](REFERENCES.md#webauthn-2) defines the relying-party contract that YEN-22 must meet.
+- **Abuse case.** An attacker steals or guesses an approver's 6-digit PIN, hijacks an active browser session, or intercepts an OTP to authorize expenses.
+- **Exists today.** None. No authentication, PIN verification, or session management code exists.
+- **Planned.** YEN-25 enforces server-side PIN controls: 5-attempt lockout for 30 minutes, 10 failures in 24 hours require support reset with OTP and a 24-hour cooling-off period notifying all club members. Single-use verification expires within 60 seconds and is bound to the specific action. Sign-in policy (YEN-72) mandates that a PIN alone never authorizes a new device; proving a new device requires an OTP. Re-authentication with PIN or fingerprint is required after idle. YEN-71 introduces WebAuthn hardware-backed passkeys.
+- **Residual risk.** An attacker who obtains physical access to an unlocked, active device during an approval session can authorize actions if they know or guess the PIN before lockout occurs.
+- **Sources.** [NIST SP 800-63B](REFERENCES.md#nist-800-63b), [OWASP Authentication](REFERENCES.md#owasp-auth), [OWASP Transaction Authorization](REFERENCES.md#owasp-transaction).
+
+#### X8. SIM swap or recycled phone number inherits roles
+
+- **STRIDE.** Spoofing, elevation of privilege.
+- **Abuse case.** An attacker executes a SIM swap on a member's mobile number, or a telecom provider recycles an inactive mobile number and reassigns it to a new subscriber. The new holder requests an OTP, logs in, and inherits the previous owner's account, fund memberships, or approver privileges.
+- **Exists today.** None. No phone authentication or role binding code exists.
+- **Planned.** Sign-in policy (YEN-72): accounts belong to the account, not the phone number. Phone OTP (WhatsApp/SMS) proves phone possession only (initial registration, new device binding, recovery, PIN reset, or session absolute expiry). A PIN alone never authorizes a new device. If a phone number changes hands, re-authenticating on a new device requires secondary account recovery or owner-vouched re-invitation. Reassigning roles requires explicit owner approval.
+- **Residual risk.** In India, prepaid mobile numbers are routinely recycled after 90 days of inactivity. If a departing club member abandons their number without updating their Yen profile and the club fails to remove their membership, a new recipient of the recycled SIM who also circumvents secondary recovery could attempt account takeover.
+- **Sources.** [NIST SP 800-63B](REFERENCES.md#nist-800-63b), [OWASP Authentication](REFERENCES.md#owasp-auth).
+
+#### X9. PIN online brute force
+
+- **STRIDE.** Spoofing.
+- **Abuse case.** An attacker with an active or compromised user session systematically submits guessed 6-digit PINs (10^6 combinations) against the approval confirmation endpoint.
+- **Exists today.** None. No PIN confirmation route or attempt tracking exists in code.
+- **Planned.** YEN-25 enforces server-side lockout: 5 consecutive failed attempts trigger an automatic 30-minute lockout. 10 failures in 24 hours escalate to a full account lock requiring owner/support reset. Reset requires an OTP plus a mandatory 24-hour cooling-off period with alerts dispatched to all fund members. Action verification tokens are single-use, bound to the exact payload hash, and expire in 60 seconds.
+- **Residual risk.** An attacker who deliberately submits 5 incorrect PINs can lock out a legitimate approver for 30 minutes, mounting an application-level denial-of-service during an urgent expense approval or objection window.
+- **Sources.** [NIST SP 800-63B](REFERENCES.md#nist-800-63b), [OWASP Authentication](REFERENCES.md#owasp-auth).
+
+#### X10. PIN offline cracking after database leak
+
+- **STRIDE.** Information disclosure, spoofing.
+- **Abuse case.** An attacker gains read access to the database (via SQL injection, database dump, or backup compromise) and attempts offline brute-force cracking of stored PIN hashes. Because a 6-digit numeric PIN has only 1,000,000 possible values (~20 bits of entropy), standard unsalted or even salted hashes can be cracked in seconds using commodity hardware.
+- **Exists today.** None. No PIN storage table or hashing mechanism exists in code.
+- **Planned.** YEN-25 uses a keyed hash (HMAC-SHA-256 or Argon2id with a server pepper) where the secret key is stored outside the database (e.g. in KMS or runtime environment variables). Without the external secret key, offline dictionary attacks on leaked database tables are prevented.
+- **Residual risk.** If the application server environment is compromised concurrently with the database, the external pepper secret is exposed, enabling immediate offline exhaustion of the 6-digit PIN space.
+- **Sources.** [OWASP Password Storage](REFERENCES.md#owasp-password-storage), [RFC 2104](REFERENCES.md#rfc-2104), [NIST SP 800-63B](REFERENCES.md#nist-800-63b).
+
+#### X11. PIN phishing on lookalike site
+
+- **STRIDE.** Spoofing.
+- **Abuse case.** An attacker creates a spoofed domain or phishing interface that mimics Yen and tricks an approver into entering their phone number, OTP, and 6-digit PIN. Unlike WebAuthn passkeys, memorized PINs have no cryptographic origin binding.
+- **Exists today.** None.
+- **Planned.** Under YEN-72, a PIN alone never authorizes a new device; an attacker must harvest an active OTP within its short validity window to bind a new device. PIN action authorizations expire in 60 seconds and are single-use. For post-MVP money movement, YEN-71 requires WebAuthn device-signed approvals (fingerprint/face), which provide hardware-backed origin binding that is cryptographically immune to credential harvesting on lookalike domains. Rule: PIN is acceptable while Yen only records; before Yen ever moves money, approvals must be device-signed.
+- **Residual risk.** Real-time adversary-in-the-middle (AiTM) phishing proxies can relay both OTP and PIN to authorize an action within the 60-second validity window. Only WebAuthn device signing (YEN-71) provides cryptographic origin binding.
+- **Sources.** [NIST SP 800-63B](REFERENCES.md#nist-800-63b), [OWASP Authentication](REFERENCES.md#owasp-auth).
+
+#### X12. Owner-vouched invite interception
+
+- **STRIDE.** Spoofing, elevation of privilege.
+- **Abuse case.** An attacker intercepts an in-person vouched invitation link, token, or QR code generated by a club owner as a pilot fallback for users without reliable SMS/WhatsApp delivery, and redeems it to gain unauthorized membership or roles.
+- **Exists today.** None.
+- **Planned.** YEN-72 designates owner-vouched in-person invites as a lower-assurance pilot fallback. Vouched invites must be short-lived, strictly single-use, tied to an in-person verification flow, and recorded with an audit event identifying the vouching owner.
+- **Residual risk.** Vouched invites rely on manual owner vigilance. An invite sent over unencrypted channels or intercepted before the intended member redeems it grants entry without telephone verification.
+- **Sources.** [OWASP Authentication](REFERENCES.md#owasp-auth).
 
 ## Decisions the model asks for before persistence
 
 The v1 payloads are provisional. Under `packages/eventlog/README.md`, a payload changes only by defining v2 once v1 is released or persisted. So these decisions belong before YEN-18 writes a row.
 
-1. **Bind approvals to a credential.** The envelope `actor` names who appended an event, but not which passkey assertion authorised it. Decide whether `expense.approved` carries a reference to the assertion, and whether `expense.objection_resolved` and `discrepancy.resolved` carry a resolver reference beyond the envelope actor. This closes part of E1 and E5.
-2. **Record what was paid.** Require `expense.paid` to record the actual amount and payee, or link it to a checked bank record containing both. Compare those details with the approved amount and payee. An approved-event hash can identify the approval, but cannot replace the actual payment details. This closes P2.
-3. **Separate submitter from approver.** Decide whether a treasurer may approve. Then enforce the rule in the approval path (YEN-26). This closes E3 and part of X4.
-4. **Bind evidence before approval.** Require the evidence hash to be recorded before approval. Store the bytes content-addressed, and verify the hash on every read. This closes E4. The product must decide how bill replacement works.
-5. **Choose a publisher key policy.** The registry has one publisher and a two-step transfer (`proposePublisher`, then `acceptPublisher`). It has no delayed transfer, shared control, or written key-management policy. Decide whether to add a multisig or a timelock, and write the policy. This is a product and operations decision (V2).
-6. **Name the monitors.** Decide who compares roots across clients, and how they do it. Without this, V1 and X5 stay partial.
-7. **Make rate limits and idempotency shared before scale.** The Postgres idempotency adapter is YEN-24. The shared rate-limit store has no id yet (X2, D2).
-8. **Check the identifiers.** Decide whether `bank_transaction_id` is personal data or can be linked to a person (V3).
+1. **Money actions confirmed with 6-digit Yen PIN (Decided 2026-10-28; YEN-25, YEN-71).** For the MVP, money actions are confirmed with a server-verified 6-digit PIN (keyed hash with external secret outside the DB, 5-attempt lockout for 30 min, 10 failures in 24h require support reset, reset requires OTP plus a 24-hour cooling-off that notifies all members, verification bound to exact action, single use, expires within 60 seconds). Consequence: approvals are attested by the server, not signed by the approver's device; a compromised server or operator could record an approval nobody gave. A later optional device-signed approval (YEN-71, fingerprint/face via WebAuthn) is recorded separately, labelled "Signed on device" versus "Confirmed with PIN". Rule: PIN is acceptable while Yen only records; before Yen ever moves money, approvals must be device-signed. This updates E1, X5, and X7.
+2. **Sign-in policy (Decided 2026-10-28; YEN-72).** OTP by WhatsApp or SMS (user's choice, no silent fallback, one live code, unified cross-channel limits per number) is used only to prove the phone: first sign-up, new device, recovery, PIN reset, or session older than the absolute limit. PIN or fingerprint unlock after idle. A PIN alone never authorizes a new device. Owner-vouched in-person invite is a lower-assurance pilot fallback. Accounts belong to the account, not the phone number, acknowledging number recycling. This updates X1, X7, and adds X8, X12.
+3. **Identity and pseudonyms (Decided 2026-10-28; YEN-70).** Pseudonyms are strictly per person per fund so public records cannot link one person across funds. The private Yen ID is a 9-digit number with a check digit, never in events, receipts, or public pages. Donor names live outside the event log, with donor choice between full name, initials, or "a donor". This adds V5.
+4. **DPDP research note (Decided 2026-10-28; YEN-46).** Erasure under Sections 12(3) and 8(7) yields to retention required by another law. Identity is kept in erasable database tables and only pseudonyms in the permanent log. Clubs can mark a record "retention required". Logs must be kept at least a year per commentary (secondary source, unverified against the Gazette). Not legal advice. This adds V6.
+5. **QR/UPI payment path plan (Decided 2026-10-28).** To mitigate QR-swap fraud at collection points, the club's official payee UPI ID is published on public pages; any change is a high-risk, approver-confirmed, announced event. Payee ID stays out of event payloads; only a hash is committed. This adds D4.
+6. **Record what was paid.** Require `expense.paid` to record the actual amount and payee, or link it to a checked bank record containing both. Compare those details with the approved amount and payee. An approved-event hash can identify the approval, but cannot replace the actual payment details. This closes P2.
+7. **Separate submitter from approver.** Decide whether a treasurer may approve. Then enforce the rule in the approval path (YEN-26). This closes E3 and part of X4.
+8. **Bind evidence before approval.** Require the evidence hash to be recorded before approval. Store the bytes content-addressed, and verify the hash on every read. This closes E4. The product must decide how bill replacement works.
+9. **Choose a publisher key policy.** The registry has one publisher and a two-step transfer (`proposePublisher`, then `acceptPublisher`). It has no delayed transfer, shared control, or written key-management policy. Decide whether to add a multisig or a timelock, and write the policy. This is a product and operations decision (V2).
+10. **Name the monitors.** Decide who compares roots across clients, and how they do it. Without this, V1 and X5 stay partial.
+11. **Make rate limits and idempotency shared before scale.** The Postgres idempotency adapter is YEN-24. The shared rate-limit store has no id yet (X2, D2).
+12. **Check the identifiers.** Decide whether `bank_transaction_id` is personal data or can be linked to a person (V3).
 
 ## Out of scope and assumptions
 

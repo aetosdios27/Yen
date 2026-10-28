@@ -17,12 +17,12 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 | Benchmarking and latency             |       1 |
 | SRE and observability                |       5 |
 | PostgreSQL                           |      15 |
-| Authentication and approvals         |       5 |
+| Authentication and approvals         |       9 |
 | Blockchain anchoring                 |       2 |
-| Privacy and law                      |       3 |
+| Privacy and law                      |       4 |
 | Supply chain and CI                  |       2 |
 | Security and threat modeling         |       2 |
-| **Total**                            |  **65** |
+| **Total**                            |  **70** |
 
 ## Tamper-evident logs and transparency
 
@@ -492,6 +492,38 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **What we use it for:** Machine-readable error details help clients interpret HTTP failures. Yen uses its own nested error envelope and does not claim RFC 9457 conformance.
 - **Where in this repo:** apps/api/README.md
 
+<a id="nist-800-63b"></a>
+### Digital Identity Guidelines: Authentication and Lifecycle Management
+
+- **Source:** Paul A. Grassi, James L. Fenton, Elaine M. Newton, Ray A. Perlner, Andrew R. Regenscheid, William E. Burr, Justin P. Richer, Naomi B. Lefkovitz, J.M. Danker, Yee-Yin Choong, Kristen K. Greene and Mary F. Theofanos; NIST Special Publication 800-63B, 2017 (updated 2020).
+- **URL:** https://pages.nist.gov/800-63-3/sp800-63b.html
+- **What we use it for:** Memorized secret verifiers require rate limiting and lockout controls to mitigate online guessing (Sections 5.1.1.2 and 5.2.2). Out-of-band authenticators (SMS/PSTN) carry risks of SIM swap and phone number recycling.
+- **Where in this repo:** docs/THREAT-MODEL.md
+
+<a id="owasp-auth"></a>
+### Authentication Cheat Sheet
+
+- **Source:** OWASP; OWASP Cheat Sheet Series, undated (accessed 2026).
+- **URL:** https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
+- **What we use it for:** Multi-factor authentication, account recovery, rate limiting, and cooling-off periods. Yen requires phone-proving OTP for new devices and PIN resets, while a PIN alone never authorizes a new device.
+- **Where in this repo:** docs/THREAT-MODEL.md
+
+<a id="owasp-password-storage"></a>
+### Password Storage Cheat Sheet
+
+- **Source:** OWASP; OWASP Cheat Sheet Series, undated (accessed 2026).
+- **URL:** https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
+- **What we use it for:** Low-entropy secrets such as 6-digit PINs require keyed hashing (peppering) with a secret held outside the database to prevent offline cracking if database contents leak.
+- **Where in this repo:** docs/THREAT-MODEL.md
+
+<a id="rfc-2104"></a>
+### HMAC: Keyed-Hashing for Message Authentication
+
+- **Source:** H. Krawczyk, M. Bellare and R. Canetti; RFC 2104, 1997.
+- **URL:** https://www.rfc-editor.org/rfc/rfc2104.html
+- **What we use it for:** Keyed-hashing binds an external secret to a message or secret value, preventing offline brute-force attacks against low-entropy inputs when the key is withheld.
+- **Where in this repo:** docs/THREAT-MODEL.md
+
 ## Blockchain anchoring
 
 <a id="opentimestamps"></a>
@@ -535,6 +567,14 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **URL:** https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/data-sharing/anonymisation/pseudonymisation/
 - **What we use it for:** Pseudonymisation reduces identification risk but does not automatically make data anonymous. This UK guidance is a design reference, not a determination of Indian legal compliance.
 - **Where in this repo:** packages/eventlog/README.md; packages/db/README.md
+
+<a id="dpdpa-transcription"></a>
+### Digital Personal Data Protection Act, 2023 Transcription (Sections 8 and 12)
+
+- **Source:** Prashant Mali; dpdpa.com transcription and legal interpretation, 2023.
+- **URL:** https://dpdpa.com/dpdpa2023/chapter-2/section8.html
+- **What we use it for:** Section 8(7) mandates erasure when the purpose is served unless retention is required by another law; Section 12(3) establishes the right to erasure subject to statutory retention obligations.
+- **Where in this repo:** docs/THREAT-MODEL.md
 
 ## Supply chain and CI
 
