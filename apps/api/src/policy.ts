@@ -1,4 +1,5 @@
 import type { z } from "@hono/zod-openapi";
+import { type Redacted, unsafeMarkRedactedForDevPolicy } from "@yen/policy";
 import type { expenseSchema, fundSchema } from "./contract.js";
 import type { Principal } from "./dependencies.js";
 
@@ -38,7 +39,7 @@ export type PolicyResource = FundResource | ExpenseResource;
 
 export interface Policy {
   can(principal: Principal, action: PolicyAction, resource: PolicyResource): boolean;
-  redact(viewer: Principal, resource: ExistingFundResource): FundView;
+  redact(viewer: Principal, resource: ExistingFundResource): Redacted<FundView>;
   redactExpense?(viewer: Principal, resource: ExistingExpenseResource): ExpenseView;
 }
 
@@ -79,6 +80,6 @@ export const devPolicy: Policy = {
     }
     return false;
   },
-  redact: (_viewer, resource) => resource.fund.fund,
+  redact: (_viewer, resource) => unsafeMarkRedactedForDevPolicy(resource.fund.fund),
   redactExpense: (_viewer, resource) => resource.expense.expense,
 };
