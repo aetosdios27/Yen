@@ -418,7 +418,7 @@ Stages: root computation, publication to the registry, publisher transfer, and c
 - **STRIDE.** Information disclosure, spoofing.
 - **Abuse case.** An attacker gains read access to the database (via SQL injection, database dump, or backup compromise) and attempts offline brute-force cracking of stored PIN hashes. Because a 6-digit numeric PIN has only 1,000,000 possible values (~20 bits of entropy), standard unsalted or even salted hashes can be cracked in seconds using commodity hardware.
 - **Exists today.** None. No PIN storage table or hashing mechanism exists in code.
-- **Planned.** YEN-25 uses a keyed hash (HMAC-SHA-256 or Argon2id with a server pepper) where the secret key is stored outside the database (e.g. in KMS or runtime environment variables). Without the external secret key, offline dictionary attacks on leaked database tables are prevented.
+- **Planned.** YEN-25 uses a keyed hash (scrypt, then HMAC-SHA-256 under a server secret) where the secret key is stored outside the database (e.g. in KMS or runtime environment variables). Without the external secret key, offline dictionary attacks on leaked database tables are prevented.
 - **Residual risk.** If the application server environment is compromised concurrently with the database, the external pepper secret is exposed, enabling immediate offline exhaustion of the 6-digit PIN space.
 - **Sources.** [OWASP Password Storage](REFERENCES.md#owasp-password-storage), [RFC 2104](REFERENCES.md#rfc-2104), [NIST SP 800-63B](REFERENCES.md#nist-800-63b).
 
