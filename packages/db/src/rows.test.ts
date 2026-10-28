@@ -1,12 +1,14 @@
 import type { PhoneE164 } from "@yen/shared";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
+  fundPseudonymRowSchema,
   fundRowSchema,
   idempotencyKeyRowSchema,
   membershipRowSchema,
   orgRowSchema,
   pseudonymRowSchema,
   type UserRow,
+  userApprovalPinRowSchema,
   userRowSchema,
 } from "./rows.js";
 import { uuidv7 } from "./uuidv7.js";
@@ -80,6 +82,38 @@ describe("row parsing at the database boundary", () => {
     expect(pseudonymRowSchema.safeParse({ pseudonym_id: "invalid", user_id: id }).success).toBe(
       false,
     );
+    expect(
+      fundPseudonymRowSchema.safeParse({
+        pseudonym_id: "invalid",
+        user_id: id,
+        fund_id: id,
+        created_at: now,
+      }).success,
+    ).toBe(false);
+    expect(
+      fundPseudonymRowSchema.safeParse({
+        pseudonym_id: id,
+        user_id: "invalid",
+        fund_id: id,
+        created_at: now,
+      }).success,
+    ).toBe(false);
+    expect(
+      fundPseudonymRowSchema.safeParse({
+        pseudonym_id: id,
+        user_id: id,
+        fund_id: "invalid",
+        created_at: now,
+      }).success,
+    ).toBe(false);
+    expect(
+      fundPseudonymRowSchema.safeParse({
+        pseudonym_id: id,
+        user_id: id,
+        fund_id: id,
+        created_at: now,
+      }).success,
+    ).toBe(true);
     expect(
       idempotencyKeyRowSchema.safeParse({
         key: "key",
@@ -191,5 +225,30 @@ describe("row parsing at the database boundary", () => {
       dead_lettered_at: now,
     };
     expect(notificationDeadLetterRowSchema.safeParse(validDeadLetter).success).toBe(true);
+  });
+
+  it("validates approval pin rows and rejects invalid statuses or negative attempts", () => {
+    const pin = {
+      user_id: id,
+      salt: "1234567890abcdef",
+      pin_hash: "$2b$10$abcdefghijklmnopqrstuvwxyz0123456789",
+      failed_attempts: 0,
+      total_failed_24h: 0,
+      first_failed_at: null,
+      locked_until: null,
+      cooling_off_until: null,
+      status: "active" as const,
+      created_at: now,
+      updated_at: now,
+    };
+    expect(userApprovalPinRowSchema.safeParse(pin).success).toBe(true);
+    expect(userApprovalPinRowSchema.safeParse({ ...pin, status: "unknown" }).success).toBe(false);
+    expect(userApprovalPinRowSchema.safeParse({ ...pin, failed_attempts: -1 }).success).toBe(false);
+    expect(userApprovalPinRowSchema.safeParse({ ...pin, total_failed_24h: -1 }).success).toBe(
+      false,
+    );
+    expect(userApprovalPinRowSchema.safeParse({ ...pin, user_id: "not-a-uuid" }).success).toBe(
+      false,
+    );
   });
 });

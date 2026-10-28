@@ -18,16 +18,29 @@ const failureLog = z.object({
     "store",
     "handler",
     "validation",
+    "timeout",
     "unknown",
     "rate_limit_store_full",
   ]),
   errorName: z.string(),
 });
+// Load-shedding rejections are expected under load, so they are warnings, not failures.
+// The entry carries no request body, headers, or client identity.
+const overloadLog = z.object({
+  event: z.literal("http_overloaded"),
+  level: z.literal("warn"),
+  reason: z.literal("overloaded"),
+  requestId: z.string().uuid(),
+  method: requestLog.shape.method,
+  route: z.string(),
+  inFlight: z.number().int().nonnegative(),
+});
 
 export type RequestLog = z.infer<typeof requestLog>;
 export type FailureLog = z.infer<typeof failureLog>;
-export type LogEntry = RequestLog | FailureLog;
-const logEntry = z.discriminatedUnion("event", [requestLog, failureLog]);
+export type OverloadLog = z.infer<typeof overloadLog>;
+export type LogEntry = RequestLog | FailureLog | OverloadLog;
+const logEntry = z.discriminatedUnion("event", [requestLog, failureLog, overloadLog]);
 
 export function logMethod(value: string): RequestLog["method"] {
   const parsed = requestLog.shape.method.safeParse(value);
