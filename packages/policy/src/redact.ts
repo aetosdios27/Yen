@@ -197,7 +197,7 @@ function evidenceFor(evidence: unknown, staff: boolean): EvidenceRecord[] | unde
     if (!staff) return hashOnly;
     return {
       ...hashOnly,
-      evidenceId: str(ev.evidenceId),
+      evidenceId: optionalStr(ev.evidenceId),
       fileUrl: optionalStr(ev.fileUrl),
       filename: optionalStr(ev.filename),
       mimeType: optionalStr(ev.mimeType),

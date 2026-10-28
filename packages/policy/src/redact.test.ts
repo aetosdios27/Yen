@@ -8,6 +8,7 @@ import {
   RedactionError,
   redact,
 } from "./redact.js";
+import type { FundRole } from "./roles.js";
 
 function asPseudonymId(id: string): PseudonymId {
   const parsed = parsePseudonymId(id);
@@ -529,5 +530,88 @@ describe("Output allowlists and money validation (R3)", () => {
     const result = redact(undefined as unknown as { role: "owner" }, donationBase);
     expect(result.donorDisplayName).toBeUndefined();
     expect(result.bankTransactionId).toBeUndefined();
+  });
+});
+
+describe("Evidence redaction with and without evidenceId for each viewer class", () => {
+  const evidenceWithId = [
+    {
+      evidenceId: "ev-100",
+      contentSha256: "b".repeat(64),
+      fileUrl: "https://storage.internal.yen/bills/invoice-100.pdf",
+      filename: "invoice-100.pdf",
+      mimeType: "application/pdf",
+    },
+  ];
+
+  const evidenceWithoutId = [
+    {
+      contentSha256: "c".repeat(64),
+      fileUrl: "https://storage.internal.yen/bills/invoice-101.pdf",
+      filename: "invoice-101.pdf",
+      mimeType: "application/pdf",
+    },
+  ];
+
+  const baseExpense: ExpenseRecord = {
+    expenseId: "exp-100",
+    fundId: "fund-100",
+    amountPaise: paise(50000),
+    payeeName: "Vendor Corp",
+    requesterDisplayName: "Jane Doe",
+    createdAt: "2026-10-27T12:00:00.000Z",
+  };
+
+  const viewers: Array<{ role: FundRole; label: string; isStaff: boolean }> = [
+    { role: "public", label: "public", isStaff: false },
+    { role: "donor", label: "donor", isStaff: false },
+    { role: "owner", label: "staff (owner)", isStaff: true },
+    { role: "treasurer", label: "staff (treasurer)", isStaff: true },
+    { role: "approver", label: "staff (approver)", isStaff: true },
+    { role: "auditor", label: "staff (auditor)", isStaff: true },
+  ];
+
+  describe.each(viewers)("$label viewer", ({ role, isStaff }) => {
+    it("redacts evidence with evidenceId correctly", () => {
+      const exp: ExpenseRecord = { ...baseExpense, evidence: evidenceWithId };
+      const redacted = redact({ role }, exp);
+      expect(redacted.evidence).toHaveLength(1);
+      const ev = redacted.evidence?.[0];
+      expect(ev?.contentSha256).toBe("b".repeat(64));
+
+      if (isStaff) {
+        expect(ev?.evidenceId).toBe("ev-100");
+        expect(ev?.fileUrl).toBe("https://storage.internal.yen/bills/invoice-100.pdf");
+        expect(ev?.filename).toBe("invoice-100.pdf");
+        expect(ev?.mimeType).toBe("application/pdf");
+      } else {
+        expect(ev?.evidenceId).toBeUndefined();
+        expect(ev?.fileUrl).toBeUndefined();
+        expect(ev?.filename).toBeUndefined();
+        expect(ev?.mimeType).toBeUndefined();
+        expect(Object.keys(ev ?? {})).toEqual(["contentSha256"]);
+      }
+    });
+
+    it("redacts evidence without evidenceId correctly", () => {
+      const exp: ExpenseRecord = { ...baseExpense, evidence: evidenceWithoutId };
+      const redacted = redact({ role }, exp);
+      expect(redacted.evidence).toHaveLength(1);
+      const ev = redacted.evidence?.[0];
+      expect(ev?.contentSha256).toBe("c".repeat(64));
+
+      if (isStaff) {
+        expect(ev?.evidenceId).toBeUndefined();
+        expect(ev?.fileUrl).toBe("https://storage.internal.yen/bills/invoice-101.pdf");
+        expect(ev?.filename).toBe("invoice-101.pdf");
+        expect(ev?.mimeType).toBe("application/pdf");
+      } else {
+        expect(ev?.evidenceId).toBeUndefined();
+        expect(ev?.fileUrl).toBeUndefined();
+        expect(ev?.filename).toBeUndefined();
+        expect(ev?.mimeType).toBeUndefined();
+        expect(Object.keys(ev ?? {})).toEqual(["contentSha256"]);
+      }
+    });
   });
 });
