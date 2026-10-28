@@ -124,34 +124,6 @@ describe("EvidenceUpload component", () => {
     expect(screen.getByRole("button", { name: "फ़ाइल चुनें" })).toBeDefined();
   });
 
-  it("provides zoom controls (+, -, reset) to scale the preview image in the zoom dialog", () => {
-    renderWithI18n(<EvidenceUpload existingEvidence={mockEvidenceList} />);
-
-    // Open first image preview
-    const viewButtons = screen.getAllByRole("button", { name: "View full size" });
-    const firstViewButton = viewButtons[0];
-    if (!firstViewButton) throw new Error("view button not found");
-    fireEvent.click(firstViewButton);
-
-    expect(screen.getByText("Zoom: 100%")).toBeDefined();
-
-    // Zoom in
-    const zoomInBtn = screen.getByRole("button", { name: "Zoom in" });
-    fireEvent.click(zoomInBtn);
-    expect(screen.getByText("Zoom: 125%")).toBeDefined();
-
-    // Zoom out
-    const zoomOutBtn = screen.getByRole("button", { name: "Zoom out" });
-    fireEvent.click(zoomOutBtn);
-    fireEvent.click(zoomOutBtn);
-    expect(screen.getByText("Zoom: 75%")).toBeDefined();
-
-    // Reset zoom
-    const resetBtn = screen.getByRole("button", { name: "Reset zoom" });
-    fireEvent.click(resetBtn);
-    expect(screen.getByText("Zoom: 100%")).toBeDefined();
-  });
-
   it("passes axe accessibility checks on populated gallery", async () => {
     await expectNoA11yViolations(<EvidenceUpload existingEvidence={mockEvidenceList} />);
   });

@@ -31,7 +31,6 @@ export type EvidenceItem = {
   fundId?: string | undefined;
   expenseId?: string | undefined;
   fileSha256: string;
-  fileName?: string | undefined;
   mimeType: string;
   fileSizeBytes: number;
   duplicateDetected?: boolean | undefined;
@@ -61,81 +60,6 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/**
- * Checks if the browser is on a slow connection (e.g. 2G/3G or Save-Data).
- */
-function isSlowConnection(): boolean {
-  if (typeof navigator === "undefined") return false;
-  const conn = (
-    navigator as unknown as { connection?: { effectiveType?: string; saveData?: boolean } }
-  ).connection;
-  if (!conn) return false;
-  return (
-    conn.saveData === true ||
-    conn.effectiveType === "slow-2g" ||
-    conn.effectiveType === "2g" ||
-    conn.effectiveType === "3g"
-  );
-}
-
-/**
- * Client-side compression and orientation fix for slow network profiles.
- * Preserves images below 1MB or non-image files (PDFs).
- */
-async function optimizeImageForSlowNetwork(file: File): Promise<File> {
-  if (!file.type.startsWith("image/") || file.size < 800 * 1024) {
-    return file;
-  }
-
-  return new Promise((resolve) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const maxDim = 1600;
-      let width = img.width;
-      let height = img.height;
-
-      if (width > maxDim || height > maxDim) {
-        if (width > height) {
-          height = Math.round((height * maxDim) / width);
-          width = maxDim;
-        } else {
-          width = Math.round((width * maxDim) / height);
-          height = maxDim;
-        }
-      }
-
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        resolve(file);
-        return;
-      }
-
-      ctx.drawImage(img, 0, 0, width, height);
-      canvas.toBlob(
-        (blob) => {
-          if (blob && blob.size < file.size) {
-            resolve(new File([blob], file.name, { type: "image/jpeg" }));
-          } else {
-            resolve(file);
-          }
-        },
-        "image/jpeg",
-        0.82,
-      );
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve(file);
-    };
-    img.src = url;
-  });
-}
-
 export function EvidenceUpload({
   fundId,
   expenseId,
@@ -158,24 +82,15 @@ export function EvidenceUpload({
   const [gstinError, setGstinError] = useState<string | undefined>(undefined);
   const [invoiceNumber, setInvoiceNumber] = useState("");
 
-  const [isSlow, setIsSlow] = useState(false);
-  const [isOptimizing, setIsOptimizing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [items, setItems] = useState<readonly EvidenceItem[]>(existingEvidence);
   const [zoomedItem, setZoomedItem] = useState<{
-    url: string;
     title: string;
     isPdf: boolean;
     metadata?: Partial<EvidenceItem>;
   } | null>(null);
-
-  const [zoomScale, setZoomScale] = useState(1);
-
-  useEffect(() => {
-    setIsSlow(isSlowConnection());
-  }, []);
 
   // Sync with existing evidence updates
   useEffect(() => {
@@ -187,14 +102,13 @@ export function EvidenceUpload({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && zoomedItem !== null) {
         setZoomedItem(null);
-        setZoomScale(1);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [zoomedItem]);
 
-  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     setErrorMessage(null);
     const file = e.target.files?.[0];
     if (!file) return;
@@ -211,17 +125,7 @@ export function EvidenceUpload({
       return;
     }
 
-    if (isSlow && file.type.startsWith("image/")) {
-      setIsOptimizing(true);
-      try {
-        const optimized = await optimizeImageForSlowNetwork(file);
-        setSelectedFile(optimized);
-      } finally {
-        setIsOptimizing(false);
-      }
-    } else {
-      setSelectedFile(file);
-    }
+    setSelectedFile(file);
   };
 
   const handleGstinChange = (value: string) => {
@@ -281,7 +185,6 @@ export function EvidenceUpload({
         // Direct API upload via standard endpoint
         const res = await fetch(`/v1/funds/${fundId}/expenses/${expenseId}/evidence`, {
           method: "POST",
-          headers: { "Idempotency-Key": crypto.randomUUID() },
           body: formData,
         });
 
@@ -330,11 +233,9 @@ export function EvidenceUpload({
     }
   };
 
-  const openZoom = (item: EvidenceItem, clientUrl?: string) => {
+  const openZoom = (item: EvidenceItem) => {
     const isPdf = item.mimeType === "application/pdf";
-    setZoomScale(1);
     setZoomedItem({
-      url: clientUrl ?? item.fileUrl ?? "",
       title: item.vendorName ?? item.invoiceNumber ?? t("evidence.zoomTitle"),
       isPdf,
       metadata: item,
@@ -354,12 +255,6 @@ export function EvidenceUpload({
           {t("evidence.title")}
         </h2>
         <p className="text-small text-ink-muted">{t("evidence.uploadDescription")}</p>
-        <p className="text-small text-warning">{t("evidence.malwareScannerNotice")}</p>
-        {isSlow ? (
-          <p className="mt-1 text-small font-medium text-warning" role="status">
-            {t("evidence.slowNetworkNotice")}
-          </p>
-        ) : null}
       </div>
 
       {/* Accessible Error State */}
@@ -385,7 +280,7 @@ export function EvidenceUpload({
           capture="environment"
           onChange={handleFileChange}
           className="sr-only"
-          disabled={isUploading || isOptimizing}
+          disabled={isUploading}
           aria-label={t("evidence.cameraButton")}
         />
         <input
@@ -395,7 +290,7 @@ export function EvidenceUpload({
           accept="image/*,application/pdf"
           onChange={handleFileChange}
           className="sr-only"
-          disabled={isUploading || isOptimizing}
+          disabled={isUploading}
           aria-label={t("evidence.browseButton")}
         />
 
@@ -410,7 +305,7 @@ export function EvidenceUpload({
               <Button
                 variant="primary"
                 onClick={() => cameraInputRef.current?.click()}
-                disabled={isUploading || isOptimizing}
+                disabled={isUploading}
               >
                 <CameraIcon className="h-5 w-5" />
                 <span>{t("evidence.cameraButton")}</span>
@@ -418,17 +313,12 @@ export function EvidenceUpload({
               <Button
                 variant="secondary"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading || isOptimizing}
+                disabled={isUploading}
               >
                 <FileTextIcon className="h-5 w-5" />
                 <span>{t("evidence.browseButton")}</span>
               </Button>
             </div>
-            {isOptimizing ? (
-              <span className="text-small text-ink-muted animate-pulse">
-                {t("evidence.optimizing")}
-              </span>
-            ) : null}
           </div>
         ) : (
           <div className="flex flex-col gap-4 text-left">
@@ -458,16 +348,15 @@ export function EvidenceUpload({
                   <FileTextIcon className="h-8 w-8 text-ink-muted" />
                 )}
               </div>
-              <div className="flex flex-col">
-                <span className="text-body font-semibold text-ink">{selectedFile.name}</span>
-                <span className="text-small text-ink-muted">
-                  {formatFileSize(selectedFile.size)}
-                </span>
+              <div className="flex flex-col text-small">
+                <span className="font-semibold text-ink">{selectedFile.name}</span>
+                <span className="text-ink-muted">{formatFileSize(selectedFile.size)}</span>
+                <span className="text-ink-muted">{selectedFile.type}</span>
               </div>
             </div>
 
-            {/* Optional Structured Fields */}
-            <div className="grid grid-cols-1 gap-4 pt-2 md:grid-cols-3">
+            {/* Structured Metadata Fields */}
+            <div className="flex flex-col gap-3 pt-2">
               <Input
                 label={t("evidence.vendorLabel")}
                 placeholder={t("evidence.vendorPlaceholder")}
@@ -481,8 +370,8 @@ export function EvidenceUpload({
                 placeholder={t("evidence.gstinPlaceholder")}
                 hint={t("evidence.gstinHint")}
                 value={gstin}
-                {...(gstinError ? { error: gstinError } : {})}
                 onChange={(e) => handleGstinChange(e.target.value)}
+                error={gstinError}
                 disabled={isUploading}
               />
               <Input
@@ -495,22 +384,23 @@ export function EvidenceUpload({
               />
             </div>
 
-            {/* Upload Progress Bar */}
+            {/* Uploading Progress State */}
             {isUploading ? (
-              <div
-                className="flex flex-col gap-1.5 pt-2"
-                role="progressbar"
-                aria-valuenow={uploadProgress}
-                aria-valuemin={0}
-                aria-valuemax={100}
-              >
-                <div className="flex justify-between text-caption text-ink-muted">
+              <div className="flex flex-col gap-2 pt-2">
+                <div className="flex justify-between text-small font-semibold text-ink">
                   <span>{t("evidence.uploading")}</span>
                   <span>{uploadProgress}%</span>
                 </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-border">
+                <div
+                  role="progressbar"
+                  aria-valuenow={uploadProgress}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label={t("evidence.uploading")}
+                  className="h-2 w-full overflow-hidden rounded-full bg-border"
+                >
                   <div
-                    className="h-full bg-primary transition-all duration-300"
+                    className="h-full bg-primary transition-all duration-200"
                     style={{ width: `${uploadProgress}%` }}
                   />
                 </div>
@@ -518,13 +408,11 @@ export function EvidenceUpload({
             ) : null}
 
             <div className="flex justify-end gap-3 pt-2">
-              <Button variant="ghost" onClick={() => setSelectedFile(null)} disabled={isUploading}>
-                {t("common.dismiss")}
-              </Button>
               <Button
                 variant="primary"
                 onClick={handleSubmit}
-                disabled={isUploading || !!gstinError}
+                loading={isUploading}
+                loadingLabel={t("evidence.uploading")}
               >
                 {t("evidence.uploadAction")}
               </Button>
@@ -565,15 +453,8 @@ export function EvidenceUpload({
                       >
                         {isPdf ? (
                           <FileTextIcon className="h-6 w-6 text-primary" />
-                        ) : item.fileUrl ? (
-                          /* biome-ignore lint/performance/noImgElement: user-uploaded evidence thumbnail */
-                          <img
-                            src={item.fileUrl}
-                            alt={item.vendorName ?? "Evidence thumbnail"}
-                            className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                          />
                         ) : (
-                          <CheckCircleIcon className="h-6 w-6 text-primary" />
+                          <CameraIcon className="h-6 w-6 text-primary" />
                         )}
                         <span className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
                           <ZoomInIcon className="h-4 w-4 text-white" />
@@ -626,10 +507,7 @@ export function EvidenceUpload({
             type="button"
             aria-label={t("evidence.closeZoom")}
             className="fixed inset-0 bg-black/60"
-            onClick={() => {
-              setZoomedItem(null);
-              setZoomScale(1);
-            }}
+            onClick={() => setZoomedItem(null)}
             tabIndex={-1}
           />
           <div className="relative z-10 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-card bg-surface shadow-xl">
@@ -639,10 +517,7 @@ export function EvidenceUpload({
               </h4>
               <button
                 type="button"
-                onClick={() => {
-                  setZoomedItem(null);
-                  setZoomScale(1);
-                }}
+                onClick={() => setZoomedItem(null)}
                 className="tap-target inline-flex items-center justify-center rounded-control p-1 text-ink-muted hover:text-ink"
                 aria-label={t("evidence.closeZoom")}
               >
@@ -651,7 +526,7 @@ export function EvidenceUpload({
             </div>
 
             <div className="flex flex-col items-center justify-center overflow-auto p-4">
-              {zoomedItem.isPdf || !zoomedItem.url ? (
+              {zoomedItem.isPdf ? (
                 <div className="flex flex-col items-center gap-3 py-8 text-center">
                   <FileTextIcon className="h-16 w-16 text-primary" />
                   <span className="text-body font-semibold text-ink">
@@ -664,42 +539,11 @@ export function EvidenceUpload({
                   ) : null}
                 </div>
               ) : (
-                <div className="relative flex max-h-[60vh] w-full items-center justify-center overflow-auto">
-                  {/* biome-ignore lint/performance/noImgElement: approver zoom preview */}
-                  <img
-                    src={zoomedItem.url}
-                    alt={zoomedItem.title}
-                    style={{ transform: `scale(${zoomScale})`, transformOrigin: "center" }}
-                    className="max-h-[60vh] w-auto rounded-control object-contain transition-transform duration-200"
-                  />
+                <div className="flex flex-col items-center gap-3 py-8 text-center">
+                  <CameraIcon className="h-16 w-16 text-primary" />
+                  <span className="text-body font-semibold text-ink">{zoomedItem.title}</span>
                 </div>
               )}
-
-              {/* Interactive Zoom Controls for Gallery Images */}
-              {!zoomedItem.isPdf && zoomedItem.url ? (
-                <div className="mt-3 flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    onClick={() => setZoomScale((s) => Math.max(0.5, s - 0.25))}
-                    aria-label={t("evidence.zoomOut")}
-                  >
-                    -
-                  </Button>
-                  <span className="text-small font-medium text-ink">
-                    {t("evidence.zoomLevel", { level: String(Math.round(zoomScale * 100)) })}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    onClick={() => setZoomScale((s) => Math.min(3, s + 0.25))}
-                    aria-label={t("evidence.zoomIn")}
-                  >
-                    +
-                  </Button>
-                  <Button variant="ghost" onClick={() => setZoomScale(1)}>
-                    {t("evidence.resetZoom")}
-                  </Button>
-                </div>
-              ) : null}
 
               {zoomedItem.metadata ? (
                 <div className="mt-4 flex w-full flex-col gap-1 rounded-control border border-border bg-canvas p-3 text-small text-ink">
@@ -732,13 +576,7 @@ export function EvidenceUpload({
             </div>
 
             <div className="flex justify-end border-t border-border p-3">
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setZoomedItem(null);
-                  setZoomScale(1);
-                }}
-              >
+              <Button variant="secondary" onClick={() => setZoomedItem(null)}>
                 {t("evidence.closeZoom")}
               </Button>
             </div>
