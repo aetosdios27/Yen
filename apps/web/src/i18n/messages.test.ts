@@ -34,6 +34,8 @@ const IDENTICAL_BY_DESIGN = new Set([
   "locale.en",
   "locale.hi",
   "designSystem.inputErrorPlaceholder",
+  "auth.phonePlaceholder",
+  "auth.otpPlaceholder",
 ]);
 
 const PLACEHOLDER = /\{\w+\}/g;
