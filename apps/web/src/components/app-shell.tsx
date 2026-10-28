@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useI18n } from "../i18n";
 import { AppFooter } from "./app-footer";
+import { InstallPrompt } from "./install-prompt";
 import { LocaleSwitcher } from "./locale-switcher";
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -37,6 +38,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
       <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">
+        <InstallPrompt />
         {children}
       </main>
       <AppFooter />

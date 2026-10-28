@@ -60,12 +60,12 @@ jobs:
 
       - name: OpenAPI diff
         run: |
-          pnpm --filter @yen/shared build
+          pnpm turbo run build --filter="@yen/api^..."
           pnpm --filter @yen/api openapi:check
           pnpm --filter @yen/api-client generate:check
 
       - name: Governance guard
-        run: node --test .github/scripts/governance.test.mjs
+        run: node --test .github/scripts/governance.test.mjs .github/scripts/references.test.mjs
 
       - name: Typecheck, test, build
         env:

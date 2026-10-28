@@ -123,6 +123,7 @@ it("validates every documented status and sent header against the committed Open
   );
 
   for (const code of Object.keys(errorStatus)) {
+    if (code === "payload_too_large") continue;
     const parsed = errorCode.parse(code);
     const errorApp = createApp(base);
     errorApp.get("/contract-error", () => {
@@ -160,7 +161,57 @@ it("validates every documented status and sent header against the committed Open
     "409": "conflict",
     "500": "internal",
   };
+  const waitlistPost = {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: "A",
+      contact: "a@example.com",
+      org: "Club",
+      locale: "en",
+      consent: { accepted: true, text: "Yes", version: "1" },
+    }),
+  };
+  const invalidContact = {
+    ...waitlistPost,
+    body: JSON.stringify({
+      name: "A",
+      contact: "abc",
+      org: "Club",
+      locale: "en",
+      consent: { accepted: true, text: "Yes", version: "1" },
+    }),
+  };
+  const invalidContactResponse = await createApp(base).request("/v1/waitlist", invalidContact);
+  expect(invalidContactResponse.status).toBe(400);
+  await check("/v1/waitlist", "post", invalidContactResponse);
+  const waitlist = createApp({ ...base, waitlistLimit: { capacity: 2, refillMs: 3600000 } });
+  await check("/v1/waitlist", "post", await waitlist.request("/v1/waitlist", waitlistPost));
+  await check(
+    "/v1/waitlist",
+    "post",
+    await waitlist.request("/v1/waitlist", { ...waitlistPost, body: "{}" }),
+  );
+  await check("/v1/waitlist", "post", await waitlist.request("/v1/waitlist", waitlistPost));
+  await check(
+    "/v1/waitlist",
+    "post",
+    await createApp({ ...base, waitlistBodyLimit: 1 }).request("/v1/waitlist", waitlistPost),
+  );
+  await check(
+    "/v1/waitlist",
+    "post",
+    await createApp({
+      ...base,
+      waitlistStore: {
+        add: async () => {
+          throw new Error();
+        },
+      },
+    }).request("/v1/waitlist", waitlistPost),
+  );
   for (const [path, methods] of Object.entries(document.paths)) {
+    if (path === "/v1/waitlist") continue;
     for (const [method, operation] of Object.entries(methods)) {
       for (const status of Object.keys(operation.responses)) {
         if (status === "200") {
@@ -168,6 +219,23 @@ it("validates every documented status and sent header against the committed Open
           await check(path, method, await app.request(url));
         } else if (status === "201") {
           await check(path, method, await app.request("/v1/funds", post));
+        } else if (status === "503") {
+          await check(
+            path,
+            method,
+            path === "/ready"
+              ? await createApp({ ...base, readiness: async () => false }).request("/ready")
+              : await createApp({
+                  ...base,
+                  rateLimitStore: {
+                    consume: async () => ({
+                      allowed: false,
+                      overloaded: true,
+                      retryAfterSeconds: 1,
+                    }),
+                  },
+                }).request("/v1/me"),
+          );
         } else if (status === "429") {
           await check(path, method, await rateLimited.request("/v1/me"));
         } else if (status === "409" && method === "post") {
@@ -189,4 +257,21 @@ it("validates every documented status and sent header against the committed Open
     ),
   );
   expect(checkedStatuses).toEqual(documentedStatuses);
+});
+
+it("documents accepted phone spellings and rejects invalid contacts", async () => {
+  const document = documentSpec.parse(
+    JSON.parse(await readFile(new URL("../openapi/openapi.json", import.meta.url), "utf8")),
+  );
+  const validate = new Ajv2020({ strict: false }).compile(
+    z.record(z.string(), z.unknown()).parse(document.components.schemas.WaitlistInput),
+  );
+  const input = {
+    name: "A",
+    org: "Club",
+    locale: "en",
+    consent: { accepted: true, text: "Yes", version: "1" },
+  };
+  expect(validate({ ...input, contact: "9876543210-" })).toBe(true);
+  expect(validate({ ...input, contact: "abc" })).toBe(false);
 });
