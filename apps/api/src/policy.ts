@@ -1,4 +1,5 @@
 import type { z } from "@hono/zod-openapi";
+import { type Redacted, unsafeMarkRedactedForDevPolicy } from "@yen/policy";
 import type { fundSchema } from "./contract.js";
 import type { Principal } from "./dependencies.js";
 
@@ -13,7 +14,7 @@ export type ExistingFundResource = { readonly kind: "fund"; readonly fund: FundR
 
 export interface Policy {
   can(principal: Principal, action: FundAction, resource: FundResource): boolean;
-  redact(viewer: Principal, resource: ExistingFundResource): FundView;
+  redact(viewer: Principal, resource: ExistingFundResource): Redacted<FundView>;
 }
 
 export const denyAllPolicy: Policy = {
@@ -28,5 +29,5 @@ export const devPolicy: Policy = {
     resource.fund === undefined
       ? action === "fund:create"
       : action === "fund:read" && resource.fund.owner === principal.id,
-  redact: (_viewer, resource) => resource.fund.fund,
+  redact: (_viewer, resource) => unsafeMarkRedactedForDevPolicy(resource.fund.fund),
 };
