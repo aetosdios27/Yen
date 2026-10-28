@@ -1,7 +1,7 @@
 import type { z } from "@hono/zod-openapi";
 import {
-  can as policyCan,
   DEFAULT_FUND_POLICY,
+  can as policyCan,
   type Redacted,
   unsafeMarkRedactedForDevPolicy,
 } from "@yen/policy";
