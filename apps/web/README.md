@@ -75,7 +75,7 @@ Yen is installed as a Progressive Web App (PWA) on mobile and desktop, keeping i
 
 ### What is cached vs. never cached
 
-The service worker (`public/sw.js`) and its caching rules module (`public/sw-rules.js`) adhere to strict transparency boundaries:
+The service worker (`public/sw.js`) and its caching rules (`public/sw-rules.js`) adhere to strict transparency boundaries. Both are classic scripts, not ES modules: `sw.js` loads the rules with `importScripts`, because older Android WebViews and Firefox cannot run module service workers. The rules file wraps its code in a function, since `importScripts` shares one top-level scope with the worker, and `src/pwa/sw-script.test.ts` loads both files that way:
 
 - **What is cached:**
   - **Precached:** The offline fallback page (`/offline`), the web manifest (`/manifest.webmanifest`), and app icons (`/icons/*`, `/favicon.ico`).

@@ -1,11 +1,9 @@
-import {
-  CACHE_NAME,
-  cleanOldCaches,
-  isNavigationRequest,
-  OFFLINE_URL,
-  PRECACHE_URLS,
-  shouldCache,
-} from "./sw-rules.js";
+// Classic service worker: importScripts works in every service-worker-capable browser, unlike ES
+// module workers. The caching rules live in sw-rules.js so they can be unit-tested.
+importScripts("/sw-rules.js");
+
+const { CACHE_NAME, cleanOldCaches, isNavigationRequest, OFFLINE_URL, PRECACHE_URLS, shouldCache } =
+  self.YenSwRules;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
