@@ -77,7 +77,6 @@ export function EvidenceUpload({
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [vendorName, setVendorName] = useState("");
   const [gstin, setGstin] = useState("");
   const [gstinError, setGstinError] = useState<string | undefined>(undefined);
@@ -98,24 +97,6 @@ export function EvidenceUpload({
   useEffect(() => {
     setItems(existingEvidence);
   }, [existingEvidence]);
-
-  // Handle client-side preview URL creation and cleanup
-  useEffect(() => {
-    if (!selectedFile) {
-      setPreviewUrl(null);
-      return;
-    }
-
-    if (selectedFile.type.startsWith("image/")) {
-      const url = URL.createObjectURL(selectedFile);
-      setPreviewUrl(url);
-      return () => {
-        URL.revokeObjectURL(url);
-      };
-    }
-
-    setPreviewUrl(null);
-  }, [selectedFile]);
 
   // Handle escape key to close zoom dialog
   useEffect(() => {
@@ -200,7 +181,6 @@ export function EvidenceUpload({
           gstin: gstin.trim().toUpperCase() || undefined,
           invoiceNumber: invoiceNumber.trim() || undefined,
           createdAt: new Date().toISOString(),
-          fileUrl: previewUrl ?? undefined,
         };
       } else if (fundId && expenseId) {
         // Direct API upload via standard endpoint
@@ -234,7 +214,6 @@ export function EvidenceUpload({
           gstin: gstin.trim().toUpperCase() || undefined,
           invoiceNumber: invoiceNumber.trim() || undefined,
           createdAt: new Date().toISOString(),
-          fileUrl: previewUrl ?? undefined,
         };
       }
 
@@ -362,41 +341,15 @@ export function EvidenceUpload({
               </button>
             </div>
 
-            {/* Thumbnail Preview */}
+            {/* Selected File Preview Icon */}
             <div className="flex items-center gap-4">
-              {previewUrl ? (
-                <button
-                  type="button"
-                  onClick={() =>
-                    openZoom(
-                      {
-                        evidenceId: "preview",
-                        fileSha256: "",
-                        mimeType: selectedFile.type,
-                        fileSizeBytes: selectedFile.size,
-                        createdAt: new Date().toISOString(),
-                      },
-                      previewUrl,
-                    )
-                  }
-                  className="group relative h-20 w-20 shrink-0 overflow-hidden rounded-control border border-border"
-                  aria-label={t("evidence.viewDocument")}
-                >
-                  {/* biome-ignore lint/performance/noImgElement: client-side blob/url preview */}
-                  <img
-                    src={previewUrl}
-                    alt={selectedFile.name}
-                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                  />
-                  <span className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
-                    <ZoomInIcon className="h-5 w-5 text-white" />
-                  </span>
-                </button>
-              ) : (
-                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-control border border-border bg-surface">
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-control border border-border bg-surface">
+                {selectedFile.type.startsWith("image/") ? (
+                  <CameraIcon className="h-8 w-8 text-primary" />
+                ) : (
                   <FileTextIcon className="h-8 w-8 text-ink-muted" />
-                </div>
-              )}
+                )}
+              </div>
               <div className="flex flex-col text-small">
                 <span className="font-semibold text-ink">{selectedFile.name}</span>
                 <span className="text-ink-muted">{formatFileSize(selectedFile.size)}</span>
