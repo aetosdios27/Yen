@@ -35,8 +35,38 @@ export class MemoryWaitlistStore implements WaitlistStore {
   }
 }
 
+export interface DonationPledgeRequest {
+  readonly fundId: string;
+  readonly amountPaise: number;
+  readonly utr: string;
+  readonly donorName?: string;
+  readonly donorContact?: string;
+}
+
+export type DonationPledgeOutcome =
+  | { readonly kind: "pledged"; readonly donationId: string }
+  | { readonly kind: "duplicate_utr" };
+
+export interface DonationPledgeStore {
+  pledge(request: DonationPledgeRequest): Promise<DonationPledgeOutcome>;
+}
+
+/** Dev and test store. One reference can only be claimed once, like the real table. */
+export class MemoryDonationPledgeStore implements DonationPledgeStore {
+  private readonly claimed = new Set<string>();
+
+  async pledge(request: DonationPledgeRequest): Promise<DonationPledgeOutcome> {
+    if (this.claimed.has(request.utr)) return { kind: "duplicate_utr" };
+    this.claimed.add(request.utr);
+    return { kind: "pledged", donationId: crypto.randomUUID() };
+  }
+}
+
 export interface AppDependencies {
   readonly waitlistStore: WaitlistStore;
+  readonly donationPledgeStore: DonationPledgeStore;
+  readonly pledgeLimit: RateLimit;
+  readonly pledgeBodyLimit: number;
   readonly waitlistLimit: RateLimit;
   readonly waitlistBodyLimit: number;
   readonly clock: () => number;
@@ -57,6 +87,9 @@ export interface AppDependencies {
 export function defaultDependencies(clock: () => number = Date.now): AppDependencies {
   return {
     waitlistStore: new MemoryWaitlistStore(),
+    donationPledgeStore: new MemoryDonationPledgeStore(),
+    pledgeLimit: { capacity: 10, refillMs: 3600000 },
+    pledgeBodyLimit: 4096,
     waitlistLimit: { capacity: 5, refillMs: 3600000 },
     waitlistBodyLimit: 8192,
     clock,

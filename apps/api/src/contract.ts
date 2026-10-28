@@ -61,7 +61,17 @@ const protectedErrors = {
 const security = [{ bearerAuth: [] }];
 
 export const principalSchema = z.object({ id: z.string().uuid() }).openapi("Principal");
-const fundFields = { name: z.string().trim().min(1).max(120), targetPaise: paiseWire };
+const payeeName = z.string().trim().min(1).max(80);
+const upiVpa = z
+  .string()
+  .trim()
+  .regex(/^[a-zA-Z0-9._-]{2,256}@[a-zA-Z]{2,64}$/, "Expected a UPI ID such as club@bank");
+const fundFields = {
+  name: z.string().trim().min(1).max(120),
+  targetPaise: paiseWire,
+  upiVpa,
+  upiPayeeName: payeeName,
+};
 export const fundInput = z.object(fundFields).strict().openapi("CreateFund");
 export const fundSchema = z
   .object({ ...fundFields, id: z.string().uuid(), createdAt: z.iso.datetime() })
@@ -233,5 +243,95 @@ export const waitlistRoute = createRoute({
     429: limitedResponse,
     503: overloadedResponse,
     500: internalResponse,
+  },
+});
+
+const fundIdParam = z.object({
+  fundId: z.string().openapi({
+    description: "Canonical lowercase FundId UUID; invalid IDs return 404",
+    param: { name: "fundId", in: "path" },
+  }),
+});
+const publicErrors = {
+  404: protectedErrors[404],
+  429: limitedResponse,
+  500: internalResponse,
+  503: overloadedResponse,
+};
+
+/** Public donors are not signed in, so money details travel through policy redaction. */
+export const donationDetailsSchema = z
+  .object({
+    fundId: z.string().uuid(),
+    title: z.string(),
+    upiVpa: z.string(),
+    upiPayeeName: z.string(),
+  })
+  .strict()
+  .openapi("DonationDetails");
+
+export const donationDetailsRoute = createRoute({
+  method: "get",
+  path: "/v1/funds/{fundId}/donation-details",
+  tags: ["donations"],
+  operationId: "getDonationDetails",
+  description:
+    "Public where-to-pay details for a fund: its UPI ID and the name to show the donor. Anyone may read them; an unknown or closed fund returns 404.",
+  request: { params: fundIdParam },
+  responses: {
+    200: jsonResponse(donationDetailsSchema, "Where to send a donation"),
+    ...publicErrors,
+  },
+});
+
+const donationAmount = paiseWire.refine(
+  (value) => value.length <= 15 && Number.isSafeInteger(Number(value)) && Number(value) > 0,
+  "Expected a positive whole number of paise",
+);
+
+export const donationPledgeInput = z
+  .object({
+    amountPaise: donationAmount,
+    utr: z
+      .string()
+      .regex(/^[0-9]{12}$/, "A UPI reference is exactly 12 digits")
+      .openapi({ description: "The 12-digit reference shown in the donor's UPI app" }),
+    donorName: z.string().trim().min(1).max(60).optional(),
+    donorContact: contact.optional(),
+  })
+  .strict()
+  .openapi("DonationPledge");
+
+export const donationPledgeSchema = z
+  .object({
+    donationId: z.string().uuid(),
+    fundId: z.string().uuid(),
+    status: z.literal("pledged"),
+    amountPaise: paiseWire,
+  })
+  .strict()
+  .openapi("DonationPledgeResult");
+
+export const pledgeDonationRoute = createRoute({
+  method: "post",
+  path: "/v1/funds/{fundId}/donations/pledge",
+  tags: ["donations"],
+  operationId: "pledgeDonation",
+  description:
+    "Records a donor's self-reported UPI payment. The money is not spendable until a bank statement confirms it, and one 12-digit reference can only be claimed once, so a repeat returns 409. Requires Idempotency-Key; identical requests replay.",
+  request: {
+    params: fundIdParam,
+    headers: z.object({ "Idempotency-Key": idempotencyKey }),
+    body: { required: true, content: { "application/json": { schema: donationPledgeInput } } },
+  },
+  responses: {
+    201: withReplay(jsonResponse(donationPledgeSchema, "Pledge recorded")),
+    400: protectedErrors[400],
+    404: protectedErrors[404],
+    409: jsonResponse(errorEnvelope, "Reference already claimed, or idempotency conflict"),
+    413: jsonResponse(errorEnvelope, "Request body too large"),
+    429: limitedResponse,
+    500: internalResponse,
+    503: overloadedResponse,
   },
 });

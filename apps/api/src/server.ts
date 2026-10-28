@@ -5,6 +5,7 @@ import { createApp } from "./app.js";
 import { clientIp } from "./client-ip.js";
 import { rateLimits } from "./config.js";
 import { createDatabaseReady } from "./database-ready.js";
+import { PostgresDonationPledgeStore } from "./donation-store.js";
 import { env } from "./env.js";
 import { useMemoryStore } from "./server-config.js";
 import { MemoryRateLimitStore } from "./stores.js";
@@ -31,6 +32,12 @@ if (!(await readiness())) {
 serve({
   fetch: createApp({
     ...(sql ? { waitlistStore: new PostgresWaitlistStore(sql) } : {}),
+    ...(sql ? { donationPledgeStore: new PostgresDonationPledgeStore(sql) } : {}),
+    pledgeLimit: {
+      capacity: env.PLEDGE_RATE_LIMIT_CAPACITY,
+      refillMs: env.PLEDGE_RATE_LIMIT_REFILL_MS,
+    },
+    pledgeBodyLimit: env.PLEDGE_BODY_LIMIT_BYTES,
     waitlistLimit: {
       capacity: env.WAITLIST_RATE_LIMIT_CAPACITY,
       refillMs: env.WAITLIST_RATE_LIMIT_REFILL_MS,

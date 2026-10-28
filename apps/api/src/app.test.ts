@@ -11,7 +11,12 @@ import { MemoryIdempotencyStore, MemoryRateLimitStore } from "./stores.js";
 
 const principal = { id: "00000000-0000-4000-8000-000000000001" };
 const inboundId = "00000000-0000-4000-8000-000000000099";
-const input = { name: "Festival", targetPaise: "9007199254740993" };
+const input = {
+  name: "Festival",
+  targetPaise: "9007199254740993",
+  upiVpa: "festival@yenbank",
+  upiPayeeName: "Festival Committee",
+};
 
 function setup(overrides: Partial<AppDependencies> = {}) {
   let now = 0;
@@ -236,10 +241,12 @@ it("consults policy for both fund routes and returns only its redacted view", as
     id: inboundId,
     name: "Policy view",
     targetPaise: "7",
+    upiVpa: "policy@yenbank",
+    upiPayeeName: "Policy Committee",
     createdAt: "1970-01-01T00:00:00.000Z",
   };
   const redact = vi.fn(() => sentinel);
-  const { app } = setup({ policy: { can, redact } });
+  const { app } = setup({ policy: { ...devPolicy, can, redact } });
   const created = await app.request("/v1/funds", post());
   expect(await created.json()).toEqual(sentinel);
   const id = "00000000-0000-4000-8000-000000000101";
@@ -254,7 +261,7 @@ it("conceals an existing fund when read policy denies it", async () => {
     (viewer, action, resource) =>
       action === "fund:create" && devPolicy.can(viewer, action, resource),
   );
-  const { app } = setup({ policy: { can, redact: devPolicy.redact } });
+  const { app } = setup({ policy: { ...devPolicy, can, redact: devPolicy.redact } });
   const created = fundSchema.parse(await (await app.request("/v1/funds", post())).json());
   const response = await app.request(`/v1/funds/${created.id}`);
   expect(response.status).toBe(404);
@@ -288,6 +295,8 @@ it("reports zod field paths", async () => {
   expect(body.error.details?.map((detail) => detail.path)).toEqual([
     ["json", "name"],
     ["json", "targetPaise"],
+    ["json", "upiVpa"],
+    ["json", "upiPayeeName"],
   ]);
 });
 
