@@ -7,6 +7,9 @@ beforeEach(() => {
   vi.stubEnv("RATE_LIMIT_IP_CAPACITY", undefined);
   vi.stubEnv("RATE_LIMIT_PRINCIPAL_CAPACITY", undefined);
   vi.stubEnv("RATE_LIMIT_REFILL_MS", undefined);
+  vi.stubEnv("TRUSTED_PROXY_HOPS", undefined);
+  vi.stubEnv("TRUSTED_PROXY_HEADER", undefined);
+  vi.stubEnv("CLEANUP_INTERVAL_MS", undefined);
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -21,6 +24,9 @@ it("exports typed env and parses it only once per startup", async () => {
     RATE_LIMIT_IP_CAPACITY: 120,
     RATE_LIMIT_PRINCIPAL_CAPACITY: 60,
     RATE_LIMIT_REFILL_MS: 60000,
+    TRUSTED_PROXY_HOPS: 0,
+    TRUSTED_PROXY_HEADER: "x-forwarded-for",
+    CLEANUP_INTERVAL_MS: 60000,
   });
   vi.stubEnv("PORT", "invalid");
   expect((await import("./env.js")).env).toBe(env);
@@ -96,6 +102,31 @@ it.each([
   vi.stubEnv(key, value);
   await expect(import("./env.js")).rejects.toThrow(key);
 });
+
+it.each(["x-forwarded-for", "forwarded"])("accepts TRUSTED_PROXY_HEADER %s", async (value) => {
+  vi.stubEnv("PORT", "3001");
+  vi.stubEnv("TRUSTED_PROXY_HEADER", value);
+  expect((await import("./env.js")).env.TRUSTED_PROXY_HEADER).toBe(value);
+});
+
+it.each(["Forwarded", "x-real-ip", "x-forwarded-for,forwarded", ""])(
+  "rejects unsupported TRUSTED_PROXY_HEADER %s without exposing its value",
+  async (value) => {
+    vi.stubEnv("PORT", "3001");
+    vi.stubEnv("TRUSTED_PROXY_HEADER", value);
+    await expect(import("./env.js")).rejects.toThrow("TRUSTED_PROXY_HEADER");
+    await expect(import("./env.js")).rejects.not.toThrow("x-real-ip");
+  },
+);
+
+it.each(["999", "3600001", "1.5", "invalid"])(
+  "rejects out of range CLEANUP_INTERVAL_MS %s",
+  async (value) => {
+    vi.stubEnv("PORT", "3001");
+    vi.stubEnv("CLEANUP_INTERVAL_MS", value);
+    await expect(import("./env.js")).rejects.toThrow("CLEANUP_INTERVAL_MS");
+  },
+);
 
 it.each(["999", "1000001", "1.5", "invalid"])(
   "rejects invalid rate limit key cap %s",

@@ -107,14 +107,19 @@ insert or expired-lease takeover; completion and release must compare the token 
 hash. `createdAt` is epoch milliseconds. YEN-18/24 owns the Postgres adapter and
 schema; this contract does not change that migration.
 
-The in-memory store expires completed responses after 24 hours by default and sweeps
-expired entries lazily on access. It caps entries at 10,000, evicting the oldest
-completed responses first. When all slots hold active leases, it rejects a new
-reservation until a lease expires; it never evicts an active lease to make room.
-These defaults are injectable as `inProgressTtlMs`, `replayRetentionMs`, and
-`maxEntries`. Production needs a shared store for consistent idempotency across
-processes. A released or expired key can execute again, so operations with durable
-side effects still need transactional coordination in that store.
+Completed idempotency responses are retained for 24 hours by default (`replayRetentionMs = 86_400_000`),
+after which the key expires and can be reused. In-progress reservations have a 30-second lease
+(`inProgressTtlMs = 30_000`), after which an abandoned lease can be taken over atomically by another
+request with a new fencing token. Both in-memory (`MemoryIdempotencyStore`) and PostgreSQL
+(`PostgresIdempotencyStore`) stores implement this retention policy.
+
+In PostgreSQL, `PostgresIdempotencyStore` operates on the `idempotency_keys` table. `begin`
+atomically inserts absent keys or takes over expired leases using `INSERT ... ON CONFLICT (key) DO UPDATE`
+returning whether the token was newly acquired. `complete` and `release` check the fencing token and
+request hash so stale or replaced workers cannot overwrite or release an active lease. `sweep()`
+purges expired completed entries and abandoned leases without lock contention using `FOR UPDATE SKIP LOCKED`.
+Migration `0004` backfills `replay_expires_at` as `created_at + 24 hours` for existing completed rows, so they expire like new ones.
+In PostgreSQL mode the process calls `sweep()` and the rate-limit `prune()` on the schedule described under "Retention" below.
 
 ## Rate limits and logs
 
@@ -124,12 +129,25 @@ Configure positive integer `RATE_LIMIT_IP_CAPACITY`, `RATE_LIMIT_PRINCIPAL_CAPAC
 and `RATE_LIMIT_REFILL_MS` at startup. A rejected request returns `429` with integer
 seconds in `retry-after`. Liveness and readiness bypass rate limits.
 
-The Node entrypoint resolves the socket peer address. Forwarded headers are ignored.
-Configure a trusted resolver explicitly when deploying behind a proxy.
-Store instances are injectable and in-memory limits apply to one process. The
-in-memory rate-limit store lazily removes buckets once they would be full and caps
-entries at 10,000, evicting the oldest bucket when full. It has no background timer.
-Production needs a shared rate-limit store for consistent limits across processes.
+The Node entrypoint resolves the socket peer address and ignores forwarded headers
+unless `TRUSTED_PROXY_HOPS` is set (see the proxy paragraph below).
+Store instances are injectable. When `DATABASE_URL` is provided, production uses `PostgresRateLimitStore`
+on the `rate_limits` table so limits hold across multiple API instances and processes. Each key takes a
+transaction-level advisory lock, `pg_advisory_xact_lock(0x59454e01, hashtext(key))`. A key that is new or
+whose window has expired also takes one global admission lock, `pg_advisory_xact_lock(0x59454e02, 0)`,
+and rechecks the `RATE_LIMIT_MAX_KEYS` capacity under it, so concurrent first-time keys cannot exceed the cap.
+Both locks use the two-`int4` form, which PostgreSQL keeps separate from the one-`bigint` form used by fund
+events (`yen_fund_lock_key`). Atomic upserts coordinate continuous token refill and fixed-window expiry.
+A delayed request never moves a bucket's timestamp backwards, so it cannot refill tokens twice.
+In-memory mode (`MemoryRateLimitStore`) is used when `YEN_ALLOW_MEMORY_STORES=true` or in local mock mode.
+
+### Retention
+
+`CLEANUP_INTERVAL_MS` (default `60000`, range `1000`–`3600000`) sets how often PostgreSQL mode runs
+`sweep()` on `idempotency_keys` and `prune()` on `rate_limits`. Each call removes at most 1000 expired rows.
+Ticks never overlap. A failed call writes one stderr line, `{"event":"cleanup_failed","task":"...","errorName":"..."}`,
+with no message or stack, and the next tick retries. On `SIGINT` or `SIGTERM` the process stops the scheduler,
+closes the HTTP server, and ends the database pool.
 
 Request logs contain only event, UUID requestId, method, route template, status, and
 durationMs. Failure logs contain only event, requestId, method, route template,
@@ -176,7 +194,8 @@ the public route does not require an idempotency key.
 
 The waitlist response floor (`WAITLIST_MIN_RESPONSE_MS`, default 75 ms) hides differences below the floor. The per-IP limit of five requests per hour makes statistical timing attacks impractical; a slow database could still exceed the floor.
 
-`TRUSTED_PROXY_HOPS` defaults to 0 and ignores forwarded headers. Set it to the number of trusted proxy hops (1–5) only when the server is reachable exclusively through those proxies; the address is selected from the right of `X-Forwarded-For`. Malformed headers fall back to the socket address. Rate limits are process-local; the shared store is tracked by YEN-55.
+`TRUSTED_PROXY_HOPS` defaults to 0 and ignores all forwarded headers (safe by default). Set it to the number of trusted proxy hops (1–5) only when the server is reachable exclusively through those proxies.
+`TRUSTED_PROXY_HEADER` names the one header that is read when hops are configured: `x-forwarded-for` (the default) or `forwarded` (RFC 7239, `for=` parameter). Choose the header your edge proxy overwrites. The other header is never read, so a client cannot pick its rate-limit address by sending the unused one. The address is selected from the right of that header by hop count. Quoted strings are parsed per RFC 7230, so commas and semicolons inside quotes do not split elements. `unknown`, obfuscated `_name` identifiers, and non-IP values fall back to the socket address. Spoofed headers cannot evade or poison limits when no trusted proxy is configured. Shared rate limiting across processes is implemented via `PostgresRateLimitStore` (YEN-55).
 
 The `RATE_LIMIT_MAX_KEYS` setting (1,000–1,000,000, default 100,000) is a deliberate
 global admission limit that protects process memory. When active fixed windows fill

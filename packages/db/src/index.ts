@@ -1,4 +1,4 @@
-export { createSql, type Sql } from "./client.js";
+export { createSql, type Sql, type SqlClient, type TransactionSql } from "./client.js";
 export { parseDatabaseUrl } from "./env.js";
 export {
   type AppendEventInput,
@@ -47,6 +47,8 @@ export {
   orgRowSchema,
   type PseudonymRow,
   pseudonymRowSchema,
+  type RateLimitRow,
+  rateLimitRowSchema,
   type UserRow,
   userRowSchema,
 } from "./rows.js";
