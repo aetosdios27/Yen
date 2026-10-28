@@ -5,6 +5,7 @@ import {
   InMemoryExpenseStore,
   rejectUnverifiedApprovalProof,
 } from "@yen/ledger";
+import type { FundRole } from "@yen/policy";
 import type { Context } from "hono";
 import { rateLimitEnv, rateLimits } from "./config.js";
 import { jsonLogger, type Logger } from "./logging.js";
@@ -19,6 +20,7 @@ import {
 
 export interface Principal {
   readonly id: string;
+  readonly role?: FundRole | undefined;
 }
 
 export type ApiEnv = {

@@ -12,9 +12,9 @@ import type { AppDependencies } from "./dependencies.js";
 import { devPolicy } from "./policy.js";
 
 const FUND_ID = "00000000-0000-4000-8000-000000000001";
-const REQUESTER = { id: "00000000-0000-4000-8000-000000000010" };
-const APPROVER_1 = { id: "00000000-0000-4000-8000-000000000021" };
-const APPROVER_2 = { id: "00000000-0000-4000-8000-000000000022" };
+const REQUESTER = { id: "00000000-0000-4000-8000-000000000010", role: "owner" as const };
+const APPROVER_1 = { id: "00000000-0000-4000-8000-000000000021", role: "approver" as const };
+const APPROVER_2 = { id: "00000000-0000-4000-8000-000000000022", role: "approver" as const };
 
 function setup(overrides: Partial<AppDependencies> = {}) {
   let now = 1700000000000;
@@ -366,7 +366,7 @@ describe("Expense Requests API Routes (YEN-30)", () => {
     expect(reconciledBody.reconciledAt).toBeDefined();
   });
 
-  it("rejects approval when no cryptographic proof verifier is configured", async () => {
+  it("requires an authorized approver and a configured cryptographic proof verifier", async () => {
     const expenseStore = new InMemoryExpenseStore();
     const app = createApp({ principal: REQUESTER, policy: devPolicy, expenseStore });
     const createRes = await app.request(
@@ -382,7 +382,6 @@ describe("Expense Requests API Routes (YEN-30)", () => {
       req("POST", `/v1/funds/${FUND_ID}/expenses/${created.id}/submit`, undefined, "proof-submit"),
     );
 
-    const approverApp = createApp({ principal: APPROVER_1, policy: devPolicy, expenseStore });
     const forgedProof = {
       credentialId: "attacker-controlled-credential",
       signatureHex: "00",
@@ -392,6 +391,23 @@ describe("Expense Requests API Routes (YEN-30)", () => {
       }),
       authenticatorDataHex: "00",
     };
+    const missingRoleApp = createApp({
+      principal: { id: APPROVER_1.id },
+      policy: devPolicy,
+      expenseStore,
+      approvalProofVerifier: verifyPasskeyBinding,
+    });
+    const unauthorized = await missingRoleApp.request(
+      req(
+        "POST",
+        `/v1/funds/${FUND_ID}/expenses/${created.id}/approve`,
+        forgedProof,
+        "proof-missing-role",
+      ),
+    );
+    expect(unauthorized.status).toBe(403);
+
+    const approverApp = createApp({ principal: APPROVER_1, policy: devPolicy, expenseStore });
     const result = await approverApp.request(
       req(
         "POST",
@@ -448,6 +464,6 @@ describe("Expense Requests API Routes (YEN-30)", () => {
         "pay-rejected",
       ),
     );
-    expect(payRes.status).toBe(409);
+    expect(payRes.status).toBe(403);
   });
 });

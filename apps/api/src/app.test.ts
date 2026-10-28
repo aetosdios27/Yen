@@ -10,7 +10,7 @@ import { type LogEntry, serializeRequestLog } from "./logging.js";
 import { devPolicy } from "./policy.js";
 import { MemoryIdempotencyStore, MemoryRateLimitStore } from "./stores.js";
 
-const principal = { id: "00000000-0000-4000-8000-000000000001" };
+const principal = { id: "00000000-0000-4000-8000-000000000001", role: "owner" as const };
 const inboundId = "00000000-0000-4000-8000-000000000099";
 const input = { name: "Festival", targetPaise: "9007199254740993" };
 
@@ -180,7 +180,7 @@ it("returns the injected principal", async () => {
   const { app } = setup();
   const response = await app.request("/v1/me");
   expect(response.status).toBe(200);
-  expect(await response.json()).toEqual(principal);
+  expect(await response.json()).toEqual({ id: principal.id });
 });
 
 it.each(["/v1/me", "/v1/funds", "/v1/funds/not-an-id"])("requires auth for %s", async (path) => {
@@ -351,7 +351,7 @@ it.each(["query", "method", "content-type", "bytes"])(
 it("isolates idempotency keys by principal", async () => {
   const idempotencyStore = new MemoryIdempotencyStore();
   const first = setup({ idempotencyStore });
-  const second = setup({ idempotencyStore, principal: { id: inboundId } });
+  const second = setup({ idempotencyStore, principal: { id: inboundId, role: "owner" } });
   expect((await first.app.request("/v1/funds", post())).status).toBe(201);
   const response = await second.app.request("/v1/funds", post());
   expect(response.status).toBe(201);

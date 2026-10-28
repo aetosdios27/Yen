@@ -75,7 +75,7 @@ it("validates every documented status and sent header against the committed Open
   let sequence = 100;
   const idGenerator = () => `00000000-0000-4000-8000-${String(sequence++).padStart(12, "0")}`;
   const base = {
-    principal: { id: "00000000-0000-4000-8000-000000000001" },
+    principal: { id: "00000000-0000-4000-8000-000000000001", role: "owner" as const },
     idGenerator,
     clock: () => 0,
     logger: { log: () => undefined },

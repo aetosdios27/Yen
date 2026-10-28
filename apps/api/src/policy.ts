@@ -1,5 +1,12 @@
 import type { z } from "@hono/zod-openapi";
-import { type Redacted, unsafeMarkRedactedForDevPolicy } from "@yen/policy";
+import {
+  DEFAULT_FUND_POLICY,
+  type Action as DomainAction,
+  can as policyCan,
+  type Redacted,
+  unsafeMarkRedactedForDevPolicy,
+} from "@yen/policy";
+import type { FundId, Paise } from "@yen/shared";
 import type { expenseSchema, fundSchema } from "./contract.js";
 import type { Principal } from "./dependencies.js";
 
@@ -55,28 +62,78 @@ export const denyAllPolicy: Policy = {
 
 export const devPolicy: Policy = {
   can: (principal, action, resource) => {
+    if (!principal.role) return false;
+    const actor = { id: principal.id, role: principal.role };
     if (resource.kind === "fund") {
-      return resource.fund === undefined
-        ? action === "fund:create"
-        : action === "fund:read" && resource.fund.owner === principal.id;
+      if (action === "fund:create") return policyCan(actor, action, { kind: "fund" });
+      if (action !== "fund:read" || resource.fund === undefined) return false;
+      return policyCan(actor, action, {
+        kind: "fund",
+        fund: {
+          fundId: resource.fund.fund.id as FundId,
+          ownerId: resource.fund.owner,
+          policy: DEFAULT_FUND_POLICY,
+        },
+      });
     }
     if (resource.kind === "expense") {
+      let domainAction: DomainAction;
       switch (action) {
         case "expense:create":
-        case "expense:read":
-          return true;
         case "expense:submit":
-          return resource.expense?.owner === principal.id;
+          domainAction = "expense:submit";
+          break;
+        case "expense:read":
+          domainAction = "expense:read";
+          break;
         case "expense:approve":
-          // Separation of duties: requester cannot approve
-          return resource.expense !== undefined && resource.expense.owner !== principal.id;
+          domainAction = "expense:approve";
+          break;
         case "expense:reject":
+          domainAction = "expense:reject";
+          break;
         case "expense:pay":
+          domainAction = "expense:payout";
+          break;
         case "expense:reconcile":
-          return true;
+          domainAction = "bank:reconcile";
+          break;
         default:
           return false;
       }
+
+      const record = resource.expense;
+      const view = record?.expense;
+      const fundId = (view?.fundId ?? "00000000-0000-4000-8000-000000000000") as FundId;
+      if (domainAction === "bank:reconcile") {
+        return policyCan(actor, domainAction, {
+          kind: "bank",
+          bank: { fundId, policy: DEFAULT_FUND_POLICY },
+        });
+      }
+
+      const amountPaise = Number(view?.amountPaise ?? 0) as Paise;
+      const approvalCount = view?.approvalsCount ?? 0;
+      const supportedStatus = ["submitted", "approved", "rejected", "paid"].includes(
+        view?.status ?? "",
+      )
+        ? (view?.status as "submitted" | "approved" | "rejected" | "paid")
+        : undefined;
+      return policyCan(actor, domainAction, {
+        kind: "expense",
+        expense: {
+          fundId,
+          ...(view?.id === undefined ? {} : { expenseId: view.id }),
+          policy: DEFAULT_FUND_POLICY,
+          requesterId: record?.owner ?? principal.id,
+          amountPaise,
+          ...(supportedStatus === undefined ? {} : { status: supportedStatus }),
+          approvals: Array.from({ length: approvalCount }, (_, index) => ({
+            approverId: `dev-policy-approval-${index}`,
+            roleAtApproval: "approver" as const,
+          })),
+        },
+      });
     }
     return false;
   },
