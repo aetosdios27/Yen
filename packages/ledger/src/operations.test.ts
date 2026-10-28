@@ -20,6 +20,76 @@ import { replayFundEvents } from "./replay.js";
 import { ledgerDatabaseSuite } from "./test/database.js";
 
 ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (sql) => {
+  it("rolls back a newly created hold when event construction fails", async () => {
+    const fundId = uuidv7();
+    await sql.begin(async (tx) => {
+      await recordDonation(tx, {
+        fundId,
+        amount: paise(50000),
+        reference: "seed-atomic-hold-test",
+      });
+    });
+
+    await sql.begin(async (tx) => {
+      await expect(
+        reserveForExpense(tx, {
+          fundId,
+          amount: paise(20000),
+          occurredAt: "not-a-timestamp",
+        }),
+      ).rejects.toThrow(/Invalid event input/i);
+
+      const holds = await tx<{ count: number }[]>`
+        SELECT COUNT(*)::int AS count FROM konto_holds h
+        JOIN konto_accounts a ON a.id = h.account_id
+        WHERE a.name = ${`fund:${fundId}:bank`} AND h.status = 'PENDING'
+      `;
+      expect(holds[0]?.count).toBe(0);
+    });
+
+    expect(await available(sql, fundId)).toBe(50000n);
+  });
+
+  it("restores a released hold when its event cannot be constructed", async () => {
+    const fundId = uuidv7();
+    await sql.begin(async (tx) => {
+      await recordDonation(tx, {
+        fundId,
+        amount: paise(50000),
+        reference: "seed-atomic-release-test",
+      });
+    });
+
+    let holdId = "";
+    let expenseId = "";
+    await sql.begin(async (tx) => {
+      const result = await reserveForExpense(tx, {
+        fundId,
+        amount: paise(20000),
+      });
+      holdId = result.holdId;
+      expenseId = result.expenseId;
+    });
+
+    await sql.begin(async (tx) => {
+      await expect(
+        releaseExpense(tx, {
+          fundId,
+          holdId,
+          expenseId,
+          occurredAt: "not-a-timestamp",
+        }),
+      ).rejects.toThrow(/Invalid event input/i);
+
+      const holds = await tx<{ status: string }[]>`
+        SELECT status FROM konto_holds WHERE id = ${holdId}
+      `;
+      expect(holds[0]?.status).toBe("PENDING");
+    });
+
+    expect(await available(sql, fundId)).toBe(30000n);
+  });
+
   it("AC1: Killing the transaction between ledger write and event write leaves neither in DB", async () => {
     const fundId = uuidv7();
 
