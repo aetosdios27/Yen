@@ -123,7 +123,7 @@ Each README claim that has a row carries a `<!-- claim: CLAIM-ID -->` marker. Th
 - **Mechanism:** `contracts/src/RootRegistry.sol` `publishRoot` accepts only a `bytes32` root. `packages/eventlog/src/model.ts` `parseEvent` rejects unknown payload fields and raw user IDs.
 - **Test:** `packages/eventlog/src/eventlog.test.ts` "rejects a raw user UUID as actor and unversioned payload additions"
 - **Reference:** `dpdp-act`, `ico-pseudonymisation`
-- **Missing:** No chain writer exists (CLAIM-10), so nothing is published yet. Payload schemas are provisional (packages/eventlog/README.md:9-36). No test scans a published artifact for personal data. Pseudonymisation alone does not make data anonymous.
+- **Missing:** No chain writer exists (CLAIM-10), so nothing is published yet. Payload schemas are provisional (packages/eventlog/README.md:9-36). No test scans a published artifact for personal data. Pseudonymisation alone does not make data anonymous. Real names, 9-digit private Yen IDs, and phone numbers live in erasable tables outside the log (YEN-46, YEN-70). Pseudonyms are strictly per person per fund to prevent cross-fund correlation.
 
 ### CLAIM-12 Spending needs the configured approvals
 
@@ -132,8 +132,8 @@ Each README claim that has a row carries a `<!-- claim: CLAIM-ID -->` marker. Th
 - **Where:** README.md:67; README.md:49
 - **Mechanism:** none
 - **Test:** none
-- **Reference:** `webauthn-2`, `owasp-transaction`
-- **Missing:** No expense, approval, quorum, or passkey code exists. The event types `expense.approved` and `expense.rejected` are provisional schemas only. The bearer scheme does not authenticate tokens (apps/api/README.md:29).
+- **Reference:** `owasp-transaction`, `nist-800-63b`, `owasp-auth`
+- **Missing:** For MVP, money actions are confirmed with a 6-digit Yen PIN, and approvals are recorded by Yen after PIN confirmation (attested by the server, not signed by the approver's device; YEN-25). A compromised server could record an approval nobody gave; the event log stops later edits but not write-time fabricated approvals. Before Yen ever moves money, device-signed approvals via WebAuthn (YEN-71) must be required. No expense, approval, quorum, or PIN verification code exists in the repository. The event types `expense.approved` and `expense.rejected` are provisional schemas only. The bearer scheme does not authenticate tokens (apps/api/README.md:29). Named tests to be written: `apps/api/src/approvals.test.ts` "records approval only after valid 6-digit PIN confirmation bound to action", `apps/api/src/approvals.test.ts` "requires configured quorum of distinct approvers before spending transitions", and `apps/api/src/approvals.test.ts` "distinguishes server-attested PIN confirmations from device-signed WebAuthn assertions".
 
 ### CLAIM-13 A payment is recorded only when the bank reports it
 
@@ -284,3 +284,34 @@ Each README claim that has a row carries a `<!-- claim: CLAIM-ID -->` marker. Th
 - **Test:** `contracts/test/RootRegistry.t.sol` "testRejectsNativeCurrencyAndUnknownCalls"
 - **Reference:** none yet (gap)
 - **Mutation:** Added `receive() external payable {}`. "testRejectsNativeCurrencyAndUnknownCalls" failed.
+
+
+### CLAIM-28 Per-fund pseudonyms isolate identity across funds
+
+- **Status:** planned
+- **Wording:** "PII belongs only in application tables. `pseudonyms` is an erasable mapping from a public UUID to a user."
+- **Where:** packages/db/README.md:15
+- **Mechanism:** none in use. The `ensureFundPseudonym` helper is planned under YEN-70 in `@yen/db` to map `(user_id, fund_id)` pairs to distinct random UUIDv4 pseudonyms.
+- **Test:** none
+- **Reference:** `ico-pseudonymisation`, `dpdpa-transcription`
+- **Missing:** The per-fund pseudonym schema (`fund_pseudonyms`) and `ensureFundPseudonym` helper are not merged on this branch (developed on origin/aetosdios27/yen-70-fund-pseudonyms). Event persistence is unbuilt (YEN-18). Named tests to be written: `packages/db/src/pseudonyms.test.ts` "isolates pseudonyms for the same user across distinct funds", `packages/db/src/pseudonyms.test.ts` "generates random UUIDs without shared timestamp prefixes", and `packages/db/src/pseudonyms.test.ts` "converges idempotently under concurrent creation".
+
+### CLAIM-29 Real names and Yen IDs stay outside event logs and public pages
+
+- **Status:** partial
+- **Wording:** "Names, phone numbers, VPAs, free-form notes, and raw evidence are not accepted."
+- **Where:** packages/eventlog/README.md:9
+- **Mechanism:** `packages/eventlog/src/model.ts` `parseEvent` rejects raw user UUIDs and unversioned payload fields. Private 9-digit Yen ID with check digit lives outside logs and public pages (YEN-70).
+- **Test:** `packages/eventlog/src/eventlog.test.ts` "rejects a raw user UUID as actor and unversioned payload additions"
+- **Reference:** `dpdp-act`, `dpdpa-transcription`
+- **Missing:** The parse check covers the eventlog package only. Real names, private 9-digit Yen IDs, and phone numbers are stored in application tables; UI donor visibility options (full name, initials, "a donor") and redaction tiers are unbuilt (YEN-31, YEN-70). No test scans receipts or API responses to verify absence of Yen IDs and real names. Named tests to be written: `apps/api/src/routes.test.ts` "never exposes 9-digit Yen ID in public endpoints, receipts, or event streams" and `apps/api/src/routes.test.ts` "redacts donor name according to selected visibility preference".
+
+### CLAIM-30 Money actions require server-verified 6-digit PIN with lockout and cooling-off
+
+- **Status:** planned
+- **Wording:** "Configured approvers confirm with a 6-digit Yen PIN (recorded by Yen after PIN confirmation)"
+- **Where:** README.md:49
+- **Mechanism:** none. Server-side PIN verification planned under YEN-25, using keyed hash with secret outside DB, 5-attempt lockout for 30 minutes, 10-attempt lock requiring OTP support reset with 24-hour cooling-off notifying all members.
+- **Test:** none
+- **Reference:** `nist-800-63b`, `owasp-auth`, `owasp-password-storage`, `rfc-2104`
+- **Missing:** Approvals are recorded by Yen after PIN confirmation and attested by the server rather than signed by the approver's device; a compromised server or operator could record an approval nobody gave (the event log stops later edits but not write-time fabricated approvals). Device-signed approvals via WebAuthn (YEN-71) are planned before Yen moves money. No PIN storage, keyed hashing, lockout tracking, or cooling-off reset notification code exists in the repository. Named tests to be written: `apps/api/src/pin.test.ts` "locks out after 5 consecutive failed attempts for 30 minutes", `apps/api/src/pin.test.ts` "requires owner reset with 24-hour cooling-off and member notifications after 10 failures", and `apps/api/src/pin.test.ts` "verifies single-use action-bound PIN and expires token within 60 seconds".

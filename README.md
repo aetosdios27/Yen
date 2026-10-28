@@ -46,7 +46,7 @@ flowchart LR
 ```
 
 1. **Donations go directly to the club bank account.** The bank feed confirms incoming payments, so a payment is recorded only when the bank reports it. <!-- claim: CLAIM-13 -->
-2. **Spending requires permission.** The treasurer submits an expense request with a bill. Configured approvers confirm with passkeys, and donors receive an objection window. <!-- claim: CLAIM-12 --> <!-- claim: CLAIM-15 -->
+2. **Spending requires permission.** The treasurer submits an expense request with a bill. Configured approvers confirm with a 6-digit Yen PIN (recorded by Yen after PIN confirmation), and donors receive an objection window. <!-- claim: CLAIM-12 --> <!-- claim: CLAIM-15 --> <!-- claim: CLAIM-30 -->
 3. **Debits match approved requests.** Bank debits are reconciled against approved requests. Any debit without a matching approval is flagged publicly. <!-- claim: CLAIM-14 -->
 4. **Events are hash-chained in the event log (planned).** Each record includes the cryptographic hash of the prior record, ensuring any change would be detected. <!-- claim: CLAIM-03 -->
 5. **Merkle roots anchor to a public chain (planned).** Periodic root hashes are published to the Polygon Amoy testnet without names or amounts. <!-- claim: CLAIM-10 --> Anyone can verify proofs locally in the browser. <!-- claim: CLAIM-09 -->
