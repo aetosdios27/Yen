@@ -2,8 +2,8 @@ import type { Server } from "node:http";
 import { serve } from "@hono/node-server";
 import { createSql, type Sql } from "@yen/db";
 import { createApp } from "./app.js";
-import { startCleanupScheduler, type CleanupScheduler } from "./cleanup-scheduler.js";
-import { createClientIpResolver } from "./client-ip.js";
+import { type CleanupScheduler, startCleanupScheduler } from "./cleanup-scheduler.js";
+import { createClientIpResolver, type TrustedProxyHeader } from "./client-ip.js";
 import { rateLimits } from "./config.js";
 import { createDatabaseReady } from "./database-ready.js";
 import { DefaultInFlightTracker } from "./dependencies.js";
@@ -23,6 +23,7 @@ export interface ServerConfig {
   readonly YEN_ALLOW_MEMORY_STORES?: "true" | "false" | undefined;
   readonly READINESS_CACHE_MS: number;
   readonly TRUSTED_PROXY_HOPS: number;
+  readonly TRUSTED_PROXY_HEADER: TrustedProxyHeader;
   readonly CLEANUP_INTERVAL_MS: number;
   readonly WAITLIST_MIN_RESPONSE_MS: number;
   readonly WAITLIST_RATE_LIMIT_CAPACITY: number;
@@ -142,7 +143,10 @@ export async function startServer(
     concurrencyLimit: resolvedConfig.CONCURRENCY_LIMIT,
     requestTimeoutMs: resolvedConfig.REQUEST_TIMEOUT_MS,
     inFlightTracker,
-    clientIp: createClientIpResolver({ trustedHops: resolvedConfig.TRUSTED_PROXY_HOPS }),
+    clientIp: createClientIpResolver({
+      trustedHops: resolvedConfig.TRUSTED_PROXY_HOPS,
+      trustedHeader: resolvedConfig.TRUSTED_PROXY_HEADER,
+    }),
     rateLimits: rateLimits(resolvedConfig),
   });
 
