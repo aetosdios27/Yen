@@ -172,6 +172,7 @@ CREATE TABLE IF NOT EXISTS fund_events (
   payload JSONB NOT NULL,
   prev_hash TEXT NOT NULL CHECK (prev_hash ~ '^[0-9a-f]{64}$'),
   hash TEXT NOT NULL CHECK (hash ~ '^[0-9a-f]{64}$'),
+  canonical_envelope TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (fund_id, seq),
   UNIQUE (fund_id, hash)
