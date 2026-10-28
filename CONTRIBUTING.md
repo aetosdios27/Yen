@@ -15,7 +15,7 @@ The full handbook lives in Linear (**06 · Engineering Handbook**). This file is
 5. Reference the issue (`YEN-<n>`) in the branch, title or description. CI fails otherwise.
 6. Greptile reviews automatically. Fix or reply to every comment.
 7. Another teammate approves. Aim to respond within one working day.
-8. Resolve all conversations, keep the branch up to date, wait for **CI Gate**.
+8. Resolve all conversations, keep the branch up to date, and wait for **CI Gate** and **Greptile 5/5**.
 9. Squash and merge. The branch is deleted automatically.
 
 Every pull request gets a Vercel preview from the bot comment. Open it on a
@@ -35,6 +35,21 @@ rules, and the [rollback runbook](docs/runbooks/web-rollback.md) for incidents.
 | Review threads resolved              | includes Greptile's                       |
 | `CI Gate` green, branch up to date   | one required check aggregates everything  |
 | Squash merge only, linear history    | one PR is one commit on `main`            |
+
+## Greptile review gate
+
+The **Greptile 5/5** check requires exactly one Greptile review block in the
+current PR description, a matching confidence heading and score marker of 5/5,
+and a reviewed commit that matches the PR's current head. Greptile's later PR
+description edit reruns the check. To request another review, comment
+`@greptileai review` on the PR.
+
+The PR author can edit the description text, so this gate complements the
+required **Greptile Review** app check and required resolution of review
+threads; it does not replace either requirement. The gate runs separately from
+**CI Gate** so docs-only changes do not wait for a Greptile review through that
+aggregator. Both **Greptile 5/5** and the **Greptile Review** app check are
+required by the `main` ruleset.
 
 ## How to cite
 

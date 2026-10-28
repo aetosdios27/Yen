@@ -52,6 +52,15 @@ describe("evaluate Greptile reviews", () => {
     ).toBe(false);
   });
 
+  it("rejects a malformed confidence score heading", () => {
+    expect(
+      evaluate({
+        body: review("5").replace("Confidence Score: 5/5", "Confidence Score: 5 out of 5"),
+        headSha,
+      }).ok,
+    ).toBe(false);
+  });
+
   it("ignores score text outside the review block", () => {
     const body = `Confidence Score: 5/5\n<!-- greptile_confidence_score:5 -->\n${review("4")}`;
     expect(evaluate({ body, headSha }).ok).toBe(false);

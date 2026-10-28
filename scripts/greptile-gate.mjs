@@ -33,9 +33,16 @@ export function evaluate({ body, headSha }) {
   }
   const score = Number(markerValue);
   const headings = [...block.matchAll(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi)];
-  const scoreHeadings = headings.flatMap((heading) =>
-    [...heading[1].matchAll(/Confidence Score:\s*([^\s<]+)\/5/g)].map((match) => match[1]),
-  );
+  const scoreHeadings = headings.flatMap((heading) => {
+    const labels = [...heading[1].matchAll(/Confidence Score:/g)];
+    if (labels.length === 0) {
+      return [];
+    }
+    if (labels.length !== 1) {
+      return [""];
+    }
+    return [heading[1].match(/Confidence Score:\s*([^\s<]+)\/5/)?.[1] ?? ""];
+  });
   if (scoreHeadings.length !== 1 || !/^[0-5]$/.test(scoreHeadings[0])) {
     return { ok: false, reason: "Greptile confidence score heading is missing or malformed" };
   }

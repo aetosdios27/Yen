@@ -1,0 +1,84 @@
+name: Greptile Gate
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  greptile-review:
+    name: Greptile 5/5
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check live Greptile review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_JSON: ${{ runner.temp }}/greptile-pr.json
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" \
+            --jq '{body: .body, headSha: .head.sha}' > "$PR_JSON"
+          node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+
+          const { body, headSha } = JSON.parse(readFileSync(process.env.PR_JSON, "utf8"));
+          const failure = (reason) => ({ ok: false, reason });
+          let result;
+          if (typeof body !== "string") {
+            result = failure("pull request body is missing");
+          } else {
+            const starts = [...body.matchAll(/<!-- greptile_comment -->/g)];
+            const ends = [...body.matchAll(/<!-- \/greptile_comment -->/g)];
+            if (starts.length === 0 && ends.length === 0) {
+              result = failure(`waiting for a Greptile review of ${headSha}`);
+            } else if (starts.length !== 1 || ends.length !== 1 || starts[0].index > ends[0].index) {
+              result = failure("Greptile review block is missing or malformed");
+            } else {
+              const block = body.slice(starts[0].index + "<!-- greptile_comment -->".length, ends[0].index);
+              const markers = [...block.matchAll(/<!-- greptile_confidence_score:([^>]*) -->/g)];
+              const headings = [...block.matchAll(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi)];
+              const headingScores = headings.flatMap((heading) => {
+                const labels = [...heading[1].matchAll(/Confidence Score:/g)];
+                if (labels.length === 0) {
+                  return [];
+                }
+                if (labels.length !== 1) {
+                  return [""];
+                }
+                return [heading[1].match(/Confidence Score:\s*([^\s<]+)\/5/)?.[1] ?? ""];
+              });
+              const reviewed = [
+                ...block.matchAll(
+                  /Last reviewed commit:\s*\[[^\]]*\]\(https:\/\/github\.com\/[^/\s)]+\/[^/\s)]+\/commit\/([0-9a-f]{40})\)/gi,
+                ),
+              ];
+
+              if (markers.length !== 1 || !/^[0-5]$/.test(markers[0][1].trim())) {
+                result = failure("Greptile confidence score marker is missing or malformed");
+              } else if (headingScores.length !== 1 || !/^[0-5]$/.test(headingScores[0])) {
+                result = failure("Greptile confidence score heading is missing or malformed");
+              } else if (headingScores[0] !== markers[0][1].trim()) {
+                result = failure("Greptile confidence score heading does not match its marker");
+              } else if (markers[0][1].trim() !== "5") {
+                result = failure(`Greptile confidence score is ${markers[0][1].trim()}/5; 5/5 is required`);
+              } else if (reviewed.length !== 1) {
+                result = failure("Greptile reviewed commit is missing or malformed");
+              } else if (!/^[0-9a-f]{40}$/i.test(headSha) || reviewed[0][1].toLowerCase() !== headSha.toLowerCase()) {
+                result = failure(`Greptile review is stale: reviewed ${reviewed[0][1]}, current head is ${headSha}`);
+              } else {
+                result = { ok: true, reason: "Greptile reviewed the current commit with confidence 5/5" };
+              }
+            }
+          }
+          console.log(result.reason);
+          if (!result.ok) {
+            console.error(`::error::${result.reason}`);
+            process.exitCode = 1;
+          }
+          NODE
+
+# Greptile's PR-description edits trigger the `edited` event and rerun this check.
