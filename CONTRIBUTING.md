@@ -18,6 +18,12 @@ The full handbook lives in Linear (**06 · Engineering Handbook**). This file is
 8. Resolve all conversations, keep the branch up to date, wait for **CI Gate**.
 9. Squash and merge. The branch is deleted automatically.
 
+Every pull request gets a Vercel preview from the bot comment. Open it on a
+phone before approving; previews use the staging API, and production deploys
+only after the squashed PR lands on `main`. See
+[`docs/deployment/web.md`](docs/deployment/web.md) for setup and environment
+rules, and the [rollback runbook](docs/runbooks/web-rollback.md) for incidents.
+
 ## What `main` enforces
 
 | Rule                                 | Effect                                    |
@@ -29,6 +35,10 @@ The full handbook lives in Linear (**06 · Engineering Handbook**). This file is
 | Review threads resolved              | includes Greptile's                       |
 | `CI Gate` green, branch up to date   | one required check aggregates everything  |
 | Squash merge only, linear history    | one PR is one commit on `main`            |
+
+## How to cite
+
+ADRs and design-heavy PRs must cite relevant entries in [References](docs/REFERENCES.md), explain what they take and where the design differs, or explicitly state “no prior art found” when true. Add new primary sources only after opening and reading them and verifying their metadata, URL, and the claim attributed to them.
 
 ## Local checks
 

@@ -25,7 +25,7 @@ export async function runVerifyCli(
   env: NodeJS.ProcessEnv = process.env,
   out: { log: (msg: string) => void; error: (msg: string) => void } = console,
 ): Promise<number> {
-  if (args.includes("--help") || args.includes("-h") || args.length === 0) {
+  if (args.length === 0 || (args.length === 1 && (args[0] === "--help" || args[0] === "-h"))) {
     out.log(HELP_TEXT);
     return 0;
   }
@@ -37,9 +37,19 @@ export async function runVerifyCli(
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--head") {
-      headHashStr = args[++i];
+      const val = args[++i];
+      if (val === undefined || /^-[a-zA-Z-]/.test(val)) {
+        out.error(`Missing value for option: --head\n\n${HELP_TEXT}`);
+        return 1;
+      }
+      headHashStr = val;
     } else if (arg === "--count") {
-      countStr = args[++i];
+      const val = args[++i];
+      if (val === undefined || /^-[a-zA-Z-]/.test(val)) {
+        out.error(`Missing value for option: --count\n\n${HELP_TEXT}`);
+        return 1;
+      }
+      countStr = val;
     } else if (arg?.startsWith("-")) {
       out.error(`Unknown option: ${arg}\n\n${HELP_TEXT}`);
       return 1;

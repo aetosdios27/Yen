@@ -260,3 +260,13 @@ Lifecycle management is handled by `createServerLifecycle` in `lifecycle.ts`:
 - Force-closes remaining sockets (`server.closeAllConnections()`) if the shutdown deadline expires.
 - Closes the Postgres pool (`sql.end({ timeout })`) with bounded timeout.
 - Exits with code 0 when cleanup succeeded. If closing the pool fails, writes one line to stderr (`Error during <signal> shutdown: Database pool failed to close`) and exits with code 1. The error details are not printed.
+
+## Prior art
+
+- [AWS idempotent APIs](../../docs/REFERENCES.md#aws-idempotency) explain atomic coordination of a request identifier and mutations, which the current store does not provide.
+- [RFC 9457](../../docs/REFERENCES.md#rfc-9457) describes machine-readable errors; Yen uses a different envelope.
+- [RFC 6585](../../docs/REFERENCES.md#rfc-6585) defines 429 and describes Retry-After.
+- [Stripe idempotency](../../docs/REFERENCES.md#stripe-idempotency) motivates safe retries; Yen scopes keys to principals and hashes exact request bytes, and its in-memory store is not durable.
+- [Stripe rate limiters](../../docs/REFERENCES.md#stripe-rate-limiters) describes token buckets; Yen’s default buckets are per process.
+- [Square Money](../../docs/REFERENCES.md#square-money) uses minor units; Yen encodes paise as decimal strings to preserve large integers.
+- [WebAuthn Level 2](../../docs/REFERENCES.md#webauthn-2) is relevant to planned authentication, which the current bearer contract does not implement.
