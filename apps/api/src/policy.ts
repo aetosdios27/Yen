@@ -7,7 +7,16 @@ export interface FundRecord {
   readonly owner: string;
   readonly fund: FundView;
 }
-export type FundAction = "fund:create" | "fund:read";
+export type FundAction =
+  | "fund:create"
+  | "fund:read"
+  | "fund:expense:approve"
+  | "fund:expense:reject"
+  | "fund:payee:change"
+  | "fund:policy:change"
+  | "fund:member:add"
+  | "fund:member:remove"
+  | "fund:member:unlock";
 export type FundResource = { readonly kind: "fund"; readonly fund?: FundRecord };
 export type ExistingFundResource = { readonly kind: "fund"; readonly fund: FundRecord };
 
@@ -24,9 +33,10 @@ export const denyAllPolicy: Policy = {
 };
 
 export const devPolicy: Policy = {
-  can: (principal, action, resource) =>
-    resource.fund === undefined
-      ? action === "fund:create"
-      : action === "fund:read" && resource.fund.owner === principal.id,
+  can: (principal, action, resource) => {
+    if (action === "fund:member:unlock") return true;
+    if (resource.fund === undefined) return action === "fund:create";
+    return resource.fund.owner === principal.id;
+  },
   redact: (_viewer, resource) => resource.fund.fund,
 };

@@ -2,6 +2,15 @@ import type { WaitlistEntry } from "@yen/db";
 import type { Context } from "hono";
 import { rateLimitEnv, rateLimits } from "./config.js";
 import { jsonLogger, type Logger } from "./logging.js";
+import {
+  type ActionTokenStore,
+  MemoryActionTokenStore,
+  MemoryPinNotificationService,
+  MemoryPinStore,
+  type PinNotificationService,
+  PinService,
+  type PinStore,
+} from "./pin/index.js";
 import { denyAllPolicy, type Policy } from "./policy.js";
 import {
   type IdempotencyStore,
@@ -52,9 +61,26 @@ export interface AppDependencies {
   readonly corsOrigins: string[];
   readonly readiness: () => Promise<boolean>;
   readonly rateLimits: { readonly ip: RateLimit; readonly principal: RateLimit };
+  readonly pinStore: PinStore;
+  readonly actionTokenStore: ActionTokenStore;
+  readonly pinNotificationService: PinNotificationService;
+  readonly pinSecret: string;
+  readonly pinService: PinService;
 }
 
 export function defaultDependencies(clock: () => number = Date.now): AppDependencies {
+  const pinStore = new MemoryPinStore({ clock });
+  const actionTokenStore = new MemoryActionTokenStore({ clock });
+  const pinNotificationService = new MemoryPinNotificationService();
+  const pinSecret = process.env.PIN_HMAC_SECRET ?? "yen_default_pin_hmac_secret_32bytes_long";
+  const pinService = new PinService({
+    pinStore,
+    actionTokenStore,
+    notificationService: pinNotificationService,
+    pinSecret,
+    clock,
+  });
+
   return {
     waitlistStore: new MemoryWaitlistStore(),
     waitlistLimit: { capacity: 5, refillMs: 3600000 },
@@ -72,5 +98,10 @@ export function defaultDependencies(clock: () => number = Date.now): AppDependen
     corsOrigins: [],
     readiness: async () => true,
     rateLimits: rateLimits(rateLimitEnv.parse({})),
+    pinStore,
+    actionTokenStore,
+    pinNotificationService,
+    pinSecret,
+    pinService,
   };
 }
