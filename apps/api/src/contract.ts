@@ -235,3 +235,361 @@ export const waitlistRoute = createRoute({
     500: internalResponse,
   },
 });
+
+export const expenseStatusSchema = z
+  .enum(["draft", "submitted", "approved", "rejected", "expired", "paid", "reconciled"])
+  .openapi("ExpenseStatus");
+
+export const expenseEvidenceSchema = z
+  .object({
+    evidenceId: z.string().uuid(),
+    contentSha256: z.string().regex(/^[0-9a-f]{64}$/),
+  })
+  .strict()
+  .openapi("ExpenseEvidence");
+
+export const createExpenseInput = z
+  .object({
+    amountPaise: paiseWire,
+    description: bounded(500),
+    recipientRef: bounded(128),
+    evidence: z.array(expenseEvidenceSchema).optional(),
+    supersedesId: z.string().uuid().optional(),
+  })
+  .strict()
+  .openapi("CreateExpenseInput");
+
+export const expenseSchema = z
+  .object({
+    id: z.string().uuid(),
+    fundId: z.string().uuid(),
+    requesterId: z.string(),
+    amountPaise: paiseWire,
+    description: z.string(),
+    recipientRef: z.string(),
+    status: expenseStatusSchema,
+    holdId: z.string().nullable(),
+    approvalsCount: z.number().int().min(0),
+    supersedesId: z.string().uuid().nullable(),
+    submittedAt: z.iso.datetime().nullable(),
+    approvedAt: z.iso.datetime().nullable(),
+    rejectedAt: z.iso.datetime().nullable(),
+    rejectionReason: z.enum(["quorum", "objection", "policy"]).nullable(),
+    expiredAt: z.iso.datetime().nullable(),
+    paidAt: z.iso.datetime().nullable(),
+    reconciledAt: z.iso.datetime().nullable(),
+    bankTransactionId: z.string().uuid().nullable(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict()
+  .openapi("Expense");
+
+export const passkeySignatureInput = z
+  .object({
+    credentialId: z.string().min(1).max(256),
+    signatureHex: z.string().regex(/^[0-9a-f]+$/),
+    clientDataJson: z.string().min(1),
+    authenticatorDataHex: z.string().regex(/^[0-9a-f]+$/),
+  })
+  .strict()
+  .openapi("PasskeySignatureInput");
+
+export const rejectExpenseInput = z
+  .object({
+    reason: z.enum(["quorum", "objection", "policy"]),
+  })
+  .strict()
+  .openapi("RejectExpenseInput");
+
+export const payExpenseInput = z
+  .object({
+    bankTransactionId: z.string().uuid(),
+  })
+  .strict()
+  .openapi("PayExpenseInput");
+
+export const reconcileExpenseInput = z
+  .object({
+    bankTransactionId: z.string().uuid(),
+  })
+  .strict()
+  .openapi("ReconcileExpenseInput");
+
+export const createExpenseRoute = createRoute({
+  method: "post",
+  path: "/v1/funds/{fundId}/expenses",
+  tags: ["expenses"],
+  operationId: "createExpense",
+  security,
+  description:
+    "Creates a new draft expense request for a fund. Money is nonnegative integer paise encoded as decimal string. Requires Idempotency-Key.",
+  request: {
+    headers: z.object({
+      "Idempotency-Key": idempotencyKey,
+    }),
+    params: z.object({
+      fundId: z
+        .string()
+        .uuid()
+        .openapi({
+          description: "Canonical lowercase FundId UUID",
+          param: { name: "fundId", in: "path" },
+        }),
+    }),
+    body: { required: true, content: { "application/json": { schema: createExpenseInput } } },
+  },
+  responses: {
+    201: withReplay(jsonResponse(expenseSchema, "Draft expense created")),
+    400: withReplay(protectedErrors[400]),
+    401: withReplay(protectedErrors[401]),
+    403: withReplay(protectedErrors[403]),
+    404: withReplay(protectedErrors[404]),
+    409: {
+      ...withReplay(protectedErrors[409]),
+      headers: { ...responseHeaders, ...replayHeader, ...retryHeader },
+    },
+    429: protectedErrors[429],
+    500: protectedErrors[500],
+    503: protectedErrors[503],
+  },
+});
+
+export const getExpenseRoute = createRoute({
+  method: "get",
+  path: "/v1/funds/{fundId}/expenses/{expenseId}",
+  tags: ["expenses"],
+  operationId: "getExpense",
+  security,
+  description: "Reads an expense request. Unauthorized requests return 404.",
+  request: {
+    params: z.object({
+      fundId: z
+        .string()
+        .uuid()
+        .openapi({ param: { name: "fundId", in: "path" } }),
+      expenseId: z
+        .string()
+        .uuid()
+        .openapi({ param: { name: "expenseId", in: "path" } }),
+    }),
+  },
+  responses: { 200: jsonResponse(expenseSchema, "Expense details"), ...protectedErrors },
+});
+
+export const listExpensesRoute = createRoute({
+  method: "get",
+  path: "/v1/funds/{fundId}/expenses",
+  tags: ["expenses"],
+  operationId: "listExpenses",
+  security,
+  description: "Lists expense requests for a fund.",
+  request: {
+    params: z.object({
+      fundId: z
+        .string()
+        .uuid()
+        .openapi({ param: { name: "fundId", in: "path" } }),
+    }),
+  },
+  responses: { 200: jsonResponse(z.array(expenseSchema), "List of expenses"), ...protectedErrors },
+});
+
+export const submitExpenseRoute = createRoute({
+  method: "post",
+  path: "/v1/funds/{fundId}/expenses/{expenseId}/submit",
+  tags: ["expenses"],
+  operationId: "submitExpense",
+  security,
+  description:
+    "Submits a draft expense request, creating a ledger hold to reserve funds. Transitions draft -> submitted. Emits expense.submitted event.",
+  request: {
+    headers: z.object({
+      "Idempotency-Key": idempotencyKey,
+    }),
+    params: z.object({
+      fundId: z
+        .string()
+        .uuid()
+        .openapi({ param: { name: "fundId", in: "path" } }),
+      expenseId: z
+        .string()
+        .uuid()
+        .openapi({ param: { name: "expenseId", in: "path" } }),
+    }),
+  },
+  responses: {
+    200: withReplay(jsonResponse(expenseSchema, "Expense submitted and funds reserved via hold")),
+    400: withReplay(protectedErrors[400]),
+    401: withReplay(protectedErrors[401]),
+    403: withReplay(protectedErrors[403]),
+    404: withReplay(protectedErrors[404]),
+    409: {
+      ...withReplay(protectedErrors[409]),
+      headers: { ...responseHeaders, ...replayHeader, ...retryHeader },
+    },
+    429: protectedErrors[429],
+    500: protectedErrors[500],
+    503: protectedErrors[503],
+  },
+});
+
+export const approveExpenseRoute = createRoute({
+  method: "post",
+  path: "/v1/funds/{fundId}/expenses/{expenseId}/approve",
+  tags: ["expenses"],
+  operationId: "approveExpense",
+  security,
+  description:
+    "Records a passkey-signed approval for a submitted expense. Reaching quorum transitions submitted -> approved. Emits expense.approved event.",
+  request: {
+    headers: z.object({
+      "Idempotency-Key": idempotencyKey,
+    }),
+    params: z.object({
+      fundId: z
+        .string()
+        .uuid()
+        .openapi({ param: { name: "fundId", in: "path" } }),
+      expenseId: z
+        .string()
+        .uuid()
+        .openapi({ param: { name: "expenseId", in: "path" } }),
+    }),
+    body: { required: true, content: { "application/json": { schema: passkeySignatureInput } } },
+  },
+  responses: {
+    200: withReplay(jsonResponse(expenseSchema, "Approval recorded")),
+    400: withReplay(protectedErrors[400]),
+    401: withReplay(protectedErrors[401]),
+    403: withReplay(protectedErrors[403]),
+    404: withReplay(protectedErrors[404]),
+    409: {
+      ...withReplay(protectedErrors[409]),
+      headers: { ...responseHeaders, ...replayHeader, ...retryHeader },
+    },
+    429: protectedErrors[429],
+    500: protectedErrors[500],
+    503: protectedErrors[503],
+  },
+});
+
+export const rejectExpenseRoute = createRoute({
+  method: "post",
+  path: "/v1/funds/{fundId}/expenses/{expenseId}/reject",
+  tags: ["expenses"],
+  operationId: "rejectExpense",
+  security,
+  description:
+    "Rejects a submitted expense and releases the reserved ledger hold. Transitions submitted -> rejected. Emits expense.rejected event.",
+  request: {
+    headers: z.object({
+      "Idempotency-Key": idempotencyKey,
+    }),
+    params: z.object({
+      fundId: z
+        .string()
+        .uuid()
+        .openapi({ param: { name: "fundId", in: "path" } }),
+      expenseId: z
+        .string()
+        .uuid()
+        .openapi({ param: { name: "expenseId", in: "path" } }),
+    }),
+    body: { required: true, content: { "application/json": { schema: rejectExpenseInput } } },
+  },
+  responses: {
+    200: withReplay(jsonResponse(expenseSchema, "Expense rejected and hold released")),
+    400: withReplay(protectedErrors[400]),
+    401: withReplay(protectedErrors[401]),
+    403: withReplay(protectedErrors[403]),
+    404: withReplay(protectedErrors[404]),
+    409: {
+      ...withReplay(protectedErrors[409]),
+      headers: { ...responseHeaders, ...replayHeader, ...retryHeader },
+    },
+    429: protectedErrors[429],
+    500: protectedErrors[500],
+    503: protectedErrors[503],
+  },
+});
+
+export const payExpenseRoute = createRoute({
+  method: "post",
+  path: "/v1/funds/{fundId}/expenses/{expenseId}/pay",
+  tags: ["expenses"],
+  operationId: "payExpense",
+  security,
+  description:
+    "Commits/settles the ledger hold for an approved expense after payment. Transitions approved -> paid. Emits expense.paid event.",
+  request: {
+    headers: z.object({
+      "Idempotency-Key": idempotencyKey,
+    }),
+    params: z.object({
+      fundId: z
+        .string()
+        .uuid()
+        .openapi({ param: { name: "fundId", in: "path" } }),
+      expenseId: z
+        .string()
+        .uuid()
+        .openapi({ param: { name: "expenseId", in: "path" } }),
+    }),
+    body: { required: true, content: { "application/json": { schema: payExpenseInput } } },
+  },
+  responses: {
+    200: withReplay(jsonResponse(expenseSchema, "Expense paid and hold settled")),
+    400: withReplay(protectedErrors[400]),
+    401: withReplay(protectedErrors[401]),
+    403: withReplay(protectedErrors[403]),
+    404: withReplay(protectedErrors[404]),
+    409: {
+      ...withReplay(protectedErrors[409]),
+      headers: { ...responseHeaders, ...replayHeader, ...retryHeader },
+    },
+    429: protectedErrors[429],
+    500: protectedErrors[500],
+    503: protectedErrors[503],
+  },
+});
+
+export const reconcileExpenseRoute = createRoute({
+  method: "post",
+  path: "/v1/funds/{fundId}/expenses/{expenseId}/reconcile",
+  tags: ["expenses"],
+  operationId: "reconcileExpense",
+  security,
+  description:
+    "Reconciles a paid expense against bank debit verification. Transitions paid -> reconciled. Emits bank.debit_seen event.",
+  request: {
+    headers: z.object({
+      "Idempotency-Key": idempotencyKey,
+    }),
+    params: z.object({
+      fundId: z
+        .string()
+        .uuid()
+        .openapi({ param: { name: "fundId", in: "path" } }),
+      expenseId: z
+        .string()
+        .uuid()
+        .openapi({ param: { name: "expenseId", in: "path" } }),
+    }),
+    body: { required: true, content: { "application/json": { schema: reconcileExpenseInput } } },
+  },
+  responses: {
+    200: withReplay(jsonResponse(expenseSchema, "Expense reconciled")),
+    400: withReplay(protectedErrors[400]),
+    401: withReplay(protectedErrors[401]),
+    403: withReplay(protectedErrors[403]),
+    404: withReplay(protectedErrors[404]),
+    409: {
+      ...withReplay(protectedErrors[409]),
+      headers: { ...responseHeaders, ...replayHeader, ...retryHeader },
+    },
+    429: protectedErrors[429],
+    500: protectedErrors[500],
+    503: protectedErrors[503],
+  },
+});

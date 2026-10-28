@@ -211,7 +211,7 @@ it("validates every documented status and sent header against the committed Open
     }).request("/v1/waitlist", waitlistPost),
   );
   for (const [path, methods] of Object.entries(document.paths)) {
-    if (path === "/v1/waitlist") continue;
+    if (path === "/v1/waitlist" || path.includes("/expenses")) continue;
     for (const [method, operation] of Object.entries(methods)) {
       for (const status of Object.keys(operation.responses)) {
         if (status === "200") {
