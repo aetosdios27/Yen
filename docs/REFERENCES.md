@@ -21,7 +21,8 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 | Blockchain anchoring                 |       2 |
 | Privacy and law                      |       4 |
 | Supply chain and CI                  |       2 |
-| **Total**                            |  **71** |
+| Security and threat modeling         |       2 |
+| **Total**                            |  **73** |
 
 ## Tamper-evident logs and transparency
 
@@ -521,7 +522,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Source:** Paul A. Grassi, James L. Fenton, Elaine M. Newton, Ray A. Perlner, Andrew R. Regenscheid, William E. Burr, Justin P. Richer, Naomi B. Lefkovitz, J.M. Danker, Yee-Yin Choong, Kristen K. Greene and Mary F. Theofanos; NIST Special Publication 800-63B, 2017 (updated 2020).
 - **URL:** https://pages.nist.gov/800-63-3/sp800-63b.html
 - **What we use it for:** Memorized secret verifiers require rate limiting and lockout controls to mitigate online guessing (Sections 5.1.1.2 and 5.2.2). Out-of-band authenticators (SMS/PSTN) carry risks of SIM swap and phone number recycling.
-- **Where in this repo:** docs/TRUST-CLAIMS.md
+- **Where in this repo:** docs/THREAT-MODEL.md; docs/TRUST-CLAIMS.md
 
 <a id="owasp-auth"></a>
 ### Authentication Cheat Sheet
@@ -529,7 +530,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Source:** OWASP; OWASP Cheat Sheet Series, undated (accessed 2026).
 - **URL:** https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
 - **What we use it for:** Multi-factor authentication, account recovery, rate limiting, and cooling-off periods. Yen requires phone-proving OTP for new devices and PIN resets, while a PIN alone never authorizes a new device.
-- **Where in this repo:** docs/TRUST-CLAIMS.md
+- **Where in this repo:** docs/THREAT-MODEL.md; docs/TRUST-CLAIMS.md
 
 <a id="owasp-password-storage"></a>
 ### Password Storage Cheat Sheet
@@ -537,7 +538,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Source:** OWASP; OWASP Cheat Sheet Series, undated (accessed 2026).
 - **URL:** https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
 - **What we use it for:** Low-entropy secrets such as 6-digit PINs require keyed hashing (peppering) with a secret held outside the database to prevent offline cracking if database contents leak.
-- **Where in this repo:** docs/TRUST-CLAIMS.md
+- **Where in this repo:** docs/THREAT-MODEL.md; docs/TRUST-CLAIMS.md
 
 <a id="rfc-2104"></a>
 ### HMAC: Keyed-Hashing for Message Authentication
@@ -545,7 +546,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Source:** H. Krawczyk, M. Bellare and R. Canetti; RFC 2104, 1997.
 - **URL:** https://www.rfc-editor.org/rfc/rfc2104.html
 - **What we use it for:** Keyed-hashing binds an external secret to a message or secret value, preventing offline brute-force attacks against low-entropy inputs when the key is withheld.
-- **Where in this repo:** docs/TRUST-CLAIMS.md
+- **Where in this repo:** docs/THREAT-MODEL.md; docs/TRUST-CLAIMS.md
 
 ## Blockchain anchoring
 
@@ -597,7 +598,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Source:** Prashant Mali; dpdpa.com transcription and legal interpretation, 2023.
 - **URL:** https://dpdpa.com/dpdpa2023/chapter-2/section8.html
 - **What we use it for:** Section 8(7) mandates erasure when the purpose is served unless retention is required by another law; Section 12(3) establishes the right to erasure subject to statutory retention obligations.
-- **Where in this repo:** docs/TRUST-CLAIMS.md
+- **Where in this repo:** docs/THREAT-MODEL.md; docs/TRUST-CLAIMS.md
 
 ## Supply chain and CI
 
@@ -616,3 +617,21 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **URL:** https://docs.github.com/en/actions/reference/security/secure-use
 - **What we use it for:** GitHub recommends pinning third-party actions to full commit SHAs. Yen pins its workflow actions; pinning alone does not establish their safety.
 - **Where in this repo:** .github/workflows/ci.yml
+
+## Security and threat modeling
+
+<a id="stride-approach"></a>
+### Uncover Security Design Flaws Using The STRIDE Approach
+
+- **Source:** Shawn Hernan, Scott Lambert, Tomasz Ostwald and Adam Shostack; Microsoft Corporation, MSDN Magazine, 2006.
+- **URL:** https://learn.microsoft.com/en-us/archive/msdn-magazine/2006/november/uncover-security-design-flaws-using-the-stride-approach
+- **What we use it for:** STRIDE maps six threat categories to security properties and to data-flow diagram elements. Yen applies STRIDE to its money paths and trust boundaries; the article says threat modeling cannot prove a design secure, so the threat model records residual risk rather than claiming absence of threats.
+- **Where in this repo:** docs/THREAT-MODEL.md
+
+<a id="owasp-threat-modeling"></a>
+### Threat Modeling Cheat Sheet
+
+- **Source:** OWASP; OWASP Cheat Sheet Series, undated (accessed 2026).
+- **URL:** https://cheatsheetseries.owasp.org/cheatsheets/Threat_Modeling_Cheat_Sheet.html
+- **What we use it for:** Uses STRIDE categories as prompts against a system model and lists four responses to a threat (mitigate, eliminate, transfer, accept). It asks teams to document remaining risk and who owns it, but gives no method for measuring residual risk. Yen records residual risk and out-of-scope conditions per threat.
+- **Where in this repo:** docs/THREAT-MODEL.md
