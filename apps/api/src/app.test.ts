@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { unsafeMarkRedactedForDevPolicy } from "@yen/policy";
 import { HTTPException } from "hono/http-exception";
 import { expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
@@ -238,8 +239,8 @@ it("consults policy for both fund routes and returns only its redacted view", as
     targetPaise: "7",
     createdAt: "1970-01-01T00:00:00.000Z",
   };
-  const redact = vi.fn(() => sentinel);
-  const { app } = setup({ policy: { can, redact } });
+  const redact = vi.fn(() => unsafeMarkRedactedForDevPolicy(sentinel));
+  const { app } = setup({ policy: { can, redact, redactReceipt: devPolicy.redactReceipt } });
   const created = await app.request("/v1/funds", post());
   expect(await created.json()).toEqual(sentinel);
   const id = "00000000-0000-4000-8000-000000000101";
@@ -254,7 +255,9 @@ it("conceals an existing fund when read policy denies it", async () => {
     (viewer, action, resource) =>
       action === "fund:create" && devPolicy.can(viewer, action, resource),
   );
-  const { app } = setup({ policy: { can, redact: devPolicy.redact } });
+  const { app } = setup({
+    policy: { can, redact: devPolicy.redact, redactReceipt: devPolicy.redactReceipt },
+  });
   const created = fundSchema.parse(await (await app.request("/v1/funds", post())).json());
   const response = await app.request(`/v1/funds/${created.id}`);
   expect(response.status).toBe(404);

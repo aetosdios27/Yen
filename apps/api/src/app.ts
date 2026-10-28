@@ -280,11 +280,16 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     });
 
     return c.json(
-      {
-        status: "approved" as const,
-        expenseId,
-        approvedAt: new Date(deps.clock()).toISOString(),
-      },
+      deps.policy.redactReceipt(
+        principal,
+        "fund:expense:approve",
+        {
+          status: "approved" as const,
+          expenseId,
+          approvedAt: new Date(deps.clock()).toISOString(),
+        },
+        resource,
+      ),
       200,
     );
   });
@@ -310,12 +315,17 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     });
 
     return c.json(
-      {
-        status: "rejected" as const,
-        expenseId,
-        reason: body?.reason ?? "policy",
-        rejectedAt: new Date(deps.clock()).toISOString(),
-      },
+      deps.policy.redactReceipt(
+        principal,
+        "fund:expense:reject",
+        {
+          status: "rejected" as const,
+          expenseId,
+          reason: body?.reason ?? "policy",
+          rejectedAt: new Date(deps.clock()).toISOString(),
+        },
+        resource,
+      ),
       200,
     );
   });
@@ -332,7 +342,15 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const actionDetails = { action: "payee:change", fundId: id, vpa: body.vpa };
     await deps.pinService.verifyAction(principal.id, actionDetails, { pin, approvalToken });
 
-    return c.json({ status: "updated" as const, vpa: body.vpa }, 200);
+    return c.json(
+      deps.policy.redactReceipt(
+        principal,
+        "fund:payee:change",
+        { status: "updated" as const, vpa: body.vpa },
+        resource,
+      ),
+      200,
+    );
   });
 
   app.openapi(changePolicyRoute, async (c) => {
@@ -347,7 +365,15 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const actionDetails = { action: "policy:change", fundId: id, policy: body.policyJson };
     await deps.pinService.verifyAction(principal.id, actionDetails, { pin, approvalToken });
 
-    return c.json({ status: "updated" as const, policyJson: body.policyJson }, 200);
+    return c.json(
+      deps.policy.redactReceipt(
+        principal,
+        "fund:policy:change",
+        { status: "updated" as const, policyJson: body.policyJson },
+        resource,
+      ),
+      200,
+    );
   });
 
   app.openapi(addMemberRoute, async (c) => {
@@ -367,7 +393,15 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     };
     await deps.pinService.verifyAction(principal.id, actionDetails, { pin, approvalToken });
 
-    return c.json({ status: "added" as const, memberId: body.userId, role: body.role }, 201);
+    return c.json(
+      deps.policy.redactReceipt(
+        principal,
+        "fund:member:add",
+        { status: "added" as const, memberId: body.userId, role: body.role },
+        resource,
+      ),
+      201,
+    );
   });
 
   app.openapi(removeMemberRoute, async (c) => {
@@ -382,7 +416,15 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const actionDetails = { action: "member:remove", fundId: id, targetId: memberId };
     await deps.pinService.verifyAction(principal.id, actionDetails, { pin, approvalToken });
 
-    return c.json({ status: "removed" as const, memberId }, 200);
+    return c.json(
+      deps.policy.redactReceipt(
+        principal,
+        "fund:member:remove",
+        { status: "removed" as const, memberId },
+        resource,
+      ),
+      200,
+    );
   });
 
   app.openapi(openapiRoute, (c) => c.json(openapiSchema.parse(openApiDocument(app)), 200));
