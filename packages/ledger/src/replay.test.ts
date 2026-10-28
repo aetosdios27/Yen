@@ -92,6 +92,26 @@ describe("replayFundEvents unit tests", () => {
     expect(balances.pendingSpendPaise).toBe(0n);
   });
 
+  it("does not apply the same event twice during replay", async () => {
+    const submitted = await makeNextEvent(
+      null,
+      toEventInput({
+        fund_id: FUND_ID,
+        actor: ACTOR,
+        occurred_at: "2027-01-01T10:00:00.000Z",
+        type: "expense.submitted",
+        payload: {
+          expense_id: "0194ebc4-94e8-7000-8000-000000000010",
+          amount_paise: 50000,
+        },
+      }),
+    );
+
+    expect(replayFundEvents(FUND_ID, [submitted, submitted])).toEqual(
+      replayFundEvents(FUND_ID, [submitted]),
+    );
+  });
+
   it("pending spend reduces available balance but not bank balance", async () => {
     let prev: Event | null = null;
     const events: Event[] = [];

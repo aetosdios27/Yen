@@ -26,9 +26,12 @@ export function replayFundEvents(fundId: string, events: readonly Event[]): Fund
   const settledExpenses = new Map<string, bigint>();
   const seenBankCredits = new Set<string>();
   const seenBankDebits = new Set<string>();
+  const appliedEventHashes = new Set<string>();
 
   for (const event of events) {
     if (event.fund_id !== fundId) continue;
+    if (appliedEventHashes.has(event.hash)) continue;
+    appliedEventHashes.add(event.hash);
 
     switch (event.type) {
       case "donation.pledged": {
