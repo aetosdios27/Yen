@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,7 +11,7 @@ import {
   hashHexSchema,
   pseudonymIdSchema,
 } from "@yen/eventlog";
-import { type FundId, fundIdSchema, orgIdSchema, userIdSchema } from "@yen/shared";
+import { type FundId, fundIdSchema, orgIdSchema, sha256, toHex, userIdSchema } from "@yen/shared";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createSql, type Sql, type SqlClient } from "./client.js";
 import { appendEvent, checkStoredChainStructure, verifyStoredChain } from "./events.js";
@@ -20,6 +21,50 @@ import { uuidv7 } from "./uuidv7.js";
 import { runVerifyCli } from "./verify-cli.js";
 
 const vectorsDir = fileURLToPath(new URL("../../eventlog/test-vectors/", import.meta.url));
+
+async function computeRawEnvelopeHash(canonical: string): Promise<string> {
+  const domainBytes = new TextEncoder().encode("yen/eventlog/event/v1\u0000");
+  const envelopeBytes = new TextEncoder().encode(canonical);
+  return toHex(await sha256(domainBytes, envelopeBytes));
+}
+
+async function insertRawEnvelope(
+  client: SqlClient,
+  raw: {
+    fundId: string;
+    seq: number;
+    type: string;
+    version: number;
+    actor: string;
+    occurredAt: string;
+    payload: unknown;
+    prevHash: string;
+  },
+): Promise<string> {
+  const unsigned = {
+    actor: raw.actor,
+    fund_id: raw.fundId,
+    occurred_at: raw.occurredAt,
+    payload: raw.payload,
+    prev_hash: raw.prevHash,
+    seq: raw.seq,
+    type: raw.type,
+    version: raw.version,
+  };
+  const canonical = canonicalize(unsigned);
+  const hash = await computeRawEnvelopeHash(canonical);
+  // Schema-qualified on purpose: the R1 test must reach the real table even when a
+  // session-local TEMP table named fund_events exists.
+  await client`
+    INSERT INTO public.fund_events (
+      fund_id, seq, type, version, actor, occurred_at, payload, prev_hash, hash, canonical_envelope
+    ) VALUES (
+      ${raw.fundId}, ${raw.seq}, ${raw.type}, ${raw.version}, ${raw.actor}, ${raw.occurredAt},
+      ${client.json(raw.payload as Parameters<typeof client.json>[0])}, ${raw.prevHash}, ${hash}, ${canonical}
+    )
+  `;
+  return hash;
+}
 
 async function createTestFund(
   sql: Sql,
@@ -703,7 +748,277 @@ databaseSuite("fund_events persistence layer", (sql, url) => {
     });
   });
 
+  describe("head lookup cannot be spoofed by temporary tables (R1)", () => {
+    it("rejects real insert when non-superuser app role creates temp fund_events table with fake head", async () => {
+      const fundId = await createTestFund(sql);
+      const actor = pseudonymIdSchema.parse(`psn_${uuidv7()}`);
+      const orgId = orgIdSchema.parse(uuidv7());
+
+      // Insert real event at seq 1
+      await appendEvent(sql, {
+        fundId,
+        type: "fund.created",
+        version: 1,
+        actor,
+        occurredAt: "2026-01-01T00:00:00.000Z",
+        payload: { org_id: orgId, visibility: "private" },
+      });
+
+      // Create a non-superuser application role
+      const roleName = `yen_app_spoof_${uuidv7().replaceAll("-", "")}`;
+      const dbName = new URL(url).pathname.slice(1);
+      await sql`CREATE ROLE ${sql(roleName)} WITH LOGIN PASSWORD 'app_pw' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`;
+      await sql`GRANT CONNECT ON DATABASE ${sql(dbName)} TO ${sql(roleName)}`;
+      await sql`GRANT USAGE ON SCHEMA public TO ${sql(roleName)}`;
+      await sql`GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA public TO ${sql(roleName)}`;
+
+      const appUrl = new URL(url);
+      appUrl.username = roleName;
+      appUrl.password = "app_pw";
+      const appSql = createSql(appUrl.toString());
+
+      try {
+        // App role creates a TEMP TABLE named fund_events with a fake head at seq 98
+        await appSql`
+          CREATE TEMP TABLE fund_events (
+            fund_id uuid,
+            seq bigint,
+            type text,
+            version integer,
+            actor text,
+            occurred_at text,
+            payload jsonb,
+            prev_hash text,
+            hash text,
+            canonical_envelope text
+          )
+        `;
+        const fakeHash = "a".repeat(64);
+        await appSql`
+          INSERT INTO fund_events (fund_id, seq, hash, occurred_at)
+          VALUES (${fundId}, 98, ${fakeHash}, '2026-01-01T00:00:00.000Z')
+        `;
+
+        // App role attempts to insert seq 99 into real table using the fake head as predecessor
+        await expect(
+          insertRawEnvelope(appSql, {
+            fundId,
+            seq: 99,
+            type: "fund.visibility_changed",
+            version: 1,
+            actor,
+            occurredAt: "2026-01-01T00:01:00.000Z",
+            payload: { visibility: "public" },
+            prevHash: fakeHash,
+          }),
+        ).rejects.toThrow(/Event seq gap: expected 2, got 99/);
+
+        // Verify public.fund_events only has seq 1
+        const rows = await sql`SELECT seq FROM fund_events WHERE fund_id = ${fundId}`;
+        expect(rows).toHaveLength(1);
+        expect(Number(rows[0]?.seq)).toBe(1);
+      } finally {
+        await appSql.end();
+        await sql`REVOKE ALL ON ALL TABLES IN SCHEMA public FROM ${sql(roleName)}`;
+        await sql`REVOKE ALL ON SCHEMA public FROM ${sql(roleName)}`;
+        await sql`REVOKE CONNECT ON DATABASE ${sql(dbName)} FROM ${sql(roleName)}`;
+        await sql`DROP ROLE ${sql(roleName)}`;
+      }
+    });
+  });
+
+  describe("payload validation against TypeScript schemas (R2)", () => {
+    const invalidPayloads: Record<string, unknown> = {
+      "fund.created": { org_id: null, visibility: "public" },
+      "fund.policy_changed": { approval_quorum: 1 },
+      "fund.visibility_changed": { unexpected: 0 },
+      "member.added": { member_id: "not-a-psn", role: "member" },
+      "member.removed": { member_id: null },
+      "donation.pledged": { donation_id: "00000000-0000-0000-0000-000000000000", amount_paise: -5 },
+      "donation.verified": {
+        donation_id: "00000000-0000-0000-0000-000000000000",
+        bank_transaction_id: null,
+      },
+      "donation.rejected": {
+        donation_id: "00000000-0000-0000-0000-000000000000",
+        reason: "invalid_reason",
+      },
+      "expense.submitted": {
+        expense_id: "00000000-0000-0000-0000-000000000000",
+        amount_paise: "100",
+      },
+      "expense.evidence_added": {
+        expense_id: "00000000-0000-0000-0000-000000000000",
+        evidence_id: "00000000-0000-0000-0000-000000000000",
+        content_sha256: "short",
+      },
+      "expense.flagged": { expense_id: "00000000-0000-0000-0000-000000000000", reason: null },
+      "expense.objection_raised": { expense_id: "00000000-0000-0000-0000-000000000000" },
+      "expense.objection_resolved": {
+        expense_id: "00000000-0000-0000-0000-000000000000",
+        objection_id: "00000000-0000-0000-0000-000000000000",
+        resolution: "unknown",
+      },
+      "expense.approved": { expense_id: null },
+      "expense.rejected": { expense_id: "00000000-0000-0000-0000-000000000000", reason: "bad" },
+      "expense.expired": { expense_id: "bad-id", extra: 1 },
+      "expense.paid": {
+        expense_id: "00000000-0000-0000-0000-000000000000",
+        bank_transaction_id: "bad-uuid",
+      },
+      "expense.reversed": { expense_id: "00000000-0000-0000-0000-000000000000" },
+      "bank.credit_seen": {
+        bank_transaction_id: "00000000-0000-0000-0000-000000000000",
+        amount_paise: 0,
+      },
+      "bank.debit_seen": {
+        bank_transaction_id: "00000000-0000-0000-0000-000000000000",
+        amount_paise: null,
+      },
+      "bank.balance_checked": { balance_paise: "100" },
+      "discrepancy.raised": {
+        discrepancy_id: "00000000-0000-0000-0000-000000000000",
+        bank_transaction_id: "00000000-0000-0000-0000-000000000000",
+        kind: "bad_kind",
+      },
+      "discrepancy.resolved": {
+        discrepancy_id: "00000000-0000-0000-0000-000000000000",
+        resolution: null,
+      },
+      "anchor.published": {
+        anchor_id: "00000000-0000-0000-0000-000000000000",
+        global_root: "xyz",
+      },
+    };
+
+    const eventTypes = Object.keys(invalidPayloads);
+
+    it.each(eventTypes)(
+      "rejects invalid canonical and correctly hashed payload for %s",
+      async (eventType) => {
+        const fundId = await createTestFund(sql);
+        const actor = pseudonymIdSchema.parse(`psn_${uuidv7()}`);
+        const payload = invalidPayloads[eventType];
+
+        await expect(
+          insertRawEnvelope(sql, {
+            fundId,
+            seq: 1,
+            type: eventType,
+            version: 1,
+            actor,
+            occurredAt: "2026-01-01T00:00:00.000Z",
+            payload,
+            prevHash: genesisHash,
+          }),
+        ).rejects.toThrow(new RegExp(`Invalid payload for ${eventType}`));
+      },
+    );
+
+    it("accepts valid payloads for every event type from golden vectors", async () => {
+      const goldenJson = JSON.parse(await readFile(join(vectorsDir, "golden-events.json"), "utf8"));
+      const events: Array<{ event: Event }> = goldenJson.events;
+      const seenTypes = new Set<string>();
+
+      for (const item of events) {
+        seenTypes.add(item.event.type);
+      }
+      expect(seenTypes.size).toBe(24);
+
+      // Verify each event type can be inserted when valid
+      for (const item of events) {
+        const fundId = await createTestFund(sql);
+        const ev = item.event;
+        await expect(
+          insertRawEnvelope(sql, {
+            fundId,
+            seq: 1,
+            type: ev.type,
+            version: 1,
+            actor: ev.actor,
+            occurredAt: "2026-01-01T00:00:00.000Z",
+            payload: ev.payload,
+            prevHash: genesisHash,
+          }),
+        ).resolves.toMatch(/^[0-9a-f]{64}$/);
+      }
+    });
+  });
+
+  describe("impossible timestamps rejected by database triggers (R3)", () => {
+    it.each([
+      ["2026-02-30T00:00:00.000Z", "impossible date Feb 30"],
+      ["2026-02-29T00:00:00.000Z", "Feb 29 in non-leap year"],
+      ["2026-13-01T00:00:00.000Z", "impossible month 13"],
+      ["2026-01-32T00:00:00.000Z", "impossible day 32"],
+      ["2026-01-01T24:00:00.000Z", "impossible clock hour 24"],
+    ])("rejects %s (%s) on direct insert with valid hash", async (occurredAt) => {
+      const fundId = await createTestFund(sql);
+      const actor = pseudonymIdSchema.parse(`psn_${uuidv7()}`);
+      const orgId = orgIdSchema.parse(uuidv7());
+
+      await expect(
+        insertRawEnvelope(sql, {
+          fundId,
+          seq: 1,
+          type: "fund.created",
+          version: 1,
+          actor,
+          occurredAt,
+          payload: { org_id: orgId, visibility: "private" },
+          prevHash: genesisHash,
+        }),
+      ).rejects.toThrow(/Invalid occurred_at/);
+    });
+
+    it("accepts valid leap-day 2028-02-29T00:00:00.000Z on direct insert with valid hash", async () => {
+      const fundId = await createTestFund(sql);
+      const actor = pseudonymIdSchema.parse(`psn_${uuidv7()}`);
+      const orgId = orgIdSchema.parse(uuidv7());
+
+      await expect(
+        insertRawEnvelope(sql, {
+          fundId,
+          seq: 1,
+          type: "fund.created",
+          version: 1,
+          actor,
+          occurredAt: "2028-02-29T00:00:00.000Z",
+          payload: { org_id: orgId, visibility: "private" },
+          prevHash: genesisHash,
+        }),
+      ).resolves.toMatch(/^[0-9a-f]{64}$/);
+    });
+  });
+
   describe("verify-chain CLI", () => {
+    it("runs the actual command against a stored chain and detects a tampered hash", async () => {
+      const fundId = await createTestFund(sql);
+      const event = await appendEvent(sql, {
+        fundId,
+        type: "fund.created",
+        version: 1,
+        actor: pseudonymIdSchema.parse(`psn_${uuidv7()}`),
+        occurredAt: "2026-01-01T00:00:00.000Z",
+        payload: { org_id: orgIdSchema.parse(uuidv7()), visibility: "private" },
+      });
+      const run = (...args: string[]) =>
+        spawnSync("pnpm", ["--filter", "@yen/db", "verify-chain", ...args], {
+          env: { ...process.env, DATABASE_URL: url },
+          encoding: "utf8",
+        });
+      const valid = run(fundId, "--head", event.hash, "--count", "1");
+      expect(valid.status, valid.stderr).toBe(0);
+      expect(valid.stdout).toContain("Chain verified against expected head: count=1");
+      await sql.begin(async (tx) => {
+        await tx`SET LOCAL session_replication_role = 'replica'`;
+        await tx`UPDATE fund_events SET hash = ${"e".repeat(64)} WHERE fund_id = ${fundId}`;
+      });
+      const broken = run(fundId);
+      expect(broken.status).toBe(1);
+      expect(broken.stderr).toContain("Chain structure break");
+    });
+
     it("prints help text and explains it is a consistency check, not authenticity proof", async () => {
       const logs: string[] = [];
       const errors: string[] = [];

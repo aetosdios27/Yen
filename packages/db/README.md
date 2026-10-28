@@ -100,7 +100,9 @@ The workspace CLI checks fund event chains:
 DATABASE_URL=postgres://postgres:pw@localhost:55432/yen pnpm --filter @yen/db verify-chain <fund-id> [--head <hash> --count <count>]
 ```
 
-The CLI prints the first break (index, seq, reason) or the verified head. Note: the CLI is an internal consistency check, not an external authenticity proof.
+The CLI prints the first break (index, seq, reason) or the verified head. It runs directly on Node 24 and recomputes event hashes; without an independently authenticated head it checks internal consistency, not authenticity. Both `--head` and `--count` must be supplied together.
+
+Use a non-superuser application role without database `TEMP` privilege. Since PostgreSQL grants `TEMP` to `PUBLIC` by default, revoke that database privilege from `PUBLIC` and grant it only to roles that need it. The migration does not change database-level privileges; its trigger functions also pin their search path and read the public event table explicitly.
 
 ## Run migrations
 

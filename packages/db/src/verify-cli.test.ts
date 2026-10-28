@@ -35,6 +35,7 @@ describe("verify-chain CLI unit tests", () => {
 
     expect(await runVerifyCli(["--unknown"], {}, out)).toBe(1);
     expect(errors.join("\n")).toContain("Unknown option: --unknown");
+    expect(await runVerifyCli(["--help", "--unknown"], {}, out)).toBe(1);
   });
 
   it("returns 1 if only one of --head or --count is provided", async () => {
@@ -60,6 +61,36 @@ describe("verify-chain CLI unit tests", () => {
       ),
     ).toBe(1);
     expect(errors.join("\n")).toContain("Both --head and --count must be provided together");
+  });
+
+  it("rejects missing value for trailing --head without opening database", async () => {
+    const errors: string[] = [];
+    const out = { log: () => {}, error: (m: string) => errors.push(m) };
+    const validFundId = "00000000-0000-0000-0000-000000000000";
+
+    const code = await runVerifyCli([validFundId, "--head"], {}, out);
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toContain("Missing value for option: --head");
+  });
+
+  it("rejects missing value for trailing --count without opening database", async () => {
+    const errors: string[] = [];
+    const out = { log: () => {}, error: (m: string) => errors.push(m) };
+    const validFundId = "00000000-0000-0000-0000-000000000000";
+
+    const code = await runVerifyCli([validFundId, "--count"], {}, out);
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toContain("Missing value for option: --count");
+  });
+
+  it("rejects missing value when --head is followed by another flag", async () => {
+    const errors: string[] = [];
+    const out = { log: () => {}, error: (m: string) => errors.push(m) };
+    const validFundId = "00000000-0000-0000-0000-000000000000";
+
+    const code = await runVerifyCli([validFundId, "--head", "--count", "1"], {}, out);
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toContain("Missing value for option: --head");
   });
 
   it("returns 1 on invalid count or head format", async () => {
