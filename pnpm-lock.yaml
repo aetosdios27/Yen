@@ -193,6 +193,9 @@ importers:
       '@yen/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@yen/ledger':
+        specifier: workspace:*
+        version: link:../../packages/ledger
       '@yen/shared':
         specifier: workspace:*
         version: link:../../packages/shared

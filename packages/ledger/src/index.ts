@@ -23,6 +23,7 @@ export {
   nowUtcIso,
   toEventInput,
 } from "./eventlog.js";
+export * from "./expense/index.js";
 export {
   asQueryExecutor,
   available,
