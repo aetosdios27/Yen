@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 const START_MARKER = "<!-- greptile_comment -->";
 
 /**
@@ -71,4 +74,14 @@ export function evaluate({ body, headSha }) {
   }
 
   return { ok: true, reason: "Greptile reviewed the current commit with confidence 5/5" };
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const { body, headSha } = JSON.parse(readFileSync(process.argv[2], "utf8"));
+  const result = evaluate({ body, headSha });
+  console.log(result.reason);
+  if (!result.ok) {
+    console.error(`::error::${result.reason}`);
+    process.exitCode = 1;
+  }
 }
