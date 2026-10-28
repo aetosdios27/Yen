@@ -62,6 +62,19 @@ describe("InstallPrompt component", () => {
     expect(screen.getByRole("region", { name: "Install Yen" })).toBeDefined();
   });
 
+  it("unlocks after an action on the same route without counting another view", () => {
+    const view = renderWithI18n(<InstallPrompt trigger={false} />);
+    triggerBeforeInstallPrompt();
+    expect(screen.queryByRole("region", { name: "Install Yen" })).toBeNull();
+    view.rerender(
+      <LocaleProvider initialLocale="en">
+        <InstallPrompt trigger={true} />
+      </LocaleProvider>,
+    );
+    expect(screen.getByRole("region", { name: "Install Yen" })).toBeDefined();
+    expect(window.sessionStorage.getItem("yen_pwa_session_views")).toBe("1");
+  });
+
   it("does not count the same route twice", () => {
     const view = renderWithI18n(<InstallPrompt />);
     view.rerender(

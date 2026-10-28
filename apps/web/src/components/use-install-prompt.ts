@@ -114,6 +114,7 @@ export function useInstallPrompt(options: UseInstallPromptOptions = {}) {
       return;
     }
     if (lastCountedPath.current === pathname) {
+      if (trigger) setHasUsefulActivity(true);
       return;
     }
     lastCountedPath.current = pathname;
