@@ -1,4 +1,10 @@
-export { createSql, type Sql } from "./client.js";
+export {
+  createSql,
+  type Sql,
+  type SqlClient,
+  type SqlOptions,
+  type TransactionSql,
+} from "./client.js";
 export { parseDatabaseUrl } from "./env.js";
 export {
   type AppendEventInput,
@@ -16,6 +22,10 @@ export {
   verifyAllMigrationsForeignKeys,
 } from "./foreign-keys.js";
 export { migrate } from "./migrate.js";
+export {
+  type EnsureFundPseudonymParams,
+  ensureFundPseudonym,
+} from "./pseudonyms.js";
 export {
   assertAllRegisteredQueryPlans,
   explainQuery,
@@ -38,8 +48,10 @@ export {
   type AuthOtpRow,
   authOtpRowSchema,
   type FundEventRow,
+  type FundPseudonymRow,
   type FundRow,
   fundEventRowSchema,
+  fundPseudonymRowSchema,
   fundRowSchema,
   type IdempotencyKeyRow,
   idempotencyKeyRowSchema,
@@ -49,6 +61,8 @@ export {
   orgRowSchema,
   type PseudonymRow,
   pseudonymRowSchema,
+  type RateLimitRow,
+  rateLimitRowSchema,
   type SessionRow,
   sessionRowSchema,
   type UserRow,

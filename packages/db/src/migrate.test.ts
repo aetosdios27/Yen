@@ -54,21 +54,27 @@ databaseSuite("migration runner", (sql, url) => {
       "auth_otp_attempt_limits",
       "auth_otps",
       "fund_events",
+      "fund_pseudonyms",
       "funds",
       "idempotency_keys",
       "memberships",
       "orgs",
       "pseudonyms",
+      "rate_limits",
       "schema_migrations",
       "sessions",
       "users",
       "waitlist_entries",
+      "yen_ids",
     ]);
     const source = await readFile(join(defaultDir, "0001_app_tables.sql"));
     const waitlistSource = await readFile(join(defaultDir, "0002_waitlist.sql"));
     const fundEventsSource = await readFile(join(defaultDir, "0003_fund_events.sql"));
-    const authSource = await readFile(join(defaultDir, "0004_auth_sessions.sql"));
-    const authAttemptsSource = await readFile(join(defaultDir, "0005_auth_otp_attempt_limits.sql"));
+    const sharedStoresSource = await readFile(join(defaultDir, "0004_shared_stores.sql"));
+    const fundPseudonymsSource = await readFile(join(defaultDir, "0005_fund_pseudonyms.sql"));
+    const yenIdsSource = await readFile(join(defaultDir, "0006_yen_ids.sql"));
+    const authSource = await readFile(join(defaultDir, "0007_auth_sessions.sql"));
+    const authAttemptsSource = await readFile(join(defaultDir, "0008_auth_otp_attempt_limits.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -91,13 +97,31 @@ databaseSuite("migration runner", (sql, url) => {
       },
       {
         version: 4,
-        name: "0004_auth_sessions.sql",
-        checksum: createHash("sha256").update(authSource).digest("hex"),
+        name: "0004_shared_stores.sql",
+        checksum: createHash("sha256").update(sharedStoresSource).digest("hex"),
         applied_at: expect.any(Date),
       },
       {
         version: 5,
-        name: "0005_auth_otp_attempt_limits.sql",
+        name: "0005_fund_pseudonyms.sql",
+        checksum: createHash("sha256").update(fundPseudonymsSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
+      {
+        version: 6,
+        name: "0006_yen_ids.sql",
+        checksum: createHash("sha256").update(yenIdsSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
+      {
+        version: 7,
+        name: "0007_auth_sessions.sql",
+        checksum: createHash("sha256").update(authSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
+      {
+        version: 8,
+        name: "0008_auth_otp_attempt_limits.sql",
         checksum: createHash("sha256").update(authAttemptsSource).digest("hex"),
         applied_at: expect.any(Date),
       },
@@ -134,7 +158,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(5);
+    expect(before).toHaveLength(8);
   });
 
   it("rejects an edited applied file and names it", async () => {
@@ -586,5 +610,43 @@ databaseSuite("migration runner", (sql, url) => {
       { version: 1 },
       { version: 2 },
     ]);
+  });
+
+  it("backfills replay_expires_at and lease_expires_at for rows inserted under 0001-0003", async () => {
+    // Copy 0001, 0002, 0003 into dir
+    const m1 = await readFile(join(defaultDir, "0001_app_tables.sql"));
+    const m2 = await readFile(join(defaultDir, "0002_waitlist.sql"));
+    const m3 = await readFile(join(defaultDir, "0003_fund_events.sql"));
+    await writeFile(join(dir, "0001_app_tables.sql"), m1);
+    await writeFile(join(dir, "0002_waitlist.sql"), m2);
+    await writeFile(join(dir, "0003_fund_events.sql"), m3);
+
+    await migrate(sql, { dir });
+
+    // Insert a completed row under the old schema (0001-0003 shape)
+    const createdAt = new Date("2026-01-01T10:00:00Z");
+    await sql`
+      INSERT INTO idempotency_keys (key, request_hash, response, created_at)
+      VALUES ('comp-key', 'hash1', '{"status":200}'::jsonb, ${createdAt})
+    `;
+
+    // Now copy 0004_shared_stores.sql into dir and migrate
+    const m4 = await readFile(join(defaultDir, "0004_shared_stores.sql"));
+    await writeFile(join(dir, "0004_shared_stores.sql"), m4);
+
+    await migrate(sql, { dir });
+
+    const [row] = await sql<
+      [{ replay_expires_at: Date | null; lease_expires_at: Date | null; created_at: Date }]
+    >`
+      SELECT replay_expires_at, lease_expires_at, created_at
+      FROM idempotency_keys
+      WHERE key = 'comp-key'
+    `;
+
+    expect(row).toBeDefined();
+    expect(row.replay_expires_at).not.toBeNull();
+    expect(row.replay_expires_at?.getTime()).toBe(createdAt.getTime() + 24 * 60 * 60 * 1000);
+    expect(row.lease_expires_at).toBeNull();
   });
 });

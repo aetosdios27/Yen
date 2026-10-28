@@ -49,6 +49,7 @@ const internalResponse = jsonResponse(
   errorEnvelope,
   "Internal failure; no private error information",
 );
+const gatewayTimeoutResponse = jsonResponse(errorEnvelope, "Gateway timeout");
 const limitedResponse = {
   ...jsonResponse(errorEnvelope, "Rate limit exceeded"),
   headers: {
@@ -72,6 +73,7 @@ const protectedErrors = {
   429: limitedResponse,
   500: internalResponse,
   503: overloadedResponse,
+  504: gatewayTimeoutResponse,
 };
 const security = [{ bearerAuth: [] }];
 
@@ -151,6 +153,7 @@ export const createFundRoute = createRoute({
     429: protectedErrors[429],
     500: protectedErrors[500],
     503: protectedErrors[503],
+    504: protectedErrors[504],
   },
 });
 export const getFundRoute = createRoute({
@@ -182,6 +185,7 @@ export const openapiRoute = createRoute({
     429: limitedResponse,
     503: overloadedResponse,
     500: internalResponse,
+    504: gatewayTimeoutResponse,
   },
 });
 
@@ -255,6 +259,7 @@ export const waitlistRoute = createRoute({
     429: limitedResponse,
     503: overloadedResponse,
     500: internalResponse,
+    504: gatewayTimeoutResponse,
   },
 });
 

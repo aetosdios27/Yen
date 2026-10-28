@@ -43,6 +43,25 @@ export class MemoryWaitlistStore implements WaitlistStore {
   }
 }
 
+export interface InFlightTracker {
+  readonly count: number;
+  inc(): void;
+  dec(): void;
+}
+
+export class DefaultInFlightTracker implements InFlightTracker {
+  private inFlight = 0;
+  get count() {
+    return this.inFlight;
+  }
+  inc() {
+    this.inFlight++;
+  }
+  dec() {
+    this.inFlight = Math.max(0, this.inFlight - 1);
+  }
+}
+
 export interface AppDependencies {
   readonly waitlistStore: WaitlistStore;
   readonly waitlistLimit: RateLimit;
@@ -70,6 +89,10 @@ export interface AppDependencies {
   readonly otpRateLimitPhone: RateLimit;
   readonly sessionCookieName: string;
   readonly sessionMaxAgeSeconds: number;
+  readonly concurrencyLimit: number;
+  readonly requestTimeoutMs: number;
+  readonly inFlightTracker: InFlightTracker;
+  readonly isShuttingDown: () => boolean;
 }
 
 export function defaultDependencies(clock: () => number = Date.now): AppDependencies {
@@ -100,5 +123,9 @@ export function defaultDependencies(clock: () => number = Date.now): AppDependen
     otpRateLimitPhone: { capacity: 5, refillMs: 600_000 },
     sessionCookieName: "yen_session",
     sessionMaxAgeSeconds: 30 * 24 * 3600,
+    concurrencyLimit: 100,
+    requestTimeoutMs: 15000,
+    inFlightTracker: new DefaultInFlightTracker(),
+    isShuttingDown: () => false,
   };
 }

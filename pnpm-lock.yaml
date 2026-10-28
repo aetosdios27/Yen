@@ -349,8 +349,58 @@ importers:
         specifier: ^5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(jsdom@30.1.3)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
-  packages/ledger:
+  packages/identity:
+    dependencies:
+      '@yen/db':
+        specifier: workspace:*
+        version: link:../db
+      '@yen/shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.5
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@26.6.5)(jsdom@30.1.3)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+
+  packages/ledger:
+    dependencies:
+      '@konto-ledger/adapters':
+        specifier: 0.2.0
+        version: 0.2.0(postgres@3.4.9)
+      '@konto-ledger/core':
+        specifier: 0.2.0
+        version: 0.2.0
+      '@konto-ledger/types':
+        specifier: 0.2.0
+        version: 0.2.0
+      '@yen/db':
+        specifier: workspace:*
+        version: link:../db
+      '@yen/eventlog':
+        specifier: workspace:*
+        version: link:../eventlog
+      '@yen/shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.5
+      fast-check:
+        specifier: ^4.10.2
+        version: 4.10.2
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -928,6 +978,32 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@konto-ledger/adapters@0.2.0':
+    resolution: {integrity: sha512-h4mqTS5gx1BY9PKvdSjlzC3vwcHUJ5XjX2ppReH0qJNmuXUm1MNUOoyCfiK/alGAyOMAdRGqJf7jDsvT0WSVWw==}
+    peerDependencies:
+      '@neondatabase/serverless': ^1.1.0
+      '@prisma/client': ^5.0.0 || ^6.0.0 || ^7.0.0
+      '@vercel/postgres': ^0.10.0
+      drizzle-orm: ^0.30.0 || ^0.31.0 || ^0.32.0 || ^0.33.0 || ^0.34.0 || ^0.35.0 || ^0.36.0
+      postgres: ^3.4.5
+    peerDependenciesMeta:
+      '@neondatabase/serverless':
+        optional: true
+      '@prisma/client':
+        optional: true
+      '@vercel/postgres':
+        optional: true
+      drizzle-orm:
+        optional: true
+      postgres:
+        optional: true
+
+  '@konto-ledger/core@0.2.0':
+    resolution: {integrity: sha512-vUFv73AlLa6w0Bd8dOUrp6f8Ol8aA3meZtlU0mDWui66ygDEccUFmoaXcisGM/nrlpuEcff62+5BBWaBtMU5uA==}
+
+  '@konto-ledger/types@0.2.0':
+    resolution: {integrity: sha512-2TJmisELT99JcnUr2VNX4E8mWLF8KiQGWfGjMA5KTqDPlGqr6gnq3tW8V5xIqXjxy/47Zqa1j6U271rfaHm8cg==}
 
   '@next/env@16.4.3':
     resolution: {integrity: sha512-a7tz1QCcWWkwC/rPJcPMJk/UNRu9CFhDd3OHYE5hddbJrs8BqRTalxI6GlKCWEGzRLHN+S/B7a4PAHCtm25aBQ==}
@@ -2245,6 +2321,9 @@ packages:
     resolution: {integrity: sha512-tVpsJW7DdjecAiFpbIB1e3qxIQsE6NoPc5/eTdrbbIC4h0LVsWhnoa3g+m2HclBIujHzsxZ4VJVA+GUuc2/LBw==}
     engines: {node: '>=12'}
 
+  zod@3.25.76:
+    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
+
   zod@4.6.7:
     resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
 
@@ -2580,6 +2659,19 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
+
+  '@konto-ledger/adapters@0.2.0(postgres@3.4.9)':
+    dependencies:
+      '@konto-ledger/types': 0.2.0
+    optionalDependencies:
+      postgres: 3.4.9
+
+  '@konto-ledger/core@0.2.0':
+    dependencies:
+      '@konto-ledger/types': 0.2.0
+      zod: 3.25.76
+
+  '@konto-ledger/types@0.2.0': {}
 
   '@next/env@16.4.3': {}
 
@@ -3632,5 +3724,7 @@ snapshots:
   yaml@2.9.1: {}
 
   yargs-parser@21.1.1: {}
+
+  zod@3.25.76: {}
 
   zod@4.6.7: {}

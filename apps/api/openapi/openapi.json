@@ -32,7 +32,8 @@
                   "rate_limited",
                   "overloaded",
                   "payload_too_large",
-                  "internal"
+                  "internal",
+                  "gateway_timeout"
                 ]
               },
               "message": { "type": "string" },
@@ -340,6 +341,19 @@
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
             }
+          },
+          "504": {
+            "description": "Gateway timeout",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
           }
         }
       }
@@ -563,6 +577,19 @@
               "retry-after": {
                 "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
                 "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "504": {
+            "description": "Gateway timeout",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
                 "required": true
               }
             },
@@ -1247,6 +1274,19 @@
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
             }
+          },
+          "504": {
+            "description": "Gateway timeout",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
           }
         }
       }
@@ -1394,6 +1434,19 @@
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
             }
+          },
+          "504": {
+            "description": "Gateway timeout",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
           }
         }
       }
@@ -1457,6 +1510,19 @@
               "retry-after": {
                 "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
                 "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "504": {
+            "description": "Gateway timeout",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
                 "required": true
               }
             },

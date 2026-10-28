@@ -166,6 +166,7 @@ it("validates every documented status and sent header against the committed Open
     "404": "not_found",
     "409": "conflict",
     "500": "internal",
+    "504": "gateway_timeout",
   };
   const waitlistPost = {
     method: "POST",
