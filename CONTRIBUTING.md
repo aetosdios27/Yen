@@ -18,6 +18,12 @@ The full handbook lives in Linear (**06 · Engineering Handbook**). This file is
 8. Resolve all conversations, keep the branch up to date, wait for **CI Gate**.
 9. Squash and merge. The branch is deleted automatically.
 
+Every pull request gets a Vercel preview from the bot comment. Open it on a
+phone before approving; previews use the staging API, and production deploys
+only after the squashed PR lands on `main`. See
+[`docs/deployment/web.md`](docs/deployment/web.md) for setup and environment
+rules, and the [rollback runbook](docs/runbooks/web-rollback.md) for incidents.
+
 ## What `main` enforces
 
 | Rule                                 | Effect                                    |
