@@ -55,8 +55,10 @@ export function ledgerDatabaseSuite(name: string, tests: (sql: Sql, url: string)
 export async function createLedgerTestFund(sql: Sql, fundId = uuidv7()): Promise<string> {
   const userId = uuidv7();
   const orgId = uuidv7();
-  const phoneNumber =
-    (BigInt(`0x${userId.replaceAll("-", "")}`) % 900_000_000_000n + 100_000_000_000n).toString();
+  const phoneNumber = (
+    (BigInt(`0x${userId.replaceAll("-", "")}`) % 900_000_000_000n) +
+    100_000_000_000n
+  ).toString();
   const phone = `+1${phoneNumber}`;
 
   await sql.begin(async (tx) => {
