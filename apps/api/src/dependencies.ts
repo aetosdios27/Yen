@@ -35,6 +35,25 @@ export class MemoryWaitlistStore implements WaitlistStore {
   }
 }
 
+export interface InFlightTracker {
+  readonly count: number;
+  inc(): void;
+  dec(): void;
+}
+
+export class DefaultInFlightTracker implements InFlightTracker {
+  private inFlight = 0;
+  get count() {
+    return this.inFlight;
+  }
+  inc() {
+    this.inFlight++;
+  }
+  dec() {
+    this.inFlight = Math.max(0, this.inFlight - 1);
+  }
+}
+
 export interface AppDependencies {
   readonly waitlistStore: WaitlistStore;
   readonly waitlistLimit: RateLimit;
@@ -52,6 +71,10 @@ export interface AppDependencies {
   readonly corsOrigins: string[];
   readonly readiness: () => Promise<boolean>;
   readonly rateLimits: { readonly ip: RateLimit; readonly principal: RateLimit };
+  readonly concurrencyLimit: number;
+  readonly requestTimeoutMs: number;
+  readonly inFlightTracker: InFlightTracker;
+  readonly isShuttingDown: () => boolean;
 }
 
 export function defaultDependencies(clock: () => number = Date.now): AppDependencies {
@@ -72,5 +95,9 @@ export function defaultDependencies(clock: () => number = Date.now): AppDependen
     corsOrigins: [],
     readiness: async () => true,
     rateLimits: rateLimits(rateLimitEnv.parse({})),
+    concurrencyLimit: 100,
+    requestTimeoutMs: 15000,
+    inFlightTracker: new DefaultInFlightTracker(),
+    isShuttingDown: () => false,
   };
 }
