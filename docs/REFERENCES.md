@@ -11,7 +11,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 | Tamper-evident logs and transparency |       8 |
 | Canonical serialization              |       1 |
 | Money and ledgers                    |       5 |
-| Idempotency and retries              |       5 |
+| Idempotency and retries              |       8 |
 | Rate limiting and load shedding      |       7 |
 | Testing and failure handling         |       4 |
 | Benchmarking and latency             |       1 |
@@ -21,7 +21,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 | Blockchain anchoring                 |       2 |
 | Privacy and law                      |       3 |
 | Supply chain and CI                  |       2 |
-| **Total**                            |  **63** |
+| **Total**                            |  **66** |
 
 ## Tamper-evident logs and transparency
 
@@ -182,6 +182,30 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **URL:** https://aws.amazon.com/builders-library/avoiding-fallback-in-distributed-systems/
 - **What we use it for:** Rare fallback paths can add reliability risk; evaluate and test failure paths. This is guidance for future integration design, not a description of a Yen fallback implementation.
 - **Where in this repo:** apps/api/README.md
+
+<a id="pg-boss"></a>
+### pg-boss: Background Jobs in PostgreSQL
+
+- **Source:** Tim Jones and contributors; pg-boss v12 documentation, 2026.
+- **URL:** https://pgboss.io
+- **What we use it for:** Transactional background job queue in PostgreSQL using SKIP LOCKED, supporting outbox enqueue via caller-provided database transactions, configurable retries with backoff, and dead-letter queues.
+- **Where in this repo:** packages/queue/README.md
+
+<a id="bullmq"></a>
+### BullMQ: Redis-based Distributed Message Queue
+
+- **Source:** Taskforce.sh Inc.; BullMQ documentation, 2026.
+- **URL:** https://docs.bullmq.io
+- **What we use it for:** Evaluated alternative queue engine for high-throughput short idempotent jobs. Rejected for initial runtime due to separate Redis/Valkey operational requirement and lack of atomic transactions with PostgreSQL domain writes.
+- **Where in this repo:** packages/queue/README.md
+
+<a id="temporal"></a>
+### Temporal Platform Documentation
+
+- **Source:** Temporal Technologies Inc.; Temporal Platform Documentation, 2026.
+- **URL:** https://docs.temporal.io
+- **What we use it for:** Evaluated escape hatch for complex, long-running, multi-step workflows such as blockchain anchoring. Deferred until workflow duration or saga orchestration complexity exceeds defined exit thresholds.
+- **Where in this repo:** packages/queue/README.md
 
 ## Rate limiting and load shedding
 
