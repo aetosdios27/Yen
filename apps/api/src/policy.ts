@@ -1,5 +1,11 @@
 import type { z } from "@hono/zod-openapi";
-import { type Redacted, unsafeMarkRedactedForDevPolicy } from "@yen/policy";
+import {
+  can as policyCan,
+  DEFAULT_FUND_POLICY,
+  type Redacted,
+  unsafeMarkRedactedForDevPolicy,
+} from "@yen/policy";
+import { parseFundId } from "@yen/shared";
 import type { donationDetailsSchema, fundSchema } from "./contract.js";
 import type { Principal } from "./dependencies.js";
 
@@ -39,7 +45,14 @@ export const devPolicy: Policy = {
       ? action === "fund:create"
       : action === "fund:read" && resource.fund.owner === principal.id,
   redact: (_viewer, resource) => unsafeMarkRedactedForDevPolicy(resource.fund.fund),
-  canDonate: (resource) => resource.fund.fund.id.length > 0,
+  canDonate: (resource) => {
+    const fundId = parseFundId(resource.fund.fund.id);
+    if (!fundId.ok) return false;
+    return policyCan({ role: "public" }, "donation:pledge", {
+      kind: "donation",
+      donation: { fundId: fundId.value, policy: { ...DEFAULT_FUND_POLICY, fundId: fundId.value } },
+    });
+  },
   redactDonationDetails: (resource) => ({
     fundId: resource.fund.fund.id,
     title: resource.fund.fund.name,
