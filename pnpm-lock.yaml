@@ -307,6 +307,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@yen/eventlog':
+        specifier: workspace:*
+        version: link:../eventlog
       '@yen/shared':
         specifier: workspace:*
         version: link:../shared

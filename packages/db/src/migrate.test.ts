@@ -51,6 +51,7 @@ databaseSuite("migration runner", (sql, url) => {
         await sql`SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename`,
       );
     expect(tables.map((row) => row.tablename)).toEqual([
+      "fund_events",
       "funds",
       "idempotency_keys",
       "memberships",
@@ -62,6 +63,7 @@ databaseSuite("migration runner", (sql, url) => {
     ]);
     const source = await readFile(join(defaultDir, "0001_app_tables.sql"));
     const waitlistSource = await readFile(join(defaultDir, "0002_waitlist.sql"));
+    const fundEventsSource = await readFile(join(defaultDir, "0003_fund_events.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -74,6 +76,12 @@ databaseSuite("migration runner", (sql, url) => {
         version: 2,
         name: "0002_waitlist.sql",
         checksum: createHash("sha256").update(waitlistSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
+      {
+        version: 3,
+        name: "0003_fund_events.sql",
+        checksum: createHash("sha256").update(fundEventsSource).digest("hex"),
         applied_at: expect.any(Date),
       },
     ]);
@@ -109,7 +117,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(2);
+    expect(before).toHaveLength(3);
   });
 
   it("rejects an edited applied file and names it", async () => {
@@ -522,7 +530,7 @@ databaseSuite("migration runner", (sql, url) => {
 
   it("rejects an out-of-order applied history", async () => {
     await migrate(sql);
-    await sql`UPDATE schema_migrations SET version = 3 WHERE version = 1`;
+    await sql`UPDATE schema_migrations SET version = 99 WHERE version = 1`;
     await expect(migrate(sql)).rejects.toThrow("Missing or out-of-order applied migration");
   });
 
