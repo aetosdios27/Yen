@@ -12,6 +12,7 @@ import { appendFundEventInTx, nowUtcIso, toEventInput } from "../eventlog.js";
 import { asQueryExecutor, available } from "../operations.js";
 import {
   addSignedApproval,
+  assertValidTransition,
   expireExpense,
   payExpense,
   reconcileExpense,
@@ -41,6 +42,7 @@ export async function submitExpenseInTx(
   input: SubmitExpenseInTxInput,
 ): Promise<SubmitExpenseInTxResult> {
   const { tx, expense, policy } = input;
+  assertValidTransition(expense.status, "submitted");
   const fundId = expense.fundId;
   const actor = (input.actorPseudonym ?? expense.requesterId ?? SYSTEM_ACTOR) as PseudonymId;
   const time = input.nowUtc ?? nowUtcIso();
@@ -127,15 +129,15 @@ export async function approveExpenseInTx(
   const actor = (input.actorPseudonym ?? approval.approverId ?? SYSTEM_ACTOR) as PseudonymId;
   const time = input.nowUtc ?? nowUtcIso();
 
-  // Advisory lock serializes concurrent approvals
-  await tx`SELECT pg_advisory_xact_lock(hashtext(${fundId}))`;
-
   const { expense: updatedExpense, reachedQuorum } = addSignedApproval(
     expense,
     approval,
     policy,
     time,
   );
+
+  // Advisory lock serializes concurrent approvals
+  await tx`SELECT pg_advisory_xact_lock(hashtext(${fundId}))`;
 
   let approvedEvent: Event | undefined;
   if (reachedQuorum) {
@@ -178,6 +180,7 @@ export async function rejectExpenseInTx(
   input: RejectExpenseInTxInput,
 ): Promise<RejectExpenseInTxResult> {
   const { tx, expense, reason } = input;
+  assertValidTransition(expense.status, "rejected");
   const fundId = expense.fundId;
   const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
   const time = input.nowUtc ?? nowUtcIso();
@@ -227,6 +230,7 @@ export async function expireExpenseInTx(
   input: ExpireExpenseInTxInput,
 ): Promise<ExpireExpenseInTxResult> {
   const { tx, expense } = input;
+  assertValidTransition(expense.status, "expired");
   const fundId = expense.fundId;
   const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
   const time = input.nowUtc ?? nowUtcIso();
@@ -275,6 +279,7 @@ export interface PayExpenseInTxResult {
 
 export async function payExpenseInTx(input: PayExpenseInTxInput): Promise<PayExpenseInTxResult> {
   const { tx, expense, bankTransactionId } = input;
+  assertValidTransition(expense.status, "paid");
   const fundId = expense.fundId;
   const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
   const time = input.nowUtc ?? nowUtcIso();
@@ -331,6 +336,7 @@ export async function reconcileExpenseInTx(
   input: ReconcileExpenseInTxInput,
 ): Promise<ReconcileExpenseInTxResult> {
   const { tx, expense, bankTransactionId } = input;
+  assertValidTransition(expense.status, "reconciled");
   const fundId = expense.fundId;
   const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
   const time = input.nowUtc ?? nowUtcIso();
