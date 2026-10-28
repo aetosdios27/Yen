@@ -22,8 +22,23 @@ const retryHeader = {
   },
 };
 
+const cookieHeader = {
+  "set-cookie": {
+    schema: { type: "string" },
+    description: "Session cookie for browser clients",
+  },
+} as const;
+
 function jsonResponse<T extends z.ZodType>(schema: T, description: string) {
   return { description, headers: responseHeaders, content: { "application/json": { schema } } };
+}
+
+function jsonCookieResponse<T extends z.ZodType>(schema: T, description: string) {
+  return {
+    description,
+    headers: { ...responseHeaders, ...cookieHeader },
+    content: { "application/json": { schema } },
+  };
 }
 
 function withReplay<T extends { headers: object }>(response: T) {
@@ -34,6 +49,7 @@ const internalResponse = jsonResponse(
   errorEnvelope,
   "Internal failure; no private error information",
 );
+const gatewayTimeoutResponse = jsonResponse(errorEnvelope, "Gateway timeout");
 const limitedResponse = {
   ...jsonResponse(errorEnvelope, "Rate limit exceeded"),
   headers: {
@@ -57,11 +73,29 @@ const protectedErrors = {
   429: limitedResponse,
   500: internalResponse,
   503: overloadedResponse,
+  504: gatewayTimeoutResponse,
 };
 const security = [{ bearerAuth: [] }];
 
-export const principalSchema = z.object({ id: z.string().uuid() }).openapi("Principal");
-const fundFields = { name: z.string().trim().min(1).max(120), targetPaise: paiseWire };
+export const principalSchema = z
+  .object({
+    id: z.string().uuid(),
+    phone: z.string().optional(),
+    displayName: z.string().optional(),
+    locale: z.string().optional(),
+  })
+  .openapi("Principal");
+const payeeName = z.string().trim().min(1).max(80);
+const upiVpa = z
+  .string()
+  .trim()
+  .regex(/^[a-zA-Z0-9._-]{2,256}@[a-zA-Z]{2,64}$/, "Expected a UPI ID such as club@bank");
+const fundFields = {
+  name: z.string().trim().min(1).max(120),
+  targetPaise: paiseWire,
+  upiVpa,
+  upiPayeeName: payeeName,
+};
 export const fundInput = z.object(fundFields).strict().openapi("CreateFund");
 export const fundSchema = z
   .object({ ...fundFields, id: z.string().uuid(), createdAt: z.iso.datetime() })
@@ -129,6 +163,7 @@ export const createFundRoute = createRoute({
     429: protectedErrors[429],
     500: protectedErrors[500],
     503: protectedErrors[503],
+    504: protectedErrors[504],
   },
 });
 export const getFundRoute = createRoute({
@@ -160,6 +195,7 @@ export const openapiRoute = createRoute({
     429: limitedResponse,
     503: overloadedResponse,
     500: internalResponse,
+    504: gatewayTimeoutResponse,
   },
 });
 
@@ -233,6 +269,867 @@ export const waitlistRoute = createRoute({
     429: limitedResponse,
     503: overloadedResponse,
     500: internalResponse,
+    504: gatewayTimeoutResponse,
+  },
+});
+
+export const sendOtpInput = z
+  .object({
+    phone: z
+      .string()
+      .min(1)
+      .openapi({ description: "Phone number (E.164 or 10-digit Indian mobile)" }),
+    channel: z
+      .enum(["whatsapp", "sms"])
+      .openapi({ description: "Selected delivery channel; delivery never switches channels" }),
+  })
+  .strict()
+  .openapi("SendOtpInput");
+
+export const sendOtpResponse = z
+  .object({
+    status: z.literal("sent"),
+    channel: z.enum(["whatsapp", "sms"]),
+    resendAfterSeconds: z.number().int().nonnegative(),
+    expiresAt: z.iso.datetime(),
+  })
+  .strict()
+  .openapi("SendOtpResponse");
+
+export const verifyOtpInput = z
+  .object({
+    phone: z
+      .string()
+      .min(1)
+      .openapi({ description: "Phone number (E.164 or 10-digit Indian mobile)" }),
+    code: z
+      .string()
+      .regex(/^\d{6}$/)
+      .openapi({ description: "6-digit OTP code" }),
+  })
+  .strict()
+  .openapi("VerifyOtpInput");
+
+export const authUserSchema = z
+  .object({
+    id: z.string().uuid(),
+    phone: z.string(),
+    displayName: z.string(),
+    locale: z.string(),
+  })
+  .strict()
+  .openapi("AuthUser");
+
+export const authSessionSchema = z
+  .object({
+    id: z.string().uuid(),
+    token: z.string(),
+    expiresAt: z.iso.datetime(),
+    user: authUserSchema,
+  })
+  .strict()
+  .openapi("AuthSession");
+
+export const verifyOtpResponse = z
+  .object({
+    status: z.literal("authenticated"),
+    session: authSessionSchema,
+  })
+  .strict()
+  .openapi("VerifyOtpResponse");
+
+export const rotateSessionResponse = z
+  .object({
+    status: z.literal("rotated"),
+    session: z.object({
+      id: z.string().uuid(),
+      token: z.string(),
+      expiresAt: z.iso.datetime(),
+    }),
+  })
+  .strict()
+  .openapi("RotateSessionResponse");
+
+export const sessionItemSchema = z
+  .object({
+    id: z.string().uuid(),
+    deviceInfo: z.string(),
+    ip: z.string(),
+    createdAt: z.iso.datetime(),
+    lastActiveAt: z.iso.datetime(),
+    isCurrent: z.boolean(),
+  })
+  .strict()
+  .openapi("SessionItem");
+
+export const listSessionsResponse = z
+  .object({
+    sessions: z.array(sessionItemSchema),
+  })
+  .strict()
+  .openapi("ListSessionsResponse");
+
+export const statusLoggedOut = z.object({ status: z.literal("logged_out") }).strict();
+export const statusLoggedOutAll = z.object({ status: z.literal("logged_out_all") }).strict();
+export const statusRevoked = z.object({ status: z.literal("revoked") }).strict();
+
+export const sendOtpRoute = createRoute({
+  method: "post",
+  path: "/v1/auth/otp/send",
+  operationId: "sendOtp",
+  tags: ["auth"],
+  description: "Send a 6-digit OTP to a phone number via WhatsApp or SMS fallback.",
+  request: { body: { required: true, content: { "application/json": { schema: sendOtpInput } } } },
+  responses: {
+    200: jsonResponse(sendOtpResponse, "OTP challenge dispatched"),
+    400: protectedErrors[400],
+    429: limitedResponse,
+    500: internalResponse,
+    503: overloadedResponse,
+  },
+});
+
+export const verifyOtpRoute = createRoute({
+  method: "post",
+  path: "/v1/auth/otp/verify",
+  operationId: "verifyOtp",
+  tags: ["auth"],
+  description:
+    "Verify a 6-digit OTP, authenticate or register the user, and issue an httpOnly session cookie.",
+  request: {
+    body: { required: true, content: { "application/json": { schema: verifyOtpInput } } },
+  },
+  responses: {
+    200: jsonCookieResponse(verifyOtpResponse, "Authenticated session created"),
+    400: protectedErrors[400],
+    429: limitedResponse,
+    500: internalResponse,
+    503: overloadedResponse,
+  },
+});
+
+export const rotateSessionRoute = createRoute({
+  method: "post",
+  path: "/v1/auth/session/rotate",
+  operationId: "rotateSession",
+  tags: ["auth"],
+  security,
+  description: "Rotates the active session token, invalidating the previous token.",
+  responses: {
+    200: jsonCookieResponse(rotateSessionResponse, "Session token rotated"),
+    401: protectedErrors[401],
+    500: internalResponse,
+  },
+});
+
+export const getSessionsRoute = createRoute({
+  method: "get",
+  path: "/v1/auth/sessions",
+  operationId: "getSessions",
+  tags: ["auth"],
+  security,
+  description: "Lists active sessions and devices for the authenticated user.",
+  responses: {
+    200: jsonResponse(listSessionsResponse, "List of active user sessions"),
+    401: protectedErrors[401],
+    500: internalResponse,
+  },
+});
+
+export const logoutRoute = createRoute({
+  method: "post",
+  path: "/v1/auth/logout",
+  operationId: "logout",
+  tags: ["auth"],
+  security,
+  description: "Revokes current session and clears session cookie.",
+  responses: {
+    200: jsonCookieResponse(statusLoggedOut, "Session revoked"),
+    401: protectedErrors[401],
+    500: internalResponse,
+  },
+});
+
+export const logoutAllRoute = createRoute({
+  method: "post",
+  path: "/v1/auth/logout-all",
+  operationId: "logoutAll",
+  tags: ["auth"],
+  security,
+  description: "Revokes all sessions across all devices for the authenticated user.",
+  responses: {
+    200: jsonCookieResponse(statusLoggedOutAll, "All sessions revoked"),
+    401: protectedErrors[401],
+    500: internalResponse,
+  },
+});
+
+export const revokeSessionRoute = createRoute({
+  method: "delete",
+  path: "/v1/auth/sessions/{sessionId}",
+  operationId: "revokeSession",
+  tags: ["auth"],
+  security,
+  description: "Revokes a specific session belonging to the authenticated user.",
+  request: {
+    params: z.object({
+      sessionId: z
+        .string()
+        .uuid()
+        .openapi({
+          description: "Session UUID to revoke",
+          param: { name: "sessionId", in: "path" },
+        }),
+    }),
+  },
+  responses: {
+    200: jsonCookieResponse(statusRevoked, "Session revoked"),
+    401: protectedErrors[401],
+    404: protectedErrors[404],
+    500: internalResponse,
+  },
+});
+
+export const pinSchema = z
+  .string()
+  .regex(/^\d{6}$/, "Must be exactly 6 digits")
+  .openapi({ example: "482915", description: "6-digit Yen approval PIN" });
+
+export const pinSetupInput = z
+  .object({
+    pin: pinSchema,
+  })
+  .strict()
+  .openapi("PinSetupInput");
+
+export const pinSetupResponse = z
+  .object({
+    status: z.literal("created"),
+    isSet: z.literal(true),
+  })
+  .strict()
+  .openapi("PinSetupResponse");
+
+export const setupPinRoute = createRoute({
+  method: "post",
+  path: "/v1/auth/pin/setup",
+  tags: ["auth", "pin"],
+  operationId: "setupApprovalPin",
+  security,
+  description: "Sets the 6-digit approval PIN for the principal before first approval action.",
+  request: {
+    body: { required: true, content: { "application/json": { schema: pinSetupInput } } },
+  },
+  responses: {
+    201: jsonResponse(pinSetupResponse, "Approval PIN configured"),
+    ...protectedErrors,
+  },
+});
+
+export const pinStatusSchema = z
+  .object({
+    isSet: z.boolean(),
+    status: z.enum(["not_set", "active", "locked_out", "cooling_off", "rate_limited"]),
+    lockedUntil: z.string().nullable().optional(),
+    coolingOffUntil: z.string().nullable().optional(),
+    failedAttempts: z.number().int().nonnegative().optional(),
+  })
+  .strict()
+  .openapi("PinStatus");
+
+export const getPinStatusRoute = createRoute({
+  method: "get",
+  path: "/v1/auth/pin/status",
+  tags: ["auth", "pin"],
+  operationId: "getApprovalPinStatus",
+  security,
+  description: "Returns the approval PIN status for the principal.",
+  responses: {
+    200: jsonResponse(pinStatusSchema, "Current approval PIN status"),
+    ...protectedErrors,
+  },
+});
+
+export const verifyPinInput = z
+  .object({
+    pin: pinSchema,
+    actionHash: z.string().regex(/^[0-9a-f]{64}$/, "Must be a 64-character hex hash"),
+  })
+  .strict()
+  .openapi("VerifyPinInput");
+
+export const verifyPinResponse = z
+  .object({
+    approvalToken: z.string().uuid(),
+    expiresAt: z.iso.datetime(),
+  })
+  .strict()
+  .openapi("VerifyPinResponse");
+
+export const verifyPinRoute = createRoute({
+  method: "post",
+  path: "/v1/auth/pin/verify",
+  tags: ["auth", "pin"],
+  operationId: "verifyApprovalPin",
+  security,
+  description:
+    "Verifies the 6-digit approval PIN against a specific action hash and issues a single-use 60-second approval token.",
+  request: {
+    body: { required: true, content: { "application/json": { schema: verifyPinInput } } },
+  },
+  responses: {
+    200: jsonResponse(verifyPinResponse, "PIN verified and approval token issued"),
+    ...protectedErrors,
+  },
+});
+
+export const changePinInput = z
+  .object({
+    currentPin: pinSchema,
+    newPin: pinSchema,
+  })
+  .strict()
+  .openapi("ChangePinInput");
+
+export const changePinResponse = z
+  .object({
+    status: z.literal("updated"),
+  })
+  .strict()
+  .openapi("ChangePinResponse");
+
+export const changePinRoute = createRoute({
+  method: "post",
+  path: "/v1/auth/pin/change",
+  tags: ["auth", "pin"],
+  operationId: "changeApprovalPin",
+  security,
+  description: "Changes the approval PIN given the verified current PIN.",
+  request: {
+    body: { required: true, content: { "application/json": { schema: changePinInput } } },
+  },
+  responses: {
+    200: jsonResponse(changePinResponse, "Approval PIN updated"),
+    ...protectedErrors,
+  },
+});
+
+export const resetPinRequestInput = z.object({}).strict().openapi("ResetPinRequestInput");
+
+export const resetPinRequestResponse = z
+  .object({
+    status: z.literal("otp_sent"),
+    challengeId: z.string().uuid(),
+  })
+  .strict()
+  .openapi("ResetPinRequestResponse");
+
+export const requestPinResetRoute = createRoute({
+  method: "post",
+  path: "/v1/auth/pin/reset/request",
+  tags: ["auth", "pin"],
+  operationId: "requestPinReset",
+  security,
+  description: "Requests an OTP to reset a forgotten or locked PIN.",
+  request: {
+    body: { required: true, content: { "application/json": { schema: resetPinRequestInput } } },
+  },
+  responses: {
+    200: jsonResponse(resetPinRequestResponse, "OTP challenge initiated"),
+    ...protectedErrors,
+  },
+});
+
+export const resetPinConfirmInput = z
+  .object({
+    otp: z.string().trim().min(1).max(10),
+    newPin: pinSchema,
+    challengeId: z.string().uuid().optional(),
+  })
+  .strict()
+  .openapi("ResetPinConfirmInput");
+
+export const resetPinConfirmResponse = z
+  .object({
+    status: z.literal("cooling_off"),
+    coolingOffUntil: z.iso.datetime(),
+  })
+  .strict()
+  .openapi("ResetPinConfirmResponse");
+
+export const confirmPinResetRoute = createRoute({
+  method: "post",
+  path: "/v1/auth/pin/reset/confirm",
+  tags: ["auth", "pin"],
+  operationId: "confirmPinReset",
+  security,
+  description:
+    "Confirms PIN reset with OTP, setting a 24-hour cooling-off during which approval actions are blocked.",
+  request: {
+    body: { required: true, content: { "application/json": { schema: resetPinConfirmInput } } },
+  },
+  responses: {
+    200: jsonResponse(resetPinConfirmResponse, "PIN reset into 24-hour cooling-off period"),
+    ...protectedErrors,
+  },
+});
+
+export const unlockPinInput = z
+  .object({
+    targetUserId: z.string().uuid(),
+  })
+  .strict()
+  .openapi("UnlockPinInput");
+
+export const unlockPinResponse = z
+  .object({
+    status: z.literal("unlocked"),
+  })
+  .strict()
+  .openapi("UnlockPinResponse");
+
+export const unlockPinRoute = createRoute({
+  method: "post",
+  path: "/v1/auth/pin/unlock",
+  tags: ["auth", "pin"],
+  operationId: "unlockApprovalPin",
+  security,
+  description:
+    "Allows an authorized administrator or recovery capability to unlock a locked-out approver PIN.",
+  request: {
+    body: { required: true, content: { "application/json": { schema: unlockPinInput } } },
+  },
+  responses: {
+    200: jsonResponse(unlockPinResponse, "Approver PIN unlocked"),
+    ...protectedErrors,
+  },
+});
+
+export const expenseApprovalInput = z
+  .object({
+    approvalToken: z.string().uuid().optional(),
+    pin: pinSchema.optional(),
+    credentialId: z.string().min(1).max(256).optional(),
+    signatureHex: z
+      .string()
+      .regex(/^[0-9a-f]+$/)
+      .optional(),
+    clientDataJson: z.string().min(1).optional(),
+    authenticatorDataHex: z
+      .string()
+      .regex(/^[0-9a-f]+$/)
+      .optional(),
+  })
+  .strict()
+  .openapi("ExpenseApprovalInput");
+
+export const expenseApprovalResponse = z
+  .object({
+    status: z.enum(["submitted", "approved"]),
+    expenseId: z.string().uuid(),
+    approvedAt: z.iso.datetime().nullable(),
+    approvalsCount: z.number().int().nonnegative().optional(),
+  })
+  .strict()
+  .openapi("ExpenseApprovalResponse");
+
+export const approveExpenseRoute = createRoute({
+  method: "post",
+  path: "/v1/funds/{fundId}/expenses/{expenseId}/approve",
+  tags: ["approvals", "expenses"],
+  operationId: "approveExpense",
+  security,
+  description:
+    "Approves an expense spend request. Requires 6-digit approval PIN verification or valid approval token bound to this action.",
+  request: {
+    params: z.object({
+      fundId: z.string().uuid(),
+      expenseId: z.string().uuid(),
+    }),
+    headers: z.object({
+      "Idempotency-Key": idempotencyKey,
+      "X-Approval-Token": z.string().uuid().optional(),
+      "X-Approval-Pin": pinSchema.optional(),
+    }),
+    body: {
+      required: false,
+      content: { "application/json": { schema: expenseApprovalInput } },
+    },
+  },
+  responses: {
+    200: withReplay(jsonResponse(expenseApprovalResponse, "Expense approved")),
+    400: withReplay(protectedErrors[400]),
+    401: withReplay(protectedErrors[401]),
+    403: withReplay(protectedErrors[403]),
+    404: withReplay(protectedErrors[404]),
+    409: {
+      ...withReplay(protectedErrors[409]),
+      headers: { ...responseHeaders, ...replayHeader, ...retryHeader },
+    },
+    429: protectedErrors[429],
+    500: protectedErrors[500],
+    503: protectedErrors[503],
+  },
+});
+
+export const expenseRejectionInput = z
+  .object({
+    reason: z.enum(["quorum", "objection", "policy"]).default("policy"),
+    approvalToken: z.string().uuid().optional(),
+    pin: pinSchema.optional(),
+  })
+  .strict()
+  .openapi("ExpenseRejectionInput");
+
+export const expenseRejectionResponse = z
+  .object({
+    status: z.literal("rejected"),
+    expenseId: z.string().uuid(),
+    reason: z.string(),
+    rejectedAt: z.iso.datetime(),
+  })
+  .strict()
+  .openapi("ExpenseRejectionResponse");
+
+export const rejectExpenseRoute = createRoute({
+  method: "post",
+  path: "/v1/funds/{fundId}/expenses/{expenseId}/reject",
+  tags: ["approvals", "expenses"],
+  operationId: "rejectExpense",
+  security,
+  description:
+    "Rejects an expense spend request. Requires 6-digit approval PIN verification or valid approval token bound to this action.",
+  request: {
+    params: z.object({
+      fundId: z.string().uuid(),
+      expenseId: z.string().uuid(),
+    }),
+    headers: z.object({
+      "Idempotency-Key": idempotencyKey,
+      "X-Approval-Token": z.string().uuid().optional(),
+      "X-Approval-Pin": pinSchema.optional(),
+    }),
+    body: {
+      required: false,
+      content: { "application/json": { schema: expenseRejectionInput } },
+    },
+  },
+  responses: {
+    200: withReplay(jsonResponse(expenseRejectionResponse, "Expense rejected")),
+    400: withReplay(protectedErrors[400]),
+    401: withReplay(protectedErrors[401]),
+    403: withReplay(protectedErrors[403]),
+    404: withReplay(protectedErrors[404]),
+    409: {
+      ...withReplay(protectedErrors[409]),
+      headers: { ...responseHeaders, ...replayHeader, ...retryHeader },
+    },
+    429: protectedErrors[429],
+    500: protectedErrors[500],
+    503: protectedErrors[503],
+  },
+});
+
+export const payeeChangeInput = z
+  .object({
+    vpa: z.string().trim().min(3).max(100),
+    approvalToken: z.string().uuid().optional(),
+    pin: pinSchema.optional(),
+  })
+  .strict()
+  .openapi("PayeeChangeInput");
+
+export const payeeChangeResponse = z
+  .object({
+    status: z.literal("updated"),
+    vpa: z.string(),
+  })
+  .strict()
+  .openapi("PayeeChangeResponse");
+
+export const changePayeeRoute = createRoute({
+  method: "post",
+  path: "/v1/funds/{fundId}/payee",
+  tags: ["approvals", "payee"],
+  operationId: "changeFundPayee",
+  security,
+  description: "Changes the club's payee UPI ID. Requires 6-digit approval PIN verification.",
+  request: {
+    params: z.object({ fundId: z.string().uuid() }),
+    headers: z.object({
+      "Idempotency-Key": idempotencyKey,
+      "X-Approval-Token": z.string().uuid().optional(),
+      "X-Approval-Pin": pinSchema.optional(),
+    }),
+    body: {
+      required: true,
+      content: { "application/json": { schema: payeeChangeInput } },
+    },
+  },
+  responses: {
+    200: withReplay(jsonResponse(payeeChangeResponse, "Payee updated")),
+    400: withReplay(protectedErrors[400]),
+    401: withReplay(protectedErrors[401]),
+    403: withReplay(protectedErrors[403]),
+    404: withReplay(protectedErrors[404]),
+    409: {
+      ...withReplay(protectedErrors[409]),
+      headers: { ...responseHeaders, ...replayHeader, ...retryHeader },
+    },
+    429: protectedErrors[429],
+    500: protectedErrors[500],
+    503: protectedErrors[503],
+  },
+});
+
+export const policyChangeInput = z
+  .object({
+    policyJson: z.record(z.string(), z.unknown()),
+    approvalToken: z.string().uuid().optional(),
+    pin: pinSchema.optional(),
+  })
+  .strict()
+  .openapi("PolicyChangeInput");
+
+export const policyChangeResponse = z
+  .object({
+    status: z.literal("updated"),
+    policyJson: z.record(z.string(), z.unknown()),
+  })
+  .strict()
+  .openapi("PolicyChangeResponse");
+
+export const changePolicyRoute = createRoute({
+  method: "post",
+  path: "/v1/funds/{fundId}/policy",
+  tags: ["approvals", "policy"],
+  operationId: "changeFundPolicy",
+  security,
+  description: "Changes the fund approval policy. Requires 6-digit approval PIN verification.",
+  request: {
+    params: z.object({ fundId: z.string().uuid() }),
+    headers: z.object({
+      "Idempotency-Key": idempotencyKey,
+      "X-Approval-Token": z.string().uuid().optional(),
+      "X-Approval-Pin": pinSchema.optional(),
+    }),
+    body: {
+      required: true,
+      content: { "application/json": { schema: policyChangeInput } },
+    },
+  },
+  responses: {
+    200: withReplay(jsonResponse(policyChangeResponse, "Policy updated")),
+    400: withReplay(protectedErrors[400]),
+    401: withReplay(protectedErrors[401]),
+    403: withReplay(protectedErrors[403]),
+    404: withReplay(protectedErrors[404]),
+    409: {
+      ...withReplay(protectedErrors[409]),
+      headers: { ...responseHeaders, ...replayHeader, ...retryHeader },
+    },
+    429: protectedErrors[429],
+    500: protectedErrors[500],
+    503: protectedErrors[503],
+  },
+});
+
+export const addMemberInput = z
+  .object({
+    userId: z.string().uuid(),
+    role: z.enum(["approver", "treasurer", "member"]),
+    approvalToken: z.string().uuid().optional(),
+    pin: pinSchema.optional(),
+  })
+  .strict()
+  .openapi("AddMemberInput");
+
+export const addMemberResponse = z
+  .object({
+    status: z.literal("added"),
+    memberId: z.string().uuid(),
+    role: z.string(),
+  })
+  .strict()
+  .openapi("AddMemberResponse");
+
+export const addMemberRoute = createRoute({
+  method: "post",
+  path: "/v1/funds/{fundId}/members",
+  tags: ["approvals", "members"],
+  operationId: "addFundMember",
+  security,
+  description:
+    "Adds a new member or approver to the fund. Requires 6-digit approval PIN verification.",
+  request: {
+    params: z.object({ fundId: z.string().uuid() }),
+    headers: z.object({
+      "Idempotency-Key": idempotencyKey,
+      "X-Approval-Token": z.string().uuid().optional(),
+      "X-Approval-Pin": pinSchema.optional(),
+    }),
+    body: {
+      required: true,
+      content: { "application/json": { schema: addMemberInput } },
+    },
+  },
+  responses: {
+    201: withReplay(jsonResponse(addMemberResponse, "Member added")),
+    400: withReplay(protectedErrors[400]),
+    401: withReplay(protectedErrors[401]),
+    403: withReplay(protectedErrors[403]),
+    404: withReplay(protectedErrors[404]),
+    409: {
+      ...withReplay(protectedErrors[409]),
+      headers: { ...responseHeaders, ...replayHeader, ...retryHeader },
+    },
+    429: protectedErrors[429],
+    500: protectedErrors[500],
+    503: protectedErrors[503],
+  },
+});
+
+export const removeMemberInput = z
+  .object({
+    approvalToken: z.string().uuid().optional(),
+    pin: pinSchema.optional(),
+  })
+  .strict()
+  .openapi("RemoveMemberInput");
+
+export const removeMemberResponse = z
+  .object({
+    status: z.literal("removed"),
+    memberId: z.string().uuid(),
+  })
+  .strict()
+  .openapi("RemoveMemberResponse");
+
+export const removeMemberRoute = createRoute({
+  method: "post",
+  path: "/v1/funds/{fundId}/members/{memberId}/remove",
+  tags: ["approvals", "members"],
+  operationId: "removeFundMember",
+  security,
+  description: "Removes a member from the fund. Requires 6-digit approval PIN verification.",
+  request: {
+    params: z.object({
+      fundId: z.string().uuid(),
+      memberId: z.string().uuid(),
+    }),
+    headers: z.object({
+      "Idempotency-Key": idempotencyKey,
+      "X-Approval-Token": z.string().uuid().optional(),
+      "X-Approval-Pin": pinSchema.optional(),
+    }),
+    body: {
+      required: false,
+      content: { "application/json": { schema: removeMemberInput } },
+    },
+  },
+  responses: {
+    200: withReplay(jsonResponse(removeMemberResponse, "Member removed")),
+    400: withReplay(protectedErrors[400]),
+    401: withReplay(protectedErrors[401]),
+    403: withReplay(protectedErrors[403]),
+    404: withReplay(protectedErrors[404]),
+    409: {
+      ...withReplay(protectedErrors[409]),
+      headers: { ...responseHeaders, ...replayHeader, ...retryHeader },
+    },
+    429: protectedErrors[429],
+    500: protectedErrors[500],
+    503: protectedErrors[503],
+  },
+});
+
+const fundIdParam = z.object({
+  fundId: z.string().openapi({
+    description: "Canonical lowercase FundId UUID; invalid IDs return 404",
+    param: { name: "fundId", in: "path" },
+  }),
+});
+const publicErrors = {
+  404: protectedErrors[404],
+  429: limitedResponse,
+  500: internalResponse,
+  503: overloadedResponse,
+};
+
+/** Public donors are not signed in, so money details travel through policy redaction. */
+export const donationDetailsSchema = z
+  .object({
+    fundId: z.string().uuid(),
+    title: z.string(),
+    upiVpa: z.string(),
+    upiPayeeName: z.string(),
+  })
+  .strict()
+  .openapi("DonationDetails");
+
+export const donationDetailsRoute = createRoute({
+  method: "get",
+  path: "/v1/funds/{fundId}/donation-details",
+  tags: ["donations"],
+  operationId: "getDonationDetails",
+  description:
+    "Public where-to-pay details for a fund: its UPI ID and the name to show the donor. Anyone may read them; an unknown or closed fund returns 404.",
+  request: { params: fundIdParam },
+  responses: {
+    200: jsonResponse(donationDetailsSchema, "Where to send a donation"),
+    ...publicErrors,
+  },
+});
+
+const donationAmount = paiseWire.refine(
+  (value) => value.length <= 15 && Number.isSafeInteger(Number(value)) && Number(value) > 0,
+  "Expected a positive whole number of paise",
+);
+
+export const donationPledgeInput = z
+  .object({
+    amountPaise: donationAmount,
+    utr: z
+      .string()
+      .regex(/^[0-9]{12}$/, "A UPI reference is exactly 12 digits")
+      .openapi({ description: "The 12-digit reference shown in the donor's UPI app" }),
+    donorName: z.string().trim().min(1).max(60).optional(),
+    donorContact: contact.optional(),
+  })
+  .strict()
+  .openapi("DonationPledge");
+
+export const donationPledgeSchema = z
+  .object({
+    donationId: z.string().uuid(),
+    fundId: z.string().uuid(),
+    status: z.literal("pledged"),
+    amountPaise: paiseWire,
+  })
+  .strict()
+  .openapi("DonationPledgeResult");
+
+export const pledgeDonationRoute = createRoute({
+  method: "post",
+  path: "/v1/funds/{fundId}/donations/pledge",
+  tags: ["donations"],
+  operationId: "pledgeDonation",
+  description:
+    "Records a donor's self-reported UPI payment. The money is not spendable until a bank statement confirms it, and one 12-digit reference can only be claimed once, so a repeat returns 409. Requires Idempotency-Key; identical requests replay.",
+  request: {
+    params: fundIdParam,
+    headers: z.object({ "Idempotency-Key": idempotencyKey }),
+    body: { required: true, content: { "application/json": { schema: donationPledgeInput } } },
+  },
+  responses: {
+    201: withReplay(jsonResponse(donationPledgeSchema, "Pledge recorded")),
+    400: protectedErrors[400],
+    404: protectedErrors[404],
+    409: jsonResponse(errorEnvelope, "Reference already claimed, or idempotency conflict"),
+    413: jsonResponse(errorEnvelope, "Request body too large"),
+    429: limitedResponse,
+    500: internalResponse,
+    503: overloadedResponse,
   },
 });
 
@@ -420,86 +1317,6 @@ export const submitExpenseRoute = createRoute({
   },
   responses: {
     200: withReplay(jsonResponse(expenseSchema, "Expense submitted and funds reserved via hold")),
-    400: withReplay(protectedErrors[400]),
-    401: withReplay(protectedErrors[401]),
-    403: withReplay(protectedErrors[403]),
-    404: withReplay(protectedErrors[404]),
-    409: {
-      ...withReplay(protectedErrors[409]),
-      headers: { ...responseHeaders, ...replayHeader, ...retryHeader },
-    },
-    429: protectedErrors[429],
-    500: protectedErrors[500],
-    503: protectedErrors[503],
-  },
-});
-
-export const approveExpenseRoute = createRoute({
-  method: "post",
-  path: "/v1/funds/{fundId}/expenses/{expenseId}/approve",
-  tags: ["expenses"],
-  operationId: "approveExpense",
-  security,
-  description:
-    "Records a passkey-signed approval for a submitted expense. Reaching quorum transitions submitted -> approved. Emits expense.approved event.",
-  request: {
-    headers: z.object({
-      "Idempotency-Key": idempotencyKey,
-    }),
-    params: z.object({
-      fundId: z
-        .string()
-        .uuid()
-        .openapi({ param: { name: "fundId", in: "path" } }),
-      expenseId: z
-        .string()
-        .uuid()
-        .openapi({ param: { name: "expenseId", in: "path" } }),
-    }),
-    body: { required: true, content: { "application/json": { schema: passkeySignatureInput } } },
-  },
-  responses: {
-    200: withReplay(jsonResponse(expenseSchema, "Approval recorded")),
-    400: withReplay(protectedErrors[400]),
-    401: withReplay(protectedErrors[401]),
-    403: withReplay(protectedErrors[403]),
-    404: withReplay(protectedErrors[404]),
-    409: {
-      ...withReplay(protectedErrors[409]),
-      headers: { ...responseHeaders, ...replayHeader, ...retryHeader },
-    },
-    429: protectedErrors[429],
-    500: protectedErrors[500],
-    503: protectedErrors[503],
-  },
-});
-
-export const rejectExpenseRoute = createRoute({
-  method: "post",
-  path: "/v1/funds/{fundId}/expenses/{expenseId}/reject",
-  tags: ["expenses"],
-  operationId: "rejectExpense",
-  security,
-  description:
-    "Rejects a submitted expense and releases the reserved ledger hold. Transitions submitted -> rejected. Emits expense.rejected event.",
-  request: {
-    headers: z.object({
-      "Idempotency-Key": idempotencyKey,
-    }),
-    params: z.object({
-      fundId: z
-        .string()
-        .uuid()
-        .openapi({ param: { name: "fundId", in: "path" } }),
-      expenseId: z
-        .string()
-        .uuid()
-        .openapi({ param: { name: "expenseId", in: "path" } }),
-    }),
-    body: { required: true, content: { "application/json": { schema: rejectExpenseInput } } },
-  },
-  responses: {
-    200: withReplay(jsonResponse(expenseSchema, "Expense rejected and hold released")),
     400: withReplay(protectedErrors[400]),
     401: withReplay(protectedErrors[401]),
     403: withReplay(protectedErrors[403]),

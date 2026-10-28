@@ -9,6 +9,12 @@ import { paise } from "@yen/shared";
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
 import type { AppDependencies } from "./dependencies.js";
+import {
+  MemoryActionTokenStore,
+  MemoryPinNotificationService,
+  MemoryPinStore,
+  PinService,
+} from "./pin/index.js";
 import { devPolicy } from "./policy.js";
 
 const FUND_ID = "00000000-0000-4000-8000-000000000001";
@@ -22,18 +28,35 @@ function setup(overrides: Partial<AppDependencies> = {}) {
   const idGenerator = vi.fn(
     () => `00000000-0000-4000-8000-${String(sequence++).padStart(12, "0")}`,
   );
+  const clock = () => now;
+  const pinStore = new MemoryPinStore({ clock });
+  const actionTokenStore = new MemoryActionTokenStore({ clock });
+  const pinNotificationService = new MemoryPinNotificationService();
+  const pinSecret = "test_pin_hmac_secret_32_bytes_long_env_kms";
+  const pinService = new PinService({
+    pinStore,
+    actionTokenStore,
+    notificationService: pinNotificationService,
+    pinSecret,
+    otpVerifier: null,
+    clock,
+  });
   const app = createApp({
     principal: REQUESTER,
-    clock: () => now,
+    clock,
     idGenerator,
     policy: devPolicy,
-    // Test-only: this validates challenge binding but does not verify a real signature.
-    approvalProofVerifier: verifyPasskeyBinding,
+    pinStore,
+    actionTokenStore,
+    pinNotificationService,
+    pinSecret,
+    pinService,
     ...overrides,
   });
   return {
     app,
     idGenerator,
+    pinService,
     advance: (ms: number) => {
       now += ms;
     },
@@ -261,17 +284,16 @@ describe("Expense Requests API Routes (YEN-30)", () => {
     expect(selfAppRes.status).toBe(403);
 
     // Approvers sign using approver principals on the same app/store
-    const app1 = setup({ principal: APPROVER_1, expenseStore }).app;
-    const app1Data = createMockPasskeyApproval(
-      APPROVER_1.id as PseudonymId,
-      { id: created.id, fundId: FUND_ID, amountPaise: paise(50000) },
-      new Date().toISOString(),
-    );
+    const approver1Setup = setup({ principal: APPROVER_1, expenseStore });
+    const app1 = approver1Setup.app;
+    await approver1Setup.pinService.setupPin(APPROVER_1.id, "482915", {
+      userId: APPROVER_1.id,
+    });
     const app1Res = await app1.request(
       req(
         "POST",
         `/v1/funds/${FUND_ID}/expenses/${created.id}/approve`,
-        app1Data.passkeySignature,
+        { pin: "482915" },
         "lifecycle-app-1",
       ),
     );
@@ -284,7 +306,7 @@ describe("Expense Requests API Routes (YEN-30)", () => {
       req(
         "POST",
         `/v1/funds/${FUND_ID}/expenses/${created.id}/approve`,
-        app1Data.passkeySignature,
+        { pin: "482915" },
         "lifecycle-app-1",
       ),
     );
@@ -293,17 +315,16 @@ describe("Expense Requests API Routes (YEN-30)", () => {
     expect(await json(approvalRetry)).toEqual(app1Body);
 
     // Approver 2 signs: reaches quorum of 2!
-    const app2 = setup({ principal: APPROVER_2, expenseStore }).app;
-    const app2Data = createMockPasskeyApproval(
-      APPROVER_2.id as PseudonymId,
-      { id: created.id, fundId: FUND_ID, amountPaise: paise(50000) },
-      new Date().toISOString(),
-    );
+    const approver2Setup = setup({ principal: APPROVER_2, expenseStore });
+    const app2 = approver2Setup.app;
+    await approver2Setup.pinService.setupPin(APPROVER_2.id, "482915", {
+      userId: APPROVER_2.id,
+    });
     const app2Res = await app2.request(
       req(
         "POST",
         `/v1/funds/${FUND_ID}/expenses/${created.id}/approve`,
-        app2Data.passkeySignature,
+        { pin: "482915" },
         "lifecycle-app-2",
       ),
     );
@@ -407,12 +428,20 @@ describe("Expense Requests API Routes (YEN-30)", () => {
     );
     expect(unauthorized.status).toBe(403);
 
-    const approverApp = createApp({ principal: APPROVER_1, policy: devPolicy, expenseStore });
-    const result = await approverApp.request(
+    const approverSetup = setup({
+      principal: APPROVER_1,
+      policy: devPolicy,
+      expenseStore,
+      approvalProofVerifier: verifyPasskeyBinding,
+    });
+    await approverSetup.pinService.setupPin(APPROVER_1.id, "482915", {
+      userId: APPROVER_1.id,
+    });
+    const result = await approverSetup.app.request(
       req(
         "POST",
         `/v1/funds/${FUND_ID}/expenses/${created.id}/approve`,
-        forgedProof,
+        { pin: "482915" },
         "proof-forgery",
       ),
     );
@@ -422,7 +451,8 @@ describe("Expense Requests API Routes (YEN-30)", () => {
   });
 
   it("handles rejection flow: draft -> submitted -> rejected", async () => {
-    const { app } = setup();
+    const { app, pinService } = setup();
+    await pinService.setupPin(REQUESTER.id, "482915", { userId: REQUESTER.id });
 
     const createRes = await app.request(
       req(
@@ -446,14 +476,14 @@ describe("Expense Requests API Routes (YEN-30)", () => {
       req(
         "POST",
         `/v1/funds/${FUND_ID}/expenses/${created.id}/reject`,
-        { reason: "policy" },
+        { reason: "policy", pin: "482915" },
         "reject-action",
       ),
     );
     expect(rejectRes.status).toBe(200);
     const rejectedBody = await json(rejectRes);
     expect(rejectedBody.status).toBe("rejected");
-    expect(rejectedBody.rejectionReason).toBe("policy");
+    expect(rejectedBody.reason).toBe("policy");
 
     // Cannot pay a rejected expense
     const payRes = await app.request(

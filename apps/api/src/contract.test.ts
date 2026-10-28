@@ -3,6 +3,8 @@ import { z } from "@hono/zod-openapi";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { expect, it } from "vitest";
 import { createApp } from "./app.js";
+import { DevStubOtpDeliveryProvider, normalizePhone } from "./auth/index.js";
+import { rotateSessionResponse, verifyOtpResponse } from "./contract.js";
 import { ApiError, errorCode, errorStatus } from "./errors.js";
 import { devPolicy } from "./policy.js";
 import { MemoryIdempotencyStore } from "./stores.js";
@@ -74,18 +76,27 @@ it("validates every documented status and sent header against the committed Open
 
   let sequence = 100;
   const idGenerator = () => `00000000-0000-4000-8000-${String(sequence++).padStart(12, "0")}`;
+  let currentTime = 100000;
+  const clock = () => currentTime;
+  const otpDeliveryProvider = new DevStubOtpDeliveryProvider(clock);
   const base = {
     principal: { id: "00000000-0000-4000-8000-000000000001", role: "owner" as const },
     idGenerator,
-    clock: () => 0,
+    clock,
     logger: { log: () => undefined },
     policy: devPolicy,
+    otpDeliveryProvider,
   };
   const app = createApp(base);
   const post = {
     method: "POST",
     headers: { "content-type": "application/json", "Idempotency-Key": "contract" },
-    body: JSON.stringify({ name: "Festival", targetPaise: "10" }),
+    body: JSON.stringify({
+      name: "Festival",
+      targetPaise: "10",
+      upiVpa: "festival@yenbank",
+      upiPayeeName: "Festival Committee",
+    }),
   };
   const created = await app.request("/v1/funds", post);
   const fund = await created.clone().json();
@@ -159,7 +170,9 @@ it("validates every documented status and sent header against the committed Open
     "403": "forbidden",
     "404": "not_found",
     "409": "conflict",
+    "413": "payload_too_large",
     "500": "internal",
+    "504": "gateway_timeout",
   };
   const waitlistPost = {
     method: "POST",
@@ -210,15 +223,140 @@ it("validates every documented status and sent header against the committed Open
       },
     }).request("/v1/waitlist", waitlistPost),
   );
+  const pledgePath = "/v1/funds/{fundId}/donations/pledge";
+  const pledge = (key: string) => ({
+    method: "POST",
+    headers: { "content-type": "application/json", "Idempotency-Key": key },
+    body: JSON.stringify({ amountPaise: "50000", utr: "314159265358" }),
+  });
+  const resolve = (path: string) => path.replace("{fundId}", id);
+
+  const parsedTestPhone = normalizePhone("+919876543210");
+  if (!parsedTestPhone) throw new Error("Invalid test phone");
+  const testPhone = parsedTestPhone;
+
+  const sendRes = await app.request("/v1/auth/otp/send", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ phone: testPhone, channel: "whatsapp" }),
+  });
+  expect(sendRes.status).toBe(200);
+  await check("/v1/auth/otp/send", "post", sendRes);
+
+  const delivered = otpDeliveryProvider.getLastDeliveryFor(testPhone);
+  expect(delivered).toBeDefined();
+
+  const verifyRes = await app.request("/v1/auth/otp/verify", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ phone: testPhone, code: delivered?.code ?? "" }),
+  });
+  expect(verifyRes.status).toBe(200);
+  const authData = verifyOtpResponse.parse(await verifyRes.clone().json());
+  const sessionToken = authData.session.token;
+  await check("/v1/auth/otp/verify", "post", verifyRes);
+
+  const getSessionsRes = await app.request("/v1/auth/sessions", {
+    headers: { authorization: `Bearer ${sessionToken}` },
+  });
+  expect(getSessionsRes.status).toBe(200);
+  await check("/v1/auth/sessions", "get", getSessionsRes);
+
+  const rotateRes = await app.request("/v1/auth/session/rotate", {
+    method: "POST",
+    headers: { authorization: `Bearer ${sessionToken}` },
+  });
+  expect(rotateRes.status).toBe(200);
+  const rotatedData = rotateSessionResponse.parse(await rotateRes.clone().json());
+  const newSessionToken = rotatedData.session.token;
+  await check("/v1/auth/session/rotate", "post", rotateRes);
+
+  // Advance clock past cooldown to create another session
+  currentTime += 70_000;
+  await app.request("/v1/auth/otp/send", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ phone: testPhone, channel: "whatsapp" }),
+  });
+  const delivered2 = otpDeliveryProvider.getLastDeliveryFor(testPhone);
+  const verifyRes2 = await app.request("/v1/auth/otp/verify", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ phone: testPhone, code: delivered2?.code ?? "" }),
+  });
+  const authData2 = verifyOtpResponse.parse(await verifyRes2.json());
+  const session2Id = authData2.session.id;
+
+  // Revoke session 2 from session 1 -> 200
+  const deleteSessionRes = await app.request(`/v1/auth/sessions/${session2Id}`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${newSessionToken}` },
+  });
+  expect(deleteSessionRes.status).toBe(200);
+  await check("/v1/auth/sessions/{sessionId}", "delete", deleteSessionRes);
+
+  // Revoke nonexistent session -> 404
+  const delete404Res = await app.request("/v1/auth/sessions/00000000-0000-4000-8000-999999999999", {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${newSessionToken}` },
+  });
+  expect(delete404Res.status).toBe(404);
+  await check("/v1/auth/sessions/{sessionId}", "delete", delete404Res);
+
+  // Advance clock again
+  currentTime += 70_000;
+  await app.request("/v1/auth/otp/send", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ phone: testPhone, channel: "whatsapp" }),
+  });
+  const delivered3 = otpDeliveryProvider.getLastDeliveryFor(testPhone);
+  const verifyRes3 = await app.request("/v1/auth/otp/verify", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ phone: testPhone, code: delivered3?.code ?? "" }),
+  });
+  const authData3 = verifyOtpResponse.parse(await verifyRes3.json());
+  const session3Token = authData3.session.token;
+
+  // Logout session 3 -> 200
+  const logoutRes = await app.request("/v1/auth/logout", {
+    method: "POST",
+    headers: { authorization: `Bearer ${session3Token}` },
+  });
+  expect(logoutRes.status).toBe(200);
+  await check("/v1/auth/logout", "post", logoutRes);
+
+  // Logout all with session 1 -> 200
+  const logoutAllRes = await app.request("/v1/auth/logout-all", {
+    method: "POST",
+    headers: { authorization: `Bearer ${newSessionToken}` },
+  });
+  expect(logoutAllRes.status).toBe(200);
+  await check("/v1/auth/logout-all", "post", logoutAllRes);
   for (const [path, methods] of Object.entries(document.paths)) {
-    if (path === "/v1/waitlist" || path.includes("/expenses")) continue;
+    if (
+      path === "/v1/waitlist" ||
+      path.startsWith("/v1/auth/") ||
+      path.includes("/expenses") ||
+      path.endsWith("/payee") ||
+      path.endsWith("/policy") ||
+      path.endsWith("/members") ||
+      path.endsWith("/remove")
+    )
+      continue;
     for (const [method, operation] of Object.entries(methods)) {
       for (const status of Object.keys(operation.responses)) {
         if (status === "200") {
-          const url = path === "/v1/funds/{fundId}" ? `/v1/funds/${id}` : path;
-          await check(path, method, await app.request(url));
+          await check(path, method, await app.request(resolve(path)));
         } else if (status === "201") {
-          await check(path, method, await app.request("/v1/funds", post));
+          await check(
+            path,
+            method,
+            path === pledgePath
+              ? await app.request(resolve(path), pledge("pledge-201"))
+              : await app.request("/v1/funds", post),
+          );
         } else if (status === "503") {
           await check(
             path,
@@ -239,7 +377,13 @@ it("validates every documented status and sent header against the committed Open
         } else if (status === "429") {
           await check(path, method, await rateLimited.request("/v1/me"));
         } else if (status === "409" && method === "post") {
-          await check(path, method, await conflict.request("/v1/funds", post));
+          await check(
+            path,
+            method,
+            path === pledgePath
+              ? await app.request(resolve(path), pledge("pledge-409"))
+              : await conflict.request("/v1/funds", post),
+          );
         } else {
           const code = errorCode.parse(errorCodes[status]);
           const errorApp = createApp(base);
