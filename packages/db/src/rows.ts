@@ -57,6 +57,13 @@ export const pseudonymRowSchema = z.object({
   user_id: userId,
 });
 
+export const fundPseudonymRowSchema = z.object({
+  pseudonym_id: z.uuid(),
+  user_id: userId,
+  fund_id: fundId,
+  created_at: z.date(),
+});
+
 export const idempotencyKeyRowSchema = z.object({
   key: z.string(),
   request_hash: z.string(),
@@ -92,6 +99,7 @@ export type OrgRow = z.infer<typeof orgRowSchema>;
 export type FundRow = z.infer<typeof fundRowSchema>;
 export type MembershipRow = z.infer<typeof membershipRowSchema>;
 export type PseudonymRow = z.infer<typeof pseudonymRowSchema>;
+export type FundPseudonymRow = z.infer<typeof fundPseudonymRowSchema>;
 export type IdempotencyKeyRow = z.infer<typeof idempotencyKeyRowSchema>;
 export type FundEventRow = z.infer<typeof fundEventRowSchema>;
 export type RateLimitRow = z.infer<typeof rateLimitRowSchema>;

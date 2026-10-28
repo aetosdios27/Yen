@@ -23,6 +23,10 @@ export {
 } from "./foreign-keys.js";
 export { migrate } from "./migrate.js";
 export {
+  type EnsureFundPseudonymParams,
+  ensureFundPseudonym,
+} from "./pseudonyms.js";
+export {
   assertAllRegisteredQueryPlans,
   explainQuery,
   getTableEstimatedRowCounts,
@@ -42,8 +46,10 @@ export {
 } from "./query-registry.js";
 export {
   type FundEventRow,
+  type FundPseudonymRow,
   type FundRow,
   fundEventRowSchema,
+  fundPseudonymRowSchema,
   fundRowSchema,
   type IdempotencyKeyRow,
   idempotencyKeyRowSchema,
