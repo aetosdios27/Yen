@@ -60,7 +60,7 @@ it("runs injected readiness independently of liveness", async () => {
   expect((await app.request("/health")).status).toBe(200);
   expect(readiness).not.toHaveBeenCalled();
   const response = await app.request("/ready");
-  expect(response.status).toBe(500);
+  expect(response.status).toBe(503);
   expect(errorEnvelope.parse(await response.json()).error.code).toBe("internal");
 });
 
@@ -125,7 +125,7 @@ it.each([
       request,
       kind === "validation" ? { ...post(), body: "{" } : undefined,
     );
-    expect(response.status).toBe(kind === "validation" ? 400 : 500);
+    expect(response.status).toBe(kind === "validation" ? 400 : kind === "readiness" ? 503 : 500);
     expect(entries.filter((entry) => entry.event === "http_failure")).toEqual([
       {
         event: "http_failure",

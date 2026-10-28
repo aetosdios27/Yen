@@ -1,0 +1,65 @@
+/**
+ * Yen design tokens (YEN-13).
+ *
+ * Body text never drops below 16 px, interactive controls never drop below
+ * 48 px, and every foreground/background pair used for text is checked by
+ * `tokens.test.ts`. Keep the values in this file and that test in sync.
+ */
+@theme {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans",
+    "Noto Sans Devanagari", sans-serif;
+
+  /* Type scale: 18 px body, 16 px supporting text. */
+  --text-small: 1rem;
+  --text-small--line-height: 1.5;
+  --text-body: 1.125rem;
+  --text-body--line-height: 1.65;
+  --text-lead: 1.25rem;
+  --text-lead--line-height: 1.5;
+  --text-title: 1.5rem;
+  --text-title--line-height: 1.35;
+  --text-heading: 1.875rem;
+  --text-heading--line-height: 1.25;
+  --text-display: 2.25rem;
+  --text-display--line-height: 1.2;
+
+  /* Surfaces and text. ink on canvas is 16.4:1; muted ink is 7.3:1. */
+  --color-canvas: #ffffff;
+  --color-surface: #f4f7f5;
+  --color-ink: #10231a;
+  --color-ink-muted: #445c50;
+  --color-border: #d4ded8;
+  --color-border-strong: #5f756a;
+
+  /* Actions. White on primary is 9.1:1 and white on danger is 8.3:1. */
+  --color-primary: #14532d;
+  --color-primary-hover: #0f3f22;
+  --color-primary-subtle: #dcfce7;
+  --color-on-solid: #ffffff;
+  --color-danger: #991b1b;
+  --color-danger-hover: #7f1d1d;
+
+  /* 6.7:1 on white, above the 3:1 non-text requirement. */
+  --color-focus: #1d4ed8;
+
+  /* Status colours pair with a word and an icon, never colour alone. */
+  --color-verified-bg: #dcfce7;
+  --color-verified-ink: #14532d;
+  --color-verified-border: #86efac;
+  --color-pending-bg: #fef9c3;
+  --color-pending-ink: #78350f;
+  --color-pending-border: #fde047;
+  --color-unmatched-bg: #ffedd5;
+  --color-unmatched-ink: #7c2d12;
+  --color-unmatched-border: #fdba74;
+  --color-rejected-bg: #fee2e2;
+  --color-rejected-ink: #7f1d1d;
+  --color-rejected-border: #fca5a5;
+
+  --spacing-tap: 3rem;
+  --container-phone: 23.4375rem;
+  --radius-control: 0.625rem;
+  --radius-card: 1rem;
+  --shadow-card: 0 1px 2px rgb(16 35 26 / 0.06), 0 12px 32px rgb(16 35 26 / 0.08);
+}

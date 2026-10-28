@@ -5,6 +5,10 @@ import { idempotencyKey } from "./contract.js";
 import type { ApiEnv, AppDependencies } from "./dependencies.js";
 import { ApiError, StoreError } from "./errors.js";
 
+export function isWaitlistRoute(path: string): boolean {
+  return path.replace(/\/$/, "") === "/v1/waitlist";
+}
+
 async function storeCall<T>(operation: () => Promise<T>): Promise<T> {
   try {
     return await operation();
@@ -31,6 +35,10 @@ export function requestContext(deps: AppDependencies): MiddlewareHandler<ApiEnv>
     c.header("x-request-id", c.get("requestId"));
     const started = deps.clock();
     await next();
+    if (isWaitlistRoute(c.req.path)) {
+      const remaining = deps.waitlistMinResponseMs - (deps.clock() - started);
+      if (remaining > 0) await deps.sleep(remaining);
+    }
     c.header("x-request-id", c.get("requestId"));
     const parsedMethod = method.safeParse(c.req.method);
     deps.logger.log({
@@ -47,17 +55,52 @@ export function requestContext(deps: AppDependencies): MiddlewareHandler<ApiEnv>
 export function rateLimit(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
   return async (c, next) => {
     const principal = c.get("principal");
-    const limits = [
-      { key: JSON.stringify(["ip", deps.clientIp(c)]), limit: deps.rateLimits.ip },
-      ...(principal
-        ? [{ key: JSON.stringify(["principal", principal.id]), limit: deps.rateLimits.principal }]
-        : []),
-    ];
+    const isWaitlist = isWaitlistRoute(c.req.path);
+    const now = deps.clock();
+    const limits = isWaitlist
+      ? [
+          {
+            key: JSON.stringify([
+              "waitlist",
+              deps.clientIp(c),
+              Math.floor(now / deps.waitlistLimit.refillMs),
+            ]),
+            limit: {
+              capacity: deps.waitlistLimit.capacity,
+              refillMs: deps.waitlistLimit.refillMs,
+              expiresAt:
+                (Math.floor(now / deps.waitlistLimit.refillMs) + 1) * deps.waitlistLimit.refillMs,
+            },
+          },
+        ]
+      : [
+          { key: JSON.stringify(["ip", deps.clientIp(c)]), limit: deps.rateLimits.ip },
+          ...(principal
+            ? [
+                {
+                  key: JSON.stringify(["principal", principal.id]),
+                  limit: deps.rateLimits.principal,
+                },
+              ]
+            : []),
+        ];
     for (const { key, limit } of limits) {
-      const result = await storeCall(() => deps.rateLimitStore.consume(key, limit, deps.clock()));
+      const result = await storeCall(() => deps.rateLimitStore.consume(key, limit, now));
       if (!result.allowed) {
-        c.header("retry-after", String(result.retryAfterSeconds));
-        throw new ApiError("rate_limited");
+        c.header(
+          "retry-after",
+          String(
+            isWaitlist && !result.overloaded
+              ? Math.max(
+                  1,
+                  Math.ceil(
+                    (deps.waitlistLimit.refillMs - (now % deps.waitlistLimit.refillMs)) / 1000,
+                  ),
+                )
+              : result.retryAfterSeconds,
+          ),
+        );
+        throw new ApiError(result.overloaded ? "overloaded" : "rate_limited");
       }
     }
     await next();
@@ -66,7 +109,8 @@ export function rateLimit(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
 
 export function idempotency(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
   return async (c, next) => {
-    if (["GET", "HEAD", "OPTIONS"].includes(c.req.method)) return next();
+    if (["GET", "HEAD", "OPTIONS"].includes(c.req.method) || isWaitlistRoute(c.req.path))
+      return next();
     const principal = c.get("principal");
     if (!principal) throw new ApiError("unauthenticated");
     const key = idempotencyKey.safeParse(c.req.header("Idempotency-Key"));
