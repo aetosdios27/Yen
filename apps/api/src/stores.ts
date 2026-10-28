@@ -253,3 +253,51 @@ export class MemoryRateLimitStore implements RateLimitStore {
     }
   }
 }
+
+export type AllowedEvidenceMimeType = "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
+
+export interface StoredEvidence {
+  readonly evidenceId: string;
+  readonly fundId: string;
+  readonly expenseId: string;
+  readonly fileSha256: string;
+  readonly mimeType: AllowedEvidenceMimeType;
+  readonly fileSizeBytes: number;
+  readonly duplicateDetected: boolean;
+  readonly isDuplicate: boolean;
+  readonly duplicateExpenseId?: string | undefined;
+  readonly vendorName?: string | undefined;
+  readonly gstin?: string | undefined;
+  readonly invoiceNumber?: string | undefined;
+  readonly invoiceDate?: string | undefined;
+  readonly createdAt: string;
+}
+
+export interface EvidenceStore {
+  save(evidence: StoredEvidence): Promise<StoredEvidence>;
+  getByExpense(fundId: string, expenseId: string): Promise<readonly StoredEvidence[]>;
+  findBySha256(sha256: string): Promise<readonly StoredEvidence[]>;
+}
+
+export class MemoryEvidenceStore implements EvidenceStore {
+  private readonly records = new Map<string, StoredEvidence>();
+  private readonly byHash = new Map<string, StoredEvidence[]>();
+
+  async save(evidence: StoredEvidence): Promise<StoredEvidence> {
+    this.records.set(evidence.evidenceId, evidence);
+    const list = this.byHash.get(evidence.fileSha256) ?? [];
+    list.push(evidence);
+    this.byHash.set(evidence.fileSha256, list);
+    return evidence;
+  }
+
+  async getByExpense(fundId: string, expenseId: string): Promise<readonly StoredEvidence[]> {
+    return Array.from(this.records.values()).filter(
+      (e) => e.fundId === fundId && e.expenseId === expenseId,
+    );
+  }
+
+  async findBySha256(sha256: string): Promise<readonly StoredEvidence[]> {
+    return this.byHash.get(sha256) ?? [];
+  }
+}

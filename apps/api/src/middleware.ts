@@ -9,6 +9,10 @@ export function isWaitlistRoute(path: string): boolean {
   return path.replace(/\/$/, "") === "/v1/waitlist";
 }
 
+export function isEvidenceRoute(path: string): boolean {
+  return /\/v1\/funds\/[^/]+\/expenses\/[^/]+\/evidence\/?$/.test(path);
+}
+
 async function storeCall<T>(operation: () => Promise<T>): Promise<T> {
   try {
     return await operation();
@@ -111,6 +115,9 @@ export function idempotency(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
   return async (c, next) => {
     if (["GET", "HEAD", "OPTIONS"].includes(c.req.method) || isWaitlistRoute(c.req.path))
       return next();
+    if (isEvidenceRoute(c.req.path) && !c.req.header("Idempotency-Key")) {
+      return next();
+    }
     const principal = c.get("principal");
     if (!principal) throw new ApiError("unauthenticated");
     const key = idempotencyKey.safeParse(c.req.header("Idempotency-Key"));

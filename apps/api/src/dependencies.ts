@@ -4,12 +4,17 @@ import { rateLimitEnv, rateLimits } from "./config.js";
 import { jsonLogger, type Logger } from "./logging.js";
 import { denyAllPolicy, type Policy } from "./policy.js";
 import {
+  type EvidenceStore,
   type IdempotencyStore,
+  MemoryEvidenceStore,
   MemoryIdempotencyStore,
   MemoryRateLimitStore,
   type RateLimit,
   type RateLimitStore,
+  type StoredEvidence,
 } from "./stores.js";
+
+export { type EvidenceStore, MemoryEvidenceStore, type StoredEvidence };
 
 export interface Principal {
   readonly id: string;
@@ -39,6 +44,7 @@ export interface AppDependencies {
   readonly waitlistStore: WaitlistStore;
   readonly waitlistLimit: RateLimit;
   readonly waitlistBodyLimit: number;
+  readonly evidenceStore: EvidenceStore;
   readonly clock: () => number;
   readonly sleep: (ms: number) => Promise<void>;
   readonly waitlistMinResponseMs: number;
@@ -59,6 +65,7 @@ export function defaultDependencies(clock: () => number = Date.now): AppDependen
     waitlistStore: new MemoryWaitlistStore(),
     waitlistLimit: { capacity: 5, refillMs: 3600000 },
     waitlistBodyLimit: 8192,
+    evidenceStore: new MemoryEvidenceStore(),
     clock,
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     waitlistMinResponseMs: 75,
