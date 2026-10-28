@@ -14,7 +14,6 @@ describe("evidence storage keys and filenames", () => {
   it("rejects traversal identifiers and untrusted nonces in storage keys", () => {
     expect(() => buildOpaqueEvidenceKey(fundId, "../../expense", evidenceId)).toThrow();
     expect(() => buildOpaqueEvidenceKey(fundId, expenseId, "../../evidence")).toThrow();
-    expect(() => buildOpaqueEvidenceKey(fundId, expenseId, evidenceId, "../key")).toThrow();
   });
 
   it("uses a fresh unguessable nonce for each key", () => {

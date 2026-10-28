@@ -304,10 +304,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const _sanitizedPreviewBytes = stripExifMetadata(bytes, file.type);
 
     // Duplicate detection across expenses ONLY within authorized fund scope (prevent cross-fund disclosure)
-    const existingEvidence = await deps.evidenceStore.findBySha256(fileSha256);
-    const duplicateInSameFund = existingEvidence.find(
-      (e) => e.fundId === fundParam.value && e.expenseId !== expenseId,
-    );
+    const existingEvidence = await deps.evidenceStore.findBySha256(fundParam.value, fileSha256);
+    const duplicateInSameFund = existingEvidence.find((e) => e.expenseId !== expenseId);
     const duplicateDetected = duplicateInSameFund !== undefined;
 
     const record: StoredEvidence = {

@@ -34,13 +34,12 @@ export function buildOpaqueEvidenceKey(
   fundId: string,
   expenseId: string,
   evidenceId: string,
-  nonce: string = crypto.randomBytes(16).toString("hex"),
 ): string {
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   if (!uuid.test(fundId) || !uuid.test(expenseId) || !uuid.test(evidenceId)) {
     throw new Error("Invalid identifiers for evidence storage key construction");
   }
-  if (!/^[a-f0-9]{32}$/.test(nonce)) throw new Error("Invalid storage key nonce");
+  const nonce = crypto.randomBytes(16).toString("hex");
   return `funds/${fundId}/expenses/${expenseId}/evidence/${evidenceId}/${nonce}`;
 }
 

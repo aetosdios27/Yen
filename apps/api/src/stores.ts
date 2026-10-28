@@ -278,7 +278,7 @@ export interface StoredEvidence {
 export interface EvidenceStore {
   save(evidence: StoredEvidence): Promise<StoredEvidence>;
   getByExpense(fundId: string, expenseId: string): Promise<readonly StoredEvidence[]>;
-  findBySha256(sha256: string): Promise<readonly StoredEvidence[]>;
+  findBySha256(fundId: string, sha256: string): Promise<readonly StoredEvidence[]>;
 }
 
 export class MemoryEvidenceStore implements EvidenceStore {
@@ -299,7 +299,7 @@ export class MemoryEvidenceStore implements EvidenceStore {
     );
   }
 
-  async findBySha256(sha256: string): Promise<readonly StoredEvidence[]> {
-    return this.byHash.get(sha256) ?? [];
+  async findBySha256(fundId: string, sha256: string): Promise<readonly StoredEvidence[]> {
+    return (this.byHash.get(sha256) ?? []).filter((evidence) => evidence.fundId === fundId);
   }
 }
