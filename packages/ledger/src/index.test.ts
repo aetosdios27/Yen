@@ -3,6 +3,7 @@ import * as ledger from "./index.js";
 
 it("exports all required ledger and Konto primitives", () => {
   expect(typeof ledger.recordDonation).toBe("function");
+  expect(typeof ledger.pledgeDonation).toBe("function");
   expect(typeof ledger.reserveForExpense).toBe("function");
   expect(typeof ledger.settleExpense).toBe("function");
   expect(typeof ledger.releaseExpense).toBe("function");
