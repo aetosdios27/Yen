@@ -1,18 +1,15 @@
-"use client";
+import type { Metadata } from "next";
+import { catalog } from "../../i18n/catalog";
 
-import { Button } from "../../components";
-import { useDocumentTitle, useI18n } from "../../i18n";
+export const metadata: Metadata = { title: "You are offline" };
+
+// This page is served by the service worker when a request fails, possibly before any of its
+// scripts were ever cached. It therefore needs no JavaScript: both languages are printed as plain
+// HTML and "try again" is an ordinary link rather than a button with a click handler.
+const en = catalog.en.offline;
+const hi = catalog.hi.offline;
 
 export default function OfflinePage() {
-  const { t } = useI18n();
-  useDocumentTitle("offline.title");
-
-  const handleRetry = () => {
-    if (typeof window !== "undefined") {
-      window.location.reload();
-    }
-  };
-
   return (
     <div className="mx-auto flex max-w-[var(--container-phone)] flex-col items-center justify-center px-4 py-16 text-center">
       <div
@@ -41,12 +38,27 @@ export default function OfflinePage() {
           <line x1="12" y1="20" x2="12.01" y2="20" />
         </svg>
       </div>
-      <h1 className="text-heading font-semibold text-ink">{t("offline.title")}</h1>
-      <p className="mt-4 text-body text-ink-muted">{t("offline.message")}</p>
+      <h1 className="text-heading font-semibold text-ink" lang="en">
+        {en.title}
+      </h1>
+      <p className="mt-4 text-body text-ink-muted" lang="en">
+        {en.message}
+      </p>
+      <h2 className="mt-8 text-heading font-semibold text-ink" lang="hi">
+        {hi.title}
+      </h2>
+      <p className="mt-4 text-body text-ink-muted" lang="hi">
+        {hi.message}
+      </p>
       <div className="mt-8">
-        <Button variant="primary" onClick={handleRetry}>
-          {t("offline.retry")}
-        </Button>
+        <a
+          href="/"
+          className="tap-target inline-flex items-center justify-center gap-2 rounded-control border-2 border-primary bg-primary px-5 py-3 text-body font-semibold text-on-solid transition-colors hover:bg-primary-hover"
+        >
+          <span lang="en">{en.retry}</span>
+          <span aria-hidden="true">·</span>
+          <span lang="hi">{hi.retry}</span>
+        </a>
       </div>
     </div>
   );

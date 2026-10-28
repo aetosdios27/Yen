@@ -44,4 +44,62 @@ describe("service worker script", () => {
     expect(typeof rules.shouldCache).toBe("function");
     expect(rules.CACHE_NAME).toMatch(/^yen-/);
   });
+
+  it("keeps the worker alive for the cache write and survives a failed write", async () => {
+    const { scope, listeners } = loadWorker();
+    let resolvePut!: () => void;
+    const putCalls: Array<Promise<void>> = [];
+    const cache = {
+      match: async () => undefined,
+      put: () => {
+        const write = new Promise<void>((resolve, reject) => {
+          resolvePut = resolve;
+          setTimeout(() => reject(new Error("quota")), 0);
+        });
+        putCalls.push(write);
+        return write;
+      },
+    };
+    // A bare vm context has no web platform globals; a real worker does.
+    scope.URL = URL;
+    scope.caches = { open: async () => cache };
+    const networkResponse = {
+      status: 200,
+      type: "basic",
+      headers: new Headers({ "content-type": "text/css" }),
+      clone() {
+        return this;
+      },
+    };
+    scope.fetch = async () => networkResponse;
+    const warnings: string[] = [];
+    scope.console = { warn: (message: string) => warnings.push(message) };
+
+    const waits: Array<Promise<unknown>> = [];
+    let response: Promise<unknown> | undefined;
+    const event = {
+      request: {
+        url: "http://localhost:3000/_next/static/app.css",
+        method: "GET",
+        mode: "no-cors",
+        destination: "style",
+        headers: new Headers({ accept: "text/css" }),
+      },
+      respondWith: (value: Promise<unknown>) => {
+        response = value;
+      },
+      waitUntil: (value: Promise<unknown>) => {
+        waits.push(value);
+      },
+    };
+    (listeners.fetch as (e: unknown) => void)(event);
+
+    // The good network response still comes back even though the write is rejected.
+    await expect(response).resolves.toBe(networkResponse);
+    expect(waits).toHaveLength(1);
+    await waits[0];
+    expect(putCalls).toHaveLength(1);
+    expect(warnings.join(" ")).toMatch(/could not save/);
+    resolvePut?.();
+  });
 });

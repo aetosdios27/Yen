@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface BeforeInstallPromptEvent extends Event {
@@ -54,35 +55,30 @@ export function useInstallPrompt(options: UseInstallPromptOptions = {}) {
   const [hasUsefulActivity, setHasUsefulActivity] = useState(false);
   const deferredPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
 
+  const pathname = usePathname();
+  const lastCountedPath = useRef<string | null | undefined>(undefined);
+
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
 
-    // Check if dismissed and not expired
-    const dismissedUntil = window.localStorage?.getItem(storageKey);
-    if (dismissedUntil) {
-      const expiry = Number(dismissedUntil);
-      if (!Number.isNaN(expiry) && expiry > Date.now()) {
-        setIsDismissed(true);
-        return;
-      }
-      // Expired: clean it up
-      window.localStorage?.removeItem(storageKey);
-    }
-
-    // Track session page views (first view = 1, second view = 2, etc.)
-    let currentViews = 1;
+    // Check if dismissed and not expired. Storage can throw when the browser blocks it, in which
+    // case nothing was stored and the banner may show.
     try {
-      const stored = window.sessionStorage?.getItem(sessionKey);
-      currentViews = (stored ? Number(stored) : 0) + 1;
-      window.sessionStorage?.setItem(sessionKey, String(currentViews));
+      const dismissedUntil = window.localStorage?.getItem(storageKey);
+      if (dismissedUntil) {
+        const expiry = Number(dismissedUntil);
+        if (!Number.isNaN(expiry) && expiry > Date.now()) {
+          setIsDismissed(true);
+          return;
+        }
+        // Expired: clean it up
+        window.localStorage?.removeItem(storageKey);
+      }
     } catch {
-      // sessionStorage might be disabled in private mode
+      // localStorage blocked: carry on with the in-memory default
     }
-
-    const useful = trigger || currentViews >= minPageViews;
-    setHasUsefulActivity(useful);
 
     // Detect iOS (where beforeinstallprompt is not supported)
     const userAgent = window.navigator.userAgent.toLowerCase();
@@ -109,7 +105,29 @@ export function useInstallPrompt(options: UseInstallPromptOptions = {}) {
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     };
-  }, [trigger, minPageViews, storageKey, sessionKey]);
+  }, [storageKey]);
+
+  // Count one page view per route change. The shell that hosts this hook stays mounted during
+  // client-side navigation, so counting only on mount would never reach the threshold.
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (lastCountedPath.current === pathname) {
+      return;
+    }
+    lastCountedPath.current = pathname;
+
+    let currentViews = 1;
+    try {
+      const stored = window.sessionStorage?.getItem(sessionKey);
+      currentViews = (stored ? Number(stored) : 0) + 1;
+      window.sessionStorage?.setItem(sessionKey, String(currentViews));
+    } catch {
+      // sessionStorage might be disabled in private mode
+    }
+    setHasUsefulActivity(trigger || currentViews >= minPageViews);
+  }, [pathname, trigger, minPageViews, sessionKey]);
 
   const promptInstall = useCallback(async () => {
     if (!deferredPromptRef.current) {

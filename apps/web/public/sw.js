@@ -54,7 +54,13 @@ self.addEventListener("fetch", (event) => {
         }
         const networkResponse = await fetch(request);
         if (shouldCache(request, networkResponse)) {
-          cache.put(request, networkResponse.clone());
+          // Keep the worker alive until the write finishes, and report a failed write without
+          // losing the good network response we are about to return.
+          event.waitUntil(
+            cache.put(request, networkResponse.clone()).catch(() => {
+              console.warn("Yen could not save a static file for offline use.");
+            }),
+          );
         }
         return networkResponse;
       }),

@@ -9,10 +9,14 @@ function renderWithI18n(ui: React.ReactElement, locale = "en") {
   return render(<LocaleProvider initialLocale={locale as "en"}>{ui}</LocaleProvider>);
 }
 
+let mockPathname: string | null = "/";
+vi.mock("next/navigation", () => ({ usePathname: () => mockPathname }));
+
 describe("InstallPrompt component", () => {
   const originalUserAgent = window.navigator.userAgent;
 
   beforeEach(() => {
+    mockPathname = "/";
     window.localStorage.clear();
     window.sessionStorage.clear();
     vi.restoreAllMocks();
@@ -41,6 +45,42 @@ describe("InstallPrompt component", () => {
     });
     return status;
   }
+
+  it("counts a page view when the route changes without the shell remounting", () => {
+    const view = renderWithI18n(<InstallPrompt />);
+    triggerBeforeInstallPrompt();
+    expect(screen.queryByRole("region", { name: "Install Yen" })).toBeNull();
+
+    mockPathname = "/design-system";
+    view.rerender(
+      <LocaleProvider initialLocale="en">
+        <InstallPrompt />
+      </LocaleProvider>,
+    );
+
+    expect(window.sessionStorage.getItem("yen_pwa_session_views")).toBe("2");
+    expect(screen.getByRole("region", { name: "Install Yen" })).toBeDefined();
+  });
+
+  it("does not count the same route twice", () => {
+    const view = renderWithI18n(<InstallPrompt />);
+    view.rerender(
+      <LocaleProvider initialLocale="en">
+        <InstallPrompt />
+      </LocaleProvider>,
+    );
+    expect(window.sessionStorage.getItem("yen_pwa_session_views")).toBe("1");
+  });
+
+  it("still renders when the browser blocks localStorage entirely", () => {
+    window.sessionStorage.setItem("yen_pwa_session_views", "1");
+    const blocked = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new DOMException("blocked", "SecurityError");
+    });
+    expect(() => renderWithI18n(<InstallPrompt />)).not.toThrow();
+    triggerBeforeInstallPrompt();
+    blocked.mockRestore();
+  });
 
   it("is NEVER shown on first paint without trigger or second page view", () => {
     const { container } = renderWithI18n(<InstallPrompt />);
