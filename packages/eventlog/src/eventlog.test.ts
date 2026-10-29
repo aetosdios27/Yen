@@ -840,6 +840,9 @@ describe("chain verification", () => {
     );
   }, 30_000);
 
+  // Exhaustive: every field and every hash byte of every pinned event re-verifies the whole
+  // chain, so cost grows with the number of golden events. It took 21-30 s on CI against a
+  // 30 s limit and began failing once more events were pinned; the limit follows the cost.
   it("covers every pinned event field and each of its 32 hash bytes", async () => {
     for (const [index, event] of events.entries()) {
       const fieldCount = Object.keys(event).length + Object.keys(event.payload).length;
@@ -861,7 +864,7 @@ describe("chain verification", () => {
         ).toBe(false);
       }
     }
-  }, 30_000);
+  }, 120_000);
 
   it("detects removal, reordering, duplication, and insertion", async () => {
     await fc.assert(
