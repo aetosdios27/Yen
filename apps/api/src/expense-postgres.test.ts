@@ -652,6 +652,81 @@ databaseSuite("Postgres expense store", (sql, url) => {
     expect(everyActor[0]?.filter((actor) => everyActor[1]?.includes(actor))).toEqual([]);
   });
 
+  it("blocks approval while a fraud flag is unacknowledged and while an objection is open", async () => {
+    const fundId = await fund();
+    const actorUserId = uuidv7();
+    const startAt = Date.now() + 10_000;
+    const at = (hours: number) => new Date(startAt + hours * 3_600_000).toISOString();
+    const phone = `+91${randomInt(1_000_000_000, 10_000_000_000)}`;
+    await sql`INSERT INTO users (id, phone, display_name) VALUES (${actorUserId}, ${phone}, 'Flagged Objector')`;
+    const { recordDonation, SYSTEM_ACTOR, UnacknowledgedFraudFlagsError } = await import(
+      "@yen/ledger"
+    );
+    await sql.begin((tx) =>
+      recordDonation(tx, { fundId, amount: paise(5000), actorPseudonym: SYSTEM_ACTOR }),
+    );
+    const expenseStore = new PostgresExpenseStore(sql);
+    const objectionStore = new PostgresExpenseObjectionStore(sql);
+    const policy = { approvalQuorum: 1, objectionWindowHours: 24, autoExpireHours: 72 } as const;
+    const expense = draft(fundId);
+    await expenseStore.save(expense);
+    const flag = { code: "self_payment" as const, reason: "Payee matches the requester" };
+    const submitted = await expenseStore.save(
+      { ...expense, status: "submitted", holdId: uuidv7(), submittedAt: at(0), fraudFlags: [flag] },
+      { policy },
+    );
+    if (!submitted?.holdId) throw new Error("Submitted expense did not create a hold");
+    await objectionStore.raise({
+      expenseId: expense.id,
+      actorUserId,
+      reason: "Please clarify the payee",
+      idempotencyKey: "raise-fraud-and-objection",
+      nowUtc: at(1),
+    });
+    const approverApproval = (approvedAt: string) => ({
+      approverId: `psn_${uuidv7()}` as PseudonymId,
+      passkeySignature: {
+        credentialId: "pin",
+        signatureHex: "00",
+        clientDataJson: "{}",
+        authenticatorDataHex: "00",
+      },
+      approvedAt,
+    });
+
+    // Fraud flag unacknowledged and objection open: approval is rejected by the fraud gate.
+    await expect(
+      expenseStore.atomicApprove(expense.id, approverApproval(at(30)), policy, verified, at(30)),
+    ).rejects.toThrow(UnacknowledgedFraudFlagsError);
+
+    // Owner acknowledges the flag; the open objection still blocks quorum after its window closed.
+    const current = await expenseStore.get(expense.id);
+    if (!current) throw new Error("Expense not found");
+    await expenseStore.save(
+      {
+        ...current,
+        fraudAcknowledgements: [
+          {
+            code: "self_payment",
+            actorPseudonym: `psn_${uuidv7()}` as PseudonymId,
+            reason: "Reviewed with the requester",
+            acknowledgedAt: at(2),
+          },
+        ],
+      },
+      { policy },
+    );
+    const blocked = await expenseStore.atomicApprove(
+      expense.id,
+      approverApproval(at(30)),
+      policy,
+      verified,
+      at(30),
+    );
+    expect(blocked.reachedQuorum).toBe(false);
+    expect(blocked.expense.status).toBe("submitted");
+  });
+
   it("traces API approval and payment on Postgres without personal span attributes", async () => {
     spanExporter.reset();
     const ownerId = uuidv7();
