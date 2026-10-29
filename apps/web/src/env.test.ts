@@ -51,5 +51,6 @@ it.each([undefined, "", "invalid-private-value", "/api", "ftp://example.com"])(
 );
 
 it("skips runtime env validation during production builds", async () => {
-  await expect(nextConfig(PHASE_PRODUCTION_BUILD)).resolves.toEqual({});
+  const config = await nextConfig(PHASE_PRODUCTION_BUILD);
+  expect(await config.generateBuildId?.()).toMatch(/^[0-9a-f]{40}$/);
 });

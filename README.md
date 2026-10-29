@@ -77,7 +77,7 @@ We only claim what a skeptic can check.
 | Monorepo           | pnpm workspaces, Turborepo                                                                             |
 | Quality            | Biome, Vitest, Foundry, Playwright (planned)                                                           |
 | Web app            | Next.js with a shared design system and EN/HI i18n; PWA planned                                        |
-| API                | Hono HTTP service with a health endpoint                                                               |
+| API                | Hono HTTP service with health, readiness and build version endpoints                                   |
 | Data & ledger      | PostgreSQL 16, [Konto](https://github.com/aetosdios27/Konto) double-entry ledger integration (planned) |
 | Event log          | Hash-chained event log (planned)                                                                       |
 | Proofs & anchoring | SHA-256, Merkle trees, Polygon Amoy testnet anchoring (planned for MVP)                                |
@@ -101,7 +101,7 @@ Delivery is structured into six focus areas:
 
 ```
 apps/web/         Next.js app, design system and EN/HI i18n
-apps/api/         Hono HTTP service with a health endpoint
+apps/api/         Hono HTTP service with health, readiness and build version endpoints
 packages/shared/  Integer paise, branded IDs, Merkle proofs
 packages/ledger/  Placeholder for ledger integration
 packages/eventlog/ Placeholder for the append-only event log
@@ -115,7 +115,7 @@ Money is always **integer paise** with the branded `Paise` type, never floats. <
 ## Getting started
 
 ```sh
-nvm use                # Node 24 (see .nvmrc)
+nvm use                # Node 24.21.0 (see .nvmrc)
 pnpm install
 pnpm verify            # biome ci + typecheck + test + build
 ```

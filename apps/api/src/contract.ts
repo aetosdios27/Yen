@@ -124,6 +124,10 @@ export const fundSchema = z
   .openapi("Fund");
 
 const statusSchema = z.object({ status: z.literal("ok") });
+const versionSchema = z
+  .object({ gitSha: z.string(), buildId: z.string() })
+  .strict()
+  .openapi("Version");
 
 export const healthRoute = createRoute({
   method: "get",
@@ -131,6 +135,15 @@ export const healthRoute = createRoute({
   operationId: "health",
   summary: "Liveness",
   responses: { 200: jsonResponse(statusSchema, "Process is alive"), 500: internalResponse },
+});
+export const versionRoute = createRoute({
+  method: "get",
+  path: "/version",
+  operationId: "version",
+  summary: "Build version",
+  responses: {
+    200: jsonResponse(versionSchema, "Source commit and deterministic build identifier"),
+  },
 });
 export const readyRoute = createRoute({
   method: "get",
