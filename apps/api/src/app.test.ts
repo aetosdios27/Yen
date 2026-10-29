@@ -61,6 +61,17 @@ it.each(["/health", "/ready"])("serves %s without auth", async (path) => {
   expect(response.headers.get("x-request-id")).toBeTruthy();
 });
 
+it("serves build identity without auth", async () => {
+  const { app } = setup({ principal: null });
+  const response = await app.request("/version");
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({
+    gitSha: expect.any(String),
+    buildId: expect.any(String),
+  });
+  expect(response.headers.get("x-request-id")).toBeTruthy();
+});
+
 it("runs injected readiness independently of liveness", async () => {
   const readiness = vi.fn(async () => false);
   const { app } = setup({ readiness });

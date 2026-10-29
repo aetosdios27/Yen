@@ -86,6 +86,12 @@
         "required": ["name", "contact", "org", "locale", "consent"],
         "additionalProperties": false
       },
+      "Version": {
+        "type": "object",
+        "properties": { "gitSha": { "type": "string" }, "buildId": { "type": "string" } },
+        "required": ["gitSha", "buildId"],
+        "additionalProperties": false
+      },
       "Principal": {
         "type": "object",
         "properties": {
@@ -875,6 +881,27 @@
             },
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/version": {
+      "get": {
+        "operationId": "version",
+        "summary": "Build version",
+        "responses": {
+          "200": {
+            "description": "Source commit and deterministic build identifier",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Version" } }
             }
           }
         }

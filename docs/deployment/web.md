@@ -14,8 +14,9 @@ configures the project as follows.
 
 1. Import `aetosdios27/Yen` (the upstream repository, not a fork).
 2. Set **Root Directory** to `apps/web`.
-3. Use the **Next.js** framework preset and **Node.js 24.x**, matching
-   [`.nvmrc`](../../.nvmrc) and the `engines` field in `apps/web/package.json`.
+3. Use the **Next.js** framework preset and **Node.js 24.x**. The build's
+   pinned Node version is `24.21.0`, from [`.nvmrc`](../../.nvmrc) and the
+   `engines` field in `apps/web/package.json`.
 4. Leave **Include source files outside of the Root Directory in the Build
    Step** enabled. `@yen/shared` lives in `packages/shared` and must be built
    before the web app.

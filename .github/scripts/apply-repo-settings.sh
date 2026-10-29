@@ -45,7 +45,9 @@ gh api -X PUT "repos/$repo/actions/permissions/selected-actions" \
   -F github_owned_allowed=true -F verified_allowed=false \
   -f 'patterns_allowed[]=gitleaks/gitleaks-action@*' \
   -f 'patterns_allowed[]=pnpm/action-setup@*' \
-  -f 'patterns_allowed[]=amannn/action-semantic-pull-request@*' --silent
+  -f 'patterns_allowed[]=amannn/action-semantic-pull-request@*' \
+  -f 'patterns_allowed[]=anchore/sbom-action@*' \
+  -f 'patterns_allowed[]=sigstore/cosign-installer@*' --silent
 
 echo "==> Immutable releases"
 gh api -X PUT "repos/$repo/immutable-releases" --silent || echo "warn: could not enable immutable releases"

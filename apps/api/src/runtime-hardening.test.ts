@@ -277,11 +277,13 @@ describe("Backpressure and load shedding", () => {
     // Give microtasks time to register in middleware
     await new Promise((r) => setTimeout(r, 50));
 
-    // While overloaded, probe /health and /ready - they MUST NOT be shed
+    // While overloaded, probe the health, readiness and build identity routes.
     const healthRes = await app.request("/health");
     const readyRes = await app.request("/ready");
+    const versionRes = await app.request("/version");
     expect(healthRes.status).toBe(200);
     expect(readyRes.status).toBe(200);
+    expect(versionRes.status).toBe(200);
 
     // Release held requests
     releaseRequests();
@@ -414,6 +416,8 @@ describe("Per-request timeouts", () => {
     expect(health.status).toBe(200);
     const ready = await app.request("/ready");
     expect(ready.status).toBe(200);
+    const version = await app.request("/version");
+    expect(version.status).toBe(200);
   });
 });
 

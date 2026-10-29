@@ -20,10 +20,10 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 | Authentication and approvals         |       9 |
 | Blockchain anchoring                 |       2 |
 | Privacy and law                      |       4 |
-| Supply chain and CI                  |       2 |
+| Supply chain and CI                  |       5 |
 | Security and threat modeling         |       2 |
 | Cryptographic hashes                 |       1 |
-| **Total**                            |  **74** |
+| **Total**                            |  **77** |
 
 ## Tamper-evident logs and transparency
 
@@ -616,8 +616,32 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 
 - **Source:** SLSA; Linux Foundation, version 1.2, undated (accessed 2026).
 - **URL:** https://slsa.dev/spec/v1.2/
-- **What we use it for:** SLSA defines security levels and provenance for supply chains. Yen’s pinned actions do not by themselves establish a SLSA level.
-- **Where in this repo:** .github/workflows/ci.yml
+- **What we use it for:** SLSA defines provenance and increasing build security levels. Yen records GitHub build provenance for release assets, but does not claim a SLSA level from this workflow.
+- **Where in this repo:** .github/workflows/release.yml; docs/verify-release.md
+
+<a id="reproducible-builds"></a>
+### Reproducible Builds documentation
+
+- **Source:** Reproducible Builds project; documentation, undated (accessed 2026).
+- **URL:** https://reproducible-builds.org/docs/
+- **What we use it for:** Reproducible Builds describes controlling timestamps, time zones, locales, build paths and other variable inputs. Yen sets a fixed build environment and compares release archives from two clean worktrees on one host; that check is not an independent or cross-platform rebuild.
+- **Where in this repo:** scripts/repro-build.sh; docs/verify-release.md
+
+<a id="sigstore-cosign"></a>
+### Cosign keyless signing and verification
+
+- **Source:** Sigstore; Cosign documentation, undated (accessed 2026).
+- **URL:** https://docs.sigstore.dev/cosign/signing/signing_with_blobs/; https://docs.sigstore.dev/cosign/verifying/verify/
+- **What we use it for:** Cosign keyless blob signatures bind an artifact digest to an identity using an ephemeral key and Sigstore verification material. Yen publishes a bundle for each release archive, SBOM and checksum file; verification does not establish that the source or runtime is benign.
+- **Where in this repo:** .github/workflows/release.yml; docs/verify-release.md
+
+<a id="github-artifact-attestations"></a>
+### GitHub artifact attestations
+
+- **Source:** GitHub; GitHub Docs, undated (accessed 2026).
+- **URL:** https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations
+- **What we use it for:** GitHub attestations associate artifact digests with build provenance that consumers can verify with GitHub CLI. Yen's attestation reports the GitHub Actions build; it is not a claim that the repository or build runner is compromise-proof.
+- **Where in this repo:** .github/workflows/release.yml; docs/verify-release.md
 
 <a id="github-actions"></a>
 ### Secure use reference
