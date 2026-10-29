@@ -10,6 +10,8 @@ import {
   type FundPolicy,
   InvalidPasskeySignatureError,
   InvalidStateTransitionError,
+  MakerCheckerViolationError,
+  PayoutsDisabledError,
   payExpense,
   reconcileExpense,
   rejectExpense,
@@ -1498,9 +1500,20 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       "/v1/funds/{fundId}/expenses/{expenseId}/pay",
     );
     const fundPolicy = await fundPolicyFor(fundIdResult.value);
-    const updated = await withSpan("ledger.pay", async () =>
-      payExpense(expense, input.bankTransactionId, now),
-    );
+    let updated: ExpenseRequest;
+    try {
+      await withSpan("partner.payout.initiate", () =>
+        deps.payoutService.initiate(expense, actorId),
+      );
+      updated = await withSpan("ledger.pay", async () =>
+        payExpense(expense, input.bankTransactionId, now),
+      );
+    } catch (err) {
+      if (err instanceof MakerCheckerViolationError || err instanceof PayoutsDisabledError) {
+        throw new ApiError("forbidden");
+      }
+      throw err;
+    }
     const persisted = await withMoneyOperation("pay", () =>
       withSpan("db.expense.save", () =>
         deps.expenseStore.save(updated, {
