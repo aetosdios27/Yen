@@ -27,7 +27,7 @@ async function persist(tx: TransactionSql, expense: ExpenseRequest): Promise<voi
   await tx`
     INSERT INTO expenses (id, fund_id, status, hold_id, expense_data, created_at, updated_at)
     VALUES (${expense.id}, ${expense.fundId}, ${expense.status}, ${expense.holdId},
-      ${JSON.stringify(expense)}::jsonb, ${expense.createdAt}, ${expense.updatedAt})
+      ${tx.json(expense as unknown as Record<string, string>)}, ${expense.createdAt}, ${expense.updatedAt})
     ON CONFLICT (id) DO UPDATE SET
       status = EXCLUDED.status,
       hold_id = EXCLUDED.hold_id,

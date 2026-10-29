@@ -199,7 +199,13 @@ export type RootChain = {
   chainId: bigint;
 };
 export type AnchorAlert = {
-  type: "anchor.stale" | "anchor.root_mismatch" | "anchor.wallet_low" | "anchor.rpc_unavailable";
+  type:
+    | "anchor.stale"
+    | "anchor.root_mismatch"
+    | "anchor.wallet_low"
+    | "anchor.rpc_unavailable"
+    | "bank.unapproved_debit"
+    | "bank.balance_mismatch";
   fundId?: string;
   sequence?: bigint;
   details: string;

@@ -217,6 +217,9 @@ importers:
       '@yen/policy':
         specifier: workspace:*
         version: link:../../packages/policy
+      '@yen/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
       '@yen/shared':
         specifier: workspace:*
         version: link:../../packages/shared

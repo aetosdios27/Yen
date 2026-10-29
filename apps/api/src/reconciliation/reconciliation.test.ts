@@ -138,7 +138,7 @@ describe("Reconciliation Engine Integration", () => {
       totalProcessed: 6,
       ingestedCount: 6,
       matchedCount: 2,
-      unmatchedCount: 3, // NEFT credit 50000.00 + 2 ambiguous/unpledged credits 2000.00
+      unmatchedCount: 4, // Three unmatched credits and one unapproved debit
       duplicateCount: 0,
     });
 
@@ -381,7 +381,7 @@ describe("Reconciliation Engine Integration", () => {
     const result = statementUploadResultSchema.parse(await uploadRes.json());
     expect(result.ingestedCount).toBe(3);
     expect(result.matchedCount).toBe(0);
-    expect(result.unmatchedCount).toBe(2); // Two credits in icici csv
+    expect(result.unmatchedCount).toBe(3); // Two unmatched credits and one unapproved debit
 
     // Unmatched queue has the 75000 paise credit
     const beforeQueue = unmatchedCreditsSchema.parse(

@@ -140,6 +140,7 @@ import type {
 import { redactActionReceipt as redactReceipt } from "./policy.js";
 import { publicExpenseDetailRoute, publicExpenseProofsRoute } from "./public-expense-contract.js";
 import { parseBankStatementCsv } from "./reconciliation/csv-parser.js";
+import { registerDebitReviewRoutes } from "./reconciliation/debit-review-routes.js";
 import { normalizePartnerWebhook } from "./reconciliation/partner-schema.js";
 import { buildOpaqueEvidenceKey, sanitizeEvidenceFilename } from "./storage.js";
 import type { AllowedEvidenceMimeType, StoredEvidence } from "./stores.js";
@@ -1962,6 +1963,23 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       ),
       200,
     );
+  });
+  registerDebitReviewRoutes(app, {
+    store: deps.reconciliationStore,
+    async authorizeFund(context, rawFundId, ownerOnly) {
+      const parsedFundId = parseFundId(rawFundId);
+      if (!parsedFundId.ok) throw new ApiError("not_found");
+      const fund = await funds.get(parsedFundId.value);
+      if (!fund) throw new ApiError("not_found");
+      const resource = { kind: "fund", fund } as const;
+      const principal = authorizedFund(context, "fund:reconcile", resource);
+      if (ownerOnly && fund.owner !== principal.id) throw new ApiError("forbidden");
+      return { principal, resource };
+    },
+    actorForUser: deps.actorForUser,
+    redact: (principal, resource, result) =>
+      deps.policy.redactManualMatch(principal, resource, result),
+    clock: deps.clock,
   });
   app.openapi(openapiRoute, (c) => c.json(openapiSchema.parse(openApiDocument(app)), 200));
   app.openAPIRegistry.registerComponent("securitySchemes", "bearerAuth", {

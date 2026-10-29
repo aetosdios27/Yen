@@ -860,7 +860,7 @@
           "type": { "type": "string", "enum": ["credit", "debit"] },
           "reconciliationStatus": {
             "type": "string",
-            "enum": ["unmatched", "matched", "manually_matched", "ignored"]
+            "enum": ["unmatched", "matched", "manually_matched", "ignored", "ambiguous"]
           },
           "matchedPledgeId": { "type": "string" },
           "duplicate": { "type": "boolean" }
@@ -885,7 +885,7 @@
           "transactionId": { "type": "string" },
           "reconciliationStatus": {
             "type": "string",
-            "enum": ["unmatched", "matched", "manually_matched", "ignored"]
+            "enum": ["unmatched", "matched", "manually_matched", "ignored", "ambiguous"]
           },
           "matchedPledgeId": { "type": "string" }
         },
@@ -10727,6 +10727,226 @@
             },
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/debit-review": {
+      "get": {
+        "tags": ["reconciliation"],
+        "summary": "List unapproved and ambiguous bank debits",
+        "parameters": [
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "fundId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Debit review items",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": { "type": "string", "enum": ["unapproved", "ambiguous"] },
+                          "bankTransactionId": { "type": "string", "format": "uuid" },
+                          "bankReference": { "type": "string" },
+                          "amountPaise": { "type": "integer", "exclusiveMinimum": 0 },
+                          "postedAt": { "type": "string", "format": "date-time" },
+                          "counterpartyVpa": { "type": "string" },
+                          "counterpartyAccountFingerprint": { "type": "string" }
+                        },
+                        "required": [
+                          "kind",
+                          "bankTransactionId",
+                          "bankReference",
+                          "amountPaise",
+                          "postedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": ["items"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/debit-review/{bankTransactionId}/resolve": {
+      "post": {
+        "tags": ["reconciliation"],
+        "summary": "Resolve an unapproved debit with an audit reason",
+        "parameters": [
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "fundId",
+            "in": "path"
+          },
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "bankTransactionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "reason": { "type": "string", "minLength": 1, "maxLength": 500 } },
+                "required": ["reason"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resolved",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "resolved": { "type": "boolean", "enum": [true] } },
+                  "required": ["resolved"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/debit-review/{bankTransactionId}/match": {
+      "post": {
+        "tags": ["reconciliation"],
+        "summary": "Manually match a debit to an approved expense",
+        "parameters": [
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "fundId",
+            "in": "path"
+          },
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "bankTransactionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expenseId": { "type": "string", "format": "uuid" },
+                  "reason": { "type": "string", "minLength": 1, "maxLength": 500 }
+                },
+                "required": ["expenseId", "reason"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Debit manually matched",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "matched": { "type": "boolean", "enum": [true] } },
+                  "required": ["matched"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/debit-review/{bankTransactionId}/unmatch": {
+      "post": {
+        "tags": ["reconciliation"],
+        "summary": "Mark an ambiguous debit as unapproved with an audit reason",
+        "parameters": [
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "fundId",
+            "in": "path"
+          },
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "bankTransactionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "reason": { "type": "string", "minLength": 1, "maxLength": 500 } },
+                "required": ["reason"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Debit moved to unapproved review",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "unmatched": { "type": "boolean", "enum": [true] } },
+                  "required": ["unmatched"]
+                }
+              }
             }
           }
         }
