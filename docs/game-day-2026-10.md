@@ -2,48 +2,50 @@
 
 ## What ran
 
-The YEN-61 randomized run used the real Postgres 16 database, `@yen/ledger` transaction and event append functions, the shared `verifyFundState` checker, the Postgres notification outbox and `NotificationsWorker`, and `AnchoringWorker` with a deterministic fake chain. The provider was fake and recorded both send attempts and provider effects by idempotency key. The chain was fake; no live RPC was contacted.
+The randomized run exercised the real Postgres 16 database, `@yen/ledger` writes, event append, event replay, and `verifyChain`; the real Postgres notifications outbox and `NotificationsWorker`; and the real `AnchoringWorker` with a deterministic fake chain. A fake provider recorded provider requests and one effect per idempotency key. The run used a dedicated local Postgres 16 container on `127.0.0.1:39243`; no live chain or provider was contacted.
 
-Command:
+Command (with `YEN_TEST_DATABASE_URL` exported to the dedicated database URL):
 
 ```sh
-YEN_TEST_DATABASE_URL=postgres://postgres:yen@127.0.0.1:37713/yen \
-YEN_CHAOS_SEED=1640038382 pnpm --filter @yen/ledger test:chaos:randomized
+YEN_RUN_1000_CHAOS=1 YEN_CHAOS_SEED=1640038382 \
+  pnpm --filter @yen/ledger exec vitest run src/chaos.randomized.test.ts
 ```
 
-The run completed 1,000 scenarios with seed `1640038382`, 2,500 ledger operations, and 323 injected transaction crash points: 106 before write, 100 after event append, and 117 before commit. Each scenario ran against persisted Postgres state and checked ledger/event agreement, replayed balances, `verifyChain`, spendable funds excluding unverified pledges, notification delivery and effects, idempotent anchor ranges, and independently recomputed anchor roots. The exact runner output was:
+The seeded run performed 1,000 scenarios, 2,500 ledger operations, and 323 injected transaction crash points: 106 before write, 100 after event append, and 117 before commit. After every scenario, the harness checked atomic ledger/event writes, replayed balances, `verifyChain`, spendable funds excluding unverified donations, notification delivery and provider effects, idempotent anchor ranges, and recomputed anchor roots. The final run after the alert-sink regression fix reported:
 
 ```text
-REAL CHAOS PASS scenarios=1000 seed=1640038382 operations=2500 injectedCrashes=323 crashPoints=before-write:106,after-event:100,before-commit:117 violations=0 durationMs=354737
+REAL CHAOS PASS scenarios=1000 seed=1640038382 operations=2500 injectedCrashes=323 crashPoints=before-write:106,after-event:100,before-commit:117 violations=0 durationMs=279465
 Test Files  1 passed (1)
 Tests  3 passed (3)
-Duration  358.55s
+Duration  283.11s
 ```
 
-The DB-backed verification passed with `YEN_TEST_DATABASE_URL` set: Biome checked 483 files, and Turborepo completed 36 of 36 tasks. The ledger package had 74 passing tests; its two opt-in tests (the 1,000-scenario run and container restart) were run separately. The queue package had 52 passing tests and one optional Anvil test skipped. The API package had 390 passing tests and one optional live ClamAV test skipped. The `useMathMinMax` diagnostics in anchoring are warnings; Biome exited successfully.
+The three tests include the real notification worker kill-point drill and the chain outage/recovery drill. The kill points were `claimed`, `sent-to-provider`, and `status-recorded`. All three outbox rows reached `delivered`; fake-provider calls were 1, 2, and 1 respectively, with exactly one recorded effect per key. The second call after the `sent-to-provider` kill is expected: exactly-once effect relies on the provider honoring the stable idempotency key.
 
-The PR #47 database failure tests ran in `pnpm verify`: backend termination during a transaction, rollback after ledger/event work, concurrent reserve contention, and concurrent settlement retries. The Postgres container restart case passed separately with `YEN_CHAOS_CONTAINER` set so it did not restart the database while parallel full verification was using it.
+For the chain outage, the fake RPC failed `getLatestSequence`. The worker emitted `anchor.rpc_unavailable` through the shared alert sink and left no incomplete anchor, while `/health` returned 200. After recovery, repeated worker runs produced one confirmed anchor with the recomputed root. Main’s reconciliation hook shares the same `ResilientCall` and `AnchorAlertSink`; it also routes `getBalance` and `getRoot` through the chain policy.
 
-## Worker failure drills
+## Merge integration and verification
 
-The real notification worker process was sent `SIGKILL` at `claimed`, `sent-to-provider`, and `status-recorded`. A Postgres-backed fake provider counted attempts and stored one effect per idempotency key. Recovery delivered all three outbox rows; provider calls were 1, 2, and 1 respectively, and each key had exactly one effect. The second call at `sent-to-provider` represents retry after provider acceptance; exactly-once effect depends on the provider honoring the stable key.
+The PR #58 anchoring structure remains the base: published roots are recovered with `recoverPublishedAnchor`, pending transactions can be fee-replaced, confirmations record `confirmed_at`, the CLI selects `KmsRootSigner` when `ANCHOR_KMS_KEY_ID` is configured, and reconciliation reports stale anchors, root mismatches, and low publisher balances. YEN-61 wraps all `RootChain` methods used by anchoring and reconciliation. Chain reads use three attempts; `publish` and `replacePending` use one attempt to avoid rebroadcasting an accepted transaction. The CLI shares one chain client, resilience instance, and alert sink between the worker and reconciliation hook.
 
-The anchoring worker was run against a fake chain that failed `getLatestSequence`. It emitted an alert through the injected sink and persisted no incomplete anchor. The application `/health` request still returned 200. After RPC recovery, repeated worker runs drained the backlog into one confirmed anchor with the correct root.
+`pnpm install --frozen-lockfile` passed. With `YEN_TEST_DATABASE_URL` pointed at the dedicated Postgres 16 container, `TURBO_CONCURRENCY=3 pnpm verify` passed: Biome checked 508 files, and Turborepo completed 36/36 tasks. The ledger tests reported 74 passed and 2 skipped, queue reported 58 passed and 1 skipped, notifications reported 46 passed, and API reported 405 passed and 1 skipped. Biome had no errors; its remaining `useMathMinMax` findings in the anchoring files and two unrelated warnings did not fail the command.
 
-## Finding and fix
+The queue anchoring test file passed separately with 12 tests passed and the optional Anvil integration skipped. The real Postgres container restart drill passed separately (1 test). `node --test .github/scripts/*.test.mjs` passed 29/29, and `node .github/scripts/check-trust-claims.mjs` reported that the register is well formed.
 
-The real notification worker initially dead-lettered claimed messages because raw Postgres JSONB `template_data` arrived as a JSON string, while template validation expected an object. `PostgresNotificationStore` now decodes that field at its boundary; a store regression test covers the database representation.
+Neither `anvil` nor `forge` was installed in the environment, so the real Anvil integration could not run. The merge retained main’s migrations through `0018`; YEN-61 added no migration.
 
-The first chain resilience integration retried `publish` after a fake chain accepted the root but returned an error, so the existing restart recovery test observed a second broadcast. Chain writes now use one client attempt; the next durable worker run reads the on-chain root before deciding whether to publish again. A unit regression test covers the single-attempt option, and the anchoring worker test verifies no duplicate broadcast.
+## Findings and fixes
 
-No ledger, replay, hash-chain, spendable-balance, notification-effect, or anchor-root violations remained in the 1,000-scenario run.
+- The real notification worker initially dead-lettered claimed messages because Postgres returned JSONB `template_data` as a JSON string while template validation expected an object. `PostgresNotificationStore` now decodes it at the database boundary; a regression test covers this representation.
+- A timed-out chain `publish` was retried after the fake chain accepted the root, causing a duplicate broadcast. `publish` and `replacePending` now receive one client attempt; the next worker run checks the published root before sending again.
+- Main’s structured alert sink threw while serializing a `bigint` sequence, masking the simulated post-broadcast crash and breaking restart recovery. The sink now serializes bigint values as decimal strings, with a regression test.
+
+The final 1,000-scenario run had zero invariant violations. No ledger/event atomicity, replay, hash-chain, spendable-balance, notification-effect, or anchoring-root violations remained.
 
 ## Coverage limits
 
-- Randomized ledger crash points abort real Postgres transactions at selected boundaries; they do not randomly kill the Node process or restart Postgres. The deterministic PR #47 tests separately cover backend termination, and the restart drill separately covers container restart.
-- The notification provider and chain are deterministic fakes. The notification kill drill proves the worker/outbox recovery path and fake provider dedupe, not the behavior of a specific production vendor. A real provider must honor the idempotency key for exactly-once external effect.
-- The outage drill exercises one chain RPC failure boundary and app health locally. It does not test a live network, RPC vendor, contract deployment, or long-running production alert delivery.
-- Partner API and WhatsApp/SMS production clients do not exist in this repository. Their resilience policies and the shared wrapper are documented for future clients; neither policy is exercised against a live service.
-- The ClamAV adapter is wired to the shared resilience wrapper, but this game day did not use a live ClamAV daemon.
-
-No migration was required.
+- The randomized crash points abort real Postgres transactions at selected boundaries; they do not randomly kill the Node process or restart Postgres. Worker SIGKILL points, PR #47 backend-termination tests, and the container restart drill ran separately.
+- The provider and chain are deterministic fakes. The notification test proves the outbox/worker recovery path and fake-provider deduplication; an actual provider must honor the idempotency key for exactly-once external effects.
+- The outage test covers RPC failure, alert emission, local application health, and recovery against a fake client. It does not exercise a live network, vendor, or production alert delivery.
+- Partner API and production WhatsApp/SMS clients do not exist in this repository. Their policies and the shared wrapper are documented for future clients. ClamAV uses the wrapper, but this game day did not use a live daemon.
+- Anvil was unavailable, so no local EVM deployment or real contract publication was exercised.
