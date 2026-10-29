@@ -15,6 +15,8 @@ export type VerifiedBadgeProps = {
   readonly status: "verified" | "pending";
   readonly evidence?: PublicEvidence | undefined;
   readonly verification?: PublicVerification | undefined;
+  readonly recordId?: string | undefined;
+  readonly fundId?: string | undefined;
   readonly onOpenExplainer: () => void;
   readonly className?: string | undefined;
 };
@@ -23,6 +25,8 @@ export function VerifiedBadge({
   status,
   evidence,
   verification,
+  recordId,
+  fundId,
   onOpenExplainer,
   className,
 }: VerifiedBadgeProps) {
@@ -62,7 +66,17 @@ export function VerifiedBadge({
         </a>
       ) : null}
 
-      {verification?.recordProofUrl ? (
+      {recordId ? (
+        <a
+          href={`/verify?recordId=${encodeURIComponent(recordId)}${fundId ? `&fundId=${encodeURIComponent(fundId)}` : ""}`}
+          className="inline-flex min-h-8 items-center gap-1 rounded-control border border-border bg-surface px-2.5 py-0.5 text-small font-medium text-ink hover:bg-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+          aria-label={t("fund.checkRecordAria")}
+        >
+          <ShieldCheckIcon className="h-3.5 w-3.5 shrink-0 text-verified-ink" />
+          <span>{t("fund.checkRecord")}</span>
+          <ArrowUpRightIcon className="h-3 w-3 shrink-0 text-ink-muted" />
+        </a>
+      ) : verification?.recordProofUrl ? (
         <a
           href={verification.recordProofUrl}
           target="_blank"

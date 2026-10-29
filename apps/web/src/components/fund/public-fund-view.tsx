@@ -25,7 +25,11 @@ export function PublicFundView({ fund, className }: PublicFundViewProps) {
 
       <SpendingBreakdown categories={fund.spendingBreakdown} />
 
-      <FundTimeline timeline={fund.timeline} onOpenExplainer={() => setExplainerOpen(true)} />
+      <FundTimeline
+        timeline={fund.timeline}
+        fundId={fund.id}
+        onOpenExplainer={() => setExplainerOpen(true)}
+      />
 
       <HowDoIKnowModal isOpen={isExplainerOpen} onClose={() => setExplainerOpen(false)} />
     </article>
