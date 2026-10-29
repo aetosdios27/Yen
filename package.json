@@ -18,6 +18,7 @@
     "format": "biome check --write .",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "test:load": "pnpm --filter @yen/load-tests test:load",
     "build": "turbo run build",
     "repro:build": "bash scripts/repro-build.sh",
     "verify": "pnpm check && turbo run typecheck test build"
