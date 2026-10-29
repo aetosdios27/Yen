@@ -5,6 +5,7 @@ export {
   getApprovalPin,
   type UpdateApprovalPinInput,
   updateApprovalPin,
+  withLockedApprovalPin,
 } from "./approval-pin.js";
 export { exportAuditBundle } from "./audit-bundle.js";
 export {

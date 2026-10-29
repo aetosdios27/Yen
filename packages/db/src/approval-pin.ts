@@ -1,4 +1,4 @@
-import type { SqlClient } from "./client.js";
+import type { Sql, SqlClient, TransactionSql } from "./client.js";
 import { type UserApprovalPinRow, userApprovalPinRowSchema } from "./rows.js";
 
 export interface CreateApprovalPinInput {
@@ -33,6 +33,21 @@ export async function getApprovalPin(
   `;
   if (rows.length === 0) return null;
   return userApprovalPinRowSchema.parse(rows[0]);
+}
+
+export async function withLockedApprovalPin<T>(
+  sql: Sql,
+  userId: string,
+  work: (tx: TransactionSql, row: UserApprovalPinRow | null) => Promise<T>,
+): Promise<T> {
+  const result = await sql.begin(async (tx) => {
+    const rows = await tx`
+      SELECT * FROM user_approval_pins WHERE user_id = ${userId} FOR UPDATE
+    `;
+    const row = rows.length === 0 ? null : userApprovalPinRowSchema.parse(rows[0]);
+    return { value: await work(tx, row) };
+  });
+  return result.value;
 }
 
 export async function createApprovalPin(
