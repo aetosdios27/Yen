@@ -88,8 +88,13 @@
       },
       "Version": {
         "type": "object",
-        "properties": { "gitSha": { "type": "string" }, "buildId": { "type": "string" } },
-        "required": ["gitSha", "buildId"],
+        "properties": {
+          "gitSha": { "type": "string" },
+          "buildId": { "type": "string" },
+          "artifactDigest": { "type": "string" },
+          "releaseTag": { "type": "string" }
+        },
+        "required": ["gitSha", "buildId", "artifactDigest", "releaseTag"],
         "additionalProperties": false
       },
       "Principal": {
@@ -916,7 +921,7 @@
         "summary": "Build version",
         "responses": {
           "200": {
-            "description": "Source commit and deterministic build identifier",
+            "description": "Source commit, deterministic build identifier, and optional release metadata",
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
