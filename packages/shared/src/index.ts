@@ -1,4 +1,14 @@
 export {
+  calculateGstinChecksum,
+  GSTIN_ALPHABET,
+  GSTIN_REGEX,
+  type Gstin,
+  gstinSchema,
+  isValidGstinFormat,
+  parseGstin,
+  validateGstinChecksum,
+} from "./gstin.js";
+export {
   type FundId,
   fundIdSchema,
   type OrgId,

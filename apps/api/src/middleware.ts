@@ -16,7 +16,6 @@ export function isPledgeRoute(path: string): boolean {
   return /^\/v1\/funds\/[0-9a-f-]{36}\/donations\/pledge\/?$/.test(path);
 }
 
-/** Donors are not signed in yet, so these fund routes decide from the fund alone. */
 export function isPublicDonationRoute(path: string): boolean {
   return /^\/v1\/funds\/[0-9a-f-]{36}\/(?:donations\/pledge|donation-details)\/?$/.test(path);
 }
@@ -33,6 +32,10 @@ export function isPublicAuthRoute(path: string): boolean {
 export function isHealthRoute(path: string): boolean {
   const normalized = path.replace(/\/$/, "");
   return normalized === "/health" || normalized === "/ready";
+}
+
+export function isEvidenceRoute(path: string): boolean {
+  return /^\/v1\/funds\/[^/]+\/expenses\/[^/]+\/evidence\/?$/.test(path);
 }
 
 async function storeCall<T>(operation: () => Promise<T>): Promise<T> {

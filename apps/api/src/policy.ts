@@ -7,7 +7,7 @@ import {
   type Redacted,
   unsafeMarkRedactedForDevPolicy,
 } from "@yen/policy";
-import { type FundId, type Paise, parseFundId } from "@yen/shared";
+import { type FundId, type Paise, paise, parseFundId } from "@yen/shared";
 import {
   type addMemberResponse,
   addMemberResponse as addMemberResponseSchema,
@@ -26,6 +26,7 @@ import {
   removeMemberResponse as removeMemberResponseSchema,
 } from "./contract.js";
 import type { Principal } from "./dependencies.js";
+import type { StoredEvidence } from "./stores.js";
 
 export type FundView = z.infer<typeof fundSchema>;
 export interface FundRecord {
@@ -44,6 +45,15 @@ export type FundAction =
   | "fund:member:unlock";
 export type FundResource = { readonly kind: "fund"; readonly fund?: FundRecord | undefined };
 export type ExistingFundResource = { readonly kind: "fund"; readonly fund: FundRecord };
+export type EvidenceResource =
+  | { readonly kind: "evidence"; readonly evidence: StoredEvidence }
+  | { readonly kind: "evidence_list"; readonly evidence: readonly StoredEvidence[] };
+type RedactedResource<R extends ExistingFundResource | EvidenceResource> =
+  R extends ExistingFundResource
+    ? Redacted<FundView>
+    : R extends { readonly kind: "evidence" }
+      ? Redacted<StoredEvidence>
+      : Redacted<{ evidence: StoredEvidence[] }>;
 export type DonationDetailsView = z.infer<typeof donationDetailsSchema>;
 
 export type ExpenseApprovalReceipt = z.infer<typeof expenseApprovalResponse>;
@@ -149,11 +159,12 @@ export type ExpenseAction =
   | "expense:approve"
   | "expense:reject"
   | "expense:pay"
-  | "expense:reconcile";
-export type ExpenseResource = {
-  readonly kind: "expense";
-  readonly expense?: ExpenseRecord | undefined;
-};
+  | "expense:reconcile"
+  | "expense:add_evidence"
+  | "expense:read_evidence";
+export type ExpenseResource =
+  | { readonly kind: "expense"; readonly expense?: ExpenseRecord | undefined }
+  | { readonly kind: "expense"; readonly fund: FundRecord; readonly expenseId: string };
 export type ExistingExpenseResource = {
   readonly kind: "expense";
   readonly expense: ExpenseRecord;
@@ -164,7 +175,10 @@ export type PolicyResource = FundResource | ExpenseResource;
 
 export interface Policy {
   can(principal: Principal, action: PolicyAction, resource: PolicyResource): boolean;
-  redact(viewer: Principal, resource: ExistingFundResource): Redacted<FundView>;
+  redact<R extends ExistingFundResource | EvidenceResource>(
+    viewer: Principal,
+    resource: R,
+  ): RedactedResource<R>;
   redactExpense?(viewer: Principal, resource: ExistingExpenseResource): ExpenseView;
   canDonate(resource: ExistingFundResource): boolean;
   redactDonationDetails(resource: ExistingFundResource): DonationDetailsView;
@@ -195,6 +209,26 @@ export const denyAllPolicy: Policy = {
 
 export const devPolicy: Policy = {
   can: (principal, action, resource) => {
+    if (action === "expense:add_evidence" || action === "expense:read_evidence") {
+      if (resource.kind !== "expense" || !("fund" in resource)) return false;
+      if (resource.fund.owner !== principal.id) return false;
+      const fundId = parseFundId(resource.fund.fund.id);
+      if (!fundId.ok) return false;
+      const evidenceActor = { id: principal.id, role: "owner" as const };
+      const engineAction = action === "expense:read_evidence" ? "expense:read" : action;
+      return policyCan(evidenceActor, engineAction, {
+        kind: "expense",
+        expense: {
+          fundId: fundId.value,
+          expenseId: resource.expenseId,
+          policy: DEFAULT_FUND_POLICY,
+          requesterId: principal.id,
+          amountPaise: paise(0),
+          status: "submitted",
+          approvals: [],
+        },
+      });
+    }
     if (action === "fund:member:unlock") {
       const roles = principal.roles ?? [];
       const capabilities = principal.capabilities ?? [];
@@ -248,7 +282,7 @@ export const devPolicy: Policy = {
           return false;
       }
 
-      const record = resource.expense;
+      const record = "expense" in resource ? resource.expense : undefined;
       const view = record?.expense;
       const fundId = (view?.fundId ?? "00000000-0000-4000-8000-000000000000") as FundId;
       if (domainAction === "bank:reconcile") {
@@ -283,7 +317,21 @@ export const devPolicy: Policy = {
     }
     return false;
   },
-  redact: (_viewer, resource) => unsafeMarkRedactedForDevPolicy(resource.fund.fund),
+  redact: <R extends ExistingFundResource | EvidenceResource>(
+    _viewer: Principal,
+    resource: R,
+  ): RedactedResource<R> => {
+    if (resource.kind === "fund") {
+      return unsafeMarkRedactedForDevPolicy(resource.fund.fund) as RedactedResource<R>;
+    }
+    if (resource.kind === "evidence") {
+      const { objectKey: _discard, ...publicEvidence } = resource.evidence;
+      return unsafeMarkRedactedForDevPolicy(publicEvidence) as RedactedResource<R>;
+    }
+    return unsafeMarkRedactedForDevPolicy({
+      evidence: resource.evidence.map(({ objectKey: _discard, ...evidence }) => evidence),
+    }) as RedactedResource<R>;
+  },
   redactExpense: (_viewer, resource) => resource.expense.expense,
   canDonate: (resource) => {
     const fundId = parseFundId(resource.fund.fund.id);

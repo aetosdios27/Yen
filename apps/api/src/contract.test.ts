@@ -8,6 +8,7 @@ import { rotateSessionResponse, verifyOtpResponse } from "./contract.js";
 import { ApiError, errorCode, errorStatus } from "./errors.js";
 import { devPolicy } from "./policy.js";
 import { MemoryIdempotencyStore } from "./stores.js";
+import { MemoryVirusScannerAdapter } from "./test-utils/memory-virus-scanner.js";
 
 const responseSpec = z.object({
   headers: z.record(
@@ -86,6 +87,7 @@ it("validates every documented status and sent header against the committed Open
     logger: { log: () => undefined },
     policy: devPolicy,
     otpDeliveryProvider,
+    virusScanner: new MemoryVirusScannerAdapter(),
   };
   const app = createApp(base);
   const post = {
@@ -334,6 +336,83 @@ it("validates every documented status and sent header against the committed Open
   });
   expect(logoutAllRes.status).toBe(200);
   await check("/v1/auth/logout-all", "post", logoutAllRes);
+
+  const evidencePath = "/v1/funds/{fundId}/expenses/{expenseId}/evidence";
+  const expenseId = "00000000-0000-4000-8000-000000000002";
+  const evidenceUrl = `/v1/funds/${id}/expenses/${expenseId}/evidence`;
+  const evidenceFd = new FormData();
+  evidenceFd.append(
+    "file",
+    new File([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34])], "receipt.pdf", {
+      type: "application/pdf",
+    }),
+  );
+  evidenceFd.append("vendorName", "Store");
+  evidenceFd.append("gstin", "27AAPFU0939F1ZV");
+
+  const evidencePost = {
+    method: "POST",
+    headers: { "Idempotency-Key": "evidence-contract-1" },
+    body: evidenceFd,
+  };
+  const evidenceCreated = await app.request(evidenceUrl, evidencePost);
+  expect(evidenceCreated.status).toBe(201);
+  await check(evidencePath, "post", evidenceCreated);
+
+  const evidenceGet = await app.request(evidenceUrl);
+  expect(evidenceGet.status).toBe(200);
+  await check(evidencePath, "get", evidenceGet);
+
+  const badMimeFd = new FormData();
+  badMimeFd.append("file", new File(["bad content"], "bad.txt", { type: "text/plain" }));
+  const badMimeRes = await app.request(evidenceUrl, {
+    method: "POST",
+    headers: { "Idempotency-Key": "evidence-contract-bad-mime" },
+    body: badMimeFd,
+  });
+  expect(badMimeRes.status).toBe(400);
+  await check(evidencePath, "post", badMimeRes);
+
+  const unauthApp = createApp({ ...base, principal: null });
+  await check(evidencePath, "post", await unauthApp.request(evidenceUrl, evidencePost));
+  await check(evidencePath, "get", await unauthApp.request(evidenceUrl));
+
+  const otherPrincipalApp = createApp({
+    ...base,
+    principal: { id: "00000000-0000-4000-8000-000000000099" },
+  });
+  await check(evidencePath, "post", await otherPrincipalApp.request(evidenceUrl, evidencePost));
+  await check(evidencePath, "get", await otherPrincipalApp.request(evidenceUrl));
+
+  await check(
+    evidencePath,
+    "post",
+    await app.request(
+      `/v1/funds/00000000-0000-4000-8000-999999999999/expenses/${expenseId}/evidence`,
+      { ...evidencePost, headers: { "Idempotency-Key": "evidence-invalid-fund" } },
+    ),
+  );
+  await check(
+    evidencePath,
+    "get",
+    await app.request(
+      `/v1/funds/00000000-0000-4000-8000-999999999999/expenses/${expenseId}/evidence`,
+    ),
+  );
+
+  const bigFileFd = new FormData();
+  bigFileFd.append(
+    "file",
+    new File([new Uint8Array(11 * 1024 * 1024)], "oversized.pdf", { type: "application/pdf" }),
+  );
+  const bigFileRes = await app.request(evidenceUrl, {
+    method: "POST",
+    headers: { "Idempotency-Key": "evidence-contract-big" },
+    body: bigFileFd,
+  });
+  expect(bigFileRes.status).toBe(413);
+  await check(evidencePath, "post", bigFileRes);
+
   for (const [path, methods] of Object.entries(document.paths)) {
     if (
       path === "/v1/waitlist" ||

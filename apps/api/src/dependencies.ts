@@ -1,4 +1,4 @@
-import type { WaitlistEntry } from "@yen/db";
+import type { AppendEventInput, StoredFundEvent, WaitlistEntry } from "@yen/db";
 import { type ApprovalProofVerifier, type ExpenseStore, InMemoryExpenseStore } from "@yen/ledger";
 import type { FundRole } from "@yen/policy";
 import type { Context } from "hono";
@@ -22,13 +22,17 @@ import {
   type PinStore,
 } from "./pin/index.js";
 import { denyAllPolicy, type Policy } from "./policy.js";
+import { MemoryStorageAdapter, type StorageAdapter } from "./storage.js";
 import {
+  type EvidenceStore,
   type IdempotencyStore,
+  MemoryEvidenceStore,
   MemoryIdempotencyStore,
   MemoryRateLimitStore,
   type RateLimit,
   type RateLimitStore,
 } from "./stores.js";
+import { UnconfiguredVirusScannerAdapter, type VirusScannerAdapter } from "./virus-scanner.js";
 
 export interface Principal {
   readonly id: string;
@@ -122,6 +126,10 @@ export interface AppDependencies {
   readonly pledgeBodyLimit: number;
   readonly waitlistLimit: RateLimit;
   readonly waitlistBodyLimit: number;
+  readonly evidenceStore: EvidenceStore;
+  readonly storageAdapter: StorageAdapter;
+  readonly virusScanner: VirusScannerAdapter;
+  readonly eventAppender?: ((input: AppendEventInput) => Promise<StoredFundEvent>) | undefined;
   readonly clock: () => number;
   readonly sleep: (ms: number) => Promise<void>;
   readonly waitlistMinResponseMs: number;
@@ -181,6 +189,9 @@ export function defaultDependencies(clock: () => number = Date.now): AppDependen
     pledgeBodyLimit: 4096,
     waitlistLimit: { capacity: 5, refillMs: 3600000 },
     waitlistBodyLimit: 8192,
+    evidenceStore: new MemoryEvidenceStore(),
+    storageAdapter: new MemoryStorageAdapter(),
+    virusScanner: new UnconfiguredVirusScannerAdapter(),
     clock,
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     waitlistMinResponseMs: 75,

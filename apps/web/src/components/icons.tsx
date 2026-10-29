@@ -103,3 +103,45 @@ export function LoaderIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function CameraIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+      <circle cx="12" cy="13" r="3" />
+    </Icon>
+  );
+}
+
+export function FileTextIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+      <path d="M10 9H8" />
+      <path d="M16 13H8" />
+      <path d="M16 17H8" />
+    </Icon>
+  );
+}
+
+export function ZoomInIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      <line x1="11" y1="8" x2="11" y2="14" />
+      <line x1="8" y1="11" x2="14" y2="11" />
+    </Icon>
+  );
+}
+
+export function UploadCloudIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+      <path d="M12 12v9" />
+      <path d="m16 16-4-4-4 4" />
+    </Icon>
+  );
+}

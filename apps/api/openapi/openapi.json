@@ -671,6 +671,37 @@
           }
         },
         "additionalProperties": false
+      },
+      "UploadEvidenceInput": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "description": "Evidence document (max 10MB; JPEG, PNG, WebP, PDF)"
+          },
+          "vendorName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Optional merchant or vendor name"
+          },
+          "gstin": {
+            "type": "string",
+            "description": "Optional 15-character Indian GSTIN; validated by the API"
+          },
+          "invoiceNumber": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Optional invoice or receipt reference number"
+          },
+          "invoiceDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Optional invoice issue date (YYYY-MM-DD)"
+          }
+        }
       }
     },
     "parameters": {}
@@ -5609,6 +5640,491 @@
               "retry-after": {
                 "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
                 "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/expenses/{expenseId}/evidence": {
+      "post": {
+        "tags": ["expenses", "evidence"],
+        "operationId": "uploadEvidence",
+        "description": "Uploads bill or receipt evidence. Computes SHA-256 server-side, validates GSTIN and MIME type, enforces the 10MB limit, and detects duplicates within the fund.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Canonical lowercase FundId UUID; invalid IDs return 404"
+            },
+            "required": true,
+            "description": "Canonical lowercase FundId UUID; invalid IDs return 404",
+            "name": "fundId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Canonical lowercase ExpenseId UUID; invalid IDs return 404"
+            },
+            "required": true,
+            "description": "Canonical lowercase ExpenseId UUID; invalid IDs return 404",
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": { "$ref": "#/components/schemas/UploadEvidenceInput" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Evidence stored with a server-computed hash",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "evidenceId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "Unique identifier for this evidence upload"
+                    },
+                    "fundId": { "type": "string", "format": "uuid" },
+                    "expenseId": { "type": "string", "format": "uuid" },
+                    "fileSha256": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$",
+                      "description": "SHA-256 hash computed by the server from the uploaded bytes"
+                    },
+                    "mimeType": {
+                      "type": "string",
+                      "enum": ["image/jpeg", "image/png", "image/webp", "application/pdf"],
+                      "description": "MIME type of uploaded file"
+                    },
+                    "fileSizeBytes": { "type": "integer", "minimum": 1, "maximum": 10485760 },
+                    "fileName": { "type": "string", "minLength": 1, "maxLength": 120 },
+                    "duplicateDetected": {
+                      "type": "boolean",
+                      "description": "Identical bytes were attached to another expense in this fund"
+                    },
+                    "isDuplicate": {
+                      "type": "boolean",
+                      "description": "Alias for duplicateDetected"
+                    },
+                    "duplicateExpenseId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "Expense ID of the prior duplicate in this fund, when present"
+                    },
+                    "vendorName": { "type": "string" },
+                    "gstin": { "type": "string" },
+                    "invoiceNumber": { "type": "string" },
+                    "invoiceDate": { "type": "string" },
+                    "createdAt": { "type": "string", "format": "date-time" }
+                  },
+                  "required": [
+                    "evidenceId",
+                    "fundId",
+                    "expenseId",
+                    "fileSha256",
+                    "mimeType",
+                    "fileSizeBytes",
+                    "fileName",
+                    "duplicateDetected",
+                    "isDuplicate",
+                    "createdAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; details contain field paths",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "409": {
+            "description": "Resource conflict, changed idempotency input, or request in progress",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "413": {
+            "description": "Evidence body exceeds the upload size limit of 10MB",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "504": {
+            "description": "Gateway timeout",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["expenses", "evidence"],
+        "operationId": "getEvidence",
+        "description": "Retrieves evidence attached to an expense after verifying stored bytes against their pinned SHA-256 hashes.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Canonical lowercase FundId UUID; invalid IDs return 404"
+            },
+            "required": true,
+            "description": "Canonical lowercase FundId UUID; invalid IDs return 404",
+            "name": "fundId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Canonical lowercase ExpenseId UUID; invalid IDs return 404"
+            },
+            "required": true,
+            "description": "Canonical lowercase ExpenseId UUID; invalid IDs return 404",
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Evidence list",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "evidence": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "evidenceId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this evidence upload"
+                          },
+                          "fundId": { "type": "string", "format": "uuid" },
+                          "expenseId": { "type": "string", "format": "uuid" },
+                          "fileSha256": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$",
+                            "description": "SHA-256 hash computed by the server from the uploaded bytes"
+                          },
+                          "mimeType": {
+                            "type": "string",
+                            "enum": ["image/jpeg", "image/png", "image/webp", "application/pdf"],
+                            "description": "MIME type of uploaded file"
+                          },
+                          "fileSizeBytes": { "type": "integer", "minimum": 1, "maximum": 10485760 },
+                          "fileName": { "type": "string", "minLength": 1, "maxLength": 120 },
+                          "duplicateDetected": {
+                            "type": "boolean",
+                            "description": "Identical bytes were attached to another expense in this fund"
+                          },
+                          "isDuplicate": {
+                            "type": "boolean",
+                            "description": "Alias for duplicateDetected"
+                          },
+                          "duplicateExpenseId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Expense ID of the prior duplicate in this fund, when present"
+                          },
+                          "vendorName": { "type": "string" },
+                          "gstin": { "type": "string" },
+                          "invoiceNumber": { "type": "string" },
+                          "invoiceDate": { "type": "string" },
+                          "createdAt": { "type": "string", "format": "date-time" }
+                        },
+                        "required": [
+                          "evidenceId",
+                          "fundId",
+                          "expenseId",
+                          "fileSha256",
+                          "mimeType",
+                          "fileSizeBytes",
+                          "fileName",
+                          "duplicateDetected",
+                          "isDuplicate",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["evidence"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; details contain field paths",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "409": {
+            "description": "Resource conflict, changed idempotency input, or request in progress",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "504": {
+            "description": "Gateway timeout",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
                 "required": true
               }
             },

@@ -8,6 +8,11 @@ export {
   type DonationPledge,
 } from "./donation-form";
 export { EmptyState, type EmptyStateProps } from "./empty-state";
+export {
+  type EvidenceItem,
+  EvidenceUpload,
+  type EvidenceUploadProps,
+} from "./evidence-upload";
 export { Input, type InputProps } from "./input";
 export { InstallPrompt, type InstallPromptProps } from "./install-prompt";
 export { LocaleSwitcher, type LocaleSwitcherProps } from "./locale-switcher";

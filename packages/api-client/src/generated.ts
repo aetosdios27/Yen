@@ -560,6 +560,24 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/funds/{fundId}/expenses/{expenseId}/evidence": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Retrieves evidence attached to an expense after verifying stored bytes against their pinned SHA-256 hashes. */
+    get: operations["getEvidence"];
+    put?: never;
+    /** @description Uploads bill or receipt evidence. Computes SHA-256 server-side, validates GSTIN and MIME type, enforces the 10MB limit, and detects duplicates within the fund. */
+    post: operations["uploadEvidence"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/openapi.json": {
     parameters: {
       query?: never;
@@ -1001,6 +1019,21 @@ export interface components {
        * @example 482915
        */
       pin?: string;
+    };
+    UploadEvidenceInput: {
+      /**
+       * Format: binary
+       * @description Evidence document (max 10MB; JPEG, PNG, WebP, PDF)
+       */
+      file?: string;
+      /** @description Optional merchant or vendor name */
+      vendorName?: string;
+      /** @description Optional 15-character Indian GSTIN; validated by the API */
+      gstin?: string;
+      /** @description Optional invoice or receipt reference number */
+      invoiceNumber?: string;
+      /** @description Optional invoice issue date (YYYY-MM-DD) */
+      invoiceDate?: string;
     };
   };
   responses: never;
@@ -4706,6 +4739,351 @@ export interface operations {
           "x-request-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  getEvidence: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Canonical lowercase FundId UUID; invalid IDs return 404 */
+        fundId: string;
+        /** @description Canonical lowercase ExpenseId UUID; invalid IDs return 404 */
+        expenseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Evidence list */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            evidence: {
+              /**
+               * Format: uuid
+               * @description Unique identifier for this evidence upload
+               */
+              evidenceId: string;
+              /** Format: uuid */
+              fundId: string;
+              /** Format: uuid */
+              expenseId: string;
+              /** @description SHA-256 hash computed by the server from the uploaded bytes */
+              fileSha256: string;
+              /**
+               * @description MIME type of uploaded file
+               * @enum {string}
+               */
+              mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
+              fileSizeBytes: number;
+              fileName: string;
+              /** @description Identical bytes were attached to another expense in this fund */
+              duplicateDetected: boolean;
+              /** @description Alias for duplicateDetected */
+              isDuplicate: boolean;
+              /**
+               * Format: uuid
+               * @description Expense ID of the prior duplicate in this fund, when present
+               */
+              duplicateExpenseId?: string;
+              vendorName?: string;
+              gstin?: string;
+              invoiceNumber?: string;
+              invoiceDate?: string;
+              /** Format: date-time */
+              createdAt: string;
+            }[];
+          };
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource conflict, changed idempotency input, or request in progress */
+      409: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Gateway timeout */
+      504: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  uploadEvidence: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Canonical lowercase FundId UUID; invalid IDs return 404 */
+        fundId: string;
+        /** @description Canonical lowercase ExpenseId UUID; invalid IDs return 404 */
+        expenseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "multipart/form-data": components["schemas"]["UploadEvidenceInput"];
+      };
+    };
+    responses: {
+      /** @description Evidence stored with a server-computed hash */
+      201: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /**
+             * Format: uuid
+             * @description Unique identifier for this evidence upload
+             */
+            evidenceId: string;
+            /** Format: uuid */
+            fundId: string;
+            /** Format: uuid */
+            expenseId: string;
+            /** @description SHA-256 hash computed by the server from the uploaded bytes */
+            fileSha256: string;
+            /**
+             * @description MIME type of uploaded file
+             * @enum {string}
+             */
+            mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
+            fileSizeBytes: number;
+            fileName: string;
+            /** @description Identical bytes were attached to another expense in this fund */
+            duplicateDetected: boolean;
+            /** @description Alias for duplicateDetected */
+            isDuplicate: boolean;
+            /**
+             * Format: uuid
+             * @description Expense ID of the prior duplicate in this fund, when present
+             */
+            duplicateExpenseId?: string;
+            vendorName?: string;
+            gstin?: string;
+            invoiceNumber?: string;
+            invoiceDate?: string;
+            /** Format: date-time */
+            createdAt: string;
+          };
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource conflict, changed idempotency input, or request in progress */
+      409: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Evidence body exceeds the upload size limit of 10MB */
+      413: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Gateway timeout */
+      504: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
