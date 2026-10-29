@@ -3,7 +3,24 @@ import { computeActionHash, generatePinSalt, hashPin, verifyPinHash } from "./cr
 import type { PinNotificationService } from "./notifications.js";
 import type { PinOtpVerifier } from "./otp.js";
 import { type PinValidationContext, validatePin } from "./rules.js";
-import type { ActionTokenStore, PinStore } from "./store.js";
+import type {
+  ActionTokenStore,
+  LockedPinTransaction,
+  PinRecord,
+  PinRecordUpdate,
+  PinStore,
+} from "./store.js";
+
+interface VerifiedResolution {
+  readonly updates: PinRecordUpdate;
+  readonly rejection?: ApiError;
+}
+
+type VerifiedHandler = () => Promise<VerifiedResolution>;
+
+type PinAttemptOutcome =
+  | { readonly verifiedAt: number }
+  | { readonly rejection: ApiError; readonly lockedOut?: true };
 
 export interface PinServiceOptions {
   readonly pinStore: PinStore;
@@ -168,44 +185,83 @@ export class PinService {
     userId: string,
     pin: string,
     purpose: "action" | "device_unlock",
+    onVerified?: VerifiedHandler,
   ): Promise<number> {
     const pinSecret = this.ensureConfigured();
-    let record = await this.pinStore.get(userId);
+    const outcome = await this.pinStore.withLock(userId, (record, tx) =>
+      this.evaluateAttempt(userId, pin, purpose, pinSecret, record, tx, onVerified),
+    );
+
+    if ("rejection" in outcome) {
+      if (outcome.lockedOut) {
+        await this.notificationService.notify({
+          kind: "pin_lockout",
+          userId,
+          recipientRoles: ["approver", "owner"],
+          reason: "max_attempts_exceeded",
+        });
+      }
+      throw outcome.rejection;
+    }
+    return outcome.verifiedAt;
+  }
+
+  /**
+   * Runs the whole verification state transition against the record read under the row lock,
+   * so every counter and lock decision is derived from the latest committed state. Rejections
+   * are returned rather than thrown so the failure accounting commits with the transaction.
+   */
+  private async evaluateAttempt(
+    userId: string,
+    pin: string,
+    purpose: "action" | "device_unlock",
+    pinSecret: string,
+    lockedRecord: PinRecord | null,
+    tx: LockedPinTransaction,
+    onVerified: VerifiedHandler | undefined,
+  ): Promise<PinAttemptOutcome> {
+    let record = lockedRecord;
     if (!record) {
-      throw new ApiError("forbidden", [
-        {
-          path: ["json", "pin"],
-          message: "Approval PIN must be configured before approving actions",
-        },
-      ]);
+      return {
+        rejection: new ApiError("forbidden", [
+          {
+            path: ["json", "pin"],
+            message: "Approval PIN must be configured before approving actions",
+          },
+        ]),
+      };
     }
 
     const now = this.clock();
 
     // 1. Check permanent 24h lockout
     if (record.status === "locked_out") {
-      throw new ApiError("forbidden", [
-        {
-          path: ["json", "pin"],
-          message: "PIN is permanently locked out; reset is required via authorized recovery",
-        },
-      ]);
+      return {
+        rejection: new ApiError("forbidden", [
+          {
+            path: ["json", "pin"],
+            message: "PIN is permanently locked out; reset is required via authorized recovery",
+          },
+        ]),
+      };
     }
 
     // 2. Check cooling off
     if (record.status === "cooling_off") {
       if (record.coolingOffUntil && now < record.coolingOffUntil) {
         if (purpose !== "device_unlock") {
-          throw new ApiError("forbidden", [
-            {
-              path: ["json", "pin"],
-              message: `PIN is in cooling-off period until ${new Date(record.coolingOffUntil).toISOString()}`,
-            },
-          ]);
+          return {
+            rejection: new ApiError("forbidden", [
+              {
+                path: ["json", "pin"],
+                message: `PIN is in cooling-off period until ${new Date(record.coolingOffUntil).toISOString()}`,
+              },
+            ]),
+          };
         }
       } else {
         // Cooling off expired: transition status back to active
-        await this.pinStore.update(userId, {
+        await tx.update({
           status: "active",
           coolingOffUntil: null,
         });
@@ -223,10 +279,10 @@ export class PinService {
             message: `PIN is temporarily locked. Try again in ${retryAfterSeconds} seconds.`,
           },
         ]);
-        throw Object.assign(err, { retryAfterSeconds });
+        return { rejection: Object.assign(err, { retryAfterSeconds }) };
       }
       // Lockout duration has elapsed: reset consecutive counter
-      await this.pinStore.update(userId, {
+      await tx.update({
         lockedUntil: null,
         failedAttempts: 0,
       });
@@ -249,31 +305,28 @@ export class PinService {
       const failedAttempts = record.failedAttempts + 1;
 
       if (totalFailed24h >= 10) {
-        await this.pinStore.update(userId, {
+        await tx.update({
           status: "locked_out",
           failedAttempts,
           totalFailed24h,
           firstFailedAt,
         });
 
-        await this.notificationService.notify({
-          kind: "pin_lockout",
-          userId,
-          recipientRoles: ["approver", "owner"],
-          reason: "max_attempts_exceeded",
-        });
-
-        throw new ApiError("forbidden", [
-          {
-            path: ["json", "pin"],
-            message: "PIN locked out after 10 failed attempts in 24 hours; support reset required",
-          },
-        ]);
+        return {
+          lockedOut: true,
+          rejection: new ApiError("forbidden", [
+            {
+              path: ["json", "pin"],
+              message:
+                "PIN locked out after 10 failed attempts in 24 hours; support reset required",
+            },
+          ]),
+        };
       }
 
       if (failedAttempts >= 5) {
         const lockedUntil = now + this.lockoutDurationMs;
-        await this.pinStore.update(userId, {
+        await tx.update({
           lockedUntil,
           failedAttempts,
           totalFailed24h,
@@ -286,31 +339,39 @@ export class PinService {
             message: "PIN locked for 30 minutes after 5 failed attempts",
           },
         ]);
-        throw Object.assign(err, { retryAfterSeconds });
+        return { rejection: Object.assign(err, { retryAfterSeconds }) };
       }
 
-      await this.pinStore.update(userId, {
+      await tx.update({
         failedAttempts,
         totalFailed24h,
         firstFailedAt,
       });
 
       const remaining = 5 - failedAttempts;
-      throw new ApiError("forbidden", [
-        {
-          path: ["json", "pin"],
-          message: `Incorrect PIN (${remaining} attempt${remaining === 1 ? "" : "s"} remaining before lockout)`,
-        },
-      ]);
+      return {
+        rejection: new ApiError("forbidden", [
+          {
+            path: ["json", "pin"],
+            message: `Incorrect PIN (${remaining} attempt${remaining === 1 ? "" : "s"} remaining before lockout)`,
+          },
+        ]),
+      };
     }
 
     // Success: reset consecutive failures, preserve totalFailed24h window
-    await this.pinStore.update(userId, {
-      failedAttempts: 0,
-      lockedUntil: null,
-      ...(record.status === "cooling_off" ? {} : { status: "active" }),
-    });
-    return now;
+    const resolution = onVerified
+      ? await onVerified()
+      : {
+          updates: {
+            failedAttempts: 0,
+            lockedUntil: null,
+            ...(record.status === "cooling_off" ? {} : { status: "active" as const }),
+          },
+        };
+    await tx.update(resolution.updates);
+    if (resolution.rejection) return { rejection: resolution.rejection };
+    return { verifiedAt: now };
   }
 
   async changePin(
@@ -327,32 +388,37 @@ export class PinService {
       ]);
     }
 
-    // Verify current PIN (subject to same verification constraints)
-    const dummyActionHash = computeActionHash({ action: "pin:change", userId });
-    await this.verifyPin(userId, currentPin, dummyActionHash);
+    // The current PIN is verified and the new one written under the same row lock, so a
+    // concurrent reset or change cannot be overwritten with a hash derived from stale state.
+    await this.verifyPinCredential(userId, currentPin, "action", async () => {
+      const verified: PinRecordUpdate = {
+        failedAttempts: 0,
+        lockedUntil: null,
+        status: "active",
+      };
 
-    if (currentPin === newPin) {
-      throw new ApiError("validation_failed", [
-        { path: ["json", "newPin"], message: "New PIN must be different from current PIN" },
-      ]);
-    }
+      if (currentPin === newPin) {
+        return {
+          updates: verified,
+          rejection: new ApiError("validation_failed", [
+            { path: ["json", "newPin"], message: "New PIN must be different from current PIN" },
+          ]),
+        };
+      }
 
-    const validation = validatePin(newPin, context);
-    if (!validation.valid) {
-      throw new ApiError("validation_failed", [
-        { path: ["json", "newPin"], message: validation.reason ?? "Invalid PIN" },
-      ]);
-    }
+      const validation = validatePin(newPin, context);
+      if (!validation.valid) {
+        return {
+          updates: verified,
+          rejection: new ApiError("validation_failed", [
+            { path: ["json", "newPin"], message: validation.reason ?? "Invalid PIN" },
+          ]),
+        };
+      }
 
-    const newSalt = generatePinSalt();
-    const newHash = await hashPin(userId, newSalt, newPin, pinSecret);
-
-    await this.pinStore.update(userId, {
-      salt: newSalt,
-      pinHash: newHash,
-      failedAttempts: 0,
-      lockedUntil: null,
-      status: "active",
+      const newSalt = generatePinSalt();
+      const newHash = await hashPin(userId, newSalt, newPin, pinSecret);
+      return { updates: { ...verified, salt: newSalt, pinHash: newHash } };
     });
   }
 
@@ -411,9 +477,8 @@ export class PinService {
     const newSalt = generatePinSalt();
     const newHash = await hashPin(userId, newSalt, newPin, pinSecret);
 
-    const record = await this.pinStore.get(userId);
-    if (record) {
-      await this.pinStore.update(userId, {
+    await this.pinStore.withLock(userId, async (record, tx) => {
+      const reset = {
         salt: newSalt,
         pinHash: newHash,
         failedAttempts: 0,
@@ -421,21 +486,14 @@ export class PinService {
         firstFailedAt: null,
         lockedUntil: null,
         coolingOffUntil: coolingOffUntilMs,
-        status: "cooling_off",
-      });
-    } else {
-      await this.pinStore.create({
-        userId,
-        salt: newSalt,
-        pinHash: newHash,
-        failedAttempts: 0,
-        totalFailed24h: 0,
-        firstFailedAt: null,
-        lockedUntil: null,
-        coolingOffUntil: coolingOffUntilMs,
-        status: "cooling_off",
-      });
-    }
+        status: "cooling_off" as const,
+      };
+      if (record) {
+        await tx.update(reset);
+      } else {
+        await tx.create({ userId, ...reset });
+      }
+    });
 
     await this.notificationService.notify({
       kind: "pin_reset",
@@ -449,20 +507,23 @@ export class PinService {
 
   async unlockPin(targetUserId: string): Promise<void> {
     this.ensureConfigured();
-    const record = await this.pinStore.get(targetUserId);
-    if (!record) {
+    const found = await this.pinStore.withLock(targetUserId, async (record, tx) => {
+      if (!record) return false;
+      await tx.update({
+        status: "active",
+        failedAttempts: 0,
+        totalFailed24h: 0,
+        firstFailedAt: null,
+        lockedUntil: null,
+        coolingOffUntil: null,
+      });
+      return true;
+    });
+    if (!found) {
       throw new ApiError("not_found", [
         { path: ["param", "targetUserId"], message: "User PIN not found" },
       ]);
     }
-    await this.pinStore.update(targetUserId, {
-      status: "active",
-      failedAttempts: 0,
-      totalFailed24h: 0,
-      firstFailedAt: null,
-      lockedUntil: null,
-      coolingOffUntil: null,
-    });
   }
 
   async verifyAction(
