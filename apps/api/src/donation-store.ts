@@ -1,4 +1,4 @@
-import type { Sql } from "@yen/db";
+import { type Sql, setGuestDisplayName } from "@yen/db";
 import { pledgeDonation } from "@yen/ledger";
 import { paise } from "@yen/shared";
 import type {
@@ -22,7 +22,19 @@ export class PostgresDonationPledgeStore implements DonationPledgeStore {
         utr: request.utr,
         ...(request.donorName === undefined ? {} : { donorDisplayName: request.donorName }),
         ...(request.donorContact === undefined ? {} : { donorContact: request.donorContact }),
+        donorNameChoice: request.donorNameChoice ?? "initials",
       });
+      if (
+        result.kind === "pledged" &&
+        request.donorName !== undefined &&
+        request.donorContact !== undefined
+      ) {
+        await setGuestDisplayName(tx, {
+          fundId: request.fundId,
+          contact: request.donorContact,
+          displayName: request.donorName,
+        });
+      }
       return result.kind === "pledged"
         ? { kind: "pledged" as const, donationId: result.donationId }
         : { kind: "duplicate_utr" as const };

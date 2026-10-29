@@ -125,7 +125,12 @@ export const fundSchema = z
 
 const statusSchema = z.object({ status: z.literal("ok") });
 const versionSchema = z
-  .object({ gitSha: z.string(), buildId: z.string() })
+  .object({
+    gitSha: z.string(),
+    buildId: z.string(),
+    artifactDigest: z.string(),
+    releaseTag: z.string(),
+  })
   .strict()
   .openapi("Version");
 
@@ -142,7 +147,10 @@ export const versionRoute = createRoute({
   operationId: "version",
   summary: "Build version",
   responses: {
-    200: jsonResponse(versionSchema, "Source commit and deterministic build identifier"),
+    200: jsonResponse(
+      versionSchema,
+      "Source commit, deterministic build identifier, and optional release metadata",
+    ),
   },
 });
 export const readyRoute = createRoute({
@@ -233,6 +241,7 @@ const publicTimelineItem = z.object({
   id: z.string().uuid(),
   occurredAt: z.iso.datetime(),
   message: z.string(),
+  actorDisplayName: z.string().optional(),
   amountPaise: paiseWire.optional(),
   verified: verificationState,
 });
@@ -1385,6 +1394,7 @@ export const donationPledgeInput = z
       .openapi({ description: "The 12-digit reference shown in the donor's UPI app" }),
     donorName: z.string().trim().min(1).max(60).optional(),
     donorContact: contact.optional(),
+    donorNameChoice: z.enum(["full", "initials", "anonymous"]).default("initials"),
   })
   .strict()
   .openapi("DonationPledge");

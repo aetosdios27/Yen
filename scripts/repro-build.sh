@@ -52,6 +52,7 @@ build_once() {
     export SOURCE_DATE_EPOCH="$source_date_epoch"
     export YEN_BUILD_SHA="$source_commit"
     export YEN_BUILD_ID="$source_tree"
+    export YEN_RELEASE_TAG="$release_tag"
     export NEXT_TELEMETRY_DISABLED=1
     export TURBO_CACHE_DIR="$directory/.turbo"
     pnpm install --frozen-lockfile

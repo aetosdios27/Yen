@@ -787,6 +787,8 @@ export interface components {
     Version: {
       gitSha: string;
       buildId: string;
+      artifactDigest: string;
+      releaseTag: string;
     };
     Principal: {
       /** Format: uuid */
@@ -1025,6 +1027,11 @@ export interface components {
       donorName?: string;
       /** @description Email address, international phone in + digits form, or Indian 10-digit mobile number with optional spaces or hyphens. */
       donorContact?: string;
+      /**
+       * @default initials
+       * @enum {string}
+       */
+      donorNameChoice: "full" | "initials" | "anonymous";
     };
     PinSetupResponse: {
       /** @enum {string} */
@@ -1359,7 +1366,7 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Source commit and deterministic build identifier */
+      /** @description Source commit, deterministic build identifier, and optional release metadata */
       200: {
         headers: {
           /** @description Request correlation ID */
@@ -2473,6 +2480,7 @@ export interface operations {
               /** Format: date-time */
               occurredAt: string;
               message: string;
+              actorDisplayName?: string;
               /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
               amountPaise?: string;
               /** @enum {string} */

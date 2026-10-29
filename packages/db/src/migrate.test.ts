@@ -55,6 +55,8 @@ databaseSuite("migration runner", (sql, url) => {
       "anchors",
       "auth_otp_attempt_limits",
       "auth_otps",
+      "display_name_contact_salts",
+      "display_names",
       "donation_pledges",
       "expense_approvals",
       "expenses",
@@ -62,6 +64,7 @@ databaseSuite("migration runner", (sql, url) => {
       "fund_notification_daily_usage",
       "fund_pseudonyms",
       "funds",
+      "guest_display_names",
       "idempotency_keys",
       "memberships",
       "notification_dead_letter",
@@ -93,7 +96,8 @@ databaseSuite("migration runner", (sql, url) => {
     const expensesSource = await readFile(join(defaultDir, "0012_expenses.sql"));
     const anchorsSource = await readFile(join(defaultDir, "0013_anchors.sql"));
     const trustedDevicesSource = await readFile(join(defaultDir, "0014_trusted_devices.sql"));
-    const ownerInvitesSource = await readFile(join(defaultDir, "0015_owner_invites.sql"));
+    const displayNamesSource = await readFile(join(defaultDir, "0015_display_names.sql"));
+    const ownerInvitesSource = await readFile(join(defaultDir, "0016_owner_invites.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -182,7 +186,13 @@ databaseSuite("migration runner", (sql, url) => {
       },
       {
         version: 15,
-        name: "0015_owner_invites.sql",
+        name: "0015_display_names.sql",
+        checksum: createHash("sha256").update(displayNamesSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
+      {
+        version: 16,
+        name: "0016_owner_invites.sql",
         checksum: createHash("sha256").update(ownerInvitesSource).digest("hex"),
         applied_at: expect.any(Date),
       },
@@ -219,7 +229,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(15);
+    expect(before).toHaveLength(16);
   });
 
   it("rejects an edited applied file and names it", async () => {

@@ -320,6 +320,7 @@ export interface PledgeDonationInput {
   utr: string;
   donorDisplayName?: string;
   donorContact?: string;
+  donorNameChoice?: "full" | "initials" | "anonymous";
   donationId?: string;
   actorPseudonym?: PseudonymId | string;
   occurredAt?: string;
@@ -357,14 +358,15 @@ export async function pledgeDonation(
   const donationId = input.donationId ?? uuidv7();
   const inserted = await tx<{ id: string }[]>`
     INSERT INTO donation_pledges (
-      id, fund_id, amount_paise, utr, donor_display_name, donor_contact
+      id, fund_id, amount_paise, utr, donor_display_name, donor_contact, donor_name_choice
     ) VALUES (
       ${donationId},
       ${input.fundId},
       ${input.amount.toString()},
       ${input.utr},
       ${input.donorDisplayName ?? null},
-      ${input.donorContact ?? null}
+      ${input.donorContact ?? null},
+      ${input.donorNameChoice ?? "initials"}
     )
     ON CONFLICT ON CONSTRAINT donation_pledges_utr_key DO NOTHING
     RETURNING id

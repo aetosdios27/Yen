@@ -615,8 +615,8 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 ### SLSA specification
 
 - **Source:** SLSA; Linux Foundation, version 1.2, undated (accessed 2026).
-- **URL:** https://slsa.dev/spec/v1.2/
-- **What we use it for:** SLSA defines provenance and increasing build security levels. Yen records GitHub build provenance for release assets, but does not claim a SLSA level from this workflow.
+- **URL:** https://slsa.dev/spec/v1.2/build-requirements (Build requirements and level table, opened 2026-10-29).
+- **What we use it for:** SLSA v1.2 Build requirements distinguish existing, authentic and unforgeable provenance, and hosted and isolated build platforms. Yen's release workflow is designed to publish GitHub provenance, but it has never run for a real release tag; Yen does not claim a SLSA Build Level.
 - **Where in this repo:** .github/workflows/release.yml; docs/verify-release.md
 
 <a id="reproducible-builds"></a>
