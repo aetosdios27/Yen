@@ -60,4 +60,36 @@ databaseSuite("Postgres OTP store", (sql) => {
     ]);
     expect(results.filter(Boolean)).toHaveLength(1);
   });
+
+  it("binds trusted-device expiry and revocation to the backing session", async () => {
+    const store = new PostgresAuthStore(sql);
+    const now = Date.UTC(2026, 0, 1);
+    const user = await store.findOrCreateUserByPhone(phone, now);
+    const sessionId = randomUUID();
+    await store.createSession({
+      id: sessionId,
+      userId: user.id,
+      tokenHash: `trusted-device-${sessionId}`,
+      userAgent: "test",
+      deviceInfo: "test device",
+      ipAddress: "127.0.0.1",
+      createdAt: now,
+      lastActiveAt: now,
+      expiresAt: now + 30 * 24 * 60 * 60 * 1000,
+    });
+
+    await store.trustDevice(sessionId, user.id, now, 7 * 24 * 60 * 60 * 1000);
+    expect(await store.getTrustedDevice(sessionId, now)).toMatchObject({
+      sessionId,
+      userId: user.id,
+      idleExpiresAt: now + 7 * 24 * 60 * 60 * 1000,
+    });
+    expect(await store.getTrustedDevice(sessionId, now + 7 * 24 * 60 * 60 * 1000)).toMatchObject({
+      idleExpiresAt: now + 7 * 24 * 60 * 60 * 1000,
+    });
+
+    await store.trustDevice(sessionId, user.id, now + 1, 7 * 24 * 60 * 60 * 1000);
+    await store.revokeSession(sessionId, now + 2);
+    expect(await store.getTrustedDevice(sessionId, now + 2)).toBeNull();
+  });
 });

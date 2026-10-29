@@ -151,6 +151,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/auth/device/lock": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Ends the unlocked period for the current trusted device. */
+    post: operations["lockTrustedDevice"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/auth/logout": {
     parameters: {
       query?: never;
@@ -449,6 +466,23 @@ export interface paths {
     put?: never;
     /** @description Sets the 6-digit approval PIN for the principal before first approval action. */
     post: operations["setupApprovalPin"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/auth/device/unlock": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Reauthenticates a phone-verified session with the Yen PIN and binds or refreshes its trusted-device record. */
+    post: operations["unlockTrustedDevice"];
     delete?: never;
     options?: never;
     head?: never;
@@ -957,6 +991,17 @@ export interface components {
        */
       pin: string;
     };
+    UnlockTrustedDeviceResponse: {
+      /** @enum {string} */
+      status: "unlocked";
+    };
+    UnlockTrustedDeviceInput: {
+      /**
+       * @description 6-digit Yen approval PIN
+       * @example 482915
+       */
+      pin: string;
+    };
     PinStatus: {
       isSet: boolean;
       /** @enum {string} */
@@ -1001,7 +1046,10 @@ export interface components {
       /** Format: uuid */
       challengeId: string;
     };
-    ResetPinRequestInput: Record<string, never>;
+    ResetPinRequestInput: {
+      /** @enum {string} */
+      channel: "whatsapp" | "sms";
+    };
     ResetPinConfirmResponse: {
       /** @enum {string} */
       status: "cooling_off";
@@ -1662,6 +1710,53 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ListSessionsResponse"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  lockTrustedDevice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Trusted device locked */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** @enum {string} */
+            status: "locked";
+          };
         };
       };
       /** @description Authentication required */
@@ -3773,6 +3868,78 @@ export interface operations {
       };
       /** @description Gateway timeout */
       504: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  unlockTrustedDevice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UnlockTrustedDeviceInput"];
+      };
+    };
+    responses: {
+      /** @description Trusted device unlocked */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UnlockTrustedDeviceResponse"];
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;

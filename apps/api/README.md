@@ -6,15 +6,58 @@ Route definitions in `src/contract.ts` own request and response schemas.
 
 ## Routes
 
-| Method | Path                 | Behavior                                          |
-| ------ | -------------------- | ------------------------------------------------- |
-| GET    | `/health`            | Public liveness                                   |
-| GET    | `/ready`             | Public readiness, through an injected async check |
-| GET    | `/version`           | Public source commit and deterministic build ID   |
-| GET    | `/v1/openapi.json`   | Public OpenAPI document                           |
-| GET    | `/v1/me`             | Current principal                                 |
-| POST   | `/v1/funds`          | Stub: create an in-memory fake fund               |
-| GET    | `/v1/funds/{fundId}` | Stub: read a fake fund owned by the principal     |
+| Method | Path                     | Behavior                                          |
+| ------ | ------------------------ | ------------------------------------------------- |
+| GET    | `/health`                | Public liveness                                   |
+| GET    | `/ready`                 | Public readiness, through an injected async check |
+| GET    | `/version`               | Public source commit and deterministic build ID   |
+| GET    | `/v1/openapi.json`       | Public OpenAPI document                           |
+| GET    | `/v1/me`                 | Current principal                                 |
+| POST   | `/v1/auth/device/unlock` | Unlock an OTP-proven session with the Yen PIN     |
+| POST   | `/v1/auth/device/lock`   | End the current trusted-device unlock period      |
+| GET    | `/v1/auth/sessions`      | List active trusted devices                       |
+| POST   | `/v1/funds`              | Stub: create an in-memory fake fund               |
+| GET    | `/v1/funds/{fundId}`     | Stub: read a fake fund owned by the principal     |
+
+## Sign-in policy (YEN-72)
+
+Phone OTP proves control of the phone number. The user chooses WhatsApp or SMS
+for each challenge; delivery does not silently switch channels. OTP is required
+for first sign-in, adding a device, account recovery, and PIN reset. It is not a
+factor for each ordinary session.
+
+An OTP-proven session on an existing device unlocks with the 6-digit Yen PIN.
+Device unlock and approval checks use the same `PinService` credential
+verification, so both update the existing lockout state. Unlock failures return
+a generic unauthenticated error and do not reveal whether a phone number has
+an account. The PIN verifier uses an HMAC key held outside Postgres; PIN values
+must not appear in logs, URLs, or analytics.
+
+An OTP-authenticated session becomes a trusted device only after successful
+PIN setup or verification. Trusted-device state is bound to its session, shown
+in the authenticated session/device list, and revoked by sign-out or
+sign-out-everywhere. The policy sets a 7-day idle timeout and a 30-day
+absolute lifetime. After idle expiry, PIN reauthentication is required while
+the session remains within its absolute lifetime. OTP is required again after
+absolute expiry, on a new device, and for recovery or PIN reset. A
+device-bound fingerprint/biometric authenticator is out of scope; YEN-71 owns
+that extension. It should be a device-local activation factor and must not
+send biometric data to Yen.
+
+The `trusted_devices` table stores session and user identifiers, timestamps,
+and revocation state only. Session tokens remain hashed in `sessions`; the PIN
+and biometric secrets are not stored in the trusted-device record.
+
+These are Yen product decisions, not a claim of NIST conformance. NIST SP
+800-63B-4 distinguishes centrally verified memorized secrets from local device
+activation secrets, requires throttling for password verifiers, describes
+authenticator binding records, and calls for documented inactivity and overall
+session timeouts. Yen's PIN is centrally verified and is protected by the
+shared lockout counter. See [NIST SP 800-63B-4](../../docs/REFERENCES.md#nist-800-63b).
+
+The device unlock endpoint is method-shaped so YEN-71 can add a device-bound
+biometric verifier without changing session or device-list semantics. The API
+does not receive or store fingerprint data.
 
 Fund data disappears on restart. A fund starts with `name` and `targetPaise`.
 The response adds a canonical lowercase UUID `id` and an ISO timestamp `createdAt`.

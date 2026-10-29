@@ -526,12 +526,12 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** apps/api/README.md
 
 <a id="nist-800-63b"></a>
-### Digital Identity Guidelines: Authentication and Lifecycle Management
+### Digital Identity Guidelines: Authentication and Authenticator Management
 
-- **Source:** Paul A. Grassi, James L. Fenton, Elaine M. Newton, Ray A. Perlner, Andrew R. Regenscheid, William E. Burr, Justin P. Richer, Naomi B. Lefkovitz, J.M. Danker, Yee-Yin Choong, Kristen K. Greene and Mary F. Theofanos; NIST Special Publication 800-63B, 2017 (updated 2020).
-- **URL:** https://pages.nist.gov/800-63-3/sp800-63b.html
-- **What we use it for:** Memorized secret verifiers require rate limiting and lockout controls to mitigate online guessing (Sections 5.1.1.2 and 5.2.2). Out-of-band authenticators (SMS/PSTN) carry risks of SIM swap and phone number recycling.
-- **Where in this repo:** docs/THREAT-MODEL.md; docs/TRUST-CLAIMS.md
+- **Source:** David Temoshok, James L. Fenton, Yee-Yin Choong, Naomi Lefkovitz, Andrew Regenscheid, Ryan Galluzzo and Justin P. Richer; NIST Special Publication 800-63B-4, July 2025.
+- **URL:** https://pages.nist.gov/800-63-4/sp800-63b.html (official NIST publication; metadata and sections 3.1.1, 3.2.2, 4.1, and 5 verified against the publication on 2026-10-29; DOI: https://doi.org/10.6028/NIST.SP.800-63B-4)
+- **What we use it for:** Section 3.1.1 treats a numeric PIN as a memorized password when it is centrally verified, and requires effective failed-attempt rate limiting (Section 3.2.2). Section 4.1 describes binding authenticators to an account and retaining lifecycle records. Section 5 describes session secrets and requires documented overall and inactivity timeouts. Yen uses these as design references; it does not claim NIST assurance-level conformance.
+- **Where in this repo:** apps/api/README.md; docs/THREAT-MODEL.md; docs/TRUST-CLAIMS.md
 
 <a id="owasp-auth"></a>
 ### Authentication Cheat Sheet

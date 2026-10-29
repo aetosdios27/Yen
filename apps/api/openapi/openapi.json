@@ -485,6 +485,25 @@
         "required": ["pin"],
         "additionalProperties": false
       },
+      "UnlockTrustedDeviceResponse": {
+        "type": "object",
+        "properties": { "status": { "type": "string", "enum": ["unlocked"] } },
+        "required": ["status"],
+        "additionalProperties": false
+      },
+      "UnlockTrustedDeviceInput": {
+        "type": "object",
+        "properties": {
+          "pin": {
+            "type": "string",
+            "pattern": "^\\d{6}$",
+            "example": "482915",
+            "description": "6-digit Yen approval PIN"
+          }
+        },
+        "required": ["pin"],
+        "additionalProperties": false
+      },
       "PinStatus": {
         "type": "object",
         "properties": {
@@ -557,7 +576,12 @@
         "required": ["status", "challengeId"],
         "additionalProperties": false
       },
-      "ResetPinRequestInput": { "type": "object", "properties": {}, "additionalProperties": false },
+      "ResetPinRequestInput": {
+        "type": "object",
+        "properties": { "channel": { "type": "string", "enum": ["whatsapp", "sms"] } },
+        "required": ["channel"],
+        "additionalProperties": false
+      },
       "ResetPinConfirmResponse": {
         "type": "object",
         "properties": {
@@ -1367,6 +1391,62 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/ListSessionsResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/device/lock": {
+      "post": {
+        "tags": ["auth", "device"],
+        "operationId": "lockTrustedDevice",
+        "security": [{ "bearerAuth": [] }],
+        "description": "Ends the unlocked period for the current trusted device.",
+        "responses": {
+          "200": {
+            "description": "Trusted device locked",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "status": { "type": "string", "enum": ["locked"] } },
+                  "required": ["status"],
+                  "additionalProperties": false
+                }
               }
             }
           },
@@ -4296,6 +4376,96 @@
           },
           "504": {
             "description": "Gateway timeout",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/device/unlock": {
+      "post": {
+        "tags": ["auth", "device"],
+        "operationId": "unlockTrustedDevice",
+        "security": [{ "bearerAuth": [] }],
+        "description": "Reauthenticates a phone-verified session with the Yen PIN and binds or refreshes its trusted-device record.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UnlockTrustedDeviceInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Trusted device unlocked",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UnlockTrustedDeviceResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; details contain field paths",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },

@@ -561,6 +561,55 @@ export const getSessionsRoute = createRoute({
   },
 });
 
+export const pinSchema = z
+  .string()
+  .regex(/^\d{6}$/, "Must be exactly 6 digits")
+  .openapi({ example: "482915", description: "6-digit Yen approval PIN" });
+
+export const unlockTrustedDeviceInput = z
+  .object({ pin: pinSchema })
+  .strict()
+  .openapi("UnlockTrustedDeviceInput");
+
+export const unlockTrustedDeviceResponse = z
+  .object({ status: z.literal("unlocked") })
+  .strict()
+  .openapi("UnlockTrustedDeviceResponse");
+
+export const unlockTrustedDeviceRoute = createRoute({
+  method: "post",
+  path: "/v1/auth/device/unlock",
+  tags: ["auth", "device"],
+  operationId: "unlockTrustedDevice",
+  security,
+  description:
+    "Reauthenticates a phone-verified session with the Yen PIN and binds or refreshes its trusted-device record.",
+  request: {
+    body: { required: true, content: { "application/json": { schema: unlockTrustedDeviceInput } } },
+  },
+  responses: {
+    200: jsonResponse(unlockTrustedDeviceResponse, "Trusted device unlocked"),
+    400: protectedErrors[400],
+    401: protectedErrors[401],
+    429: protectedErrors[429],
+    500: protectedErrors[500],
+  },
+});
+
+export const lockTrustedDeviceRoute = createRoute({
+  method: "post",
+  path: "/v1/auth/device/lock",
+  tags: ["auth", "device"],
+  operationId: "lockTrustedDevice",
+  security,
+  description: "Ends the unlocked period for the current trusted device.",
+  responses: {
+    200: jsonResponse(z.object({ status: z.literal("locked") }).strict(), "Trusted device locked"),
+    401: protectedErrors[401],
+    500: protectedErrors[500],
+  },
+});
+
 export const logoutRoute = createRoute({
   method: "post",
   path: "/v1/auth/logout",
@@ -614,11 +663,6 @@ export const revokeSessionRoute = createRoute({
     500: internalResponse,
   },
 });
-
-export const pinSchema = z
-  .string()
-  .regex(/^\d{6}$/, "Must be exactly 6 digits")
-  .openapi({ example: "482915", description: "6-digit Yen approval PIN" });
 
 export const pinSetupInput = z
   .object({
@@ -739,7 +783,10 @@ export const changePinRoute = createRoute({
   },
 });
 
-export const resetPinRequestInput = z.object({}).strict().openapi("ResetPinRequestInput");
+export const resetPinRequestInput = z
+  .object({ channel: z.enum(["whatsapp", "sms"]) })
+  .strict()
+  .openapi("ResetPinRequestInput");
 
 export const resetPinRequestResponse = z
   .object({

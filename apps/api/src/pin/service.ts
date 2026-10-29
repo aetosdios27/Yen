@@ -149,6 +149,26 @@ export class PinService {
     pin: string,
     actionHash: string,
   ): Promise<{ approvalToken: string; expiresAt: string }> {
+    const verifiedAt = await this.verifyPinCredential(userId, pin, "action");
+    const approvalToken = await this.actionTokenStore.createToken(
+      userId,
+      actionHash,
+      this.tokenTtlMs,
+    );
+    const expiresAt = new Date(verifiedAt + this.tokenTtlMs).toISOString();
+
+    return { approvalToken, expiresAt };
+  }
+
+  async verifyPinForDeviceUnlock(userId: string, pin: string): Promise<void> {
+    await this.verifyPinCredential(userId, pin, "device_unlock");
+  }
+
+  private async verifyPinCredential(
+    userId: string,
+    pin: string,
+    purpose: "action" | "device_unlock",
+  ): Promise<number> {
     const pinSecret = this.ensureConfigured();
     let record = await this.pinStore.get(userId);
     if (!record) {
@@ -175,19 +195,22 @@ export class PinService {
     // 2. Check cooling off
     if (record.status === "cooling_off") {
       if (record.coolingOffUntil && now < record.coolingOffUntil) {
-        throw new ApiError("forbidden", [
-          {
-            path: ["json", "pin"],
-            message: `PIN is in cooling-off period until ${new Date(record.coolingOffUntil).toISOString()}`,
-          },
-        ]);
+        if (purpose !== "device_unlock") {
+          throw new ApiError("forbidden", [
+            {
+              path: ["json", "pin"],
+              message: `PIN is in cooling-off period until ${new Date(record.coolingOffUntil).toISOString()}`,
+            },
+          ]);
+        }
+      } else {
+        // Cooling off expired: transition status back to active
+        await this.pinStore.update(userId, {
+          status: "active",
+          coolingOffUntil: null,
+        });
+        record = { ...record, status: "active", coolingOffUntil: null };
       }
-      // Cooling off expired: transition status back to active
-      await this.pinStore.update(userId, {
-        status: "active",
-        coolingOffUntil: null,
-      });
-      record = { ...record, status: "active", coolingOffUntil: null };
     }
 
     // 3. Check temporary rate-limiting lockout
@@ -285,17 +308,9 @@ export class PinService {
     await this.pinStore.update(userId, {
       failedAttempts: 0,
       lockedUntil: null,
-      status: "active",
+      ...(record.status === "cooling_off" ? {} : { status: "active" }),
     });
-
-    const approvalToken = await this.actionTokenStore.createToken(
-      userId,
-      actionHash,
-      this.tokenTtlMs,
-    );
-    const expiresAt = new Date(now + this.tokenTtlMs).toISOString();
-
-    return { approvalToken, expiresAt };
+    return now;
   }
 
   async changePin(
@@ -341,10 +356,13 @@ export class PinService {
     });
   }
 
-  async requestReset(userId: string): Promise<{ challengeId: string }> {
+  async requestReset(
+    userId: string,
+    channel: "whatsapp" | "sms",
+  ): Promise<{ challengeId: string }> {
     this.ensureConfigured();
     const otpVerifier = this.ensureOtpVerifier();
-    const challenge = await otpVerifier.createChallenge(userId);
+    const challenge = await otpVerifier.createChallenge(userId, channel);
     return { challengeId: challenge.challengeId };
   }
 

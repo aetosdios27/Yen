@@ -1,6 +1,8 @@
 import { authOtpRowSchema, type Sql, sessionRowSchema, userRowSchema, uuidv7 } from "@yen/db";
 import type { PhoneE164 } from "@yen/shared";
 
+export const TRUSTED_DEVICE_IDLE_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000;
+
 export interface OtpChallenge {
   readonly id: string;
   readonly phone: PhoneE164;
@@ -33,6 +35,15 @@ export interface Session {
   readonly createdAt: number;
   readonly lastActiveAt: number;
   readonly expiresAt: number;
+  readonly revokedAt: number | null;
+}
+
+export interface TrustedDevice {
+  readonly sessionId: string;
+  readonly userId: string;
+  readonly trustedAt: number;
+  readonly lastActiveAt: number;
+  readonly idleExpiresAt: number;
   readonly revokedAt: number | null;
 }
 
@@ -69,6 +80,7 @@ export interface AuthStore {
   ): Promise<boolean>;
   createOtpChallenge(input: CreateChallengeInput): Promise<OtpChallenge>;
   getLatestActiveOtpChallenge(phone: PhoneE164, now: number): Promise<OtpChallenge | null>;
+  getOtpChallengeById(challengeId: string, now: number): Promise<OtpChallenge | null>;
   incrementOtpAttempts(challengeId: string, now: number): Promise<OtpChallenge | null>;
   consumeOtpChallenge(challengeId: string, now: number): Promise<boolean>;
 
@@ -76,6 +88,10 @@ export interface AuthStore {
   getUserById(userId: string): Promise<User | null>;
 
   createSession(input: CreateSessionInput): Promise<Session>;
+  trustDevice(sessionId: string, userId: string, now: number, idleTimeoutMs: number): Promise<void>;
+  getTrustedDevice(sessionId: string, now: number): Promise<TrustedDevice | null>;
+  touchTrustedDevice(sessionId: string, now: number, idleTimeoutMs: number): Promise<void>;
+  lockTrustedDevice(sessionId: string, now: number): Promise<void>;
   findSessionByTokenHash(tokenHash: string, now: number): Promise<Session | null>;
   touchSession(sessionId: string, now: number): Promise<void>;
   rotateSession(sessionId: string, newTokenHash: string, now: number): Promise<Session | null>;
@@ -91,6 +107,7 @@ export class MemoryAuthStore implements AuthStore {
   private readonly usersByPhone = new Map<string, string>(); // phone -> userId
   private readonly sessions = new Map<string, Session>(); // key: sessionId
   private readonly sessionTokenToId = new Map<string, string>(); // tokenHash -> sessionId
+  private readonly trustedDevices = new Map<string, TrustedDevice>();
 
   constructor(private readonly idGenerator: () => string = () => crypto.randomUUID()) {}
 
@@ -147,6 +164,12 @@ export class MemoryAuthStore implements AuthStore {
       }
     }
     return latest;
+  }
+
+  async getOtpChallengeById(challengeId: string, now: number): Promise<OtpChallenge | null> {
+    const challenge = this.challenges.get(challengeId);
+    if (!challenge || challenge.consumedAt !== null || now >= challenge.expiresAt) return null;
+    return { ...challenge };
   }
 
   async incrementOtpAttempts(challengeId: string, now: number): Promise<OtpChallenge | null> {
@@ -213,6 +236,41 @@ export class MemoryAuthStore implements AuthStore {
     return session;
   }
 
+  async trustDevice(sessionId: string, userId: string, now: number, idleTimeoutMs: number) {
+    const existing = this.trustedDevices.get(sessionId);
+    this.trustedDevices.set(sessionId, {
+      sessionId,
+      userId,
+      trustedAt: existing?.trustedAt ?? now,
+      lastActiveAt: now,
+      idleExpiresAt: now + idleTimeoutMs,
+      revokedAt: null,
+    });
+  }
+
+  async getTrustedDevice(sessionId: string, _now: number) {
+    const device = this.trustedDevices.get(sessionId);
+    if (!device || device.revokedAt !== null) return null;
+    return { ...device };
+  }
+
+  async touchTrustedDevice(sessionId: string, now: number, idleTimeoutMs: number) {
+    const device = await this.getTrustedDevice(sessionId, now);
+    if (!device || now >= device.idleExpiresAt) return;
+    this.trustedDevices.set(sessionId, {
+      ...device,
+      lastActiveAt: now,
+      idleExpiresAt: now + idleTimeoutMs,
+    });
+  }
+
+  async lockTrustedDevice(sessionId: string, now: number) {
+    const device = this.trustedDevices.get(sessionId);
+    if (device && device.revokedAt === null) {
+      this.trustedDevices.set(sessionId, { ...device, lastActiveAt: now, idleExpiresAt: now });
+    }
+  }
+
   async findSessionByTokenHash(tokenHash: string, now: number): Promise<Session | null> {
     const sessionId = this.sessionTokenToId.get(tokenHash);
     if (!sessionId) return null;
@@ -258,6 +316,8 @@ export class MemoryAuthStore implements AuthStore {
       revokedAt: now,
     });
     this.sessionTokenToId.delete(session.tokenHash);
+    const device = this.trustedDevices.get(sessionId);
+    if (device) this.trustedDevices.set(sessionId, { ...device, revokedAt: now });
     return true;
   }
 
@@ -270,6 +330,8 @@ export class MemoryAuthStore implements AuthStore {
           revokedAt: now,
         });
         this.sessionTokenToId.delete(session.tokenHash);
+        const device = this.trustedDevices.get(id);
+        if (device) this.trustedDevices.set(id, { ...device, revokedAt: now });
         count++;
       }
     }
@@ -397,6 +459,15 @@ export class PostgresAuthStore implements AuthStore {
     return rows.length > 0 ? parseAuthOtpRow(rows[0]) : null;
   }
 
+  async getOtpChallengeById(challengeId: string, now: number): Promise<OtpChallenge | null> {
+    const rows = await this.sql`
+      SELECT * FROM auth_otps
+      WHERE id = ${challengeId} AND consumed_at IS NULL AND expires_at > ${new Date(now)}
+      LIMIT 1
+    `;
+    return rows.length > 0 ? parseAuthOtpRow(rows[0]) : null;
+  }
+
   async incrementOtpAttempts(challengeId: string, now: number): Promise<OtpChallenge | null> {
     const rows = await this.sql`
       UPDATE auth_otps
@@ -462,6 +533,61 @@ export class PostgresAuthStore implements AuthStore {
     return parseSessionRow(rows[0]);
   }
 
+  async trustDevice(sessionId: string, userId: string, now: number, idleTimeoutMs: number) {
+    await this.sql`
+      INSERT INTO trusted_devices (session_id, user_id, trusted_at, last_active_at, idle_expires_at)
+      SELECT ${sessionId}, ${userId}, ${new Date(now)}, ${new Date(now)}, ${new Date(now + idleTimeoutMs)}
+      WHERE EXISTS (SELECT 1 FROM sessions WHERE id = ${sessionId} AND user_id = ${userId} AND revoked_at IS NULL)
+      ON CONFLICT (session_id) DO UPDATE
+      SET last_active_at = EXCLUDED.last_active_at,
+          idle_expires_at = EXCLUDED.idle_expires_at,
+          revoked_at = NULL
+      WHERE trusted_devices.user_id = EXCLUDED.user_id
+    `;
+  }
+
+  async getTrustedDevice(sessionId: string, now: number): Promise<TrustedDevice | null> {
+    const rows = await this.sql`
+      SELECT trusted_devices.session_id, trusted_devices.user_id,
+        trusted_devices.trusted_at, trusted_devices.last_active_at,
+        trusted_devices.idle_expires_at, trusted_devices.revoked_at
+      FROM trusted_devices
+      JOIN sessions ON sessions.id = trusted_devices.session_id
+        AND sessions.user_id = trusted_devices.user_id
+        AND sessions.revoked_at IS NULL
+        AND sessions.expires_at > ${new Date(now)}
+      WHERE trusted_devices.session_id = ${sessionId}
+        AND trusted_devices.revoked_at IS NULL
+      LIMIT 1
+    `;
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      sessionId: String(row.session_id),
+      userId: String(row.user_id),
+      trustedAt: new Date(String(row.trusted_at)).getTime(),
+      lastActiveAt: new Date(String(row.last_active_at)).getTime(),
+      idleExpiresAt: new Date(String(row.idle_expires_at)).getTime(),
+      revokedAt: row.revoked_at ? new Date(String(row.revoked_at)).getTime() : null,
+    };
+  }
+
+  async touchTrustedDevice(sessionId: string, now: number, idleTimeoutMs: number) {
+    await this.sql`
+      UPDATE trusted_devices
+      SET last_active_at = ${new Date(now)}, idle_expires_at = ${new Date(now + idleTimeoutMs)}
+      WHERE session_id = ${sessionId} AND revoked_at IS NULL AND idle_expires_at > ${new Date(now)}
+    `;
+  }
+
+  async lockTrustedDevice(sessionId: string, now: number) {
+    await this.sql`
+      UPDATE trusted_devices
+      SET last_active_at = ${new Date(now)}, idle_expires_at = ${new Date(now)}
+      WHERE session_id = ${sessionId} AND revoked_at IS NULL
+    `;
+  }
+
   async findSessionByTokenHash(tokenHash: string, now: number): Promise<Session | null> {
     const rows = await this.sql`
       SELECT * FROM sessions
@@ -497,21 +623,25 @@ export class PostgresAuthStore implements AuthStore {
   }
 
   async revokeSession(sessionId: string, now: number): Promise<boolean> {
-    const result = await this.sql`
-      UPDATE sessions
-      SET revoked_at = ${new Date(now)}
-      WHERE id = ${sessionId} AND revoked_at IS NULL
-    `;
-    return result.count > 0;
+    return this.sql.begin(async (tx) => {
+      const result = await tx`
+        UPDATE sessions SET revoked_at = ${new Date(now)}
+        WHERE id = ${sessionId} AND revoked_at IS NULL
+      `;
+      await tx`UPDATE trusted_devices SET revoked_at = ${new Date(now)} WHERE session_id = ${sessionId} AND revoked_at IS NULL`;
+      return result.count > 0;
+    });
   }
 
   async revokeAllUserSessions(userId: string, now: number): Promise<number> {
-    const result = await this.sql`
-      UPDATE sessions
-      SET revoked_at = ${new Date(now)}
-      WHERE user_id = ${userId} AND revoked_at IS NULL
-    `;
-    return result.count;
+    return this.sql.begin(async (tx) => {
+      const result = await tx`
+        UPDATE sessions SET revoked_at = ${new Date(now)}
+        WHERE user_id = ${userId} AND revoked_at IS NULL
+      `;
+      await tx`UPDATE trusted_devices SET revoked_at = ${new Date(now)} WHERE user_id = ${userId} AND revoked_at IS NULL`;
+      return result.count;
+    });
   }
 
   async listUserSessions(userId: string, now: number): Promise<readonly Session[]> {

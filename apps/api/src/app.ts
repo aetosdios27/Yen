@@ -32,6 +32,7 @@ import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import { routePath } from "hono/route";
 import {
+  AuthPinOtpVerifier,
   generateOtpCode,
   generateSalt,
   generateSessionToken,
@@ -62,6 +63,7 @@ import {
   getSessionsRoute,
   healthRoute,
   listExpensesRoute,
+  lockTrustedDeviceRoute,
   logoutAllRoute,
   logoutRoute,
   MAX_EVIDENCE_FILE_SIZE_BYTES,
@@ -85,6 +87,7 @@ import {
   setupPinRoute,
   submitExpenseRoute,
   unlockPinRoute,
+  unlockTrustedDeviceRoute,
   uploadEvidenceRoute,
   verifyOtpRoute,
   verifyPinRoute,
@@ -105,6 +108,7 @@ import {
   concurrencyLimit,
   idempotency,
   isEvidenceRoute,
+  isPendingDeviceAuthRoute,
   isPledgeRoute,
   isPublicAuthRoute,
   isPublicDonationRoute,
@@ -116,7 +120,7 @@ import {
   requireAuth,
 } from "./middleware.js";
 import { verifyMimeSignature } from "./mime-signature.js";
-import { computeActionHash } from "./pin/index.js";
+import { computeActionHash, PinService } from "./pin/index.js";
 import type {
   ExistingExpenseResource,
   ExpenseAction,
@@ -133,10 +137,36 @@ import type { VirusScanResult } from "./virus-scanner.js";
 export { devPolicy } from "./policy.js";
 
 export function createApp(overrides: Partial<AppDependencies> = {}) {
-  const deps = {
+  const baseDeps = {
     ...defaultDependencies(overrides.clock, overrides.expenseStore),
     ...overrides,
   };
+  const otpVerifier =
+    overrides.otpVerifier === undefined
+      ? new AuthPinOtpVerifier({
+          authStore: baseDeps.authStore,
+          deliveryProvider: baseDeps.otpDeliveryProvider,
+          rateLimitStore: baseDeps.rateLimitStore,
+          phoneRateLimit: baseDeps.otpRateLimitPhone,
+          otpHashKey: baseDeps.otpHashKey,
+          clock: baseDeps.clock,
+          idGenerator: baseDeps.idGenerator,
+          cooldownMs: baseDeps.otpCooldownMs,
+          expiryMs: baseDeps.otpExpiryMs,
+          maxAttempts: baseDeps.otpMaxAttempts,
+        })
+      : overrides.otpVerifier;
+  const pinService =
+    overrides.pinService ??
+    new PinService({
+      pinStore: baseDeps.pinStore,
+      actionTokenStore: baseDeps.actionTokenStore,
+      notificationService: baseDeps.pinNotificationService,
+      pinSecret: baseDeps.pinSecret,
+      otpVerifier,
+      clock: baseDeps.clock,
+    });
+  const deps = { ...baseDeps, pinService };
   const app = new OpenAPIHono<ApiEnv>({
     strict: false,
     defaultHook: (result) => {
@@ -260,7 +290,9 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       : requireAuth(c, next),
   );
   app.use("/v1/auth/*", (c, next) =>
-    isPublicAuthRoute(c.req.path) ? next() : requireAuth(c, next),
+    isPublicAuthRoute(c.req.path) || isPendingDeviceAuthRoute(c.req.path)
+      ? next()
+      : requireAuth(c, next),
   );
 
   const funds = new Map<string, { owner: string; fund: z.infer<typeof fundSchema> }>();
@@ -520,19 +552,33 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const now = deps.clock();
 
     const sessions = await deps.authStore.listUserSessions(principal.id, now);
+    const trustedSessions = await Promise.all(
+      sessions.map(async (session) => ({
+        session,
+        trusted: await deps.authStore.getTrustedDevice(session.id, now),
+      })),
+    );
     return c.json(
       {
-        sessions: sessions.map((s) => ({
-          id: s.id,
-          deviceInfo: s.deviceInfo,
-          ip: s.ipAddress,
-          createdAt: new Date(s.createdAt).toISOString(),
-          lastActiveAt: new Date(s.lastActiveAt).toISOString(),
-          isCurrent: currentSession ? s.id === currentSession.id : false,
-        })),
+        sessions: trustedSessions
+          .filter((entry) => entry.trusted?.userId === principal.id)
+          .map(({ session: s }) => ({
+            id: s.id,
+            deviceInfo: s.deviceInfo,
+            ip: s.ipAddress,
+            createdAt: new Date(s.createdAt).toISOString(),
+            lastActiveAt: new Date(s.lastActiveAt).toISOString(),
+            isCurrent: currentSession ? s.id === currentSession.id : false,
+          })),
       },
       200,
     );
+  });
+  app.openapi(lockTrustedDeviceRoute, async (c) => {
+    const session = c.get("session");
+    if (!c.get("principal") || !session) throw new ApiError("unauthenticated");
+    await deps.authStore.lockTrustedDevice(session.id, deps.clock());
+    return c.json({ status: "locked" as const }, 200);
   });
   app.openapi(logoutRoute, async (c) => {
     const currentSession = c.get("session");
@@ -1126,7 +1172,36 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     if (!principal) throw new ApiError("unauthenticated");
     const { pin } = c.req.valid("json");
     await deps.pinService.setupPin(principal.id, pin, { userId: principal.id });
+    const session = c.get("session");
+    if (session) {
+      await deps.authStore.trustDevice(
+        session.id,
+        principal.id,
+        deps.clock(),
+        deps.trustedDeviceIdleTimeoutMs,
+      );
+    }
     return c.json({ status: "created" as const, isSet: true as const }, 201);
+  });
+
+  app.openapi(unlockTrustedDeviceRoute, async (c) => {
+    const principal = c.get("principal");
+    const session = c.get("session");
+    if (!principal || !session) throw new ApiError("unauthenticated");
+    const { pin } = c.req.valid("json");
+    try {
+      await deps.pinService.verifyPinForDeviceUnlock(principal.id, pin);
+    } catch (error) {
+      if (error instanceof ApiError) throw new ApiError("unauthenticated");
+      throw error;
+    }
+    await deps.authStore.trustDevice(
+      session.id,
+      principal.id,
+      deps.clock(),
+      deps.trustedDeviceIdleTimeoutMs,
+    );
+    return c.json({ status: "unlocked" as const }, 200);
   });
 
   app.openapi(getPinStatusRoute, async (c) => {
@@ -1155,7 +1230,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   app.openapi(requestPinResetRoute, async (c) => {
     const principal = c.get("principal");
     if (!principal) throw new ApiError("unauthenticated");
-    const result = await deps.pinService.requestReset(principal.id);
+    const { channel } = c.req.valid("json");
+    const result = await deps.pinService.requestReset(principal.id, channel);
     return c.json({ status: "otp_sent" as const, challengeId: result.challengeId }, 200);
   });
 
@@ -1172,6 +1248,15 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       },
       challengeId,
     );
+    const session = c.get("session");
+    if (session) {
+      await deps.authStore.trustDevice(
+        session.id,
+        principal.id,
+        deps.clock(),
+        deps.trustedDeviceIdleTimeoutMs,
+      );
+    }
     return c.json({ status: "cooling_off" as const, coolingOffUntil: result.coolingOffUntil }, 200);
   });
 

@@ -397,7 +397,7 @@ describe("Approval PIN (YEN-25)", () => {
       await post("/v1/auth/pin/setup", { pin: "482915" });
 
       // 1. Request reset
-      const reqRes = await post("/v1/auth/pin/reset/request", {});
+      const reqRes = await post("/v1/auth/pin/reset/request", { channel: "whatsapp" });
       expect(reqRes.status).toBe(200);
 
       // 2. Confirm reset with OTP and new PIN
@@ -438,7 +438,7 @@ describe("Approval PIN (YEN-25)", () => {
       const { post } = buildTestApp({ otpVerifier: null });
       await post("/v1/auth/pin/setup", { pin: "482915" });
 
-      const reqRes = await post("/v1/auth/pin/reset/request", {});
+      const reqRes = await post("/v1/auth/pin/reset/request", { channel: "whatsapp" });
       expect(reqRes.status).toBe(403);
       const errReq = await jsonOf(reqRes);
       expect(errReq.error.details[0].message).toContain("unconfigured");
@@ -457,7 +457,7 @@ describe("Approval PIN (YEN-25)", () => {
       await post("/v1/auth/pin/setup", { pin: "482915" });
 
       // 1. Request reset for User A
-      const reqRes = await post("/v1/auth/pin/reset/request", {});
+      const reqRes = await post("/v1/auth/pin/reset/request", { channel: "whatsapp" });
       expect(reqRes.status).toBe(200);
       const { challengeId } = await jsonOf(reqRes);
       expect(challengeId).toBeDefined();
@@ -504,7 +504,7 @@ describe("Approval PIN (YEN-25)", () => {
       expect(expiredErr.error.details[0].message).toContain("Challenge has expired");
 
       // 6. Valid reset works with a fresh challenge
-      const freshReq = await post("/v1/auth/pin/reset/request", {});
+      const freshReq = await post("/v1/auth/pin/reset/request", { channel: "whatsapp" });
       const { challengeId: freshChallengeId } = await jsonOf(freshReq);
 
       const validRes = await post("/v1/auth/pin/reset/confirm", {

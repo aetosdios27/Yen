@@ -71,6 +71,7 @@ databaseSuite("migration runner", (sql, url) => {
       "rate_limits",
       "schema_migrations",
       "sessions",
+      "trusted_devices",
       "user_approval_pins",
       "user_notification_preferences",
       "users",
@@ -90,6 +91,7 @@ databaseSuite("migration runner", (sql, url) => {
     const donationSource = await readFile(join(defaultDir, "0011_donation_pledges.sql"));
     const expensesSource = await readFile(join(defaultDir, "0012_expenses.sql"));
     const anchorsSource = await readFile(join(defaultDir, "0013_anchors.sql"));
+    const trustedDevicesSource = await readFile(join(defaultDir, "0014_trusted_devices.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -170,6 +172,12 @@ databaseSuite("migration runner", (sql, url) => {
         checksum: createHash("sha256").update(anchorsSource).digest("hex"),
         applied_at: expect.any(Date),
       },
+      {
+        version: 14,
+        name: "0014_trusted_devices.sql",
+        checksum: createHash("sha256").update(trustedDevicesSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
     ]);
   });
 
@@ -203,7 +211,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(13);
+    expect(before).toHaveLength(14);
   });
 
   it("rejects an edited applied file and names it", async () => {
