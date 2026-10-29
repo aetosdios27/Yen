@@ -1,3 +1,12 @@
+export {
+  AnchoringWorker,
+  createAnchoringWorker,
+  KmsRootSigner,
+  LocalDevRootSigner,
+  type RootChain,
+  type RootSigner,
+  ViemRootChain,
+} from "./anchoring.js";
 export { createPgBoss, ensureQueueSchema } from "./boss.js";
 export { DEFAULT_QUEUES, DEFAULT_SCHEMA } from "./config.js";
 export {
