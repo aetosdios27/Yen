@@ -759,6 +759,86 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/reconciliation/statements": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Upload bank statement CSV
+     * @description Uploads and ingests a bank statement CSV for reconciliation against pending donation pledges.
+     */
+    post: operations["uploadStatement"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/reconciliation/webhooks/partner": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Payment partner webhook
+     * @description Idempotent webhook receiver for payment partner notifications (e.g. UPI virtual account credit).
+     */
+    post: operations["partnerWebhook"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/funds/{fundId}/reconciliation/unmatched": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Treasurer review queue for unmatched credits
+     * @description Lists unmatched bank credits for a fund with potential matching candidate pledges for treasurer review.
+     */
+    get: operations["getUnmatchedCredits"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/funds/{fundId}/reconciliation/manual-match": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Treasurer manual reconciliation match
+     * @description Manually matches an unmatched bank transaction with a donation pledge with mandatory audit reason.
+     */
+    post: operations["manualMatch"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/openapi.json": {
     parameters: {
       query?: never;
@@ -1277,6 +1357,110 @@ export interface components {
       invoiceNumber?: string;
       /** @description Optional invoice issue date (YYYY-MM-DD) */
       invoiceDate?: string;
+    };
+    StatementUploadResult: {
+      totalProcessed: number;
+      ingestedCount: number;
+      matchedCount: number;
+      unmatchedCount: number;
+      duplicateCount: number;
+      transactions: components["schemas"]["StatementTransactionSummary"][];
+    };
+    StatementTransactionSummary: {
+      id: string;
+      bankReference: string;
+      utr?: string;
+      /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
+      amountPaise: string;
+      /** @enum {string} */
+      type: "credit" | "debit";
+      /** @enum {string} */
+      reconciliationStatus: "unmatched" | "matched" | "manually_matched" | "ignored";
+      matchedPledgeId?: string;
+      duplicate?: boolean;
+    };
+    StatementUploadInput: {
+      /** Format: uuid */
+      fundId: string;
+      csvContent: string;
+    };
+    PartnerWebhookResult: {
+      /** @enum {string} */
+      status: "processed";
+      duplicate?: boolean;
+      transactionId: string;
+      /** @enum {string} */
+      reconciliationStatus: "unmatched" | "matched" | "manually_matched" | "ignored";
+      matchedPledgeId?: string;
+    };
+    PartnerWebhookInput: {
+      event: string;
+      /** Format: date-time */
+      timestamp: string;
+      data: {
+        /** Format: uuid */
+        fund_id: string;
+        bank_reference: string;
+        amount_paise: number | string;
+        /**
+         * @default credit
+         * @enum {string}
+         */
+        type: "credit" | "debit";
+        /** Format: date-time */
+        posted_at: string;
+        utr?: string;
+        narration?: string;
+        counterparty?: {
+          vpa?: string;
+          name?: string;
+        };
+      } & {
+        [key: string]: unknown;
+      };
+    };
+    UnmatchedCreditsResponse: components["schemas"]["UnmatchedCredit"][];
+    UnmatchedCredit: {
+      id: string;
+      /** Format: uuid */
+      fundId: string;
+      bankReference: string;
+      utr?: string;
+      /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
+      amountPaise: string;
+      /** Format: date-time */
+      postedAt: string;
+      narration?: string;
+      counterpartyVpa?: string;
+      candidates: components["schemas"]["CandidatePledge"][];
+    };
+    CandidatePledge: {
+      pledgeId: string;
+      /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
+      amountPaise: string;
+      utr: string;
+      donorName?: string;
+      /** Format: date-time */
+      createdAt: string;
+      timeDifferenceHours: number;
+    };
+    ManualMatchResult: {
+      /** @enum {string} */
+      status: "matched";
+      bankTransactionId: string;
+      pledgeId: string;
+      /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
+      amountPaise: string;
+      /** Format: date-time */
+      matchedAt: string;
+    };
+    ManualMatchInput: {
+      /** @description ID of the unmatched bank transaction */
+      bankTransactionId: string;
+      /** @description ID of the pledge to match */
+      pledgeId: string;
+      /** @description Audit reason for manual match by treasurer */
+      reason: string;
     };
   };
   responses: never;
@@ -6481,6 +6665,473 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  uploadStatement: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["StatementUploadInput"];
+      };
+    };
+    responses: {
+      /** @description Statement parsed and ingested */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["StatementUploadResult"];
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource conflict, changed idempotency input, or request in progress */
+      409: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Gateway timeout */
+      504: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  partnerWebhook: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PartnerWebhookInput"];
+      };
+    };
+    responses: {
+      /** @description Webhook processed */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PartnerWebhookResult"];
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  getUnmatchedCredits: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Canonical lowercase FundId UUID; invalid IDs return 404 */
+        fundId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Queue of unmatched credits */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UnmatchedCreditsResponse"];
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource conflict, changed idempotency input, or request in progress */
+      409: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Gateway timeout */
+      504: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  manualMatch: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path: {
+        /** @description Canonical lowercase FundId UUID; invalid IDs return 404 */
+        fundId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ManualMatchInput"];
+      };
+    };
+    responses: {
+      /** @description Manual match successful */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ManualMatchResult"];
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Transaction or pledge already matched */
+      409: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
           [name: string]: unknown;
         };
         content: {
