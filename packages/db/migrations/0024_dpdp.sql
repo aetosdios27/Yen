@@ -64,6 +64,11 @@ BEGIN
      OLD.amount_paise <> NEW.amount_paise OR
      OLD.type <> NEW.type OR
      OLD.posted_at <> NEW.posted_at OR
+     OLD.utr IS DISTINCT FROM NEW.utr OR
+     OLD.counterparty_account_fingerprint IS DISTINCT FROM NEW.counterparty_account_fingerprint OR
+     (OLD.narration IS DISTINCT FROM NEW.narration AND NEW.narration IS NOT NULL) OR
+     (OLD.counterparty_vpa IS DISTINCT FROM NEW.counterparty_vpa AND NEW.counterparty_vpa IS NOT NULL) OR
+     (OLD.counterparty_name IS DISTINCT FROM NEW.counterparty_name AND NEW.counterparty_name IS NOT NULL) OR
      OLD.source <> NEW.source OR
      OLD.raw_payload_sha256 <> NEW.raw_payload_sha256 OR
      (OLD.raw_payload <> NEW.raw_payload AND NEW.raw_payload <> '{"redacted":true}'::jsonb) THEN
