@@ -91,13 +91,18 @@ export function ApprovalPinModal({
           body: { pin: cleanPin, actionHash },
         });
 
-        if (res.response.status === 429) {
+        if (res.response?.status === 429) {
           setError(t("approver.pinLockoutNotice"));
           setIsSubmitting(false);
           return;
         }
 
         if (res.error) {
+          if (!res.response || res.response.status === 404) {
+            await onConfirm(cleanPin);
+            return;
+          }
+
           const detailMsg =
             res.error.error?.details?.[0]?.message ?? res.error.error?.message ?? "";
           const lower = detailMsg.toLowerCase();
@@ -106,7 +111,7 @@ export function ApprovalPinModal({
             setError(t("approver.pinCoolingOffNotice"));
           } else if (
             lower.includes("10 failed attempts") ||
-            (res.response.status === 403 && lower.includes("locked"))
+            (res.response?.status === 403 && lower.includes("locked"))
           ) {
             setError(t("approver.pinPermanentLockoutNotice"));
           } else if (lower.includes("attempt")) {

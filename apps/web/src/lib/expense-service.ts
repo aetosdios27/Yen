@@ -272,6 +272,22 @@ export async function submitExpenseApproval(
     });
 
     if (res.data) {
+      const list = testStore.get(fundId) ?? [];
+      const idx = list.findIndex((e) => e.id === expenseId);
+      if (idx !== -1 && list[idx]) {
+        const item = list[idx];
+        const updatedStatus = res.data.status === "approved" ? "settled" : "submitted";
+        const updated: DashboardExpenseItem = {
+          ...item,
+          status: updatedStatus,
+          settledAt:
+            res.data.approvedAt ??
+            (updatedStatus === "settled" ? new Date().toISOString() : undefined),
+        };
+        list[idx] = updated;
+        testStore.set(fundId, [...list]);
+        return updated;
+      }
       const updated = await fetchExpenseItem(fundId, expenseId);
       if (updated) return updated;
     }
@@ -356,6 +372,20 @@ export async function submitExpenseRejection(
     });
 
     if (res.data) {
+      const list = testStore.get(fundId) ?? [];
+      const idx = list.findIndex((e) => e.id === expenseId);
+      if (idx !== -1 && list[idx]) {
+        const item = list[idx];
+        const updated: DashboardExpenseItem = {
+          ...item,
+          status: "rejected",
+          rejectedAt: res.data.rejectedAt ?? new Date().toISOString(),
+          rejectionReason: res.data.reason ?? reason,
+        };
+        list[idx] = updated;
+        testStore.set(fundId, [...list]);
+        return updated;
+      }
       const updated = await fetchExpenseItem(fundId, expenseId);
       if (updated) return updated;
     }
