@@ -1,9 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { parseWorkerEnv } from "./env.js";
+import { anchoringSignerMode, parseWorkerEnv } from "./env.js";
 
 const DATABASE_URL = "postgres://worker:pw@127.0.0.1:5432/yen";
 
 describe("parseWorkerEnv", () => {
+  it("requires KMS in production and opts into local signing only in development", () => {
+    expect(() => anchoringSignerMode({ NODE_ENV: "production" })).toThrow("ANCHOR_KMS_KEY_ID");
+    expect(() =>
+      anchoringSignerMode({ NODE_ENV: "production", ANCHOR_ALLOW_LOCAL_SIGNER: "true" }),
+    ).toThrow("ANCHOR_KMS_KEY_ID");
+    expect(
+      anchoringSignerMode({ NODE_ENV: "development", ANCHOR_ALLOW_LOCAL_SIGNER: "true" }),
+    ).toBe("local");
+    expect(anchoringSignerMode({ NODE_ENV: "development", ANCHOR_KMS_KEY_ID: "kms-key" })).toBe(
+      "kms",
+    );
+  });
   it("accepts a valid database URL and applies the documented defaults", () => {
     expect(parseWorkerEnv({ DATABASE_URL })).toEqual({
       DATABASE_URL,
