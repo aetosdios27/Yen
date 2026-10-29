@@ -95,6 +95,31 @@ export interface DonationPledgeStore {
   pledge(request: DonationPledgeRequest): Promise<DonationPledgeOutcome>;
 }
 
+export interface PublicFundDonation {
+  readonly id: string;
+  readonly occurredAt: string;
+  readonly amountPaise: bigint;
+  readonly donorDisplayName: string | null;
+  readonly donorNameChoice: "full" | "initials" | "anonymous";
+}
+
+export interface PublicFundReadStore {
+  /** Confirmed credits only. Pledges are deliberately excluded until bank matched. */
+  donations(fundId: string): Promise<readonly PublicFundDonation[]>;
+}
+
+export class MemoryPublicFundReadStore implements PublicFundReadStore {
+  private readonly values = new Map<string, PublicFundDonation[]>();
+
+  async donations(fundId: string) {
+    return this.values.get(fundId) ?? [];
+  }
+
+  set(fundId: string, donations: readonly PublicFundDonation[]) {
+    this.values.set(fundId, [...donations]);
+  }
+}
+
 export interface DisplayNameStore {
   get(fundId: string, pseudonymId: string): Promise<string | null>;
   officeholderNamesShown(fundId: string): Promise<boolean>;
@@ -318,6 +343,7 @@ export interface AppDependencies {
   readonly fundStore?: FundStore | undefined;
   readonly approvalProofVerifier: ApprovalProofVerifier;
   readonly donationPledgeStore: DonationPledgeStore;
+  readonly publicFundReadStore: PublicFundReadStore;
   readonly reconciliationStore: ReconciliationStore;
   readonly displayNameStore: DisplayNameStore;
   readonly pledgeLimit: RateLimit;
@@ -420,6 +446,7 @@ export function defaultDependencies(
     },
     approvalProofVerifier: (signature) => signature.credentialId === "pin-proof",
     donationPledgeStore: new MemoryDonationPledgeStore(),
+    publicFundReadStore: new MemoryPublicFundReadStore(),
     reconciliationStore: new MemoryReconciliationStore(),
     displayNameStore: new MemoryDisplayNameStore(),
     pledgeLimit: { capacity: 10, refillMs: 3600000 },

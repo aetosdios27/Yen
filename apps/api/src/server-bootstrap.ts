@@ -18,6 +18,7 @@ import { PostgresFundStore } from "./fund-store.js";
 import { createServerLifecycle, type ServerLifecycle, shutdownOnSignal } from "./lifecycle.js";
 import { startObservability } from "./observability.js";
 import { PostgresPinStore } from "./pin/index.js";
+import { PostgresPublicFundReadStore } from "./public-fund-store.js";
 import { PostgresReconciliationStore } from "./reconciliation/postgres-store.js";
 import { useMemoryStore } from "./server-config.js";
 import {
@@ -178,6 +179,7 @@ export async function startServer(
       : {}),
     isShuttingDown: () => lifecycleInstance?.isShuttingDown ?? false,
     ...(sql ? { donationPledgeStore: new PostgresDonationPledgeStore(sql) } : {}),
+    ...(sql ? { publicFundReadStore: new PostgresPublicFundReadStore(sql) } : {}),
     ...(sql ? { reconciliationStore: new PostgresReconciliationStore(sql) } : {}),
     ...(sql ? { displayNameStore: new PostgresDisplayNameStore(sql) } : {}),
     ...(sql ? { expenseStore: new PostgresExpenseStore(sql) } : {}),

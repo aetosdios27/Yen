@@ -117,7 +117,11 @@ export interface FundSummaryRecord {
 export interface FundBreakdownRecord {
   readonly kind: "fund_breakdown";
   readonly fundId: string;
-  readonly categories: readonly { readonly category: string; readonly spentPaise: string }[];
+  readonly categories: readonly {
+    readonly category: string;
+    readonly spentPaise: string;
+    readonly transactionCount: number;
+  }[];
   readonly dataGaps: readonly string[];
 }
 export interface FundTimelineRecord {
@@ -508,6 +512,10 @@ export function redactFundReadModel<T extends FundReadRecord>(
       categories: record.categories.map((item) => ({
         category: publicText(item.category),
         spentPaise: paiseString(item.spentPaise),
+        transactionCount:
+          Number.isSafeInteger(item.transactionCount) && item.transactionCount >= 0
+            ? item.transactionCount
+            : 0,
       })),
       dataGaps,
     };

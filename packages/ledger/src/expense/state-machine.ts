@@ -5,6 +5,7 @@ import {
   type ApprovalProofVerifier,
   BankTransactionMismatchError,
   DuplicateApprovalError,
+  type ExpenseCategory,
   type ExpenseEvidence,
   ExpenseNotEditableError,
   type ExpenseRequest,
@@ -42,6 +43,7 @@ export interface CreateDraftInput {
   readonly fundId: string;
   readonly requesterId: PseudonymId;
   readonly amountPaise: Paise;
+  readonly category?: ExpenseCategory | undefined;
   readonly description: string;
   readonly recipientRef: string;
   readonly evidence?: readonly ExpenseEvidence[] | undefined;
@@ -60,6 +62,7 @@ export function createDraftRequest(input: CreateDraftInput): ExpenseRequest {
     fundId: input.fundId,
     requesterId: input.requesterId,
     amountPaise: paiseAmount,
+    category: input.category ?? "Other",
     description: input.description,
     recipientRef: input.recipientRef,
     status: "draft",
@@ -85,6 +88,7 @@ export function createDraftRequest(input: CreateDraftInput): ExpenseRequest {
 export interface EditDraftInput {
   readonly amountPaise?: Paise | undefined;
   readonly description?: string | undefined;
+  readonly category?: ExpenseCategory | undefined;
   readonly recipientRef?: string | undefined;
   readonly evidence?: readonly ExpenseEvidence[] | undefined;
   readonly updatedAt?: string | undefined;
@@ -105,6 +109,7 @@ export function editDraftRequest(expense: ExpenseRequest, updates: EditDraftInpu
     ...expense,
     amountPaise: amount,
     description: updates.description ?? expense.description,
+    category: updates.category ?? expense.category,
     recipientRef: updates.recipientRef ?? expense.recipientRef,
     evidence: updates.evidence ?? expense.evidence,
     updatedAt: now,
@@ -121,6 +126,7 @@ export function createNewVersion(
     requesterId: requesterId ?? submittedExpense.requesterId,
     amountPaise: updates.amountPaise ?? submittedExpense.amountPaise,
     description: updates.description ?? submittedExpense.description,
+    category: updates.category ?? submittedExpense.category,
     recipientRef: updates.recipientRef ?? submittedExpense.recipientRef,
     evidence: updates.evidence ?? submittedExpense.evidence,
     supersedesId: submittedExpense.id,

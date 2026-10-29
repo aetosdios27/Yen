@@ -301,7 +301,15 @@ export const publicFundSummarySchema = z
 export const publicFundBreakdownSchema = z
   .object({
     fundId: z.string().uuid(),
-    categories: z.array(z.object({ category: z.string(), spentPaise: paiseWire }).strict()),
+    categories: z.array(
+      z
+        .object({
+          category: z.string(),
+          spentPaise: paiseWire,
+          transactionCount: z.number().int().nonnegative(),
+        })
+        .strict(),
+    ),
     dataGaps: z.array(z.string()),
   })
   .strict();
@@ -1490,6 +1498,9 @@ export const expenseEvidenceSchema = z
 export const createExpenseInput = z
   .object({
     amountPaise: paiseWire,
+    category: z
+      .enum(["Equipment", "Travel", "Catering", "Logistics", "Facilities", "Other"])
+      .optional(),
     description: bounded(500),
     recipientRef: bounded(128),
     evidence: z.array(expenseEvidenceSchema).optional(),
@@ -1504,6 +1515,7 @@ export const expenseSchema = z
     fundId: z.string().uuid(),
     requesterId: z.string(),
     amountPaise: paiseWire,
+    category: z.enum(["Equipment", "Travel", "Catering", "Logistics", "Facilities", "Other"]),
     description: z.string(),
     recipientRef: z.string(),
     status: expenseStatusSchema,
