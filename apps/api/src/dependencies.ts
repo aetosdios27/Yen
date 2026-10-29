@@ -35,6 +35,10 @@ import {
   type RateLimit,
   type RateLimitStore,
 } from "./stores.js";
+import {
+  MemoryReconciliationStore,
+  type ReconciliationStore,
+} from "./reconciliation/memory-store.js";
 import { UnconfiguredVirusScannerAdapter, type VirusScannerAdapter } from "./virus-scanner.js";
 
 export interface Principal {
@@ -176,6 +180,7 @@ export interface AppDependencies {
   readonly fundStore?: FundStore | undefined;
   readonly approvalProofVerifier: ApprovalProofVerifier;
   readonly donationPledgeStore: DonationPledgeStore;
+  readonly reconciliationStore: ReconciliationStore;
   readonly displayNameStore: DisplayNameStore;
   readonly pledgeLimit: RateLimit;
   readonly pledgeBodyLimit: number;
@@ -258,6 +263,7 @@ export function defaultDependencies(
     },
     approvalProofVerifier: (signature) => signature.credentialId === "pin-proof",
     donationPledgeStore: new MemoryDonationPledgeStore(),
+    reconciliationStore: new MemoryReconciliationStore(),
     displayNameStore: new MemoryDisplayNameStore(),
     pledgeLimit: { capacity: 10, refillMs: 3600000 },
     pledgeBodyLimit: 4096,
