@@ -56,8 +56,16 @@ build_once() {
     export TURBO_CACHE_DIR="$directory/.turbo"
     pnpm install --frozen-lockfile
     pnpm turbo run build --filter=@yen/api --filter=@yen/web
+    if rg --hidden --text --files-with-matches --fixed-strings "$directory" \
+      apps/api/dist apps/web/.next \
+      --glob '!**/cache/**' --glob '!**/trace' --glob '!**/trace-build'; then
+      echo "Build artifacts contain the checkout's absolute path." >&2
+      exit 1
+    fi
     tar --sort=name --mtime="@${source_date_epoch}" --owner=0 --group=0 --numeric-owner \
-      --exclude=apps/web/.next/cache -cf "$artifact" \
+      --exclude=apps/web/.next/cache \
+      --exclude=apps/web/.next/trace \
+      --exclude=apps/web/.next/trace-build -cf "$artifact" \
       apps/api/dist apps/api/openapi/openapi.json apps/web/.next
   )
 }

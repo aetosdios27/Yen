@@ -73,9 +73,19 @@ cmp "yen-${tag}.tar" "./rebuild/yen-${tag}.tar"
 ```
 
 The script builds each app in two clean Git worktrees, sets the timezone, locale
-and `SOURCE_DATE_EPOCH`, excludes Next.js' disposable `.next/cache`, creates a
-normalized tar archive and fails if the two SHA-256 digests differ. The archive
-contains `apps/api/dist`, the committed API OpenAPI document and `apps/web/.next`.
+and `SOURCE_DATE_EPOCH`, excludes Next.js' disposable cache and timing traces,
+normalizes Next.js' source-root metadata, creates a normalized tar archive and
+fails if the two SHA-256 digests differ. The archive contains `apps/api/dist`,
+the committed API OpenAPI document and `apps/web/.next`.
+
+Next.js normally writes random preview keys and a server action encryption key
+into its output. The web build derives these values from the Git tree so two
+builds of the same source have identical manifests. The current web app does
+not use Draft Mode or Server Actions; the build fails if a Server Action appears.
+Do not treat these deterministic build keys as secrets. If the app adds Draft
+Mode or Server Actions, revisit this scheme before releasing it. Next's timing
+traces and cache are intentionally left out of the release archive because
+they contain host-specific or time-dependent data and are not runtime files.
 
 ## What these checks establish
 
