@@ -27,7 +27,10 @@ export class MemoryPinOtpVerifier implements PinOtpVerifier {
     this.defaultCode = options.defaultCode ?? "123456";
   }
 
-  async createChallenge(userId: string): Promise<{ challengeId: string; code: string }> {
+  async createChallenge(
+    userId: string,
+    _channel: "whatsapp" | "sms",
+  ): Promise<{ challengeId: string; code: string }> {
     const challengeId = crypto.randomUUID();
     const code = this.defaultCode;
     const now = this.clock();

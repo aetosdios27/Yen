@@ -87,6 +87,7 @@ it("validates every documented status and sent header against the committed Open
     logger: { log: () => undefined },
     policy: devPolicy,
     otpDeliveryProvider,
+    pinSecret: "contract-test-pin-hmac-secret-longer-than-32-bytes",
     virusScanner: new MemoryVirusScannerAdapter(),
   };
   const app = createApp(base);
@@ -258,6 +259,13 @@ it("validates every documented status and sent header against the committed Open
   const sessionToken = authData.session.token;
   await check("/v1/auth/otp/verify", "post", verifyRes);
 
+  const setupPinRes = await app.request("/v1/auth/pin/setup", {
+    method: "POST",
+    headers: { authorization: `Bearer ${sessionToken}`, "content-type": "application/json" },
+    body: JSON.stringify({ pin: "482915" }),
+  });
+  expect(setupPinRes.status).toBe(201);
+
   const getSessionsRes = await app.request("/v1/auth/sessions", {
     headers: { authorization: `Bearer ${sessionToken}` },
   });
@@ -288,6 +296,15 @@ it("validates every documented status and sent header against the committed Open
   });
   const authData2 = verifyOtpResponse.parse(await verifyRes2.json());
   const session2Id = authData2.session.id;
+  const unlock2 = await app.request("/v1/auth/device/unlock", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${authData2.session.token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ pin: "482915" }),
+  });
+  expect(unlock2.status).toBe(200);
 
   // Revoke session 2 from session 1 -> 200
   const deleteSessionRes = await app.request(`/v1/auth/sessions/${session2Id}`, {
@@ -320,6 +337,12 @@ it("validates every documented status and sent header against the committed Open
   });
   const authData3 = verifyOtpResponse.parse(await verifyRes3.json());
   const session3Token = authData3.session.token;
+  const unlock3 = await app.request("/v1/auth/device/unlock", {
+    method: "POST",
+    headers: { authorization: `Bearer ${session3Token}`, "content-type": "application/json" },
+    body: JSON.stringify({ pin: "482915" }),
+  });
+  expect(unlock3.status).toBe(200);
 
   // Logout session 3 -> 200
   const logoutRes = await app.request("/v1/auth/logout", {

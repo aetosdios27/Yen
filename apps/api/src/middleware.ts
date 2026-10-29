@@ -33,6 +33,17 @@ export function isPublicAuthRoute(path: string): boolean {
   return clean === "/v1/auth/otp/send" || clean === "/v1/auth/otp/verify";
 }
 
+export function isPendingDeviceAuthRoute(path: string): boolean {
+  const clean = path.replace(/\/$/, "");
+  return (
+    clean === "/v1/auth/logout" ||
+    clean === "/v1/auth/pin/setup" ||
+    clean === "/v1/auth/pin/reset/request" ||
+    clean === "/v1/auth/pin/reset/confirm" ||
+    clean === "/v1/auth/device/unlock"
+  );
+}
+
 export function isHealthRoute(path: string): boolean {
   const normalized = path.replace(/\/$/, "");
   return normalized === "/health" || normalized === "/ready";
@@ -79,9 +90,21 @@ export function requestContext(deps: AppDependencies): MiddlewareHandler<ApiEnv>
         deps.authStore.findSessionByTokenHash(tokenHash, deps.clock()),
       );
       if (session) {
-        c.set("principal", { id: session.userId });
+        const now = deps.clock();
+        const trustedDevice = await storeCall(() =>
+          deps.authStore.getTrustedDevice(session.id, now),
+        );
+        const isTrusted =
+          trustedDevice?.userId === session.userId && now < trustedDevice.idleExpiresAt;
+        const pendingDeviceAuth = isPendingDeviceAuthRoute(c.req.path);
+        c.set("principal", isTrusted || pendingDeviceAuth ? { id: session.userId } : null);
         c.set("session", session);
-        await storeCall(() => deps.authStore.touchSession(session.id, deps.clock()));
+        if (isTrusted) {
+          await storeCall(() =>
+            deps.authStore.touchTrustedDevice(session.id, now, deps.trustedDeviceIdleTimeoutMs),
+          );
+          await storeCall(() => deps.authStore.touchSession(session.id, now));
+        }
       } else {
         c.set("principal", deps.principal);
         c.set("session", null);

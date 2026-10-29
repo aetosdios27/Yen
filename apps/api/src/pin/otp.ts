@@ -1,5 +1,5 @@
 export interface PinOtpVerifier {
-  createChallenge(userId: string): Promise<{ challengeId: string }>;
+  createChallenge(userId: string, channel: "whatsapp" | "sms"): Promise<{ challengeId: string }>;
   verifyChallenge(params: {
     userId: string;
     otp: string;

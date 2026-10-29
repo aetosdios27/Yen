@@ -8,6 +8,7 @@ import {
   MemoryAuthStore,
   type OtpDeliveryProvider,
   type Session,
+  TRUSTED_DEVICE_IDLE_TIMEOUT_MS,
 } from "./auth/index.js";
 import { rateLimitEnv, rateLimits } from "./config.js";
 import { jsonLogger, type Logger } from "./logging.js";
@@ -159,6 +160,7 @@ export interface AppDependencies {
   readonly otpRateLimitPhone: RateLimit;
   readonly sessionCookieName: string;
   readonly sessionMaxAgeSeconds: number;
+  readonly trustedDeviceIdleTimeoutMs: number;
   readonly concurrencyLimit: number;
   readonly requestTimeoutMs: number;
   readonly inFlightTracker: InFlightTracker;
@@ -228,6 +230,7 @@ export function defaultDependencies(
     otpRateLimitPhone: { capacity: 5, refillMs: 600_000 },
     sessionCookieName: "yen_session",
     sessionMaxAgeSeconds: 30 * 24 * 3600,
+    trustedDeviceIdleTimeoutMs: TRUSTED_DEVICE_IDLE_TIMEOUT_MS,
     concurrencyLimit: 100,
     requestTimeoutMs: 15000,
     inFlightTracker: new DefaultInFlightTracker(),

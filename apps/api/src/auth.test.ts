@@ -21,6 +21,7 @@ import {
   verifyOtpResponse,
 } from "./contract.js";
 import type { LogEntry } from "./logging.js";
+import { MemoryPinStore } from "./pin/index.js";
 import { devPolicy } from "./policy.js";
 
 const parsedTestPhone = normalizePhone("+919876543210");
@@ -152,6 +153,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     };
     const otpDeliveryProvider = new DevStubOtpDeliveryProvider(clock);
     const authStore = new MemoryAuthStore();
+    const pinStore = new MemoryPinStore({ clock });
 
     const app = createApp({
       clock,
@@ -159,6 +161,8 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
       policy: devPolicy,
       otpDeliveryProvider,
       authStore,
+      pinStore,
+      pinSecret: "test-yen72-pin-hmac-secret-with-more-than-32-bytes",
       otpCooldownMs: 60_000,
       otpExpiryMs: 300_000,
       otpMaxAttempts: 3,
@@ -178,6 +182,22 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
       },
       getNow: () => now,
     };
+  }
+
+  async function setupPin(app: ReturnType<typeof createApp>, token: string) {
+    return app.request("/v1/auth/pin/setup", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ pin: "482915" }),
+    });
+  }
+
+  async function unlockDevice(app: ReturnType<typeof createApp>, token: string, pin = "482915") {
+    return app.request("/v1/auth/device/unlock", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ pin }),
+    });
   }
 
   it("issues OTP via WhatsApp default, stores hashed at rest, and verifies cleanly", async () => {
@@ -226,6 +246,21 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     expect(setCookie).toContain("yen_session=");
     expect(setCookie).toContain("HttpOnly");
     expect(setCookie).toContain("SameSite=Lax");
+    expect(
+      (
+        await app.request("/v1/me", {
+          headers: { authorization: `Bearer ${verifyData.session.token}` },
+        })
+      ).status,
+    ).toBe(401);
+    expect((await setupPin(app, verifyData.session.token)).status).toBe(201);
+    expect(
+      (
+        await app.request("/v1/me", {
+          headers: { authorization: `Bearer ${verifyData.session.token}` },
+        })
+      ).status,
+    ).toBe(200);
   });
 
   it("supports the selected SMS delivery channel", async () => {
@@ -504,6 +539,11 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     const authData = verifyOtpResponse.parse(await verifyRes.json());
     const token = authData.session.token;
 
+    expect(
+      (await app.request("/v1/me", { headers: { authorization: `Bearer ${token}` } })).status,
+    ).toBe(401);
+    expect((await setupPin(app, token)).status).toBe(201);
+
     // 1. Authenticate with Authorization: Bearer
     const meBearer = await app.request("/v1/me", {
       headers: { authorization: `Bearer ${token}` },
@@ -542,7 +582,13 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     const authData = verifyOtpResponse.parse(await verifyRes.json());
     const oldToken = authData.session.token;
     const absoluteExpiry = authData.session.expiresAt;
+    expect((await setupPin(app, oldToken)).status).toBe(201);
     advanceClock(29 * 24 * 60 * 60 * 1000);
+
+    expect(
+      (await app.request("/v1/me", { headers: { authorization: `Bearer ${oldToken}` } })).status,
+    ).toBe(401);
+    expect((await unlockDevice(app, oldToken)).status).toBe(200);
 
     // Rotate session
     const rotateRes = await app.request("/v1/auth/session/rotate", {
@@ -593,6 +639,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
       body: JSON.stringify({ phone: "+919876543210", code: d1.code }),
     });
     const session1 = verifyOtpResponse.parse(await v1.json()).session;
+    expect((await setupPin(app, session1.token)).status).toBe(201);
 
     advanceClock(70_000);
 
@@ -612,6 +659,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
       body: JSON.stringify({ phone: "+919876543210", code: d2.code }),
     });
     const session2 = verifyOtpResponse.parse(await v2.json()).session;
+    expect((await unlockDevice(app, session2.token)).status).toBe(200);
 
     // View device list from Session 2
     const sessionsListRes = await app.request("/v1/auth/sessions", {
@@ -644,6 +692,114 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     expect(me2.status).toBe(401);
   });
 
+  it("shares the approval PIN lockout counter with trusted-device unlock", async () => {
+    const { app, otpDeliveryProvider } = createTestSetup();
+    await app.request("/v1/auth/otp/send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", channel: "whatsapp" }),
+    });
+    const verifyRes = await app.request("/v1/auth/otp/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", code: getDelivery(otpDeliveryProvider).code }),
+    });
+    const session = verifyOtpResponse.parse(await verifyRes.json()).session;
+    expect((await setupPin(app, session.token)).status).toBe(201);
+
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const failure = await app.request("/v1/auth/pin/verify", {
+        method: "POST",
+        headers: { authorization: `Bearer ${session.token}`, "content-type": "application/json" },
+        body: JSON.stringify({ pin: "937104", actionHash: "a".repeat(64) }),
+      });
+      expect(failure.status).toBe(403);
+    }
+
+    const unlockFailure = await unlockDevice(app, session.token, "937104");
+    expect(unlockFailure.status).toBe(401);
+    expect(errorResponseSchema.parse(await unlockFailure.json()).error.message).toBe(
+      "Authentication required",
+    );
+    expect((await unlockDevice(app, session.token)).status).toBe(401);
+  });
+
+  it("requires OTP-backed session proof before a PIN can bind a device", async () => {
+    const { app } = createTestSetup();
+    const response = await app.request("/v1/auth/device/unlock", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ pin: "482915" }),
+    });
+    expect(response.status).toBe(401);
+  });
+
+  it("locks a trusted device until the correct PIN is entered", async () => {
+    const { app, otpDeliveryProvider, logs } = createTestSetup();
+    await app.request("/v1/auth/otp/send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", channel: "whatsapp" }),
+    });
+    const verifyRes = await app.request("/v1/auth/otp/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", code: getDelivery(otpDeliveryProvider).code }),
+    });
+    const session = verifyOtpResponse.parse(await verifyRes.json()).session;
+    expect((await setupPin(app, session.token)).status).toBe(201);
+
+    const locked = await app.request("/v1/auth/device/lock", {
+      method: "POST",
+      headers: { authorization: `Bearer ${session.token}` },
+    });
+    expect(locked.status).toBe(200);
+    expect(
+      (await app.request("/v1/me", { headers: { authorization: `Bearer ${session.token}` } }))
+        .status,
+    ).toBe(401);
+
+    const wrongPin = await unlockDevice(app, session.token, "937104");
+    expect(wrongPin.status).toBe(401);
+    expect(JSON.stringify(logs)).not.toContain("937104");
+    expect(errorResponseSchema.parse(await wrongPin.json()).error.message).toBe(
+      "Authentication required",
+    );
+
+    expect((await unlockDevice(app, session.token)).status).toBe(200);
+    expect(
+      (await app.request("/v1/me", { headers: { authorization: `Bearer ${session.token}` } }))
+        .status,
+    ).toBe(200);
+  });
+
+  it("lets an idle-locked device sign out without PIN reauthentication", async () => {
+    const { app, otpDeliveryProvider, advanceClock } = createTestSetup();
+    await app.request("/v1/auth/otp/send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", channel: "whatsapp" }),
+    });
+    const verifyRes = await app.request("/v1/auth/otp/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", code: getDelivery(otpDeliveryProvider).code }),
+    });
+    const session = verifyOtpResponse.parse(await verifyRes.json()).session;
+    expect((await setupPin(app, session.token)).status).toBe(201);
+
+    advanceClock(7 * 24 * 60 * 60 * 1000);
+    const signOut = await app.request("/v1/auth/logout", {
+      method: "POST",
+      headers: { authorization: `Bearer ${session.token}` },
+    });
+    expect(signOut.status).toBe(200);
+    expect(
+      (await app.request("/v1/me", { headers: { authorization: `Bearer ${session.token}` } }))
+        .status,
+    ).toBe(401);
+  });
+
   it("satisfies security acceptance criteria: OTPs and tokens NEVER appear in logs or error bodies", async () => {
     const { app, otpDeliveryProvider, logs } = createTestSetup();
 
@@ -673,6 +829,53 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     expect(serializedLogs).not.toContain(plainOtp);
     expect(serializedLogs).not.toContain(sessionToken);
     expect(serializedLogs).not.toContain("+919876543210");
+  });
+
+  it("resets the PIN through the selected OTP channel and lets it unlock during approval cooling off", async () => {
+    const { app, otpDeliveryProvider } = createTestSetup();
+    await app.request("/v1/auth/otp/send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", channel: "whatsapp" }),
+    });
+    const verifyRes = await app.request("/v1/auth/otp/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", code: getDelivery(otpDeliveryProvider).code }),
+    });
+    const session = verifyOtpResponse.parse(await verifyRes.json()).session;
+    expect((await setupPin(app, session.token)).status).toBe(201);
+
+    const requestReset = await app.request("/v1/auth/pin/reset/request", {
+      method: "POST",
+      headers: { authorization: `Bearer ${session.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ channel: "sms" }),
+    });
+    expect(requestReset.status).toBe(200);
+    const challengeId = z
+      .object({ challengeId: z.string().uuid() })
+      .parse(await requestReset.json()).challengeId;
+    expect(getDelivery(otpDeliveryProvider).channel).toBe("sms");
+
+    const reset = await app.request("/v1/auth/pin/reset/confirm", {
+      method: "POST",
+      headers: { authorization: `Bearer ${session.token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        challengeId,
+        otp: getDelivery(otpDeliveryProvider).code,
+        newPin: "937104",
+      }),
+    });
+    expect(reset.status).toBe(200);
+    expect(z.object({ status: z.literal("cooling_off") }).parse(await reset.json()).status).toBe(
+      "cooling_off",
+    );
+
+    await app.request("/v1/auth/device/lock", {
+      method: "POST",
+      headers: { authorization: `Bearer ${session.token}` },
+    });
+    expect((await unlockDevice(app, session.token, "937104")).status).toBe(200);
   });
 
   it("handles slow connections on mobile devices gracefully (throttled test)", async () => {
