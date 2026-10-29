@@ -54,16 +54,20 @@ databaseSuite("migration runner", (sql, url) => {
       "auth_otp_attempt_limits",
       "auth_otps",
       "fund_events",
+      "fund_notification_daily_usage",
       "fund_pseudonyms",
       "funds",
       "idempotency_keys",
       "memberships",
+      "notification_dead_letter",
+      "notification_outbox",
       "orgs",
       "pseudonyms",
       "rate_limits",
       "schema_migrations",
       "sessions",
       "user_approval_pins",
+      "user_notification_preferences",
       "users",
       "waitlist_entries",
       "yen_ids",
@@ -77,6 +81,7 @@ databaseSuite("migration runner", (sql, url) => {
     const authSource = await readFile(join(defaultDir, "0007_auth_sessions.sql"));
     const authAttemptsSource = await readFile(join(defaultDir, "0008_auth_otp_attempt_limits.sql"));
     const pinsSource = await readFile(join(defaultDir, "0009_approval_pins.sql"));
+    const notificationsSource = await readFile(join(defaultDir, "0010_notifications.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -133,6 +138,12 @@ databaseSuite("migration runner", (sql, url) => {
         checksum: createHash("sha256").update(pinsSource).digest("hex"),
         applied_at: expect.any(Date),
       },
+      {
+        version: 10,
+        name: "0010_notifications.sql",
+        checksum: createHash("sha256").update(notificationsSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
     ]);
   });
 
@@ -166,7 +177,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(9);
+    expect(before).toHaveLength(10);
   });
 
   it("rejects an edited applied file and names it", async () => {
