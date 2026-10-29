@@ -1,4 +1,4 @@
-import type { Sql } from "./client.js";
+import type { SqlClient } from "./client.js";
 import { type UserApprovalPinRow, userApprovalPinRowSchema } from "./rows.js";
 
 export interface CreateApprovalPinInput {
@@ -24,7 +24,10 @@ export interface UpdateApprovalPinInput {
   readonly status?: "active" | "locked_out" | "cooling_off" | undefined;
 }
 
-export async function getApprovalPin(sql: Sql, userId: string): Promise<UserApprovalPinRow | null> {
+export async function getApprovalPin(
+  sql: SqlClient,
+  userId: string,
+): Promise<UserApprovalPinRow | null> {
   const rows = await sql`
     SELECT * FROM user_approval_pins WHERE user_id = ${userId}
   `;
@@ -33,7 +36,7 @@ export async function getApprovalPin(sql: Sql, userId: string): Promise<UserAppr
 }
 
 export async function createApprovalPin(
-  sql: Sql,
+  sql: SqlClient,
   input: CreateApprovalPinInput,
 ): Promise<UserApprovalPinRow> {
   const rows = await sql`
@@ -56,23 +59,23 @@ export async function createApprovalPin(
 }
 
 export async function updateApprovalPin(
-  sql: Sql,
+  sql: SqlClient,
   userId: string,
   updates: UpdateApprovalPinInput,
 ): Promise<UserApprovalPinRow | null> {
-  const current = await getApprovalPin(sql, userId);
-  if (!current) return null;
-
   const rows = await sql`
     UPDATE user_approval_pins SET
-      salt = ${updates.salt ?? current.salt},
-      pin_hash = ${updates.pinHash ?? current.pin_hash},
-      failed_attempts = ${updates.failedAttempts ?? current.failed_attempts},
-      total_failed_24h = ${updates.totalFailed24h ?? current.total_failed_24h},
-      first_failed_at = ${updates.firstFailedAt !== undefined ? updates.firstFailedAt : current.first_failed_at},
-      locked_until = ${updates.lockedUntil !== undefined ? updates.lockedUntil : current.locked_until},
-      cooling_off_until = ${updates.coolingOffUntil !== undefined ? updates.coolingOffUntil : current.cooling_off_until},
-      status = ${updates.status ?? current.status},
+      salt = COALESCE(${updates.salt ?? null}::text, salt),
+      pin_hash = COALESCE(${updates.pinHash ?? null}::text, pin_hash),
+      failed_attempts = COALESCE(${updates.failedAttempts ?? null}::integer, failed_attempts),
+      total_failed_24h = COALESCE(${updates.totalFailed24h ?? null}::integer, total_failed_24h),
+      first_failed_at = CASE WHEN ${updates.firstFailedAt !== undefined}::boolean
+        THEN ${updates.firstFailedAt ?? null}::timestamptz ELSE first_failed_at END,
+      locked_until = CASE WHEN ${updates.lockedUntil !== undefined}::boolean
+        THEN ${updates.lockedUntil ?? null}::timestamptz ELSE locked_until END,
+      cooling_off_until = CASE WHEN ${updates.coolingOffUntil !== undefined}::boolean
+        THEN ${updates.coolingOffUntil ?? null}::timestamptz ELSE cooling_off_until END,
+      status = COALESCE(${updates.status ?? null}::text, status),
       updated_at = CURRENT_TIMESTAMP
     WHERE user_id = ${userId}
     RETURNING *
@@ -81,7 +84,7 @@ export async function updateApprovalPin(
   return userApprovalPinRowSchema.parse(rows[0]);
 }
 
-export async function deleteApprovalPin(sql: Sql, userId: string): Promise<number> {
+export async function deleteApprovalPin(sql: SqlClient, userId: string): Promise<number> {
   const result = await sql`DELETE FROM user_approval_pins WHERE user_id = ${userId}`;
   return result.count;
 }
