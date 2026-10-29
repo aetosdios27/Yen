@@ -225,6 +225,41 @@ export const notificationDeadLetterRowSchema = z.object({
   dead_lettered_at: z.date(),
 });
 
+export const donationPledgeRowSchema = z.object({
+  id: z.string().uuid(),
+  fund_id: fundId,
+  amount_paise: z.bigint().transform((n) => Number(n)),
+  utr: z.string(),
+  donor_display_name: z.string().nullable(),
+  donor_contact: z.string().nullable(),
+  status: z.enum(["pledged", "verified", "rejected"]),
+  created_at: z.date(),
+  verified_at: z.date().nullable(),
+});
+
+export const bankTransactionRowSchema = z.object({
+  id: z.string().uuid(),
+  fund_id: fundId,
+  bank_reference: z.string(),
+  utr: z.string().nullable(),
+  amount_paise: z.bigint().transform((n) => Number(n)),
+  type: z.enum(["credit", "debit"]),
+  posted_at: z.date(),
+  narration: z.string().nullable(),
+  counterparty_vpa: z.string().nullable(),
+  counterparty_name: z.string().nullable(),
+  source: z.enum(["statement_upload", "webhook_partner"]),
+  raw_payload: z.unknown(),
+  reconciliation_status: z.enum(["unmatched", "matched", "manually_matched", "ignored"]),
+  matched_pledge_id: z.string().uuid().nullable(),
+  matched_at: z.date().nullable(),
+  match_confidence: z.number().nullable(),
+  match_method: z.enum(["exact_utr", "heuristic_amount_time", "manual"]).nullable(),
+  manual_match_reason: z.string().nullable(),
+  manual_match_by: z.string().nullable(),
+  created_at: z.date(),
+});
+
 export type NotificationOutboxRow = z.infer<typeof notificationOutboxRowSchema>;
 export type UserNotificationPreferencesRow = z.infer<typeof userNotificationPreferencesRowSchema>;
 export type FundNotificationDailyUsageRow = z.infer<typeof fundNotificationDailyUsageRowSchema>;
@@ -234,3 +269,5 @@ export type UserApprovalPinRow = z.infer<typeof userApprovalPinRowSchema>;
 export type AuthOtpRow = z.infer<typeof authOtpRowSchema>;
 export type SessionRow = z.infer<typeof sessionRowSchema>;
 export type RateLimitRow = z.infer<typeof rateLimitRowSchema>;
+export type DonationPledgeRow = z.infer<typeof donationPledgeRowSchema>;
+export type BankTransactionRow = z.infer<typeof bankTransactionRowSchema>;

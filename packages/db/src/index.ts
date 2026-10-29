@@ -68,6 +68,10 @@ export {
 export {
   type AuthOtpRow,
   authOtpRowSchema,
+  type BankTransactionRow,
+  bankTransactionRowSchema,
+  type DonationPledgeRow,
+  donationPledgeRowSchema,
   type FundEventRow,
   type FundNotificationDailyUsageRow,
   type FundPseudonymRow,
