@@ -40,7 +40,22 @@ type Bundle = {
     sequence: number;
   };
 };
-export type Check = { name: string; ok: boolean; position?: number; detail?: string };
+export const ReasonCode = {
+  FORMAT_INVALID: "FORMAT_INVALID",
+  EVENT_HASH_INVALID: "EVENT_HASH_INVALID",
+  CHAIN_INVALID: "CHAIN_INVALID",
+  PROOF_INVALID: "PROOF_INVALID",
+  BATCH_INVALID: "BATCH_INVALID",
+  ANCHOR_INVALID: "ANCHOR_INVALID",
+} as const;
+export type ReasonCode = (typeof ReasonCode)[keyof typeof ReasonCode];
+export type Check = {
+  name: string;
+  ok: boolean;
+  reasonCode?: ReasonCode;
+  position?: number;
+  detail?: string;
+};
 
 function canonical(value: Json): string {
   if (typeof value === "string" && !validUnicode(value))
@@ -189,7 +204,14 @@ export function verifyBundle(input: unknown): Check[] {
   try {
     b = parseBundle(input);
   } catch (error) {
-    return [{ name: "bundle format", ok: false, detail: String(error) }];
+    return [
+      {
+        name: "bundle format",
+        ok: false,
+        reasonCode: ReasonCode.FORMAT_INVALID,
+        detail: String(error),
+      },
+    ];
   }
   const checks: Check[] = [];
   let prevHash = b.chain.start_hash;
@@ -330,7 +352,23 @@ export function verifyBundle(input: unknown): Check[] {
     ok: anchorValid,
     ...(!anchorValid ? { detail: "anchor does not identify the final bundle root" } : {}),
   });
-  return checks;
+  return checks.map((check) =>
+    check.ok
+      ? check
+      : {
+          ...check,
+          reasonCode:
+            check.name === "canonical event hash"
+              ? ReasonCode.EVENT_HASH_INVALID
+              : check.name === "hash chain"
+                ? ReasonCode.CHAIN_INVALID
+                : check.name === "Merkle inclusion"
+                  ? ReasonCode.PROOF_INVALID
+                  : check.name === "batch ranges and roots"
+                    ? ReasonCode.BATCH_INVALID
+                    : ReasonCode.ANCHOR_INVALID,
+        },
+  );
 }
 
 export async function verifyAnchor(
@@ -357,12 +395,18 @@ export async function verifyAnchor(
         {
           name: "RPC chain id",
           ok: false,
+          reasonCode: ReasonCode.ANCHOR_INVALID,
           detail: `expected ${bundle.anchor.chain_id}, got ${chainId}`,
         },
       ];
     if (expectedContract.toLowerCase() !== bundle.anchor.contract_address.toLowerCase())
       return [
-        { name: "registry address", ok: false, detail: "CLI address differs from bundle anchor" },
+        {
+          name: "registry address",
+          ok: false,
+          reasonCode: ReasonCode.ANCHOR_INVALID,
+          detail: "CLI address differs from bundle anchor",
+        },
       ];
     // rootAt(uint64) selector from the RootRegistry ABI.
     const callData = `0xeaa38b41${BigInt(bundle.anchor.sequence).toString(16).padStart(64, "0")}`;
@@ -371,13 +415,23 @@ export async function verifyAnchor(
       {
         name: "on-chain root",
         ok: result.toLowerCase() === bundle.anchor.root.toLowerCase(),
+        ...(!(result.toLowerCase() === bundle.anchor.root.toLowerCase())
+          ? { reasonCode: ReasonCode.ANCHOR_INVALID }
+          : {}),
         ...(result.toLowerCase() !== bundle.anchor.root.toLowerCase()
           ? { detail: `RPC returned ${result}` }
           : {}),
       },
     ];
   } catch (error) {
-    return [{ name: "on-chain root", ok: false, detail: String(error) }];
+    return [
+      {
+        name: "on-chain root",
+        ok: false,
+        reasonCode: ReasonCode.ANCHOR_INVALID,
+        detail: String(error),
+      },
+    ];
   }
 }
 

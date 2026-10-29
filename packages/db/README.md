@@ -306,6 +306,21 @@ The `pg_stat_statements` module tracks aggregate execution statistics across all
   LIMIT 10;
   ```
 
+## Export an anchored audit bundle
+
+`exportAuditBundle(sql, fundId, anchorId, contractAddress)` reads the persisted fund interval, its stored salts, and a submitted or confirmed anchor. It checks the persisted events and salts reproduce the stored root and that the interval ends at the current fund head before returning the standalone `yen/audit-bundle/v1` JSON shape.
+
+The CLI writes the bundle to stdout:
+
+```sh
+YEN_DATABASE_URL=postgres://... pnpm --filter @yen/db export-audit-bundle \
+  --fund 00000000-0000-4000-8000-000000000001 \
+  --anchor 00000000-0000-4000-8000-000000000002 \
+  --contract 0xYourRootRegistryAddress > bundle.json
+```
+
+The registry address is supplied by the operator because it is not stored with the database anchor. Export requires a submitted or confirmed anchor with a transaction hash. This utility prepares a bundle; it does not publish roots or make the supplied registry address trustworthy.
+
 ## Prior art
 
 - [PostgreSQL constraints](../../docs/REFERENCES.md#pg-constraints) explain database enforcement and uniqueness.

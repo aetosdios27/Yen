@@ -1,6 +1,10 @@
 # Standalone audit bundle verifier
 
-`@yen/verifier` is a small command line verifier implemented with Node built-ins only. Its runtime code imports no `@yen/*` package. Install the published package and run:
+`@yen/verifier` is a small command line verifier implemented with Node built-ins only. Its runtime code imports no `@yen/*` package. Install the published package and run: <!-- claim: CLAIM-31 -->
+
+```sh
+npm install @yen/verifier
+```
 
 ```sh
 yen-verify bundle.json
@@ -29,3 +33,20 @@ A pass establishes that the supplied JSON's events hash to their stated hashes, 
 A pass does **not** prove the bundle includes every event, the starting head is authentic unless checked independently, records are truthful or authorized, a bank matched a transaction, a real-world spend happened, or that two users were shown the same root. The RootRegistry publisher controls publication. A root and proof establish integrity/inclusion, not completeness, consistency across intervals, availability, or economic truth. Polygon Amoy is a test network and may reset.
 
 The tests use `@yen/eventlog` and `@yen/shared` only to create independent cross-check fixtures. Production verifier imports only `node:crypto` and other Node built-ins.
+
+## Failure codes
+
+Every failed check has a stable `reasonCode`: `FORMAT_INVALID`, `EVENT_HASH_INVALID`, `CHAIN_INVALID`, `PROOF_INVALID`, `BATCH_INVALID`, or `ANCHOR_INVALID`. These codes are the cross-language contract; `detail` is diagnostic text and may change. A valid bundle has no reason code.
+
+The library API is also exported:
+
+```js
+import { verifyBundle, verifyAnchor } from "@yen/verifier";
+
+const checks = verifyBundle(bundle);
+const anchorChecks = await verifyAnchor(bundle, rpcUrl, expectedRegistryAddress);
+```
+
+## Published vectors and Python reference
+
+`vectors/v1/index.json` indexes valid, malformed, truncated, and tampered JSON bundle fixtures and their expected verdicts. Regenerate the deterministic corpus in the monorepo with `pnpm --filter @yen/eventlog vectors:generate-audit`. Run the Node and Python implementations against all committed vectors with `pnpm --filter @yen/verifier vectors:check`. The Python 3 implementation is in `verifiers/python/yen_verify.py` and uses only the Python standard library.

@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "vectors": [
+    {
+      "file": "valid-two-events.json",
+      "valid": true,
+      "reason_code": null
+    },
+    {
+      "file": "malformed-format.json",
+      "valid": false,
+      "reason_code": "FORMAT_INVALID"
+    },
+    {
+      "file": "truncated-first-event.json",
+      "valid": false,
+      "reason_code": "CHAIN_INVALID"
+    },
+    {
+      "file": "tampered-event-payload.json",
+      "valid": false,
+      "reason_code": "EVENT_HASH_INVALID"
+    },
+    {
+      "file": "tampered-inclusion-path.json",
+      "valid": false,
+      "reason_code": "PROOF_INVALID"
+    },
+    {
+      "file": "malformed-batch-range.json",
+      "valid": false,
+      "reason_code": "BATCH_INVALID"
+    },
+    {
+      "file": "tampered-anchor-root.json",
+      "valid": false,
+      "reason_code": "ANCHOR_INVALID"
+    }
+  ]
+}

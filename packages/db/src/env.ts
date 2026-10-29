@@ -14,7 +14,10 @@ const databaseUrlSchema = z
     }
   });
 
-export function parseDatabaseUrl(value: unknown, name: "DATABASE_URL" | "YEN_TEST_DATABASE_URL") {
+export function parseDatabaseUrl(
+  value: unknown,
+  name: "DATABASE_URL" | "YEN_DATABASE_URL" | "YEN_TEST_DATABASE_URL",
+) {
   const parsed = databaseUrlSchema.safeParse(value);
   if (!parsed.success) {
     throw new Error(
