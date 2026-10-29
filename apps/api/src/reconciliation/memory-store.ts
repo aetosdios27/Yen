@@ -11,7 +11,7 @@ import type {
 
 export interface StoredBankTransaction extends ParsedBankTransaction {
   id: string;
-  reconciliationStatus: "unmatched" | "matched" | "manually_matched" | "ignored";
+  reconciliationStatus: "unmatched" | "matched" | "manually_matched" | "ignored" | "ambiguous";
   matchedPledgeId?: string | undefined;
   matchedAt?: string | undefined;
   matchConfidence?: number | undefined;
@@ -41,10 +41,59 @@ export interface ManualMatchRequest {
   actorPseudonym?: string | undefined;
 }
 
+export interface DebitReviewItem {
+  readonly kind: "unapproved" | "ambiguous";
+  readonly bankTransactionId: string;
+  readonly bankReference: string;
+  readonly amountPaise: Paise;
+  readonly postedAt: string;
+  readonly counterpartyVpa?: string;
+  readonly counterpartyAccountFingerprint?: string;
+}
+
+export interface ResolveUnapprovedDebitRequest {
+  readonly fundId: string;
+  readonly bankTransactionId: string;
+  readonly reason: string;
+  readonly actorPseudonym: string;
+  readonly resolvedAt: string;
+}
+
+export interface ManualDebitMatchRequest {
+  readonly fundId: string;
+  readonly bankTransactionId: string;
+  readonly expenseId: string;
+  readonly reason: string;
+  readonly actorPseudonym: string;
+  readonly occurredAt: string;
+}
+
+export interface ManualDebitUnmatchRequest {
+  readonly fundId: string;
+  readonly bankTransactionId: string;
+  readonly reason: string;
+  readonly actorPseudonym: string;
+  readonly occurredAt: string;
+}
+
+export type ManualDebitActionResult =
+  | { readonly kind: "updated"; readonly amountPaise: Paise }
+  | { readonly kind: "not_found" }
+  | { readonly kind: "conflict" }
+  | {
+      readonly kind: "amount_mismatch";
+      readonly expectedPaise: Paise;
+      readonly actualPaise: Paise;
+    };
+
 export interface ReconciliationStore {
   ingest(transactions: ParsedBankTransaction[]): Promise<IngestResult>;
   getUnmatchedCredits(fundId: string): Promise<UnmatchedCreditWithCandidates[]>;
   manualMatch(request: ManualMatchRequest): Promise<ManualMatchResult>;
+  listDebitReview(fundId: string): Promise<DebitReviewItem[]>;
+  resolveUnapprovedDebit(request: ResolveUnapprovedDebitRequest): Promise<boolean>;
+  manualMatchDebit(request: ManualDebitMatchRequest): Promise<ManualDebitActionResult>;
+  manualUnmatchDebit(request: ManualDebitUnmatchRequest): Promise<ManualDebitActionResult>;
   addPledge(pledge: StoredPledge): void;
 }
 
@@ -53,6 +102,8 @@ export class MemoryReconciliationStore implements ReconciliationStore {
   private readonly pledges = new Map<string, StoredPledge>();
   // Unique index on (fundId, bankReference) for idempotency
   private readonly referenceIndex = new Map<string, string>();
+  private readonly unapprovedDebits = new Set<string>();
+  private readonly resolvedDebits = new Set<string>();
 
   addPledge(pledge: StoredPledge): void {
     this.pledges.set(pledge.id, { ...pledge });
@@ -168,6 +219,9 @@ export class MemoryReconciliationStore implements ReconciliationStore {
         } else {
           unmatchedCount++;
         }
+      } else {
+        this.unapprovedDebits.add(id);
+        unmatchedCount++;
       }
 
       this.transactions.set(id, stored);
@@ -252,6 +306,66 @@ export class MemoryReconciliationStore implements ReconciliationStore {
     return unmatched.sort(
       (a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime(),
     );
+  }
+
+  async listDebitReview(fundId: string): Promise<DebitReviewItem[]> {
+    return [...this.transactions.values()]
+      .filter(
+        (transaction) =>
+          transaction.fundId === fundId &&
+          ((this.unapprovedDebits.has(transaction.id) &&
+            !this.resolvedDebits.has(transaction.id)) ||
+            transaction.reconciliationStatus === "ambiguous"),
+      )
+      .map((transaction) => ({
+        kind: this.unapprovedDebits.has(transaction.id) ? "unapproved" : "ambiguous",
+        bankTransactionId: transaction.id,
+        bankReference: transaction.bankReference,
+        amountPaise: transaction.amountPaise,
+        postedAt: transaction.postedAt,
+        ...(transaction.counterpartyVpa ? { counterpartyVpa: transaction.counterpartyVpa } : {}),
+        ...(transaction.counterpartyAccountFingerprint
+          ? { counterpartyAccountFingerprint: transaction.counterpartyAccountFingerprint }
+          : {}),
+      }));
+  }
+
+  async resolveUnapprovedDebit(request: ResolveUnapprovedDebitRequest): Promise<boolean> {
+    const transaction = this.transactions.get(request.bankTransactionId);
+    if (
+      !transaction ||
+      transaction.fundId !== request.fundId ||
+      !this.unapprovedDebits.has(transaction.id) ||
+      this.resolvedDebits.has(transaction.id)
+    )
+      return false;
+    this.resolvedDebits.add(transaction.id);
+    return true;
+  }
+
+  async manualMatchDebit(request: ManualDebitMatchRequest): Promise<ManualDebitActionResult> {
+    const transaction = this.transactions.get(request.bankTransactionId);
+    const expense = this.pledges.get(request.expenseId);
+    if (
+      !transaction ||
+      transaction.fundId !== request.fundId ||
+      !expense ||
+      expense.fundId !== request.fundId
+    ) {
+      return { kind: "not_found" };
+    }
+    return { kind: "conflict" };
+  }
+
+  async manualUnmatchDebit(request: ManualDebitUnmatchRequest): Promise<ManualDebitActionResult> {
+    const transaction = this.transactions.get(request.bankTransactionId);
+    if (!transaction || transaction.fundId !== request.fundId) return { kind: "not_found" };
+    if (transaction.type !== "debit" || transaction.reconciliationStatus !== "ambiguous") {
+      return { kind: "conflict" };
+    }
+    transaction.reconciliationStatus = "unmatched";
+    this.unapprovedDebits.add(transaction.id);
+    return { kind: "updated", amountPaise: transaction.amountPaise };
   }
 
   async manualMatch(request: ManualMatchRequest): Promise<ManualMatchResult> {

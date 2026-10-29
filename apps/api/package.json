@@ -27,6 +27,7 @@
     "@yen/eventlog": "workspace:*",
     "@yen/ledger": "workspace:*",
     "@yen/policy": "workspace:*",
+    "@yen/queue": "workspace:*",
     "@yen/shared": "workspace:*",
     "bcryptjs": "^3.0.3",
     "hono": "4.13.14",

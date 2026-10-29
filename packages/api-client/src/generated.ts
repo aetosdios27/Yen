@@ -856,6 +856,211 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/funds/{fundId}/debit-review": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List unapproved and ambiguous bank debits */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          fundId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Debit review items */
+        200: {
+          headers: {
+            /** @description Request correlation ID */
+            "x-request-id": string;
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              items: {
+                /** @enum {string} */
+                kind: "unapproved" | "ambiguous";
+                /** Format: uuid */
+                bankTransactionId: string;
+                bankReference: string;
+                amountPaise: number;
+                /** Format: date-time */
+                postedAt: string;
+                counterpartyVpa?: string;
+                counterpartyAccountFingerprint?: string;
+              }[];
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/funds/{fundId}/debit-review/{bankTransactionId}/resolve": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Resolve an unapproved debit with an audit reason */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          fundId: string;
+          bankTransactionId: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            reason: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Resolved */
+        200: {
+          headers: {
+            /** @description Request correlation ID */
+            "x-request-id": string;
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              /** @enum {boolean} */
+              resolved: true;
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/funds/{fundId}/debit-review/{bankTransactionId}/match": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Manually match a debit to an approved expense */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          fundId: string;
+          bankTransactionId: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            /** Format: uuid */
+            expenseId: string;
+            reason: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Debit manually matched */
+        200: {
+          headers: {
+            /** @description Request correlation ID */
+            "x-request-id": string;
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              /** @enum {boolean} */
+              matched: true;
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/funds/{fundId}/debit-review/{bankTransactionId}/unmatch": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Mark an ambiguous debit as unapproved with an audit reason */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          fundId: string;
+          bankTransactionId: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            reason: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Debit moved to unapproved review */
+        200: {
+          headers: {
+            /** @description Request correlation ID */
+            "x-request-id": string;
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              /** @enum {boolean} */
+              unmatched: true;
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/openapi.json": {
     parameters: {
       query?: never;
@@ -1397,7 +1602,7 @@ export interface components {
       /** @enum {string} */
       type: "credit" | "debit";
       /** @enum {string} */
-      reconciliationStatus: "unmatched" | "matched" | "manually_matched" | "ignored";
+      reconciliationStatus: "unmatched" | "matched" | "manually_matched" | "ignored" | "ambiguous";
       matchedPledgeId?: string;
       duplicate?: boolean;
     };
@@ -1412,7 +1617,7 @@ export interface components {
       duplicate?: boolean;
       transactionId: string;
       /** @enum {string} */
-      reconciliationStatus: "unmatched" | "matched" | "manually_matched" | "ignored";
+      reconciliationStatus: "unmatched" | "matched" | "manually_matched" | "ignored" | "ambiguous";
       matchedPledgeId?: string;
     };
     PartnerWebhookInput: {

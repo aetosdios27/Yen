@@ -1892,7 +1892,13 @@ export const statementTransactionSummarySchema = z
     utr: z.string().optional(),
     amountPaise: paiseWire,
     type: z.enum(["credit", "debit"]),
-    reconciliationStatus: z.enum(["unmatched", "matched", "manually_matched", "ignored"]),
+    reconciliationStatus: z.enum([
+      "unmatched",
+      "matched",
+      "manually_matched",
+      "ignored",
+      "ambiguous",
+    ]),
     matchedPledgeId: z.string().optional(),
     duplicate: z.boolean().optional(),
   })
@@ -1942,7 +1948,13 @@ export const partnerWebhookResultSchema = z
     status: z.literal("processed"),
     duplicate: z.boolean().optional(),
     transactionId: z.string(),
-    reconciliationStatus: z.enum(["unmatched", "matched", "manually_matched", "ignored"]),
+    reconciliationStatus: z.enum([
+      "unmatched",
+      "matched",
+      "manually_matched",
+      "ignored",
+      "ambiguous",
+    ]),
     matchedPledgeId: z.string().optional(),
   })
   .strict()

@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -56,6 +56,7 @@ databaseSuite("migration runner", (sql, url) => {
       "auth_otp_attempt_limits",
       "auth_otps",
       "bank_transactions",
+      "debit_reconciliation_actions",
       "display_name_contact_salts",
       "display_names",
       "donation_pledges",
@@ -78,6 +79,7 @@ databaseSuite("migration runner", (sql, url) => {
       "schema_migrations",
       "sessions",
       "trusted_devices",
+      "unapproved_debits",
       "user_approval_pins",
       "user_notification_preferences",
       "users",
@@ -108,6 +110,7 @@ databaseSuite("migration runner", (sql, url) => {
     const evidenceSource = await readFile(join(defaultDir, "0020_evidence_records.sql"));
     const fundSettingsSource = await readFile(join(defaultDir, "0021_funds_settings.sql"));
     const expenseBankLinkSource = await readFile(join(defaultDir, "0022_expense_bank_link.sql"));
+    const debitMatchingSource = await readFile(join(defaultDir, "0023_debit_matching.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -242,7 +245,70 @@ databaseSuite("migration runner", (sql, url) => {
         checksum: createHash("sha256").update(expenseBankLinkSource).digest("hex"),
         applied_at: expect.any(Date),
       },
+      {
+        version: 23,
+        name: "0023_debit_matching.sql",
+        checksum: createHash("sha256").update(debitMatchingSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
     ]);
+  });
+
+  it("keeps manual debit decisions immutable", async () => {
+    await migrate(sql);
+    const fundId = randomUUID();
+    const transactionId = randomUUID();
+    await sql`INSERT INTO bank_transactions (
+      id, fund_id, bank_reference, amount_paise, type, posted_at, source, raw_payload
+    ) VALUES (
+      ${transactionId}, ${fundId}, 'manual-audit', 100, 'debit',
+      '2026-01-01T00:00:00Z', 'statement_upload', '{}'::jsonb
+    )`;
+    const actor = `psn_${randomUUID()}`;
+    await sql`INSERT INTO debit_reconciliation_actions (
+      id, fund_id, bank_transaction_id, action, reason, actor_pseudonym, occurred_at
+    ) VALUES (
+      ${randomUUID()}, ${fundId}, ${transactionId}, 'manual_unmatch', 'no approved request', ${actor}, CURRENT_TIMESTAMP
+    )`;
+    await expect(
+      sql`UPDATE debit_reconciliation_actions SET reason = 'changed' WHERE bank_transaction_id = ${transactionId}`,
+    ).rejects.toThrow("immutable");
+    await expect(
+      sql`DELETE FROM debit_reconciliation_actions WHERE bank_transaction_id = ${transactionId}`,
+    ).rejects.toThrow("immutable");
+    await expect(sql`TRUNCATE debit_reconciliation_actions`).rejects.toThrow("cannot be truncated");
+  });
+
+  it("keeps unapproved debit evidence immutable and allows one reasoned resolution", async () => {
+    await migrate(sql);
+    const transactionId = randomUUID();
+    await sql`
+      INSERT INTO bank_transactions (
+        id, fund_id, bank_reference, amount_paise, type, posted_at, source, raw_payload
+      ) VALUES (
+        ${transactionId}, ${randomUUID()}, 'reference-one', 100, 'debit',
+        '2026-01-01T00:00:00Z', 'statement_upload', '{}'::jsonb
+      )
+    `;
+    await expect(
+      sql`UPDATE bank_transactions SET counterparty_account_fingerprint = 'changed'
+        WHERE id = ${transactionId}`,
+    ).rejects.toThrow("financial attributes are immutable");
+    await sql`INSERT INTO unapproved_debits (bank_transaction_id, fund_id)
+      SELECT id, fund_id FROM bank_transactions WHERE id = ${transactionId}`;
+    const ownerPseudonym = `psn_${randomUUID()}`;
+    await expect(
+      sql`UPDATE unapproved_debits SET resolution_reason = 'reviewed', resolved_by = ${ownerPseudonym},
+        resolved_at = CURRENT_TIMESTAMP WHERE bank_transaction_id = ${transactionId}`,
+    ).resolves.toBeDefined();
+    await expect(
+      sql`UPDATE unapproved_debits SET resolution_reason = 'changed', resolved_by = ${ownerPseudonym},
+        resolved_at = CURRENT_TIMESTAMP WHERE bank_transaction_id = ${transactionId}`,
+    ).rejects.toThrow("one reasoned resolution");
+    await expect(
+      sql`DELETE FROM unapproved_debits WHERE bank_transaction_id = ${transactionId}`,
+    ).rejects.toThrow("cannot be deleted");
+    await expect(sql`TRUNCATE unapproved_debits`).rejects.toThrow("cannot be truncated");
   });
 
   it("records history when a migration changes its search path", async () => {
@@ -275,7 +341,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(22);
+    expect(before).toHaveLength(23);
   });
 
   it("rejects an edited applied file and names it", async () => {

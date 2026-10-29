@@ -2,7 +2,12 @@ import type { Paise } from "@yen/shared";
 
 export type TransactionType = "credit" | "debit";
 export type TransactionSource = "statement_upload" | "webhook_partner";
-export type ReconciliationStatus = "unmatched" | "matched" | "manually_matched" | "ignored";
+export type ReconciliationStatus =
+  | "unmatched"
+  | "matched"
+  | "manually_matched"
+  | "ignored"
+  | "ambiguous";
 export type MatchMethod = "exact_utr" | "heuristic_amount_time" | "manual";
 
 export interface ParsedBankTransaction {
@@ -14,6 +19,7 @@ export interface ParsedBankTransaction {
   postedAt: string; // ISO-8601 UTC string
   narration?: string | undefined;
   counterpartyVpa?: string | undefined;
+  counterpartyAccountFingerprint?: string | undefined;
   counterpartyName?: string | undefined;
   source: TransactionSource;
   rawPayload: Record<string, unknown>;
