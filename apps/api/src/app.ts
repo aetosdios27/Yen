@@ -149,7 +149,12 @@ export { devPolicy } from "./policy.js";
 
 export function createApp(overrides: Partial<AppDependencies> = {}) {
   const baseDeps = {
-    ...defaultDependencies(overrides.clock, overrides.expenseStore),
+    ...defaultDependencies(
+      overrides.clock,
+      overrides.expenseStore,
+      overrides.evidenceStore,
+      overrides.storageAdapter,
+    ),
     ...overrides,
   };
   if (process.env.NODE_ENV === "production" && baseDeps.fundStore?.persistent !== true) {
@@ -1593,6 +1598,9 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       fund: fundEntry,
       expenseId,
     });
+    if (!(await deps.evidenceStore.expenseBelongsToFund(fundParam.value, expenseId))) {
+      throw new ApiError("not_found");
+    }
 
     const form = c.req.valid("form");
     const file = form.file;
@@ -1689,11 +1697,6 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     // Strip EXIF metadata for served image preview (privacy & safety)
     const _sanitizedPreviewBytes = stripExifMetadata(bytes, file.type);
 
-    // Duplicate detection across expenses ONLY within authorized fund scope (prevent cross-fund disclosure)
-    const existingEvidence = await deps.evidenceStore.findBySha256(fundParam.value, fileSha256);
-    const duplicateInSameFund = existingEvidence.find((e) => e.expenseId !== expenseId);
-    const duplicateDetected = duplicateInSameFund !== undefined;
-
     const record: StoredEvidence = {
       evidenceId,
       fundId: fundParam.value,
@@ -1703,9 +1706,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       fileSizeBytes: bytes.length,
       fileName: sanitizeEvidenceFilename(file.name),
       objectKey,
-      duplicateDetected,
-      isDuplicate: duplicateDetected,
-      duplicateExpenseId: duplicateInSameFund?.expenseId,
+      duplicateDetected: false,
+      isDuplicate: false,
       vendorName: form.vendorName?.trim() || undefined,
       gstin: validatedGstin,
       invoiceNumber: form.invoiceNumber?.trim() || undefined,
@@ -1736,8 +1738,11 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       });
     }
 
-    await deps.evidenceStore.save(record);
-    return c.json(deps.policy.redact(principal, { kind: "evidence", evidence: record }), 201);
+    const storedEvidence = await deps.evidenceStore.save(record);
+    return c.json(
+      deps.policy.redact(principal, { kind: "evidence", evidence: storedEvidence }),
+      201,
+    );
   });
   app.openapi(getEvidenceRoute, async (c) => {
     const fundParam = parseFundId(c.req.valid("param").fundId);

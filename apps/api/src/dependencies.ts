@@ -13,6 +13,7 @@ import {
   TRUSTED_DEVICE_IDLE_TIMEOUT_MS,
 } from "./auth/index.js";
 import { rateLimitEnv, rateLimits } from "./config.js";
+import { PostgresEvidenceStore } from "./evidence-store-postgres.js";
 import { jsonLogger, type Logger } from "./logging.js";
 import {
   type ActionTokenStore,
@@ -30,7 +31,11 @@ import {
   MemoryReconciliationStore,
   type ReconciliationStore,
 } from "./reconciliation/memory-store.js";
-import { MemoryStorageAdapter, type StorageAdapter } from "./storage.js";
+import {
+  MemoryStorageAdapter,
+  type StorageAdapter,
+  UnconfiguredStorageAdapter,
+} from "./storage.js";
 import {
   type EvidenceStore,
   type IdempotencyStore,
@@ -362,11 +367,29 @@ export interface AppDependencies {
 export function defaultDependencies(
   clock: () => number = Date.now,
   expenseStore?: ExpenseStore,
+  evidenceStore?: EvidenceStore,
+  storageAdapter?: StorageAdapter,
 ): AppDependencies {
   if (!expenseStore && process.env.NODE_ENV === "production") {
     throw new Error("Production API requires a PostgreSQL expense store");
   }
+  if (process.env.NODE_ENV === "production" && !evidenceStore) {
+    throw new Error("Production API requires a PostgreSQL evidence store");
+  }
+  if (process.env.NODE_ENV === "production" && !(evidenceStore instanceof PostgresEvidenceStore)) {
+    throw new Error("Production API requires a PostgreSQL evidence store");
+  }
+  if (
+    process.env.NODE_ENV === "production" &&
+    (!storageAdapter ||
+      storageAdapter instanceof MemoryStorageAdapter ||
+      storageAdapter instanceof UnconfiguredStorageAdapter)
+  ) {
+    throw new Error("Production API requires configured durable evidence storage");
+  }
   const resolvedExpenseStore = expenseStore ?? new InMemoryExpenseStore();
+  const resolvedEvidenceStore = evidenceStore ?? new MemoryEvidenceStore();
+  const resolvedStorageAdapter = storageAdapter ?? new MemoryStorageAdapter();
   const pinStore = new MemoryPinStore({ clock });
   const actionTokenStore = new MemoryActionTokenStore({ clock });
   const pinNotificationService = new MemoryPinNotificationService();
@@ -402,8 +425,8 @@ export function defaultDependencies(
     pledgeBodyLimit: 4096,
     waitlistLimit: { capacity: 5, refillMs: 3600000 },
     waitlistBodyLimit: 8192,
-    evidenceStore: new MemoryEvidenceStore(),
-    storageAdapter: new MemoryStorageAdapter(),
+    evidenceStore: resolvedEvidenceStore,
+    storageAdapter: resolvedStorageAdapter,
     virusScanner: new UnconfiguredVirusScannerAdapter(),
     clock,
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),

@@ -273,7 +273,7 @@ export interface StoredEvidence {
   readonly mimeType: AllowedEvidenceMimeType;
   readonly fileSizeBytes: number;
   readonly fileName: string;
-  readonly objectKey?: string | undefined;
+  readonly objectKey: string;
   readonly duplicateDetected: boolean;
   readonly isDuplicate: boolean;
   readonly duplicateExpenseId?: string | undefined;
@@ -290,30 +290,45 @@ export interface StoredEvidence {
 }
 
 export interface EvidenceStore {
+  expenseBelongsToFund(fundId: string, expenseId: string): Promise<boolean>;
   save(evidence: StoredEvidence): Promise<StoredEvidence>;
   getByExpense(fundId: string, expenseId: string): Promise<readonly StoredEvidence[]>;
-  findBySha256(fundId: string, sha256: string): Promise<readonly StoredEvidence[]>;
 }
 
 export class MemoryEvidenceStore implements EvidenceStore {
   private readonly records = new Map<string, StoredEvidence>();
   private readonly byHash = new Map<string, StoredEvidence[]>();
 
+  async expenseBelongsToFund(): Promise<boolean> {
+    return true;
+  }
+
   async save(evidence: StoredEvidence): Promise<StoredEvidence> {
     this.records.set(evidence.evidenceId, evidence);
     const list = this.byHash.get(evidence.fileSha256) ?? [];
     list.push(evidence);
     this.byHash.set(evidence.fileSha256, list);
-    return evidence;
+    return this.withDuplicateStatus(evidence);
   }
 
   async getByExpense(fundId: string, expenseId: string): Promise<readonly StoredEvidence[]> {
-    return Array.from(this.records.values()).filter(
-      (e) => e.fundId === fundId && e.expenseId === expenseId,
-    );
+    return Array.from(this.records.values())
+      .filter((e) => e.fundId === fundId && e.expenseId === expenseId)
+      .map((evidence) => this.withDuplicateStatus(evidence));
   }
 
-  async findBySha256(fundId: string, sha256: string): Promise<readonly StoredEvidence[]> {
-    return (this.byHash.get(sha256) ?? []).filter((evidence) => evidence.fundId === fundId);
+  private withDuplicateStatus(evidence: StoredEvidence): StoredEvidence {
+    const duplicate = (this.byHash.get(evidence.fileSha256) ?? []).find(
+      (candidate) =>
+        candidate.fundId === evidence.fundId &&
+        candidate.fileSha256 === evidence.fileSha256 &&
+        candidate.expenseId !== evidence.expenseId,
+    );
+    return {
+      ...evidence,
+      duplicateDetected: duplicate !== undefined,
+      isDuplicate: duplicate !== undefined,
+      duplicateExpenseId: duplicate?.expenseId,
+    };
   }
 }
