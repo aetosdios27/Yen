@@ -764,15 +764,12 @@ export interface components {
     Fund: {
       name: string;
       purpose?: string;
-      /**
-       * @default private
-       * @enum {string}
-       */
-      visibility: "public" | "donors" | "members" | "private";
       /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
       targetPaise: string;
       upiVpa: string;
       upiPayeeName: string;
+      /** @enum {string} */
+      visibility: "public" | "donors" | "members" | "private";
       /** Format: uuid */
       id: string;
       /** Format: date-time */
@@ -781,15 +778,12 @@ export interface components {
     CreateFund: {
       name: string;
       purpose?: string;
-      /**
-       * @default private
-       * @enum {string}
-       */
-      visibility: "public" | "donors" | "members" | "private";
       /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
       targetPaise: string;
       upiVpa: string;
       upiPayeeName: string;
+      /** @enum {string} */
+      visibility?: "public" | "donors" | "members" | "private";
     };
     Expense: {
       /** Format: uuid */

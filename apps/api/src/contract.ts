@@ -104,14 +104,22 @@ const upiVpa = z
 const fundFields = {
   name: z.string().trim().min(1).max(120),
   purpose: z.string().trim().min(1).max(500).optional(),
-  visibility: z.enum(["public", "donors", "members", "private"]).default("private"),
   targetPaise: paiseWire,
   upiVpa,
   upiPayeeName: payeeName,
 };
-export const fundInput = z.object(fundFields).strict().openapi("CreateFund");
+const fundVisibility = z.enum(["public", "donors", "members", "private"]);
+export const fundInput = z
+  .object({ ...fundFields, visibility: fundVisibility.optional() })
+  .strict()
+  .openapi("CreateFund");
 export const fundSchema = z
-  .object({ ...fundFields, id: z.string().uuid(), createdAt: z.iso.datetime() })
+  .object({
+    ...fundFields,
+    visibility: fundVisibility,
+    id: z.string().uuid(),
+    createdAt: z.iso.datetime(),
+  })
   .strict()
   .openapi("Fund");
 

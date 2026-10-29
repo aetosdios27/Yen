@@ -561,8 +561,10 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const principal = authorizedFund(c, "fund:create", { kind: "fund" });
     const id = parseFundId(deps.idGenerator());
     if (!id.ok) throw new ApiError("internal");
+    const input = c.req.valid("json");
     const fund = {
-      ...c.req.valid("json"),
+      ...input,
+      visibility: input.visibility ?? "private",
       id: id.value,
       createdAt: new Date(deps.clock()).toISOString(),
     };

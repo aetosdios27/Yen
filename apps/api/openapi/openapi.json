@@ -211,11 +211,6 @@
         "properties": {
           "name": { "type": "string", "minLength": 1, "maxLength": 120 },
           "purpose": { "type": "string", "minLength": 1, "maxLength": 500 },
-          "visibility": {
-            "type": "string",
-            "enum": ["public", "donors", "members", "private"],
-            "default": "private"
-          },
           "targetPaise": {
             "type": "string",
             "pattern": "^(0|[1-9][0-9]*)$",
@@ -223,10 +218,19 @@
           },
           "upiVpa": { "type": "string", "pattern": "^[a-zA-Z0-9._-]{2,256}@[a-zA-Z]{2,64}$" },
           "upiPayeeName": { "type": "string", "minLength": 1, "maxLength": 80 },
+          "visibility": { "type": "string", "enum": ["public", "donors", "members", "private"] },
           "id": { "type": "string", "format": "uuid" },
           "createdAt": { "type": "string", "format": "date-time" }
         },
-        "required": ["name", "targetPaise", "upiVpa", "upiPayeeName", "id", "createdAt"],
+        "required": [
+          "name",
+          "targetPaise",
+          "upiVpa",
+          "upiPayeeName",
+          "visibility",
+          "id",
+          "createdAt"
+        ],
         "additionalProperties": false
       },
       "CreateFund": {
@@ -234,18 +238,14 @@
         "properties": {
           "name": { "type": "string", "minLength": 1, "maxLength": 120 },
           "purpose": { "type": "string", "minLength": 1, "maxLength": 500 },
-          "visibility": {
-            "type": "string",
-            "enum": ["public", "donors", "members", "private"],
-            "default": "private"
-          },
           "targetPaise": {
             "type": "string",
             "pattern": "^(0|[1-9][0-9]*)$",
             "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
           },
           "upiVpa": { "type": "string", "pattern": "^[a-zA-Z0-9._-]{2,256}@[a-zA-Z]{2,64}$" },
-          "upiPayeeName": { "type": "string", "minLength": 1, "maxLength": 80 }
+          "upiPayeeName": { "type": "string", "minLength": 1, "maxLength": 80 },
+          "visibility": { "type": "string", "enum": ["public", "donors", "members", "private"] }
         },
         "required": ["name", "targetPaise", "upiVpa", "upiPayeeName"],
         "additionalProperties": false
