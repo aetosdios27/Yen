@@ -105,6 +105,7 @@ import {
   versionRoute,
   waitlistRoute,
 } from "./contract.js";
+import { deliveryWebhookOpenApiPaths } from "./delivery-webhook-openapi.js";
 import {
   type ApiEnv,
   type AppDependencies,
@@ -534,22 +535,26 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const expiresAt = now + deps.otpExpiryMs;
     const resendAvailableAt = now + deps.otpCooldownMs;
 
-    const deliveryResult = await deps.otpDeliveryProvider.sendOtp({
-      phone,
-      code,
-      preferredChannel: channel,
-    });
-    if (!deliveryResult.success) {
+    const challengeId = deps.idGenerator();
+    try {
+      const delivery = await deps.otpDeliveryProvider.send({
+        channel,
+        to: phone,
+        template: "otp",
+        params: { code },
+        idempotencyKey: challengeId,
+      });
+      if (delivery.status === "failed") throw new Error("OTP provider reported failure");
+    } catch {
       throw new ApiError("internal");
     }
-    if (deliveryResult.channel !== channel) throw new ApiError("internal");
 
     await deps.authStore.createOtpChallenge({
-      id: deps.idGenerator(),
+      id: challengeId,
       phone,
       otpHash,
       salt,
-      channel: deliveryResult.channel,
+      channel,
       expiresAt,
       resendAvailableAt,
       maxAttempts: deps.otpMaxAttempts,
@@ -559,7 +564,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     return c.json(
       {
         status: "sent" as const,
-        channel: deliveryResult.channel,
+        channel,
         resendAfterSeconds: Math.ceil(deps.otpCooldownMs / 1000),
         expiresAt: new Date(expiresAt).toISOString(),
       },
@@ -2254,7 +2259,7 @@ function invalidOrExpiredCode(): ApiError {
 export function openApiDocument(
   app = createApp(),
 ): ReturnType<OpenAPIHono<ApiEnv>["getOpenAPI31Document"]> {
-  return app.getOpenAPI31Document({
+  const document = app.getOpenAPI31Document({
     openapi: "3.1.0",
     info: {
       title: "Yen API",
@@ -2263,4 +2268,8 @@ export function openApiDocument(
         "YEN-15 foundation contract. Funds are explicit in-memory stubs. Paise uses decimal strings.",
     },
   });
+  Object.assign(document, {
+    paths: Object.assign(document.paths ?? {}, deliveryWebhookOpenApiPaths),
+  });
+  return document;
 }

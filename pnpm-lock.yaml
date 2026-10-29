@@ -217,6 +217,9 @@ importers:
       '@yen/ledger':
         specifier: workspace:*
         version: link:../../packages/ledger
+      '@yen/notifications':
+        specifier: workspace:*
+        version: link:../../packages/notifications
       '@yen/policy':
         specifier: workspace:*
         version: link:../../packages/policy

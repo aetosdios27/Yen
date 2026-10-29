@@ -1,4 +1,4 @@
-import { paise, parseFundId, parseUserId } from "@yen/shared";
+import { type DeliveryRequest, paise, parseFundId, parseUserId } from "@yen/shared";
 import { describe, expect, it } from "vitest";
 import { InMemoryChannelProvider } from "./channels/in-memory.js";
 import { InMemoryNotificationStore } from "./store.js";
@@ -92,6 +92,115 @@ describe("NotificationsWorker (Delivery, Fallback, Crash Resilience, Cost Guard,
     expect(usage.total_cost_paise).toBe(30);
   });
 
+  it("sends the selected SMS notification through the shared provider contract", async () => {
+    const store = new InMemoryNotificationStore();
+    const calls: DeliveryRequest[] = [];
+    const provider = {
+      async send(request: DeliveryRequest) {
+        calls.push(request);
+        return {
+          messageId: "sms-fake-1",
+          status: "accepted" as const,
+          idempotencyGuaranteed: false,
+        };
+      },
+    };
+    store.setUserContact(userId, { phone: "+919876543210" });
+    store.outbox.set("notif-shared-sms", {
+      id: "notif-shared-sms",
+      fund_id: fundId,
+      user_id: userId,
+      event_id: null,
+      idempotency_key: "shared-sms-key",
+      template_id: "donation_received",
+      template_data: { fund_title: "Village Fund", donation_id: "don-1", amount_paise: 10000 },
+      preferred_channel: "sms",
+      status: "pending",
+      attempts: 0,
+      max_attempts: 3,
+      next_attempt_at: new Date("2026-10-28T10:00:00.000Z"),
+      lease_expires_at: null,
+      delivered_at: null,
+      channel_used: null,
+      cost_paise: 0n,
+      last_error: null,
+      created_at: new Date("2026-10-28T10:00:00.000Z"),
+      updated_at: new Date("2026-10-28T10:00:00.000Z"),
+    });
+    const worker = new NotificationsWorker({
+      store,
+      deliveryProviders: { whatsapp: provider, sms: provider },
+      clock: () => new Date("2026-10-28T10:00:00.000Z"),
+    });
+
+    const result = await worker.processNextBatch();
+
+    expect(result.submitted).toBe(1);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      channel: "sms",
+      to: "+919876543210",
+      template: "donation_received",
+      idempotencyKey: "shared-sms-key",
+    });
+    expect(store.outbox.get("notif-shared-sms")?.cost_paise).toBe(15n);
+    expect(
+      await store.applyDeliveryStatus("exotel_sms", "sms-fake-1", "delivered", "sms-event-1"),
+    ).toBe(true);
+    expect(store.outbox.get("notif-shared-sms")?.status).toBe("delivered");
+  });
+
+  it("reuses the fund cap and cost reservation for a provider-deduped retry", async () => {
+    const store = new InMemoryNotificationStore();
+    const calls: DeliveryRequest[] = [];
+    const provider = {
+      async send(request: DeliveryRequest) {
+        calls.push(request);
+        return calls.length === 1
+          ? { messageId: "retry-fake-1", status: "failed" as const, idempotencyGuaranteed: true }
+          : { messageId: "retry-fake-1", status: "accepted" as const, idempotencyGuaranteed: true };
+      },
+    };
+    const now = new Date("2026-10-28T10:00:00.000Z");
+    store.setUserContact(userId, { phone: "+919876543210" });
+    store.outbox.set("notif-safe-retry", {
+      id: "notif-safe-retry",
+      fund_id: fundId,
+      user_id: userId,
+      event_id: null,
+      idempotency_key: "safe-retry-key",
+      template_id: "donation_received",
+      template_data: { fund_title: "Village Fund", donation_id: "don-1", amount_paise: 1000 },
+      preferred_channel: "whatsapp",
+      status: "pending",
+      attempts: 0,
+      max_attempts: 3,
+      next_attempt_at: now,
+      lease_expires_at: null,
+      delivered_at: null,
+      channel_used: null,
+      cost_paise: 0n,
+      last_error: null,
+      created_at: now,
+      updated_at: now,
+    });
+    const worker = new NotificationsWorker({
+      store,
+      deliveryProviders: { whatsapp: provider, sms: provider },
+      clock: () => now,
+      random: () => 0,
+    });
+
+    expect((await worker.processNextBatch()).failed).toBe(1);
+    expect((await store.getDailyFundUsage(fundId, "2026-10-28")).sent_count).toBe(1);
+    expect((await worker.processNextBatch()).submitted).toBe(1);
+    expect(calls).toHaveLength(2);
+    expect(await store.getDailyFundUsage(fundId, "2026-10-28")).toMatchObject({
+      sent_count: 1,
+      total_cost_paise: 30,
+    });
+  });
+
   it("does not silently fall back to SMS when selected WhatsApp delivery fails", async () => {
     const logged: string[] = [];
     const logger = {
@@ -106,7 +215,7 @@ describe("NotificationsWorker (Delivery, Fallback, Crash Resilience, Cost Guard,
 
     // Simulate WhatsApp failure
     whatsapp.shouldFail = true;
-    whatsapp.failureError = "Recipient +919876543210 token=super-secret";
+    whatsapp.failureError = "Recipient +919876543210 code=123456 token=super-secret";
 
     store.outbox.set("notif-fallback", {
       id: "notif-fallback",
@@ -145,8 +254,11 @@ describe("NotificationsWorker (Delivery, Fallback, Crash Resilience, Cost Guard,
     expect(row?.channel_used).toBeNull();
 
     const usage = await store.getDailyFundUsage(fundId, "2026-10-28");
-    expect(usage.total_cost_paise).toBe(0);
+    expect(usage.sent_count).toBe(1);
+    expect(usage.total_cost_paise).toBe(30);
+    expect(row?.cost_paise).toBe(30n);
     expect(logged.join(" ")).not.toContain("+919876543210");
+    expect(logged.join(" ")).not.toContain("123456");
     expect(logged.join(" ")).not.toContain("super-secret");
   });
 

@@ -18,12 +18,13 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 | SRE and observability                |       5 |
 | PostgreSQL                           |      15 |
 | Authentication and approvals         |       9 |
+| Messaging providers                  |       2 |
 | Blockchain anchoring                 |       2 |
 | Privacy and law                      |       4 |
 | Supply chain and CI                  |       5 |
 | Security and threat modeling         |       2 |
 | Cryptographic hashes                 |       1 |
-| **Total**                            |  **77** |
+| **Total**                            |  **81** |
 
 ## Tamper-evident logs and transparency
 
@@ -684,3 +685,25 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **URL:** https://www.postgresql.org/docs/16/continuous-archiving.html
 - **What we use it for:** PITR requires a base backup and a continuous sequence of archived WAL; logical `pg_dump` archives are not a WAL-replay base. The runbook records this operational distinction and does not claim PITR coverage.
 - **Where in this repo:** docs/runbooks/backup-restore.md
+
+## Messaging providers
+
+<a id="exotel-sms-api"></a>
+### Exotel SMS API
+
+- **Source:** Exotel Developer Docs, SMS API and Send SMS reference.
+- **URL:** https://developer.exotel.com/docs/sms-api/api-reference/send-sms
+- **Related URLs:** https://developer.exotel.com/docs/sms-api/overview; https://support.exotel.com/support/solutions/articles/3000007217-how-to-monitor-the-status-of-your-sms-
+- **What we use it for:** The opened references show the form-encoded send fields, Basic authentication, DLT entity/template identifiers, accepted response SID, and `StatusCallback` fields. The Send SMS reference says the DLT entity ID is mandatory for India and the template ID is optional; Yen requires both in production per YEN-76. The callback reference lists status fields but does not specify a callback signature.
+- **Where in this repo:** packages/notifications/src/channels/exotel-sms.ts; apps/api/src/delivery-webhooks.ts
+- **Verification:** Opened and read on 2026-10-29. No live request was made.
+
+<a id="meta-whatsapp-cloud-template-send"></a>
+### Send Message Template Text
+
+- **Source:** Meta; WhatsApp Business Platform public Postman workspace.
+- **URL:** https://www.postman.com/meta/whatsapp-business-platform/request/o65u5m5/send-message-template-text
+- **Related URLs:** https://www.postman.com/meta/whatsapp-business-platform/request/lwtlz1k/send-message-template-interactive; https://www.postman.com/meta/whatsapp-business-platform/request/rgtfq23/message-status-update-notifications; https://whatsapp.github.io/WhatsApp-Nodejs-SDK/api-reference/messages/template/; https://whatsapp.github.io/WhatsApp-Nodejs-SDK/api-reference/webhooks/start/
+- **What we use it for:** The opened Postman request lists `POST https://graph.facebook.com/{{Version}}/{{Phone-Number-ID}}/messages`. Meta's archived official Node SDK docs show template name, language, and component text parameters, and describe the GET `hub.challenge` handshake plus POST `x-hub-signature-256` validation using the shared app secret. The Postman status page documents sent, delivered, and read events and warns that event order can differ from the actual status timing. The handler stores timestamps and applies the latest event.
+- **Limits:** `developers.facebook.com` returned an access error/429 on repeated attempts. The Postman template body panel did not render in the opened static page, and the archived SDK wraps its Graph API request; therefore the exact raw template payload is not verified against the active Meta documentation. The accessible webhook docs name the signature header and app secret but do not specify the HMAC-SHA256 raw-byte calculation; that detail follows the YEN-76 task contract and remains **unverified against accessible Meta documentation**. No live request or webhook was made.
+- **Where in this repo:** packages/notifications/src/channels/whatsapp-cloud.ts; apps/api/src/delivery-webhooks.ts

@@ -1,41 +1,37 @@
-import type { PhoneE164 } from "@yen/shared";
+import {
+  type DeliveryProvider,
+  type DeliveryRequest,
+  type DeliveryResponse,
+  type PhoneE164,
+  parsePhoneE164,
+} from "@yen/shared";
 
 export type OtpChannel = "whatsapp" | "sms";
 
-export interface SendOtpRequest {
-  readonly phone: PhoneE164;
-  readonly code: string;
-  readonly preferredChannel: OtpChannel;
+export class UnconfiguredOtpDeliveryProvider implements DeliveryProvider {
+  async send(_request: DeliveryRequest): Promise<DeliveryResponse> {
+    throw new Error("Delivery provider is not configured");
+  }
 }
 
-export interface SendOtpResult {
-  readonly success: boolean;
-  readonly channel: OtpChannel;
-  readonly deliveryId?: string;
-  readonly error?: string;
-}
+export class ConfiguredDeliveryProvider implements DeliveryProvider {
+  constructor(private readonly providers: Readonly<Record<OtpChannel, DeliveryProvider>>) {}
 
-export interface OtpDeliveryProvider {
-  sendOtp(request: SendOtpRequest): Promise<SendOtpResult>;
-}
-
-export class UnconfiguredOtpDeliveryProvider implements OtpDeliveryProvider {
-  async sendOtp(request: SendOtpRequest): Promise<SendOtpResult> {
-    return {
-      success: false,
-      channel: request.preferredChannel,
-      error: "OTP delivery provider is not configured",
-    };
+  send(request: DeliveryRequest): Promise<DeliveryResponse> {
+    return this.providers[request.channel].send(request);
   }
 }
 
 export function createOtpDeliveryProvider(
   environment: "development" | "test" | "production",
   clock: () => number = Date.now,
-): OtpDeliveryProvider {
-  return environment === "production"
-    ? new UnconfiguredOtpDeliveryProvider()
-    : new DevStubOtpDeliveryProvider(clock);
+  providers?: Readonly<Record<OtpChannel, DeliveryProvider>>,
+): DeliveryProvider {
+  if (providers) return new ConfiguredDeliveryProvider(providers);
+  if (environment === "production") {
+    return new UnconfiguredOtpDeliveryProvider();
+  }
+  return new DevStubOtpDeliveryProvider(clock);
 }
 
 export interface SentOtpRecord {
@@ -45,13 +41,10 @@ export interface SentOtpRecord {
   readonly sentAt: number;
 }
 
-/**
- * Development stub OTP delivery provider.
- * Keeps an in-memory audit log of sent codes for tests and local development.
- * Note: Never logs raw OTPs or phone numbers to production loggers.
- */
-export class DevStubOtpDeliveryProvider implements OtpDeliveryProvider {
+/** Local-only stub. The in-memory record is available only to tests/dev tooling. */
+export class DevStubOtpDeliveryProvider implements DeliveryProvider {
   private readonly deliveries: SentOtpRecord[] = [];
+  private readonly responses = new Map<string, DeliveryResponse>();
   private simulateFailure = false;
 
   constructor(private readonly clock: () => number = Date.now) {}
@@ -60,26 +53,29 @@ export class DevStubOtpDeliveryProvider implements OtpDeliveryProvider {
     this.simulateFailure = fail;
   }
 
-  async sendOtp(request: SendOtpRequest): Promise<SendOtpResult> {
-    const channel = request.preferredChannel;
-    if (this.simulateFailure) {
-      return {
-        success: false,
-        channel,
-        error: "Simulated delivery failure",
-      };
+  async send(request: DeliveryRequest): Promise<DeliveryResponse> {
+    if (request.channel !== "whatsapp" && request.channel !== "sms")
+      throw new Error("Unsupported delivery channel");
+    const existing = this.responses.get(`${request.channel}:${request.idempotencyKey}`);
+    if (existing) return existing;
+    if (this.simulateFailure) throw new Error("Simulated delivery failure");
+    if (request.template === "otp") {
+      const phone = parsePhoneE164(request.to);
+      if (!phone.ok) throw new Error("Delivery recipient phone number is invalid");
+      this.deliveries.push({
+        phone: phone.value,
+        code: request.params.code ?? "",
+        channel: request.channel,
+        sentAt: this.clock(),
+      });
     }
-    this.deliveries.push({
-      phone: request.phone,
-      code: request.code,
-      channel,
-      sentAt: this.clock(),
-    });
-    return {
-      success: true,
-      channel,
-      deliveryId: `dev-delivery-${crypto.randomUUID()}`,
+    const response: DeliveryResponse = {
+      messageId: `dev-delivery-${crypto.randomUUID()}`,
+      status: "accepted",
+      idempotencyGuaranteed: true,
     };
+    this.responses.set(`${request.channel}:${request.idempotencyKey}`, response);
+    return response;
   }
 
   getDeliveries(): readonly SentOtpRecord[] {
@@ -87,16 +83,15 @@ export class DevStubOtpDeliveryProvider implements OtpDeliveryProvider {
   }
 
   getLastDeliveryFor(phone: PhoneE164): SentOtpRecord | undefined {
-    for (let i = this.deliveries.length - 1; i >= 0; i--) {
-      const record = this.deliveries[i];
-      if (record && record.phone === phone) {
-        return record;
-      }
+    for (let index = this.deliveries.length - 1; index >= 0; index--) {
+      const record = this.deliveries[index];
+      if (record?.phone === phone) return record;
     }
     return undefined;
   }
 
   clear(): void {
     this.deliveries.length = 0;
+    this.responses.clear();
   }
 }

@@ -2,12 +2,20 @@ import type { Server } from "node:http";
 import { resolve } from "node:path";
 import { serve } from "@hono/node-server";
 import { createSql, ensureFundPseudonym, type Sql } from "@yen/db";
+import {
+  ExotelSmsProvider,
+  PostgresNotificationStore,
+  parseExotelSmsTemplates,
+  parseWhatsAppTemplates,
+  WhatsAppCloudProvider,
+} from "@yen/notifications";
 import { createApp } from "./app.js";
 import { createOtpDeliveryProvider, PostgresAuthStore } from "./auth/index.js";
 import { type CleanupScheduler, startCleanupScheduler } from "./cleanup-scheduler.js";
 import { createClientIpResolver, type TrustedProxyHeader } from "./client-ip.js";
 import { rateLimits } from "./config.js";
 import { createDatabaseReady } from "./database-ready.js";
+import { createDeliveryWebhookApp } from "./delivery-webhooks.js";
 import { DefaultInFlightTracker } from "./dependencies.js";
 import { PostgresDeviceSignatureStore } from "./device-signature/store.js";
 import { PostgresDisplayNameStore } from "./display-name-store.js";
@@ -33,6 +41,11 @@ import {
 import { ClamAvVirusScannerAdapter } from "./virus-scanner.js";
 import { PostgresWaitlistStore } from "./waitlist-store.js";
 
+function requiredDeliverySetting(value: string | undefined, name: string): string {
+  if (!value) throw new Error(`Missing required delivery setting: ${name}`);
+  return value;
+}
+
 export interface ServerConfig {
   readonly NODE_ENV: "development" | "test" | "production";
   readonly PORT: number;
@@ -45,6 +58,22 @@ export interface ServerConfig {
   readonly OTP_HASH_KEY?: string | undefined;
   readonly PARTNER_WEBHOOK_SECRET?: string | undefined;
   readonly PAYEE_FINGERPRINT_SALT?: string | undefined;
+  readonly DELIVERY_PROVIDER?: "stub" | "external" | undefined;
+  readonly WHATSAPP_API_BASE_URL?: string | undefined;
+  readonly WHATSAPP_API_VERSION?: string | undefined;
+  readonly WHATSAPP_PHONE_NUMBER_ID?: string | undefined;
+  readonly WHATSAPP_ACCESS_TOKEN?: string | undefined;
+  readonly WHATSAPP_TEMPLATES_JSON?: string | undefined;
+  readonly EXOTEL_SMS_ENDPOINT?: string | undefined;
+  readonly EXOTEL_SMS_STATUS_CALLBACK_URL?: string | undefined;
+  readonly EXOTEL_API_KEY?: string | undefined;
+  readonly EXOTEL_API_TOKEN?: string | undefined;
+  readonly EXOTEL_SENDER_ID?: string | undefined;
+  readonly EXOTEL_DLT_ENTITY_ID?: string | undefined;
+  readonly EXOTEL_SMS_TEMPLATES_JSON?: string | undefined;
+  readonly META_APP_SECRET?: string | undefined;
+  readonly META_WEBHOOK_VERIFY_TOKEN?: string | undefined;
+  readonly EXOTEL_RELAY_WEBHOOK_SECRET?: string | undefined;
   readonly YEN_ALLOW_MEMORY_STORES?: "true" | "false" | undefined;
   readonly READINESS_CACHE_MS: number;
   readonly TRUSTED_PROXY_HOPS: number;
@@ -73,6 +102,62 @@ export interface ServerConfig {
   readonly SERVER_MAX_HEADER_SIZE_BYTES: number;
 }
 
+export function validateProductionDeliveryConfig(
+  config: Pick<
+    ServerConfig,
+    | "NODE_ENV"
+    | "DELIVERY_PROVIDER"
+    | "WHATSAPP_API_BASE_URL"
+    | "WHATSAPP_API_VERSION"
+    | "WHATSAPP_PHONE_NUMBER_ID"
+    | "WHATSAPP_ACCESS_TOKEN"
+    | "WHATSAPP_TEMPLATES_JSON"
+    | "EXOTEL_SMS_ENDPOINT"
+    | "EXOTEL_SMS_STATUS_CALLBACK_URL"
+    | "EXOTEL_API_KEY"
+    | "EXOTEL_API_TOKEN"
+    | "EXOTEL_SENDER_ID"
+    | "EXOTEL_DLT_ENTITY_ID"
+    | "EXOTEL_SMS_TEMPLATES_JSON"
+    | "META_APP_SECRET"
+    | "META_WEBHOOK_VERIFY_TOKEN"
+    | "EXOTEL_RELAY_WEBHOOK_SECRET"
+  >,
+): void {
+  if (config.NODE_ENV !== "production") return;
+  if (config.DELIVERY_PROVIDER !== "external") {
+    throw new Error("Production requires explicitly configured external delivery providers");
+  }
+  for (const [name, value] of [
+    ["WHATSAPP_API_BASE_URL", config.WHATSAPP_API_BASE_URL],
+    ["WHATSAPP_API_VERSION", config.WHATSAPP_API_VERSION],
+    ["WHATSAPP_PHONE_NUMBER_ID", config.WHATSAPP_PHONE_NUMBER_ID],
+    ["WHATSAPP_ACCESS_TOKEN", config.WHATSAPP_ACCESS_TOKEN],
+    ["WHATSAPP_TEMPLATES_JSON", config.WHATSAPP_TEMPLATES_JSON],
+    ["EXOTEL_SMS_ENDPOINT", config.EXOTEL_SMS_ENDPOINT],
+    ["EXOTEL_SMS_STATUS_CALLBACK_URL", config.EXOTEL_SMS_STATUS_CALLBACK_URL],
+    ["EXOTEL_API_KEY", config.EXOTEL_API_KEY],
+    ["EXOTEL_API_TOKEN", config.EXOTEL_API_TOKEN],
+    ["EXOTEL_SENDER_ID", config.EXOTEL_SENDER_ID],
+    ["EXOTEL_DLT_ENTITY_ID", config.EXOTEL_DLT_ENTITY_ID],
+    ["EXOTEL_SMS_TEMPLATES_JSON", config.EXOTEL_SMS_TEMPLATES_JSON],
+    ["META_APP_SECRET", config.META_APP_SECRET],
+    ["META_WEBHOOK_VERIFY_TOKEN", config.META_WEBHOOK_VERIFY_TOKEN],
+    ["EXOTEL_RELAY_WEBHOOK_SECRET", config.EXOTEL_RELAY_WEBHOOK_SECRET],
+  ] as const) {
+    requiredDeliverySetting(value, name);
+  }
+  if (
+    new URL(config.WHATSAPP_API_BASE_URL ?? "").protocol !== "https:" ||
+    new URL(config.EXOTEL_SMS_ENDPOINT ?? "").protocol !== "https:" ||
+    new URL(config.EXOTEL_SMS_STATUS_CALLBACK_URL ?? "").protocol !== "https:"
+  ) {
+    throw new Error("Production delivery provider endpoints must use HTTPS");
+  }
+  parseWhatsAppTemplates(config.WHATSAPP_TEMPLATES_JSON ?? "");
+  parseExotelSmsTemplates(config.EXOTEL_SMS_TEMPLATES_JSON ?? "");
+}
+
 export interface StartedServer {
   readonly app: ReturnType<typeof createApp>;
   readonly server: Server;
@@ -88,6 +173,7 @@ export async function startServer(
   options: { readonly registerSignals?: boolean } = {},
 ): Promise<StartedServer> {
   const resolvedConfig = config ?? (await import("./env.js")).env;
+  validateProductionDeliveryConfig(resolvedConfig);
   const memory = useMemoryStore(resolvedConfig);
   if (resolvedConfig.NODE_ENV === "production" && !resolvedConfig.DATABASE_URL) {
     throw new Error("Production API requires DATABASE_URL and a PostgreSQL fund store");
@@ -180,6 +266,59 @@ export async function startServer(
       )
     : undefined;
 
+  const deliveryProviders =
+    resolvedConfig.DELIVERY_PROVIDER === "external"
+      ? {
+          whatsapp: new WhatsAppCloudProvider({
+            apiBaseUrl: requiredDeliverySetting(
+              resolvedConfig.WHATSAPP_API_BASE_URL,
+              "WHATSAPP_API_BASE_URL",
+            ),
+            apiVersion: requiredDeliverySetting(
+              resolvedConfig.WHATSAPP_API_VERSION,
+              "WHATSAPP_API_VERSION",
+            ),
+            phoneNumberId: requiredDeliverySetting(
+              resolvedConfig.WHATSAPP_PHONE_NUMBER_ID,
+              "WHATSAPP_PHONE_NUMBER_ID",
+            ),
+            accessToken: requiredDeliverySetting(
+              resolvedConfig.WHATSAPP_ACCESS_TOKEN,
+              "WHATSAPP_ACCESS_TOKEN",
+            ),
+            templates: parseWhatsAppTemplates(
+              requiredDeliverySetting(
+                resolvedConfig.WHATSAPP_TEMPLATES_JSON,
+                "WHATSAPP_TEMPLATES_JSON",
+              ),
+            ),
+          }),
+          sms: new ExotelSmsProvider({
+            endpoint: requiredDeliverySetting(
+              resolvedConfig.EXOTEL_SMS_ENDPOINT,
+              "EXOTEL_SMS_ENDPOINT",
+            ),
+            apiKey: requiredDeliverySetting(resolvedConfig.EXOTEL_API_KEY, "EXOTEL_API_KEY"),
+            apiToken: requiredDeliverySetting(resolvedConfig.EXOTEL_API_TOKEN, "EXOTEL_API_TOKEN"),
+            senderId: requiredDeliverySetting(resolvedConfig.EXOTEL_SENDER_ID, "EXOTEL_SENDER_ID"),
+            entityId: requiredDeliverySetting(
+              resolvedConfig.EXOTEL_DLT_ENTITY_ID,
+              "EXOTEL_DLT_ENTITY_ID",
+            ),
+            templates: parseExotelSmsTemplates(
+              requiredDeliverySetting(
+                resolvedConfig.EXOTEL_SMS_TEMPLATES_JSON,
+                "EXOTEL_SMS_TEMPLATES_JSON",
+              ),
+            ),
+            statusCallbackUrl: requiredDeliverySetting(
+              resolvedConfig.EXOTEL_SMS_STATUS_CALLBACK_URL,
+              "EXOTEL_SMS_STATUS_CALLBACK_URL",
+            ),
+          }),
+        }
+      : undefined;
+
   const app = createApp({
     ...(resolvedConfig.CLAMAV_HOST
       ? {
@@ -233,7 +372,11 @@ export async function startServer(
     ...(sql ? { deviceSignatureStore: new PostgresDeviceSignatureStore(sql) } : {}),
     otpHashKey: resolvedConfig.OTP_HASH_KEY ?? "development-only-otp-hash-key-change-me",
     partnerWebhookSecret: resolvedConfig.PARTNER_WEBHOOK_SECRET ?? null,
-    otpDeliveryProvider: createOtpDeliveryProvider(resolvedConfig.NODE_ENV),
+    otpDeliveryProvider: createOtpDeliveryProvider(
+      resolvedConfig.NODE_ENV,
+      Date.now,
+      deliveryProviders,
+    ),
     waitlistLimit: {
       capacity: resolvedConfig.WAITLIST_RATE_LIMIT_CAPACITY,
       refillMs: resolvedConfig.WAITLIST_RATE_LIMIT_REFILL_MS,
@@ -255,6 +398,22 @@ export async function startServer(
       PLEDGE_BODY_LIMIT_BYTES: resolvedConfig.PLEDGE_BODY_LIMIT_BYTES ?? 4096,
     }),
   });
+
+  if (
+    sql &&
+    resolvedConfig.META_APP_SECRET &&
+    resolvedConfig.META_WEBHOOK_VERIFY_TOKEN &&
+    resolvedConfig.EXOTEL_RELAY_WEBHOOK_SECRET
+  ) {
+    app.route(
+      "/v1/delivery/webhooks",
+      createDeliveryWebhookApp(new PostgresNotificationStore(sql as never), {
+        metaAppSecret: resolvedConfig.META_APP_SECRET,
+        metaVerifyToken: resolvedConfig.META_WEBHOOK_VERIFY_TOKEN,
+        exotelRelaySecret: resolvedConfig.EXOTEL_RELAY_WEBHOOK_SECRET,
+      }),
+    );
+  }
 
   const server = serve({
     fetch: app.fetch,

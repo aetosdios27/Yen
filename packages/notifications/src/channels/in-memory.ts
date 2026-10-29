@@ -1,9 +1,28 @@
+import type { DeliveryProvider, DeliveryRequest, DeliveryResponse } from "@yen/shared";
 import { type Paise, paise } from "@yen/shared";
 import type { DeliveryResult, NotificationChannel } from "../types.js";
 import { EMAIL_MESSAGE_COST_PAISE } from "./email.js";
 import { SMS_MESSAGE_COST_PAISE } from "./sms.js";
 import type { ChannelProvider, ChannelSendMessageInput } from "./types.js";
 import { WHATSAPP_MESSAGE_COST_PAISE } from "./whatsapp.js";
+
+/** Local-only shared-contract stub. It records idempotent delivery without network access. */
+export class InMemoryDeliveryProvider implements DeliveryProvider {
+  private readonly responses = new Map<string, DeliveryResponse>();
+
+  async send(request: DeliveryRequest): Promise<DeliveryResponse> {
+    const key = `${request.channel}:${request.idempotencyKey}`;
+    const existing = this.responses.get(key);
+    if (existing) return existing;
+    const result: DeliveryResponse = {
+      messageId: `dev-delivery-${crypto.randomUUID()}`,
+      status: "delivered",
+      idempotencyGuaranteed: true,
+    };
+    this.responses.set(key, result);
+    return result;
+  }
+}
 
 export interface SentNotificationRecord {
   channel: NotificationChannel;

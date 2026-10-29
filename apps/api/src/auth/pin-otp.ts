@@ -1,12 +1,13 @@
+import type { DeliveryProvider } from "@yen/shared";
 import { ApiError } from "../errors.js";
 import type { PinOtpVerifier } from "../pin/otp.js";
 import type { RateLimit, RateLimitStore } from "../stores.js";
 import { generateOtpCode, generateSalt, hashOtp, verifyOtp } from "./crypto.js";
-import type { AuthStore, OtpDeliveryProvider } from "./index.js";
+import type { AuthStore } from "./index.js";
 
 interface AuthPinOtpVerifierOptions {
   readonly authStore: AuthStore;
-  readonly deliveryProvider: OtpDeliveryProvider;
+  readonly deliveryProvider: DeliveryProvider;
   readonly rateLimitStore: RateLimitStore;
   readonly phoneRateLimit: RateLimit;
   readonly otpHashKey: string;
@@ -43,14 +44,19 @@ export class AuthPinOtpVerifier implements PinOtpVerifier {
 
     const code = generateOtpCode();
     const salt = generateSalt();
-    const delivery = await this.options.deliveryProvider.sendOtp({
-      phone: user.phone,
-      code,
-      preferredChannel: channel,
-    });
-    if (!delivery.success || delivery.channel !== channel) throw new ApiError("internal");
-
     const id = this.options.idGenerator();
+    try {
+      const result = await this.options.deliveryProvider.send({
+        channel,
+        to: user.phone,
+        template: "otp",
+        params: { code },
+        idempotencyKey: id,
+      });
+      if (result.status === "failed") throw new Error("OTP provider reported failure");
+    } catch {
+      throw new ApiError("internal");
+    }
     await authStore.createOtpChallenge({
       id,
       phone: user.phone,

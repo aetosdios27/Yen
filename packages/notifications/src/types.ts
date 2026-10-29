@@ -8,6 +8,8 @@ export type NotificationChannel = z.infer<typeof notificationChannelSchema>;
 export const notificationStatusSchema = z.enum([
   "pending",
   "processing",
+  "sending",
+  "submitted",
   "delivered",
   "failed",
   "dead_letter",
@@ -133,6 +135,7 @@ export interface DeliveryResult {
   channel: NotificationChannel;
   cost_paise: Paise;
   provider_message_id?: string;
+  provider_status?: "accepted" | "delivered" | "failed";
   error?: string;
   skipped?: boolean;
   retryable?: boolean;

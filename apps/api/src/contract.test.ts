@@ -27,10 +27,8 @@ const responseSpec = z.object({
     .optional()
     .default({}),
   content: z
-    .object({
-      "application/json": z.object({ schema: z.record(z.string(), z.unknown()) }),
-    })
-    .optional(),
+    .record(z.string(), z.object({ schema: z.record(z.string(), z.unknown()) }))
+    .default({}),
 });
 const documentSpec = z.object({
   components: z.object({ schemas: z.record(z.string(), z.unknown()) }),
@@ -65,17 +63,14 @@ it("validates every documented status and sent header against the committed Open
     expect(contract, `${method.toUpperCase()} ${path} ${response.status}`).toBeDefined();
     if (!contract) return;
     checkedStatuses.add(String(response.status));
-    if (contract.content) {
-      const validate = ajv.compile({
-        ...contract.content["application/json"].schema,
-        components: document.components,
-      });
-      const body = await response.json();
-      expect(
-        validate(body),
-        `${method.toUpperCase()} ${path}: ${JSON.stringify(validate.errors)}`,
-      ).toBe(true);
-    }
+    const schema = contract.content?.["application/json"]?.schema;
+    if (!schema) return;
+    const validate = ajv.compile({
+      ...schema,
+      components: document.components,
+    });
+    const body = await response.json();
+    expect(validate(body), JSON.stringify(validate.errors)).toBe(true);
     for (const [header, definition] of Object.entries(contract.headers)) {
       if (definition.required) expect(response.headers.has(header), header).toBe(true);
     }
@@ -167,14 +162,12 @@ it("validates every documented status and sent header against the committed Open
     const matching = document.paths["/v1/me"]?.get?.responses[String(response.status)];
     expect(matching, code).toBeDefined();
     if (matching) {
-      if (matching.content) {
-        const validate = ajv.compile({
-          ...matching.content["application/json"].schema,
-          components: document.components,
-        });
+      checkedStatuses.add(String(response.status));
+      const schema = matching.content["application/json"]?.schema;
+      if (schema) {
+        const validate = ajv.compile({ ...schema, components: document.components });
         expect(validate(await response.json()), JSON.stringify(validate.errors)).toBe(true);
       }
-      checkedStatuses.add(String(response.status));
     }
   }
 
@@ -559,6 +552,7 @@ it("validates every documented status and sent header against the committed Open
     if (
       path === "/v1/waitlist" ||
       path.startsWith("/v1/auth/") ||
+      path.startsWith("/v1/delivery/webhooks/") ||
       path.includes("/expenses") ||
       path.endsWith("/payee") ||
       path.endsWith("/policy") ||

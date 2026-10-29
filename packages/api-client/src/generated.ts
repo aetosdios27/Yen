@@ -140,7 +140,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** @description Send a 6-digit OTP to a phone number via WhatsApp or SMS fallback. */
+    /** @description Send a 6-digit OTP through the selected WhatsApp or SMS channel; no fallback occurs. */
     post: operations["sendOtp"];
     delete?: never;
     options?: never;
@@ -1338,6 +1338,41 @@ export interface paths {
     get: operations["getOpenApi"];
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/delivery/webhooks/meta": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Verify the Meta delivery webhook endpoint */
+    get: operations["verifyMetaDeliveryWebhook"];
+    put?: never;
+    /** Receive Meta WhatsApp delivery status events */
+    post: operations["receiveMetaDeliveryStatusWebhook"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/delivery/webhooks/exotel": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Receive an HMAC-signed Exotel SMS callback from the configured relay */
+    post: operations["receiveExotelRelayDeliveryStatusWebhook"];
     delete?: never;
     options?: never;
     head?: never;
@@ -11398,6 +11433,122 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["ErrorEnvelope"];
         };
+      };
+    };
+  };
+  verifyMetaDeliveryWebhook: {
+    parameters: {
+      query: {
+        "hub.mode": "subscribe";
+        "hub.verify_token": string;
+        "hub.challenge": string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Webhook verification challenge */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/plain": string;
+        };
+      };
+      /** @description Webhook verification rejected */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  receiveMetaDeliveryStatusWebhook: {
+    parameters: {
+      query?: never;
+      header: {
+        "X-Hub-Signature-256": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          [key: string]: unknown;
+        };
+      };
+    };
+    responses: {
+      /** @description Webhook accepted */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/plain": string;
+        };
+      };
+      /** @description Malformed webhook */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Webhook signature rejected */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  receiveExotelRelayDeliveryStatusWebhook: {
+    parameters: {
+      query?: never;
+      header: {
+        "X-Hub-Signature-256": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/x-www-form-urlencoded": {
+          SmsSid: string;
+          Status: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Webhook accepted */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/plain": string;
+        };
+      };
+      /** @description Malformed callback */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Webhook signature rejected */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
     };
   };

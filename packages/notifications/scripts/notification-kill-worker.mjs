@@ -18,10 +18,19 @@ const wrappedStore = new Proxy(store, {
         }
         return rows;
       };
-    if (property === "incrementFundUsage")
+    if (property === "markSubmitted")
       return async (...args) => {
-        const result = await target.incrementFundUsage(...args);
-        if (point === "status-recorded") {
+        const result = await target.markSubmitted(...args);
+        if (point === "status-recorded" && result) {
+          signal();
+          await park();
+        }
+        return result;
+      };
+    if (property === "prepareSend")
+      return async (...args) => {
+        const result = await target.prepareSend(...args);
+        if (point === "send-started" && result === "prepared") {
           signal();
           await park();
         }
@@ -49,6 +58,7 @@ const provider = {
       channel: "whatsapp",
       cost_paise: paise(0),
       provider_message_id: input.idempotencyKey,
+      provider_status: "accepted",
     };
   },
 };

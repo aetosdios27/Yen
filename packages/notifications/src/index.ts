@@ -1,10 +1,22 @@
+export { DeliveryChannelBridge } from "./channels/delivery-bridge.js";
 export {
   EMAIL_MESSAGE_COST_PAISE,
   EmailChannelProvider,
   type EmailTransportFn,
 } from "./channels/email.js";
 export {
+  type ExotelSmsConfig,
+  ExotelSmsHttpGateway,
+  ExotelSmsProvider,
+  type ExotelSmsTemplates,
+  exotelSmsTemplatesSchema,
+  parseExotelSmsTemplates,
+  type SmsGatewayRequest,
+  type SmsHttpGateway,
+} from "./channels/exotel-sms.js";
+export {
   InMemoryChannelProvider,
+  InMemoryDeliveryProvider,
   type SentNotificationRecord,
 } from "./channels/in-memory.js";
 export {
@@ -21,6 +33,13 @@ export {
   WhatsAppChannelProvider,
   type WhatsAppTransportFn,
 } from "./channels/whatsapp.js";
+export {
+  parseWhatsAppTemplates,
+  type WhatsAppCloudConfig,
+  WhatsAppCloudProvider,
+  type WhatsAppTemplates,
+  whatsappTemplatesSchema,
+} from "./channels/whatsapp-cloud.js";
 export {
   checkDailyCap,
   type DailyFundUsage,
