@@ -1,3 +1,4 @@
+import { InMemoryExpenseStore } from "@yen/ledger";
 import { describe, expect, it } from "vitest";
 import { createApp, devPolicy } from "../app.js";
 import { defaultDependencies } from "../dependencies.js";
@@ -11,7 +12,7 @@ import { MemoryActionTokenStore, MemoryPinStore } from "./store.js";
 
 describe("Approval PIN (YEN-25)", () => {
   const userId = "00000000-0000-4000-8000-000000000001";
-  const principal = { id: userId };
+  const principal = { id: userId, roles: ["approver"] as const };
 
   // biome-ignore lint/suspicious/noExplicitAny: test json unwrapper
   const jsonOf = async <T = any>(res: Response): Promise<T> => (await res.json()) as T;
@@ -72,6 +73,7 @@ describe("Approval PIN (YEN-25)", () => {
       pinSecret,
       otpVerifier,
       pinService,
+      expenseStore: new InMemoryExpenseStore(),
     };
 
     const app = createApp(deps);
@@ -578,10 +580,39 @@ describe("Approval PIN (YEN-25)", () => {
       return fund.id as string;
     }
 
+    async function setupSubmittedExpense(
+      postAs: (
+        actingPrincipal: {
+          id: string;
+          roles?: readonly string[];
+          capabilities?: readonly string[];
+        },
+        path: string,
+        body?: unknown,
+        headers?: Record<string, string>,
+      ) => Promise<Response>,
+      fundId: string,
+    ) {
+      const requester = { id: "00000000-0000-4000-8000-000000000099", roles: ["owner"] };
+      const createdRes = await postAs(requester, `/v1/funds/${fundId}/expenses`, {
+        amountPaise: "25000",
+        description: "Community supplies",
+        recipientRef: "vendor-1",
+      });
+      expect(createdRes.status).toBe(201);
+      const created = await jsonOf(createdRes);
+      const submitRes = await postAs(
+        requester,
+        `/v1/funds/${fundId}/expenses/${created.id}/submit`,
+      );
+      expect(submitRes.status).toBe(200);
+      return created.id as string;
+    }
+
     it("rejects expense approval if approval PIN has not been set", async () => {
-      const { post } = buildTestApp();
+      const { post, postAs } = buildTestApp();
       const fundId = await setupFund(post);
-      const expenseId = "00000000-0000-4000-8000-000000000050";
+      const expenseId = await setupSubmittedExpense(postAs, fundId);
 
       const res = await post(`/v1/funds/${fundId}/expenses/${expenseId}/approve`, {
         pin: "482915",
@@ -592,9 +623,9 @@ describe("Approval PIN (YEN-25)", () => {
     });
 
     it("approves expense with single-use action token and prevents replay", async () => {
-      const { post, pinNotificationService } = buildTestApp();
+      const { post, postAs, pinNotificationService } = buildTestApp();
       const fundId = await setupFund(post);
-      const expenseId = "00000000-0000-4000-8000-000000000050";
+      const expenseId = await setupSubmittedExpense(postAs, fundId);
 
       // Setup PIN
       await post("/v1/auth/pin/setup", { pin: "482915" });
@@ -616,7 +647,8 @@ describe("Approval PIN (YEN-25)", () => {
       );
       expect(approveRes.status).toBe(200);
       const approveBody = await jsonOf(approveRes);
-      expect(approveBody.status).toBe("approved");
+      expect(approveBody.status).toBe("submitted");
+      expect(approveBody.approvalsCount).toBe(1);
 
       // Verify notification sent to approvers
       const events = pinNotificationService.getEvents();
@@ -631,7 +663,7 @@ describe("Approval PIN (YEN-25)", () => {
       expect(replayRes.status).toBe(403);
 
       // Replaying the token on a DIFFERENT request fails
-      const diffExpenseId = "00000000-0000-4000-8000-000000000051";
+      const diffExpenseId = await setupSubmittedExpense(postAs, fundId);
       const diffRes = await post(
         `/v1/funds/${fundId}/expenses/${diffExpenseId}/approve`,
         undefined,
@@ -641,9 +673,9 @@ describe("Approval PIN (YEN-25)", () => {
     });
 
     it("approves expense directly with valid inline PIN", async () => {
-      const { post } = buildTestApp();
+      const { post, postAs } = buildTestApp();
       const fundId = await setupFund(post);
-      const expenseId = "00000000-0000-4000-8000-000000000060";
+      const expenseId = await setupSubmittedExpense(postAs, fundId);
 
       await post("/v1/auth/pin/setup", { pin: "482915" });
 
@@ -652,7 +684,8 @@ describe("Approval PIN (YEN-25)", () => {
       });
       expect(res.status).toBe(200);
       const body = await jsonOf(res);
-      expect(body.status).toBe("approved");
+      expect(body.status).toBe("submitted");
+      expect(body.approvalsCount).toBe(1);
     });
 
     it("requires PIN on all other money actions (payee, policy, members)", async () => {

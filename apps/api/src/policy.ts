@@ -1,19 +1,22 @@
 import type { z } from "@hono/zod-openapi";
 import {
   DEFAULT_FUND_POLICY,
+  type Action as DomainAction,
+  isValidRole,
   can as policyCan,
   type Redacted,
   unsafeMarkRedactedForDevPolicy,
 } from "@yen/policy";
-import { parseFundId } from "@yen/shared";
-import type { donationDetailsSchema } from "./contract.js";
+import { type FundId, type Paise, parseFundId } from "@yen/shared";
 import {
   type addMemberResponse,
   addMemberResponse as addMemberResponseSchema,
+  type donationDetailsSchema,
   type expenseApprovalResponse,
   expenseApprovalResponse as expenseApprovalResponseSchema,
   type expenseRejectionResponse,
   expenseRejectionResponse as expenseRejectionResponseSchema,
+  type expenseSchema,
   type fundSchema,
   type payeeChangeResponse,
   payeeChangeResponse as payeeChangeResponseSchema,
@@ -39,7 +42,7 @@ export type FundAction =
   | "fund:member:add"
   | "fund:member:remove"
   | "fund:member:unlock";
-export type FundResource = { readonly kind: "fund"; readonly fund?: FundRecord };
+export type FundResource = { readonly kind: "fund"; readonly fund?: FundRecord | undefined };
 export type ExistingFundResource = { readonly kind: "fund"; readonly fund: FundRecord };
 export type DonationDetailsView = z.infer<typeof donationDetailsSchema>;
 
@@ -77,7 +80,7 @@ const ACTION_RECEIPT_SCHEMAS = {
 } as const;
 
 const ACTION_RECEIPT_ALLOWLIST = {
-  "fund:expense:approve": ["status", "expenseId", "approvedAt"],
+  "fund:expense:approve": ["status", "expenseId", "approvedAt", "approvalsCount"],
   "fund:expense:reject": ["status", "expenseId", "reason", "rejectedAt"],
   "fund:payee:change": ["status", "vpa"],
   "fund:policy:change": ["status", "policyJson"],
@@ -134,12 +137,36 @@ export function redactActionReceipt<A extends ActionReceiptAction>(
   return unsafeMarkRedactedForDevPolicy(parseResult.data as ActionReceiptMap[A]);
 }
 
+export type ExpenseView = z.infer<typeof expenseSchema>;
+export interface ExpenseRecord {
+  readonly owner: string;
+  readonly expense: ExpenseView;
+}
+export type ExpenseAction =
+  | "expense:create"
+  | "expense:read"
+  | "expense:submit"
+  | "expense:approve"
+  | "expense:reject"
+  | "expense:pay"
+  | "expense:reconcile";
+export type ExpenseResource = {
+  readonly kind: "expense";
+  readonly expense?: ExpenseRecord | undefined;
+};
+export type ExistingExpenseResource = {
+  readonly kind: "expense";
+  readonly expense: ExpenseRecord;
+};
+
+export type PolicyAction = FundAction | ExpenseAction;
+export type PolicyResource = FundResource | ExpenseResource;
+
 export interface Policy {
-  can(principal: Principal, action: FundAction, resource: FundResource): boolean;
+  can(principal: Principal, action: PolicyAction, resource: PolicyResource): boolean;
   redact(viewer: Principal, resource: ExistingFundResource): Redacted<FundView>;
-  /** Donors are anonymous, so paying in is decided from the fund alone. */
+  redactExpense?(viewer: Principal, resource: ExistingExpenseResource): ExpenseView;
   canDonate(resource: ExistingFundResource): boolean;
-  /** The single public view of a fund's payment details. */
   redactDonationDetails(resource: ExistingFundResource): DonationDetailsView;
   redactReceipt<A extends ActionReceiptAction>(
     viewer: Principal,
@@ -153,6 +180,9 @@ export const denyAllPolicy: Policy = {
   can: () => false,
   redact: () => {
     throw new Error("Fund redaction is unavailable");
+  },
+  redactExpense: () => {
+    throw new Error("Expense redaction is unavailable");
   },
   canDonate: () => false,
   redactDonationDetails: () => {
@@ -168,17 +198,93 @@ export const devPolicy: Policy = {
     if (action === "fund:member:unlock") {
       const roles = principal.roles ?? [];
       const capabilities = principal.capabilities ?? [];
-      return (
-        roles.includes("admin") ||
-        roles.includes("recovery") ||
-        capabilities.includes("admin") ||
-        capabilities.includes("recovery")
+      return ["admin", "recovery"].some(
+        (role) => roles.includes(role) || capabilities.includes(role),
       );
     }
-    if (resource.fund === undefined) return action === "fund:create";
-    return resource.fund.owner === principal.id;
+    if (resource.kind === "fund" && action === "fund:create") return true;
+    if (resource.kind === "fund" && action !== "fund:read") {
+      return resource.fund?.owner === principal.id;
+    }
+    const roles = (principal.roles ?? []).filter(isValidRole);
+    const role = principal.role ?? roles[0];
+    if (!role) return false;
+    const actor = { id: principal.id, role, roles };
+    if (resource.kind === "fund") {
+      if (action === "fund:create") return policyCan(actor, action, { kind: "fund" });
+      if (action !== "fund:read" || resource.fund === undefined) return false;
+      return policyCan(actor, action, {
+        kind: "fund",
+        fund: {
+          fundId: resource.fund.fund.id as FundId,
+          ownerId: resource.fund.owner,
+          policy: DEFAULT_FUND_POLICY,
+        },
+      });
+    }
+    if (resource.kind === "expense") {
+      let domainAction: DomainAction;
+      switch (action) {
+        case "expense:create":
+        case "expense:submit":
+          domainAction = "expense:submit";
+          break;
+        case "expense:read":
+          domainAction = "expense:read";
+          break;
+        case "expense:approve":
+          domainAction = "expense:approve";
+          break;
+        case "expense:reject":
+          domainAction = "expense:reject";
+          break;
+        case "expense:pay":
+          domainAction = "expense:payout";
+          break;
+        case "expense:reconcile":
+          domainAction = "bank:reconcile";
+          break;
+        default:
+          return false;
+      }
+
+      const record = resource.expense;
+      const view = record?.expense;
+      const fundId = (view?.fundId ?? "00000000-0000-4000-8000-000000000000") as FundId;
+      if (domainAction === "bank:reconcile") {
+        return policyCan(actor, domainAction, {
+          kind: "bank",
+          bank: { fundId, policy: DEFAULT_FUND_POLICY },
+        });
+      }
+
+      const amountPaise = Number(view?.amountPaise ?? 0) as Paise;
+      const approvalCount = view?.approvalsCount ?? 0;
+      const supportedStatus = ["submitted", "approved", "rejected", "paid"].includes(
+        view?.status ?? "",
+      )
+        ? (view?.status as "submitted" | "approved" | "rejected" | "paid")
+        : undefined;
+      return policyCan(actor, domainAction, {
+        kind: "expense",
+        expense: {
+          fundId,
+          ...(view?.id === undefined ? {} : { expenseId: view.id }),
+          policy: DEFAULT_FUND_POLICY,
+          requesterId: record?.owner ?? principal.id,
+          amountPaise,
+          ...(supportedStatus === undefined ? {} : { status: supportedStatus }),
+          approvals: Array.from({ length: approvalCount }, (_, index) => ({
+            approverId: `dev-policy-approval-${index}`,
+            roleAtApproval: "approver" as const,
+          })),
+        },
+      });
+    }
+    return false;
   },
   redact: (_viewer, resource) => unsafeMarkRedactedForDevPolicy(resource.fund.fund),
+  redactExpense: (_viewer, resource) => resource.expense.expense,
   canDonate: (resource) => {
     const fundId = parseFundId(resource.fund.fund.id);
     if (!fundId.ok) return false;

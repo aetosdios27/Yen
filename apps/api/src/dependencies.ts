@@ -1,4 +1,6 @@
 import type { WaitlistEntry } from "@yen/db";
+import { type ApprovalProofVerifier, type ExpenseStore, InMemoryExpenseStore } from "@yen/ledger";
+import type { FundRole } from "@yen/policy";
 import type { Context } from "hono";
 import {
   type AuthStore,
@@ -30,6 +32,7 @@ import {
 
 export interface Principal {
   readonly id: string;
+  readonly role?: FundRole | undefined;
   readonly roles?: readonly string[];
   readonly capabilities?: readonly string[];
 }
@@ -112,6 +115,8 @@ export class DefaultInFlightTracker implements InFlightTracker {
 
 export interface AppDependencies {
   readonly waitlistStore: WaitlistStore;
+  readonly expenseStore: ExpenseStore;
+  readonly approvalProofVerifier: ApprovalProofVerifier;
   readonly donationPledgeStore: DonationPledgeStore;
   readonly pledgeLimit: RateLimit;
   readonly pledgeBodyLimit: number;
@@ -169,6 +174,8 @@ export function defaultDependencies(clock: () => number = Date.now): AppDependen
 
   return {
     waitlistStore: new MemoryWaitlistStore(),
+    expenseStore: new InMemoryExpenseStore(),
+    approvalProofVerifier: (signature) => signature.credentialId === "pin-proof",
     donationPledgeStore: new MemoryDonationPledgeStore(),
     pledgeLimit: { capacity: 10, refillMs: 3600000 },
     pledgeBodyLimit: 4096,

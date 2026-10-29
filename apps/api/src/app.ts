@@ -1,6 +1,22 @@
 import { OpenAPIHono, type z } from "@hono/zod-openapi";
 import { normalizeWaitlistContact } from "@yen/db";
-import { parseFundId } from "@yen/shared";
+import {
+  BankTransactionMismatchError,
+  createDraftRequest,
+  DuplicateApprovalError,
+  type ExpenseRequest,
+  type FundPolicy,
+  InvalidPasskeySignatureError,
+  InvalidStateTransitionError,
+  type PseudonymId,
+  payExpense,
+  reconcileExpense,
+  rejectExpense,
+  SeparationOfDutiesError,
+  type SignedApproval,
+  submitExpense,
+} from "@yen/ledger";
+import { paise, parseFundId } from "@yen/shared";
 import type { Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, setCookie } from "hono/cookie";
@@ -24,21 +40,27 @@ import {
   changePinRoute,
   changePolicyRoute,
   confirmPinResetRoute,
+  createExpenseRoute,
   createFundRoute,
   donationDetailsRoute,
+  type expenseSchema,
   type fundSchema,
+  getExpenseRoute,
   getFundRoute,
   getPinStatusRoute,
   getSessionsRoute,
   healthRoute,
+  listExpensesRoute,
   logoutAllRoute,
   logoutRoute,
   meRoute,
   openapiRoute,
   openapiSchema,
+  payExpenseRoute,
   pledgeDonationRoute,
   principalSchema,
   readyRoute,
+  reconcileExpenseRoute,
   rejectExpenseRoute,
   removeMemberRoute,
   requestPinResetRoute,
@@ -46,12 +68,18 @@ import {
   rotateSessionRoute,
   sendOtpRoute,
   setupPinRoute,
+  submitExpenseRoute,
   unlockPinRoute,
   verifyOtpRoute,
   verifyPinRoute,
   waitlistRoute,
 } from "./contract.js";
-import { type ApiEnv, type AppDependencies, defaultDependencies } from "./dependencies.js";
+import {
+  type ApiEnv,
+  type AppDependencies,
+  defaultDependencies,
+  type Principal,
+} from "./dependencies.js";
 import { ApiError, errorBody, errorStatus, ReadinessError, StoreError } from "./errors.js";
 import { logMethod } from "./logging.js";
 import {
@@ -67,7 +95,15 @@ import {
   requireAuth,
 } from "./middleware.js";
 import { computeActionHash } from "./pin/index.js";
-import type { FundAction, FundResource } from "./policy.js";
+import type {
+  ExistingExpenseResource,
+  ExpenseAction,
+  ExpenseResource,
+  ExpenseView,
+  FundAction,
+  FundResource,
+} from "./policy.js";
+import { redactActionReceipt as redactReceipt } from "./policy.js";
 
 export { devPolicy } from "./policy.js";
 
@@ -500,6 +536,339 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const principal = authorizedFund(c, "fund:read", resource);
     return c.json(deps.policy.redact(principal, resource), 200);
   });
+
+  const defaultFundPolicy: FundPolicy = {
+    approvalQuorum: 2,
+    objectionWindowHours: 0,
+    autoExpireHours: 72,
+  };
+
+  const toExpenseView = (exp: ExpenseRequest): z.infer<typeof expenseSchema> => ({
+    id: exp.id,
+    fundId: exp.fundId,
+    requesterId: exp.requesterId,
+    amountPaise: String(exp.amountPaise),
+    description: exp.description,
+    recipientRef: exp.recipientRef,
+    status: exp.status,
+    holdId: exp.holdId,
+    approvalsCount: exp.approvals.length,
+    supersedesId: exp.supersedesId,
+    submittedAt: exp.submittedAt,
+    approvedAt: exp.approvedAt,
+    rejectedAt: exp.rejectedAt,
+    rejectionReason: exp.rejectionReason,
+    expiredAt: exp.expiredAt,
+    paidAt: exp.paidAt,
+    reconciledAt: exp.reconciledAt,
+    bankTransactionId: exp.bankTransactionId,
+    createdAt: exp.createdAt,
+    updatedAt: exp.updatedAt,
+  });
+
+  const authorizedExpense = (
+    c: Context<ApiEnv>,
+    action: ExpenseAction,
+    resource: ExpenseResource,
+  ) => {
+    const principal = c.get("principal");
+    if (!principal) throw new ApiError("unauthenticated");
+    if (!deps.policy.can(principal, action, resource)) {
+      throw new ApiError(action === "expense:read" ? "not_found" : "forbidden");
+    }
+    return principal;
+  };
+
+  const redactExpense = (principal: Principal, resource: ExistingExpenseResource): ExpenseView => {
+    if (!deps.policy.redactExpense) throw new ApiError("internal");
+    return deps.policy.redactExpense(principal, resource);
+  };
+
+  app.openapi(createExpenseRoute, async (c) => {
+    const principal = authorizedExpense(c, "expense:create", { kind: "expense" });
+    const fundIdResult = parseFundId(c.req.valid("param").fundId);
+    if (!fundIdResult.ok) throw new ApiError("not_found");
+    const input = c.req.valid("json");
+    const amount = paise(Number(input.amountPaise));
+    const now = new Date(deps.clock()).toISOString();
+    const draft = createDraftRequest({
+      id: deps.idGenerator(),
+      fundId: fundIdResult.value,
+      requesterId: principal.id as PseudonymId,
+      amountPaise: amount,
+      description: input.description,
+      recipientRef: input.recipientRef,
+      evidence: input.evidence,
+      supersedesId: input.supersedesId,
+      createdAt: now,
+    });
+    await deps.expenseStore.save(draft);
+    const view = toExpenseView(draft);
+    const resource = { kind: "expense", expense: { owner: principal.id, expense: view } } as const;
+    return c.json(redactExpense(principal, resource), 201);
+  });
+
+  app.openapi(getExpenseRoute, async (c) => {
+    const { fundId, expenseId } = c.req.valid("param");
+    const fundIdResult = parseFundId(fundId);
+    if (!fundIdResult.ok) throw new ApiError("not_found");
+    const expense = await deps.expenseStore.get(expenseId);
+    if (!expense || expense.fundId !== fundIdResult.value) {
+      throw new ApiError("not_found");
+    }
+    const view = toExpenseView(expense);
+    const resource = {
+      kind: "expense",
+      expense: { owner: expense.requesterId, expense: view },
+    } as const;
+    const principal = authorizedExpense(c, "expense:read", resource);
+    return c.json(redactExpense(principal, resource), 200);
+  });
+
+  app.openapi(listExpensesRoute, async (c) => {
+    const { fundId } = c.req.valid("param");
+    const fundIdResult = parseFundId(fundId);
+    if (!fundIdResult.ok) throw new ApiError("not_found");
+    const principal = authorizedExpense(c, "expense:read", { kind: "expense" });
+    const expenses = await deps.expenseStore.list(fundIdResult.value);
+    return c.json(
+      expenses.map((exp) =>
+        redactExpense(principal, {
+          kind: "expense",
+          expense: { owner: exp.requesterId, expense: toExpenseView(exp) },
+        }),
+      ),
+      200,
+    );
+  });
+
+  app.openapi(submitExpenseRoute, async (c) => {
+    const { fundId, expenseId } = c.req.valid("param");
+    const fundIdResult = parseFundId(fundId);
+    if (!fundIdResult.ok) throw new ApiError("not_found");
+    const expense = await deps.expenseStore.get(expenseId);
+    if (!expense || expense.fundId !== fundIdResult.value) {
+      throw new ApiError("not_found");
+    }
+    const view = toExpenseView(expense);
+    const resource = {
+      kind: "expense",
+      expense: { owner: expense.requesterId, expense: view },
+    } as const;
+    const principal = authorizedExpense(c, "expense:submit", resource);
+    if (expense.status !== "draft") {
+      throw new ApiError("conflict");
+    }
+    const now = new Date(deps.clock()).toISOString();
+    const holdId = deps.idGenerator();
+    const updated = submitExpense(expense, {
+      holdId,
+      policy: defaultFundPolicy,
+      nowUtc: now,
+    });
+    await deps.expenseStore.save(updated);
+    const updatedView = toExpenseView(updated);
+    return c.json(
+      redactExpense(principal, {
+        kind: "expense",
+        expense: { owner: updated.requesterId, expense: updatedView },
+      }),
+      200,
+    );
+  });
+
+  app.openapi(approveExpenseRoute, async (c) => {
+    const { fundId, expenseId } = c.req.valid("param");
+    const fundIdResult = parseFundId(fundId);
+    if (!fundIdResult.ok) throw new ApiError("not_found");
+    const expense = await deps.expenseStore.get(expenseId);
+    if (!expense || expense.fundId !== fundIdResult.value) {
+      throw new ApiError("not_found");
+    }
+    const view = toExpenseView(expense);
+    const resource = {
+      kind: "expense",
+      expense: { owner: expense.requesterId, expense: view },
+    } as const;
+    const principal = authorizedExpense(c, "expense:approve", resource);
+    if (expense.requesterId === principal.id) {
+      throw new ApiError("forbidden");
+    }
+    if (expense.status !== "submitted") {
+      throw new ApiError("conflict");
+    }
+    const input = c.req.valid("json");
+    const now = new Date(deps.clock()).toISOString();
+    const actionDetails = {
+      action: "expense:approve",
+      fundId: fundIdResult.value,
+      targetId: expenseId,
+    };
+    await deps.pinService.verifyAction(principal.id, actionDetails, {
+      pin: c.req.header("x-approval-pin") ?? input.pin,
+      approvalToken: c.req.header("x-approval-token") ?? input.approvalToken,
+    });
+    const approval: SignedApproval = {
+      approverId: principal.id as PseudonymId,
+      passkeySignature: {
+        credentialId: "pin-proof",
+        signatureHex: "00",
+        clientDataJson: "verified PIN proof",
+        authenticatorDataHex: "00",
+      },
+      approvedAt: now,
+    };
+    try {
+      const res = await deps.expenseStore.atomicApprove(
+        expenseId,
+        approval,
+        defaultFundPolicy,
+        deps.approvalProofVerifier,
+        now,
+      );
+      await deps.pinNotificationService.notify({
+        kind: "approval_executed",
+        approverUserId: principal.id,
+        actionHash: computeActionHash(actionDetails),
+        recipientRoles: ["approver", "owner"],
+        actionSummary: actionDetails,
+      });
+      const updatedView = toExpenseView(res.expense);
+      return c.json(
+        redactReceipt("fund:expense:approve", {
+          status: res.expense.status as "submitted" | "approved",
+          expenseId: updatedView.id,
+          approvedAt: updatedView.approvedAt,
+          approvalsCount: updatedView.approvalsCount,
+        }),
+        200,
+      );
+    } catch (err) {
+      if (err instanceof SeparationOfDutiesError) throw new ApiError("forbidden");
+      if (err instanceof DuplicateApprovalError || err instanceof InvalidStateTransitionError) {
+        throw new ApiError("conflict");
+      }
+      if (err instanceof InvalidPasskeySignatureError) throw new ApiError("validation_failed");
+      throw new ApiError("internal");
+    }
+  });
+
+  app.openapi(rejectExpenseRoute, async (c) => {
+    const { fundId, expenseId } = c.req.valid("param");
+    const fundIdResult = parseFundId(fundId);
+    if (!fundIdResult.ok) throw new ApiError("not_found");
+    const expense = await deps.expenseStore.get(expenseId);
+    if (!expense || expense.fundId !== fundIdResult.value) {
+      throw new ApiError("not_found");
+    }
+    const view = toExpenseView(expense);
+    const resource = {
+      kind: "expense",
+      expense: { owner: expense.requesterId, expense: view },
+    } as const;
+    const principal = authorizedExpense(c, "expense:reject", resource);
+    if (expense.status !== "submitted") {
+      throw new ApiError("conflict");
+    }
+    const input = c.req.valid("json");
+    const now = new Date(deps.clock()).toISOString();
+    const actionDetails = {
+      action: "expense:reject",
+      fundId: fundIdResult.value,
+      targetId: expenseId,
+    };
+    await deps.pinService.verifyAction(principal.id, actionDetails, {
+      pin: c.req.header("x-approval-pin") ?? input.pin,
+      approvalToken: c.req.header("x-approval-token") ?? input.approvalToken,
+    });
+    const updated = rejectExpense(expense, input.reason, now);
+    await deps.expenseStore.save(updated);
+    await deps.pinNotificationService.notify({
+      kind: "approval_executed",
+      approverUserId: principal.id,
+      actionHash: computeActionHash(actionDetails),
+      recipientRoles: ["approver", "owner"],
+      actionSummary: actionDetails,
+    });
+    const updatedView = toExpenseView(updated);
+    return c.json(
+      redactReceipt("fund:expense:reject", {
+        status: "rejected" as const,
+        expenseId: updatedView.id,
+        reason: updatedView.rejectionReason ?? input.reason,
+        rejectedAt: updatedView.rejectedAt ?? now,
+      }),
+      200,
+    );
+  });
+
+  app.openapi(payExpenseRoute, async (c) => {
+    const { fundId, expenseId } = c.req.valid("param");
+    const fundIdResult = parseFundId(fundId);
+    if (!fundIdResult.ok) throw new ApiError("not_found");
+    const expense = await deps.expenseStore.get(expenseId);
+    if (!expense || expense.fundId !== fundIdResult.value) {
+      throw new ApiError("not_found");
+    }
+    const view = toExpenseView(expense);
+    const resource = {
+      kind: "expense",
+      expense: { owner: expense.requesterId, expense: view },
+    } as const;
+    const principal = authorizedExpense(c, "expense:pay", resource);
+    if (expense.status !== "approved") {
+      throw new ApiError("conflict");
+    }
+    const input = c.req.valid("json");
+    const now = new Date(deps.clock()).toISOString();
+    const updated = payExpense(expense, input.bankTransactionId, now);
+    await deps.expenseStore.save(updated);
+    const updatedView = toExpenseView(updated);
+    return c.json(
+      redactExpense(principal, {
+        kind: "expense",
+        expense: { owner: updated.requesterId, expense: updatedView },
+      }),
+      200,
+    );
+  });
+
+  app.openapi(reconcileExpenseRoute, async (c) => {
+    const { fundId, expenseId } = c.req.valid("param");
+    const fundIdResult = parseFundId(fundId);
+    if (!fundIdResult.ok) throw new ApiError("not_found");
+    const expense = await deps.expenseStore.get(expenseId);
+    if (!expense || expense.fundId !== fundIdResult.value) {
+      throw new ApiError("not_found");
+    }
+    const view = toExpenseView(expense);
+    const resource = {
+      kind: "expense",
+      expense: { owner: expense.requesterId, expense: view },
+    } as const;
+    const principal = authorizedExpense(c, "expense:reconcile", resource);
+    if (expense.status !== "paid") {
+      throw new ApiError("conflict");
+    }
+    const input = c.req.valid("json");
+    const now = new Date(deps.clock()).toISOString();
+    let updated: ExpenseRequest;
+    try {
+      updated = reconcileExpense(expense, input.bankTransactionId, now);
+    } catch (err) {
+      if (err instanceof BankTransactionMismatchError) throw new ApiError("conflict");
+      throw err;
+    }
+    await deps.expenseStore.save(updated);
+    const updatedView = toExpenseView(updated);
+    return c.json(
+      redactExpense(principal, {
+        kind: "expense",
+        expense: { owner: updated.requesterId, expense: updatedView },
+      }),
+      200,
+    );
+  });
   const donationResource = (id: string) => {
     const fund = funds.get(id);
     if (!fund) throw new ApiError("not_found");
@@ -618,77 +987,6 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const { targetUserId } = c.req.valid("json");
     await deps.pinService.unlockPin(targetUserId);
     return c.json({ status: "unlocked" as const }, 200);
-  });
-
-  app.openapi(approveExpenseRoute, async (c) => {
-    const { fundId, expenseId } = c.req.valid("param");
-    const { id, resource } = getFundOrNotFound(fundId);
-    const principal = authorizedFund(c, "fund:expense:approve", resource);
-
-    const body = c.req.valid("json");
-    const approvalToken = c.req.header("x-approval-token") ?? body?.approvalToken;
-    const pin = c.req.header("x-approval-pin") ?? body?.pin;
-
-    const actionDetails = { action: "expense:approve", fundId: id, targetId: expenseId };
-    await deps.pinService.verifyAction(principal.id, actionDetails, { pin, approvalToken });
-
-    await deps.pinNotificationService.notify({
-      kind: "approval_executed",
-      approverUserId: principal.id,
-      actionHash: computeActionHash(actionDetails),
-      recipientRoles: ["approver", "owner"],
-      actionSummary: actionDetails,
-    });
-
-    return c.json(
-      deps.policy.redactReceipt(
-        principal,
-        "fund:expense:approve",
-        {
-          status: "approved" as const,
-          expenseId,
-          approvedAt: new Date(deps.clock()).toISOString(),
-        },
-        resource,
-      ),
-      200,
-    );
-  });
-
-  app.openapi(rejectExpenseRoute, async (c) => {
-    const { fundId, expenseId } = c.req.valid("param");
-    const { id, resource } = getFundOrNotFound(fundId);
-    const principal = authorizedFund(c, "fund:expense:reject", resource);
-
-    const body = c.req.valid("json");
-    const approvalToken = c.req.header("x-approval-token") ?? body?.approvalToken;
-    const pin = c.req.header("x-approval-pin") ?? body?.pin;
-
-    const actionDetails = { action: "expense:reject", fundId: id, targetId: expenseId };
-    await deps.pinService.verifyAction(principal.id, actionDetails, { pin, approvalToken });
-
-    await deps.pinNotificationService.notify({
-      kind: "approval_executed",
-      approverUserId: principal.id,
-      actionHash: computeActionHash(actionDetails),
-      recipientRoles: ["approver", "owner"],
-      actionSummary: actionDetails,
-    });
-
-    return c.json(
-      deps.policy.redactReceipt(
-        principal,
-        "fund:expense:reject",
-        {
-          status: "rejected" as const,
-          expenseId,
-          reason: body?.reason ?? "policy",
-          rejectedAt: new Date(deps.clock()).toISOString(),
-        },
-        resource,
-      ),
-      200,
-    );
   });
 
   app.openapi(changePayeeRoute, async (c) => {

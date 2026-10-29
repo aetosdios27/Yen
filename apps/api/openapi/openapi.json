@@ -238,6 +238,162 @@
         "required": ["name", "targetPaise", "upiVpa", "upiPayeeName"],
         "additionalProperties": false
       },
+      "Expense": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "fundId": { "type": "string", "format": "uuid" },
+          "requesterId": { "type": "string" },
+          "amountPaise": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$",
+            "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
+          },
+          "description": { "type": "string" },
+          "recipientRef": { "type": "string" },
+          "status": { "$ref": "#/components/schemas/ExpenseStatus" },
+          "holdId": { "type": ["string", "null"] },
+          "approvalsCount": { "type": "integer", "minimum": 0 },
+          "supersedesId": { "type": ["string", "null"], "format": "uuid" },
+          "submittedAt": { "type": ["string", "null"], "format": "date-time" },
+          "approvedAt": { "type": ["string", "null"], "format": "date-time" },
+          "rejectedAt": { "type": ["string", "null"], "format": "date-time" },
+          "rejectionReason": {
+            "type": ["string", "null"],
+            "enum": ["quorum", "objection", "policy", null]
+          },
+          "expiredAt": { "type": ["string", "null"], "format": "date-time" },
+          "paidAt": { "type": ["string", "null"], "format": "date-time" },
+          "reconciledAt": { "type": ["string", "null"], "format": "date-time" },
+          "bankTransactionId": { "type": ["string", "null"], "format": "uuid" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        },
+        "required": [
+          "id",
+          "fundId",
+          "requesterId",
+          "amountPaise",
+          "description",
+          "recipientRef",
+          "status",
+          "holdId",
+          "approvalsCount",
+          "supersedesId",
+          "submittedAt",
+          "approvedAt",
+          "rejectedAt",
+          "rejectionReason",
+          "expiredAt",
+          "paidAt",
+          "reconciledAt",
+          "bankTransactionId",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "ExpenseStatus": {
+        "type": "string",
+        "enum": ["draft", "submitted", "approved", "rejected", "expired", "paid", "reconciled"]
+      },
+      "CreateExpenseInput": {
+        "type": "object",
+        "properties": {
+          "amountPaise": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$",
+            "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
+          },
+          "description": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "recipientRef": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "evidence": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ExpenseEvidence" }
+          },
+          "supersedesId": { "type": "string", "format": "uuid" }
+        },
+        "required": ["amountPaise", "description", "recipientRef"],
+        "additionalProperties": false
+      },
+      "ExpenseEvidence": {
+        "type": "object",
+        "properties": {
+          "evidenceId": { "type": "string", "format": "uuid" },
+          "contentSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        },
+        "required": ["evidenceId", "contentSha256"],
+        "additionalProperties": false
+      },
+      "ExpenseApprovalResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["submitted", "approved"] },
+          "expenseId": { "type": "string", "format": "uuid" },
+          "approvedAt": { "type": ["string", "null"], "format": "date-time" },
+          "approvalsCount": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["status", "expenseId", "approvedAt"],
+        "additionalProperties": false
+      },
+      "ExpenseApprovalInput": {
+        "type": "object",
+        "properties": {
+          "approvalToken": { "type": "string", "format": "uuid" },
+          "pin": {
+            "type": "string",
+            "pattern": "^\\d{6}$",
+            "example": "482915",
+            "description": "6-digit Yen approval PIN"
+          },
+          "credentialId": { "type": "string", "minLength": 1, "maxLength": 256 },
+          "signatureHex": { "type": "string", "pattern": "^[0-9a-f]+$" },
+          "clientDataJson": { "type": "string", "minLength": 1 },
+          "authenticatorDataHex": { "type": "string", "pattern": "^[0-9a-f]+$" }
+        },
+        "additionalProperties": false
+      },
+      "ExpenseRejectionResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["rejected"] },
+          "expenseId": { "type": "string", "format": "uuid" },
+          "reason": { "type": "string" },
+          "rejectedAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["status", "expenseId", "reason", "rejectedAt"],
+        "additionalProperties": false
+      },
+      "ExpenseRejectionInput": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": ["quorum", "objection", "policy"],
+            "default": "policy"
+          },
+          "approvalToken": { "type": "string", "format": "uuid" },
+          "pin": {
+            "type": "string",
+            "pattern": "^\\d{6}$",
+            "example": "482915",
+            "description": "6-digit Yen approval PIN"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PayExpenseInput": {
+        "type": "object",
+        "properties": { "bankTransactionId": { "type": "string", "format": "uuid" } },
+        "required": ["bankTransactionId"],
+        "additionalProperties": false
+      },
+      "ReconcileExpenseInput": {
+        "type": "object",
+        "properties": { "bankTransactionId": { "type": "string", "format": "uuid" } },
+        "required": ["bankTransactionId"],
+        "additionalProperties": false
+      },
       "DonationDetails": {
         "type": "object",
         "properties": {
@@ -418,58 +574,6 @@
         "type": "object",
         "properties": { "targetUserId": { "type": "string", "format": "uuid" } },
         "required": ["targetUserId"],
-        "additionalProperties": false
-      },
-      "ExpenseApprovalResponse": {
-        "type": "object",
-        "properties": {
-          "status": { "type": "string", "enum": ["approved"] },
-          "expenseId": { "type": "string", "format": "uuid" },
-          "approvedAt": { "type": "string", "format": "date-time" }
-        },
-        "required": ["status", "expenseId", "approvedAt"],
-        "additionalProperties": false
-      },
-      "ExpenseApprovalInput": {
-        "type": "object",
-        "properties": {
-          "approvalToken": { "type": "string", "format": "uuid" },
-          "pin": {
-            "type": "string",
-            "pattern": "^\\d{6}$",
-            "example": "482915",
-            "description": "6-digit Yen approval PIN"
-          }
-        },
-        "additionalProperties": false
-      },
-      "ExpenseRejectionResponse": {
-        "type": "object",
-        "properties": {
-          "status": { "type": "string", "enum": ["rejected"] },
-          "expenseId": { "type": "string", "format": "uuid" },
-          "reason": { "type": "string" },
-          "rejectedAt": { "type": "string", "format": "date-time" }
-        },
-        "required": ["status", "expenseId", "reason", "rejectedAt"],
-        "additionalProperties": false
-      },
-      "ExpenseRejectionInput": {
-        "type": "object",
-        "properties": {
-          "reason": {
-            "type": "string",
-            "enum": ["quorum", "objection", "policy"],
-            "default": "policy"
-          },
-          "approvalToken": { "type": "string", "format": "uuid" },
-          "pin": {
-            "type": "string",
-            "pattern": "^\\d{6}$",
-            "example": "482915",
-            "description": "6-digit Yen approval PIN"
-          }
-        },
         "additionalProperties": false
       },
       "PayeeChangeResponse": {
@@ -1776,6 +1880,1543 @@
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
                 "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/expenses": {
+      "post": {
+        "tags": ["expenses"],
+        "operationId": "createExpense",
+        "security": [{ "bearerAuth": [] }],
+        "description": "Creates a new draft expense request for a fund. Money is nonnegative integer paise encoded as decimal string. Requires Idempotency-Key.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Canonical lowercase FundId UUID"
+            },
+            "required": true,
+            "description": "Canonical lowercase FundId UUID",
+            "name": "fundId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._:-]+$"
+            },
+            "required": true,
+            "name": "Idempotency-Key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/CreateExpenseInput" } }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Draft expense created",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Expense" } }
+            }
+          },
+          "400": {
+            "description": "Validation failed; details contain field paths",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "409": {
+            "description": "Resource conflict, changed idempotency input, or request in progress",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["expenses"],
+        "operationId": "listExpenses",
+        "security": [{ "bearerAuth": [] }],
+        "description": "Lists expense requests for a fund.",
+        "parameters": [
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "fundId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of expenses",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Expense" } }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; details contain field paths",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "409": {
+            "description": "Resource conflict, changed idempotency input, or request in progress",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "504": {
+            "description": "Gateway timeout",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/expenses/{expenseId}": {
+      "get": {
+        "tags": ["expenses"],
+        "operationId": "getExpense",
+        "security": [{ "bearerAuth": [] }],
+        "description": "Reads an expense request. Unauthorized requests return 404.",
+        "parameters": [
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "fundId",
+            "in": "path"
+          },
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Expense details",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Expense" } }
+            }
+          },
+          "400": {
+            "description": "Validation failed; details contain field paths",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "409": {
+            "description": "Resource conflict, changed idempotency input, or request in progress",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "504": {
+            "description": "Gateway timeout",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/expenses/{expenseId}/submit": {
+      "post": {
+        "tags": ["expenses"],
+        "operationId": "submitExpense",
+        "security": [{ "bearerAuth": [] }],
+        "description": "Submits a draft expense request, creating a ledger hold to reserve funds. Transitions draft -> submitted. Emits expense.submitted event.",
+        "parameters": [
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "fundId",
+            "in": "path"
+          },
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._:-]+$"
+            },
+            "required": true,
+            "name": "Idempotency-Key",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Expense submitted and funds reserved via hold",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Expense" } }
+            }
+          },
+          "400": {
+            "description": "Validation failed; details contain field paths",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "409": {
+            "description": "Resource conflict, changed idempotency input, or request in progress",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/expenses/{expenseId}/approve": {
+      "post": {
+        "tags": ["approvals", "expenses"],
+        "operationId": "approveExpense",
+        "security": [{ "bearerAuth": [] }],
+        "description": "Approves an expense spend request. Requires 6-digit approval PIN verification or valid approval token bound to this action.",
+        "parameters": [
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "fundId",
+            "in": "path"
+          },
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._:-]+$"
+            },
+            "required": true,
+            "name": "Idempotency-Key",
+            "in": "header"
+          },
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": false,
+            "name": "X-Approval-Token",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{6}$",
+              "example": "482915",
+              "description": "6-digit Yen approval PIN"
+            },
+            "required": false,
+            "description": "6-digit Yen approval PIN",
+            "name": "X-Approval-Pin",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ExpenseApprovalInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Expense approved",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ExpenseApprovalResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; details contain field paths",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "409": {
+            "description": "Resource conflict, changed idempotency input, or request in progress",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/expenses/{expenseId}/reject": {
+      "post": {
+        "tags": ["approvals", "expenses"],
+        "operationId": "rejectExpense",
+        "security": [{ "bearerAuth": [] }],
+        "description": "Rejects an expense spend request. Requires 6-digit approval PIN verification or valid approval token bound to this action.",
+        "parameters": [
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "fundId",
+            "in": "path"
+          },
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._:-]+$"
+            },
+            "required": true,
+            "name": "Idempotency-Key",
+            "in": "header"
+          },
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": false,
+            "name": "X-Approval-Token",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{6}$",
+              "example": "482915",
+              "description": "6-digit Yen approval PIN"
+            },
+            "required": false,
+            "description": "6-digit Yen approval PIN",
+            "name": "X-Approval-Pin",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ExpenseRejectionInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Expense rejected",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ExpenseRejectionResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; details contain field paths",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "409": {
+            "description": "Resource conflict, changed idempotency input, or request in progress",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/expenses/{expenseId}/pay": {
+      "post": {
+        "tags": ["expenses"],
+        "operationId": "payExpense",
+        "security": [{ "bearerAuth": [] }],
+        "description": "Commits/settles the ledger hold for an approved expense after payment. Transitions approved -> paid. Emits expense.paid event.",
+        "parameters": [
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "fundId",
+            "in": "path"
+          },
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._:-]+$"
+            },
+            "required": true,
+            "name": "Idempotency-Key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/PayExpenseInput" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Expense paid and hold settled",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Expense" } }
+            }
+          },
+          "400": {
+            "description": "Validation failed; details contain field paths",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "409": {
+            "description": "Resource conflict, changed idempotency input, or request in progress",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/expenses/{expenseId}/reconcile": {
+      "post": {
+        "tags": ["expenses"],
+        "operationId": "reconcileExpense",
+        "security": [{ "bearerAuth": [] }],
+        "description": "Reconciles a paid expense against bank debit verification. Transitions paid -> reconciled. Emits bank.debit_seen event.",
+        "parameters": [
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "fundId",
+            "in": "path"
+          },
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._:-]+$"
+            },
+            "required": true,
+            "name": "Idempotency-Key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ReconcileExpenseInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Expense reconciled",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Expense" } }
+            }
+          },
+          "400": {
+            "description": "Validation failed; details contain field paths",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "409": {
+            "description": "Resource conflict, changed idempotency input, or request in progress",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
                 "required": true
               }
             },
@@ -3124,442 +4765,6 @@
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
                 "description": "Request correlation ID",
-                "required": true
-              }
-            },
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
-            }
-          }
-        }
-      }
-    },
-    "/v1/funds/{fundId}/expenses/{expenseId}/approve": {
-      "post": {
-        "tags": ["approvals", "expenses"],
-        "operationId": "approveExpense",
-        "security": [{ "bearerAuth": [] }],
-        "description": "Approves an expense spend request. Requires 6-digit approval PIN verification or valid approval token bound to this action.",
-        "parameters": [
-          {
-            "schema": { "type": "string", "format": "uuid" },
-            "required": true,
-            "name": "fundId",
-            "in": "path"
-          },
-          {
-            "schema": { "type": "string", "format": "uuid" },
-            "required": true,
-            "name": "expenseId",
-            "in": "path"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 128,
-              "pattern": "^[A-Za-z0-9._:-]+$"
-            },
-            "required": true,
-            "name": "Idempotency-Key",
-            "in": "header"
-          },
-          {
-            "schema": { "type": "string", "format": "uuid" },
-            "required": false,
-            "name": "X-Approval-Token",
-            "in": "header"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{6}$",
-              "example": "482915",
-              "description": "6-digit Yen approval PIN"
-            },
-            "required": false,
-            "description": "6-digit Yen approval PIN",
-            "name": "X-Approval-Pin",
-            "in": "header"
-          }
-        ],
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/ExpenseApprovalInput" }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Expense approved",
-            "headers": {
-              "x-request-id": {
-                "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID",
-                "required": true
-              },
-              "idempotent-replayed": {
-                "schema": { "type": "string", "enum": ["true"] },
-                "description": "Present on replay"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ExpenseApprovalResponse" }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation failed; details contain field paths",
-            "headers": {
-              "x-request-id": {
-                "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID",
-                "required": true
-              },
-              "idempotent-replayed": {
-                "schema": { "type": "string", "enum": ["true"] },
-                "description": "Present on replay"
-              }
-            },
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
-            }
-          },
-          "401": {
-            "description": "Authentication required",
-            "headers": {
-              "x-request-id": {
-                "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID",
-                "required": true
-              },
-              "idempotent-replayed": {
-                "schema": { "type": "string", "enum": ["true"] },
-                "description": "Present on replay"
-              }
-            },
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
-            }
-          },
-          "403": {
-            "description": "Access denied",
-            "headers": {
-              "x-request-id": {
-                "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID",
-                "required": true
-              },
-              "idempotent-replayed": {
-                "schema": { "type": "string", "enum": ["true"] },
-                "description": "Present on replay"
-              }
-            },
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "headers": {
-              "x-request-id": {
-                "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID",
-                "required": true
-              },
-              "idempotent-replayed": {
-                "schema": { "type": "string", "enum": ["true"] },
-                "description": "Present on replay"
-              }
-            },
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
-            }
-          },
-          "409": {
-            "description": "Resource conflict, changed idempotency input, or request in progress",
-            "headers": {
-              "x-request-id": {
-                "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID",
-                "required": true
-              },
-              "idempotent-replayed": {
-                "schema": { "type": "string", "enum": ["true"] },
-                "description": "Present on replay"
-              },
-              "retry-after": {
-                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
-                "description": "Seconds until retry"
-              }
-            },
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "headers": {
-              "x-request-id": {
-                "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID",
-                "required": true
-              },
-              "retry-after": {
-                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
-                "description": "Seconds until retry",
-                "required": true
-              }
-            },
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
-            }
-          },
-          "500": {
-            "description": "Internal failure; no private error information",
-            "headers": {
-              "x-request-id": {
-                "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID",
-                "required": true
-              }
-            },
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
-            }
-          },
-          "503": {
-            "description": "Rate limit store at capacity",
-            "headers": {
-              "x-request-id": {
-                "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID",
-                "required": true
-              },
-              "retry-after": {
-                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
-                "description": "Seconds until retry",
-                "required": true
-              }
-            },
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
-            }
-          }
-        }
-      }
-    },
-    "/v1/funds/{fundId}/expenses/{expenseId}/reject": {
-      "post": {
-        "tags": ["approvals", "expenses"],
-        "operationId": "rejectExpense",
-        "security": [{ "bearerAuth": [] }],
-        "description": "Rejects an expense spend request. Requires 6-digit approval PIN verification or valid approval token bound to this action.",
-        "parameters": [
-          {
-            "schema": { "type": "string", "format": "uuid" },
-            "required": true,
-            "name": "fundId",
-            "in": "path"
-          },
-          {
-            "schema": { "type": "string", "format": "uuid" },
-            "required": true,
-            "name": "expenseId",
-            "in": "path"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 128,
-              "pattern": "^[A-Za-z0-9._:-]+$"
-            },
-            "required": true,
-            "name": "Idempotency-Key",
-            "in": "header"
-          },
-          {
-            "schema": { "type": "string", "format": "uuid" },
-            "required": false,
-            "name": "X-Approval-Token",
-            "in": "header"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{6}$",
-              "example": "482915",
-              "description": "6-digit Yen approval PIN"
-            },
-            "required": false,
-            "description": "6-digit Yen approval PIN",
-            "name": "X-Approval-Pin",
-            "in": "header"
-          }
-        ],
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/ExpenseRejectionInput" }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Expense rejected",
-            "headers": {
-              "x-request-id": {
-                "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID",
-                "required": true
-              },
-              "idempotent-replayed": {
-                "schema": { "type": "string", "enum": ["true"] },
-                "description": "Present on replay"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ExpenseRejectionResponse" }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation failed; details contain field paths",
-            "headers": {
-              "x-request-id": {
-                "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID",
-                "required": true
-              },
-              "idempotent-replayed": {
-                "schema": { "type": "string", "enum": ["true"] },
-                "description": "Present on replay"
-              }
-            },
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
-            }
-          },
-          "401": {
-            "description": "Authentication required",
-            "headers": {
-              "x-request-id": {
-                "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID",
-                "required": true
-              },
-              "idempotent-replayed": {
-                "schema": { "type": "string", "enum": ["true"] },
-                "description": "Present on replay"
-              }
-            },
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
-            }
-          },
-          "403": {
-            "description": "Access denied",
-            "headers": {
-              "x-request-id": {
-                "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID",
-                "required": true
-              },
-              "idempotent-replayed": {
-                "schema": { "type": "string", "enum": ["true"] },
-                "description": "Present on replay"
-              }
-            },
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "headers": {
-              "x-request-id": {
-                "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID",
-                "required": true
-              },
-              "idempotent-replayed": {
-                "schema": { "type": "string", "enum": ["true"] },
-                "description": "Present on replay"
-              }
-            },
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
-            }
-          },
-          "409": {
-            "description": "Resource conflict, changed idempotency input, or request in progress",
-            "headers": {
-              "x-request-id": {
-                "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID",
-                "required": true
-              },
-              "idempotent-replayed": {
-                "schema": { "type": "string", "enum": ["true"] },
-                "description": "Present on replay"
-              },
-              "retry-after": {
-                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
-                "description": "Seconds until retry"
-              }
-            },
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "headers": {
-              "x-request-id": {
-                "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID",
-                "required": true
-              },
-              "retry-after": {
-                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
-                "description": "Seconds until retry",
-                "required": true
-              }
-            },
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
-            }
-          },
-          "500": {
-            "description": "Internal failure; no private error information",
-            "headers": {
-              "x-request-id": {
-                "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID",
-                "required": true
-              }
-            },
-            "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
-            }
-          },
-          "503": {
-            "description": "Rate limit store at capacity",
-            "headers": {
-              "x-request-id": {
-                "schema": { "type": "string", "format": "uuid" },
-                "description": "Request correlation ID",
-                "required": true
-              },
-              "retry-after": {
-                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
-                "description": "Seconds until retry",
                 "required": true
               }
             },

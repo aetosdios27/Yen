@@ -92,7 +92,8 @@ function scanRouteHandlersForRedaction(sourceText: string): string[] {
             !arg.includes(".redact(") &&
             !arg.includes("redact(") &&
             !arg.includes(".redactReceipt(") &&
-            !arg.includes("redactReceipt(")
+            !arg.includes("redactReceipt(") &&
+            !arg.includes("redactExpense(")
           ) {
             violations.push(
               `Route ${routeName} returns fund data without passing through policy.redact()`,
@@ -115,7 +116,8 @@ function scanRouteHandlersForRedaction(sourceText: string): string[] {
             !returnArg.includes(".redact(") &&
             !returnArg.includes("redact(") &&
             !returnArg.includes(".redactReceipt(") &&
-            !returnArg.includes("redactReceipt(")
+            !returnArg.includes("redactReceipt(") &&
+            !returnArg.includes("redactExpense(")
           ) {
             unredactedReturns++;
           }

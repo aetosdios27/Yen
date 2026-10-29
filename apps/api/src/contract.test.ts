@@ -80,7 +80,7 @@ it("validates every documented status and sent header against the committed Open
   const clock = () => currentTime;
   const otpDeliveryProvider = new DevStubOtpDeliveryProvider(clock);
   const base = {
-    principal: { id: "00000000-0000-4000-8000-000000000001" },
+    principal: { id: "00000000-0000-4000-8000-000000000001", role: "owner" as const },
     idGenerator,
     clock,
     logger: { log: () => undefined },
@@ -338,8 +338,7 @@ it("validates every documented status and sent header against the committed Open
     if (
       path === "/v1/waitlist" ||
       path.startsWith("/v1/auth/") ||
-      path.startsWith("/v1/auth/pin") ||
-      path.includes("/expenses/") ||
+      path.includes("/expenses") ||
       path.endsWith("/payee") ||
       path.endsWith("/policy") ||
       path.endsWith("/members") ||

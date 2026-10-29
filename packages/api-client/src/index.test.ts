@@ -4,7 +4,7 @@ import { createYenClient } from "./index.js";
 
 function client() {
   const app = createApp({
-    principal: { id: "00000000-0000-4000-8000-000000000001" },
+    principal: { id: "00000000-0000-4000-8000-000000000001", role: "owner" },
     logger: { log: () => undefined },
     policy: devPolicy,
   });
