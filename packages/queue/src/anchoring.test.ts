@@ -315,11 +315,17 @@ describePostgres("anchoring worker", (adminUrl) => {
   });
 });
 
-it.skipIf(
-  !process.env.CI &&
-    (spawnSync("anvil", ["--version"], { stdio: "ignore" }).status !== 0 ||
-      !process.env.YEN_ANVIL_TEST_DATABASE_URL),
-)(
+const anvilIntegrationRequired = process.env.YEN_ANVIL_INTEGRATION_REQUIRED === "1";
+const anvilAvailable = spawnSync("anvil", ["--version"], { stdio: "ignore" }).status === 0;
+
+if (anvilIntegrationRequired && !process.env.YEN_ANVIL_TEST_DATABASE_URL) {
+  throw new Error("YEN_ANVIL_TEST_DATABASE_URL is required for the Anvil integration test");
+}
+if (anvilIntegrationRequired && !anvilAvailable) {
+  throw new Error("Anvil is required for the Anvil integration test");
+}
+
+it.skipIf(!anvilIntegrationRequired)(
   "deploys RootRegistry and publishes a root on a real local Anvil chain",
   async () => {
     const probe = createServer();

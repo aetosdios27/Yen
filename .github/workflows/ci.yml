@@ -190,6 +190,7 @@ jobs:
           --health-retries 5
     env:
       YEN_ANVIL_TEST_DATABASE_URL: postgres://postgres:yen_test@127.0.0.1:5432/yen_anvil
+      YEN_ANVIL_INTEGRATION_REQUIRED: "1"
     defaults:
       run:
         working-directory: contracts
@@ -230,7 +231,7 @@ jobs:
         run: pnpm --filter @yen/queue... build
         working-directory: .
       - name: Run the real Anvil anchoring integration test
-        run: pnpm --filter @yen/queue test -- src/anchoring.test.ts -t "deploys RootRegistry and publishes a root on a real local Anvil chain"
+        run: pnpm --filter @yen/queue exec vitest run src/anchoring.test.ts -t "deploys RootRegistry and publishes a root on a real local Anvil chain"
         working-directory: .
       - name: Test deployment manifest writer
         run: node --test contracts/script/*.test.mjs
