@@ -38,6 +38,7 @@ export interface ServerConfig {
   readonly DATABASE_URL?: string | undefined;
   readonly EVIDENCE_STORAGE_DIR?: string | undefined;
   readonly OTP_HASH_KEY?: string | undefined;
+  readonly PARTNER_WEBHOOK_SECRET?: string | undefined;
   readonly YEN_ALLOW_MEMORY_STORES?: "true" | "false" | undefined;
   readonly READINESS_CACHE_MS: number;
   readonly TRUSTED_PROXY_HOPS: number;
@@ -206,6 +207,7 @@ export async function startServer(
     ...(sql ? { authStore: new PostgresAuthStore(sql) } : {}),
     ...(sql ? { pinStore: new PostgresPinStore(sql) } : {}),
     otpHashKey: resolvedConfig.OTP_HASH_KEY ?? "development-only-otp-hash-key-change-me",
+    partnerWebhookSecret: resolvedConfig.PARTNER_WEBHOOK_SECRET ?? null,
     otpDeliveryProvider: createOtpDeliveryProvider(resolvedConfig.NODE_ENV),
     waitlistLimit: {
       capacity: resolvedConfig.WAITLIST_RATE_LIMIT_CAPACITY,

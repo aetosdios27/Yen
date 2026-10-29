@@ -7,6 +7,7 @@ import { DevStubOtpDeliveryProvider, normalizePhone } from "./auth/index.js";
 import { rotateSessionResponse, verifyOtpResponse } from "./contract.js";
 import { ApiError, errorCode, errorStatus } from "./errors.js";
 import { devPolicy } from "./policy.js";
+import { signPartnerWebhook } from "./reconciliation/webhook-signature.js";
 import { MemoryIdempotencyStore } from "./stores.js";
 import { MemoryVirusScannerAdapter } from "./test-utils/memory-virus-scanner.js";
 
@@ -89,6 +90,7 @@ it("validates every documented status and sent header against the committed Open
     otpDeliveryProvider,
     pinSecret: "contract-test-pin-hmac-secret-longer-than-32-bytes",
     virusScanner: new MemoryVirusScannerAdapter(),
+    partnerWebhookSecret: "contract-test-partner-webhook-secret-32-chars",
   };
   const app = createApp(base);
   const post = {
@@ -249,26 +251,45 @@ it("validates every documented status and sent header against the committed Open
     await app.request("/v1/reconciliation/statements", statementPost),
   );
 
+  const webhookBody = JSON.stringify({
+    event: "virtual_account.credited",
+    timestamp: "2026-10-28T14:30:00.000Z",
+    data: {
+      fund_id: id,
+      bank_reference: "REF123",
+      amount_paise: 50000,
+      type: "credit",
+      posted_at: "2026-10-28T14:30:00.000Z",
+      utr: "123456789012",
+    },
+  });
+  const webhookTimestamp = String(Math.floor(currentTime / 1000));
   const webhookPost = {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      event: "virtual_account.credited",
-      timestamp: "2026-10-28T14:30:00.000Z",
-      data: {
-        fund_id: id,
-        bank_reference: "REF123",
-        amount_paise: 50000,
-        type: "credit",
-        posted_at: "2026-10-28T14:30:00.000Z",
-        utr: "123456789012",
-      },
-    }),
+    headers: {
+      "content-type": "application/json",
+      "x-webhook-timestamp": webhookTimestamp,
+      "x-webhook-signature": signPartnerWebhook(
+        base.partnerWebhookSecret,
+        webhookTimestamp,
+        new TextEncoder().encode(webhookBody),
+      ),
+    },
+    body: webhookBody,
   };
   await check(
     "/v1/reconciliation/webhooks/partner",
     "post",
     await app.request("/v1/reconciliation/webhooks/partner", webhookPost),
+  );
+  await check(
+    "/v1/reconciliation/webhooks/partner",
+    "post",
+    await app.request("/v1/reconciliation/webhooks/partner", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: webhookBody,
+    }),
   );
 
   await check(

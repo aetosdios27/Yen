@@ -807,7 +807,7 @@ export interface paths {
     put?: never;
     /**
      * Payment partner webhook
-     * @description Idempotent webhook receiver for payment partner notifications (e.g. UPI virtual account credit).
+     * @description Idempotent webhook receiver for payment partner notifications (e.g. UPI virtual account credit). Requests must carry `X-Webhook-Timestamp` (Unix seconds, within five minutes of server time) and `X-Webhook-Signature`, the lowercase hex HMAC-SHA256 of `v1.<timestamp>.<raw body>` under the shared partner secret. Unsigned, stale, future-dated, or tampered requests are rejected with 401 before the body is parsed.
      */
     post: operations["partnerWebhook"];
     delete?: never;
@@ -7688,6 +7688,19 @@ export interface operations {
       };
       /** @description Validation failed; details contain field paths */
       400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;

@@ -1,13 +1,18 @@
 import { readFile } from "node:fs/promises";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as z from "zod";
 import { createApp } from "../app.js";
 import { statementUploadResultSchema, unmatchedCreditsSchema } from "../contract.js";
 import type { AppDependencies } from "../dependencies.js";
 import { devPolicy } from "../policy.js";
+import { MemoryReconciliationStore } from "./memory-store.js";
+import { signPartnerWebhook } from "./webhook-signature.js";
 
 const principal = { id: "00000000-0000-4000-8000-000000000001" };
 const otherPrincipal = { id: "00000000-0000-4000-8000-000000000002" };
+
+const partnerSecret = "0".repeat(32);
+const webhookPath = "/v1/reconciliation/webhooks/partner";
 
 const fundInput = {
   name: "RoboCup 2026 Fund",
@@ -21,6 +26,7 @@ function setup(overrides: Partial<AppDependencies> = {}) {
   let sequence = 100;
   const app = createApp({
     principal,
+    partnerWebhookSecret: partnerSecret,
     clock: () => now,
     idGenerator: () => `00000000-0000-4000-8000-${String(sequence++).padStart(12, "0")}`,
     logger: { log: () => undefined },
@@ -33,6 +39,34 @@ function setup(overrides: Partial<AppDependencies> = {}) {
       now += ms;
     },
     now: () => now,
+  };
+}
+
+function signedWebhook(
+  nowMs: number,
+  body: string,
+  signedAtSeconds = Math.floor(nowMs / 1000),
+): {
+  method: string;
+  headers: { "x-webhook-timestamp": string; "x-webhook-signature": string } & Record<
+    string,
+    string
+  >;
+  body: string;
+} {
+  const timestamp = String(signedAtSeconds);
+  return {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-webhook-timestamp": timestamp,
+      "x-webhook-signature": signPartnerWebhook(
+        partnerSecret,
+        timestamp,
+        new TextEncoder().encode(body),
+      ),
+    },
+    body,
   };
 }
 
@@ -152,7 +186,7 @@ describe("Reconciliation Engine Integration", () => {
   });
 
   it("processes partner webhook idempotently and reconciles credit", async () => {
-    const { app } = setup();
+    const { app, now } = setup();
     const fundId = await createFund(app);
 
     const utr = "998877665544";
@@ -177,11 +211,10 @@ describe("Reconciliation Engine Integration", () => {
     };
 
     // First webhook call
-    const firstRes = await app.request("/v1/reconciliation/webhooks/partner", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(webhookPayload),
-    });
+    const firstRes = await app.request(
+      webhookPath,
+      signedWebhook(now(), JSON.stringify(webhookPayload)),
+    );
 
     expect(firstRes.status).toBe(200);
     const firstBody = await firstRes.json();
@@ -193,11 +226,10 @@ describe("Reconciliation Engine Integration", () => {
     });
 
     // Replay identical webhook (idempotent receiver)
-    const secondRes = await app.request("/v1/reconciliation/webhooks/partner", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(webhookPayload),
-    });
+    const secondRes = await app.request(
+      webhookPath,
+      signedWebhook(now(), JSON.stringify(webhookPayload)),
+    );
 
     expect(secondRes.status).toBe(200);
     const secondBody = await secondRes.json();
@@ -390,5 +422,279 @@ describe("Reconciliation Engine Integration", () => {
       `/v1/funds/${fundId}/reconciliation/unmatched`,
     );
     expect(unauthzRes.status).toBe(404);
+  });
+});
+
+describe("Partner webhook authentication", () => {
+  const utr = "998877665544";
+
+  function webhookPayload(fundId: string, overrides: Record<string, unknown> = {}) {
+    return {
+      event: "virtual_account.credited",
+      timestamp: "2026-10-28T11:59:00.000Z",
+      data: {
+        fund_id: fundId,
+        bank_reference: "PAY_PARTNER_AUTH_001",
+        amount_paise: 75000,
+        type: "credit",
+        posted_at: "2026-10-28T11:58:00.000Z",
+        utr,
+        narration: `UPI/CR/${utr}/DONATION`,
+        ...overrides,
+      },
+    };
+  }
+
+  async function arrange(overrides: Partial<AppDependencies> = {}) {
+    const store = new MemoryReconciliationStore();
+    const ingest = vi.spyOn(store, "ingest");
+    const harness = setup({ reconciliationStore: store, ...overrides });
+    const fundId = await createFund(harness.app);
+    const pledge = await pledgeDonation(harness.app, fundId, "75000", utr, "Webhook Donor");
+    const body = JSON.stringify(webhookPayload(fundId));
+    return { ...harness, fundId, pledge, body, ingest };
+  }
+
+  async function expectUnauthenticated(response: Response) {
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ error: { code: "unauthenticated" } });
+  }
+
+  it("rejects an unsigned webhook without touching the ledger", async () => {
+    const { app, body, ingest } = await arrange();
+    for (const path of [webhookPath, `${webhookPath}/`]) {
+      await expectUnauthenticated(
+        await app.request(path, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body,
+        }),
+      );
+    }
+    expect(ingest).not.toHaveBeenCalled();
+  });
+
+  it("rejects a request missing either the signature or the timestamp", async () => {
+    const { app, body, now, ingest } = await arrange();
+    const signed = signedWebhook(now(), body);
+    for (const header of ["x-webhook-signature", "x-webhook-timestamp"]) {
+      const { [header]: _removed, ...headers } = signed.headers;
+      await expectUnauthenticated(await app.request(webhookPath, { ...signed, headers }));
+    }
+    expect(ingest).not.toHaveBeenCalled();
+  });
+
+  it("authenticates before parsing so unsigned malformed JSON is 401 and not 400", async () => {
+    const { app, ingest } = await arrange();
+    await expectUnauthenticated(
+      await app.request(webhookPath, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{not json",
+      }),
+    );
+    expect(ingest).not.toHaveBeenCalled();
+  });
+
+  it("rejects any modification of the signed bytes", async () => {
+    const { app, fundId, body, now, ingest } = await arrange();
+    const signed = signedWebhook(now(), body);
+    const tampered = [
+      body.replace('"amount_paise":75000', '"amount_paise":75001'),
+      body.replace("PAY_PARTNER_AUTH_001", "PAY_PARTNER_AUTH_002"),
+      JSON.stringify(webhookPayload(fundId), null, 2),
+      `${body}\n`,
+      ` ${body}`,
+    ];
+    for (const changed of tampered) {
+      expect(changed).not.toBe(body);
+      await expectUnauthenticated(await app.request(webhookPath, { ...signed, body: changed }));
+    }
+    expect(ingest).not.toHaveBeenCalled();
+  });
+
+  it("rejects stale and future timestamps even when correctly signed", async () => {
+    const { app, body, now, ingest } = await arrange();
+    const nowSeconds = Math.floor(now() / 1000);
+    for (const skew of [-301, 301, -86_400, 86_400]) {
+      await expectUnauthenticated(
+        await app.request(webhookPath, signedWebhook(now(), body, nowSeconds + skew)),
+      );
+    }
+    expect(ingest).not.toHaveBeenCalled();
+  });
+
+  it("rejects a timestamp changed after signing, including a refreshed replay", async () => {
+    const { app, body, now, advance, ingest } = await arrange();
+    const original = signedWebhook(now(), body);
+    advance(10 * 60 * 1000);
+    const refreshedSeconds = String(Math.floor(now() / 1000));
+    await expectUnauthenticated(
+      await app.request(webhookPath, {
+        ...original,
+        headers: { ...original.headers, "x-webhook-timestamp": refreshedSeconds },
+      }),
+    );
+    await expectUnauthenticated(await app.request(webhookPath, original));
+    const nudged = String(Number(original.headers["x-webhook-timestamp"]) + 1);
+    await expectUnauthenticated(
+      await app.request(webhookPath, {
+        ...original,
+        headers: { ...original.headers, "x-webhook-timestamp": nudged },
+      }),
+    );
+    expect(ingest).not.toHaveBeenCalled();
+  });
+
+  it("rejects wrong-secret, malformed, and non-canonical credentials", async () => {
+    const { app, body, now, ingest } = await arrange();
+    const signed = signedWebhook(now(), body);
+    const timestamp = signed.headers["x-webhook-timestamp"];
+    const signature = signed.headers["x-webhook-signature"];
+    const forged = signPartnerWebhook(
+      "another-partner-secret-with-32-characters",
+      timestamp,
+      new TextEncoder().encode(body),
+    );
+    const headerVariants = [
+      { "x-webhook-signature": forged },
+      { "x-webhook-signature": signature.toUpperCase() },
+      { "x-webhook-signature": signature.slice(0, 62) },
+      { "x-webhook-signature": `sha256=${signature}` },
+      { "x-webhook-signature": "" },
+      { "x-webhook-timestamp": `0${timestamp}` },
+      { "x-webhook-timestamp": `${timestamp}.0` },
+      { "x-webhook-timestamp": new Date(now()).toISOString() },
+    ];
+    for (const variant of headerVariants) {
+      await expectUnauthenticated(
+        await app.request(webhookPath, { ...signed, headers: { ...signed.headers, ...variant } }),
+      );
+    }
+    expect(ingest).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when no partner secret is configured", async () => {
+    const { app, body, now, ingest } = await arrange({ partnerWebhookSecret: null });
+    await expectUnauthenticated(await app.request(webhookPath, signedWebhook(now(), body)));
+    const emptySecretSignature = signPartnerWebhook(
+      "",
+      String(Math.floor(now() / 1000)),
+      new TextEncoder().encode(body),
+    );
+    const unsigned = signedWebhook(now(), body);
+    await expectUnauthenticated(
+      await app.request(webhookPath, {
+        ...unsigned,
+        headers: { ...unsigned.headers, "x-webhook-signature": emptySecretSignature },
+      }),
+    );
+    expect(ingest).not.toHaveBeenCalled();
+  });
+
+  it("accepts a correctly signed webhook inside the tolerance and reconciles the pledge", async () => {
+    const { app, body, pledge, now, ingest } = await arrange();
+    const nowSeconds = Math.floor(now() / 1000);
+    const response = await app.request(webhookPath, signedWebhook(now(), body, nowSeconds - 300));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      status: "processed",
+      duplicate: false,
+      reconciliationStatus: "matched",
+      matchedPledgeId: pledge.donationId,
+    });
+    expect(ingest).toHaveBeenCalledTimes(1);
+    const [transactions] = ingest.mock.calls[0] ?? [];
+    expect(transactions).toHaveLength(1);
+    expect(transactions?.[0]).toMatchObject({
+      source: "webhook_partner",
+      amountPaise: 75000,
+      utr,
+    });
+  });
+
+  it("accepts a signed webhook with a future timestamp inside the tolerance", async () => {
+    const { app, body, now } = await arrange();
+    const response = await app.request(
+      webhookPath,
+      signedWebhook(now(), body, Math.floor(now() / 1000) + 300),
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it("returns 400 for signed but malformed payloads without ingesting them", async () => {
+    const { app, fundId, now, ingest } = await arrange();
+    const cases: string[] = [
+      "{not json",
+      "",
+      "[]",
+      "null",
+      JSON.stringify({ ...webhookPayload(fundId), unexpected: true }),
+      JSON.stringify(webhookPayload(fundId, { fund_id: "not-a-uuid" })),
+      JSON.stringify(webhookPayload(fundId, { amount_paise: -5 })),
+      JSON.stringify(webhookPayload(fundId, { amount_paise: 0 })),
+      JSON.stringify(webhookPayload(fundId, { amount_paise: 500.5 })),
+      JSON.stringify(webhookPayload(fundId, { amount_paise: "12.50" })),
+      JSON.stringify(webhookPayload(fundId, { amount_paise: "99999999999999999999" })),
+      JSON.stringify(webhookPayload(fundId, { utr: "123" })),
+      JSON.stringify(webhookPayload(fundId, { posted_at: "yesterday" })),
+    ];
+    for (const body of cases) {
+      const response = await app.request(webhookPath, signedWebhook(now(), body));
+      expect(response.status, body).toBe(400);
+      expect(await response.json()).toMatchObject({ error: { code: "validation_failed" } });
+    }
+    expect(ingest).not.toHaveBeenCalled();
+  });
+
+  it("treats a replay of a signed request as idempotent and rejects it once stale", async () => {
+    const { app, body, pledge, now, advance, ingest } = await arrange();
+    const request = signedWebhook(now(), body);
+
+    const first = await app.request(webhookPath, request);
+    expect(first.status).toBe(200);
+    const firstBody = await first.json();
+    expect(firstBody).toMatchObject({ duplicate: false, matchedPledgeId: pledge.donationId });
+
+    advance(60_000);
+    const replay = await app.request(webhookPath, request);
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toMatchObject({
+      duplicate: true,
+      transactionId: (firstBody as { transactionId: string }).transactionId,
+      reconciliationStatus: "matched",
+      matchedPledgeId: pledge.donationId,
+    });
+
+    const lastResults = await Promise.all(ingest.mock.results.map((result) => result.value));
+    expect(lastResults.map((result) => result.ingestedCount)).toEqual([1, 0]);
+    expect(lastResults.map((result) => result.duplicateCount)).toEqual([0, 1]);
+
+    advance(5 * 60 * 1000);
+    await expectUnauthenticated(await app.request(webhookPath, request));
+    expect(ingest).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not let a rejected forgery block the genuine signed delivery", async () => {
+    const { app, fundId, body, pledge, now, ingest } = await arrange();
+    const forged = JSON.stringify(
+      webhookPayload(fundId, { bank_reference: "PAY_PARTNER_AUTH_001" }),
+    );
+    await expectUnauthenticated(
+      await app.request(webhookPath, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: forged,
+      }),
+    );
+    expect(ingest).not.toHaveBeenCalled();
+
+    const genuine = await app.request(webhookPath, signedWebhook(now(), body));
+    expect(genuine.status).toBe(200);
+    expect(await genuine.json()).toMatchObject({
+      duplicate: false,
+      reconciliationStatus: "matched",
+      matchedPledgeId: pledge.donationId,
+    });
   });
 });
