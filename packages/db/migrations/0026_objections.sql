@@ -25,7 +25,7 @@ DO $$
 DECLARE
   definition text;
 BEGIN
-  SELECT pg_get_functiondef('public.yen_fund_events_before_insert()'::regprocedure)
+  SELECT pg_get_functiondef('yen_fund_events_before_insert()'::regprocedure)
   INTO definition;
   definition := replace(
     definition,
