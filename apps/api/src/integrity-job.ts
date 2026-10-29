@@ -33,6 +33,11 @@ export interface IntegrityJobSummary {
     pinnedSha256: string;
     actualSha256: string;
   }>;
+  readonly missingItems: Array<{
+    evidenceId: string;
+    objectKey: string;
+    error: string;
+  }>;
 }
 
 export class EvidenceIntegrityError extends Error {
@@ -43,7 +48,7 @@ export class EvidenceIntegrityError extends Error {
 }
 
 export async function getVerifiedEvidenceObject(evidence: StoredEvidence, storage: StorageAdapter) {
-  const storageObj = await storage.getObject(evidence.objectKey ?? evidence.evidenceId);
+  const storageObj = await storage.getObject(evidence.objectKey);
   const actualSha256 = crypto.createHash("sha256").update(storageObj.data).digest("hex");
   if (actualSha256 !== evidence.fileSha256) throw new EvidenceIntegrityError();
   return storageObj;
@@ -58,7 +63,7 @@ export async function checkEvidenceIntegrity(
   evidence: StoredEvidence,
   storage: StorageAdapter,
 ): Promise<IntegrityCheckResult> {
-  const objectKey = evidence.objectKey ?? evidence.evidenceId;
+  const objectKey = evidence.objectKey;
   const now = new Date().toISOString();
 
   let storageObj: { data: Uint8Array };
@@ -97,19 +102,22 @@ export async function checkEvidenceIntegrity(
  * Runs a batch integrity verification job across a set of evidence records.
  */
 export async function runEvidenceIntegrityJob(
-  evidenceList: readonly StoredEvidence[],
+  evidenceList: Iterable<StoredEvidence> | AsyncIterable<StoredEvidence>,
   storage: StorageAdapter,
 ): Promise<IntegrityJobSummary> {
   let validCount = 0;
   let tamperedCount = 0;
   let missingCount = 0;
+  let totalChecked = 0;
   const tamperedItems: Array<{
     evidenceId: string;
     pinnedSha256: string;
     actualSha256: string;
   }> = [];
+  const missingItems: Array<{ evidenceId: string; objectKey: string; error: string }> = [];
 
-  for (const item of evidenceList) {
+  for await (const item of evidenceList) {
+    totalChecked++;
     const result = await checkEvidenceIntegrity(item, storage);
     if (result.status === "valid") {
       validCount++;
@@ -122,14 +130,20 @@ export async function runEvidenceIntegrityJob(
       });
     } else if (result.status === "missing") {
       missingCount++;
+      missingItems.push({
+        evidenceId: result.evidenceId,
+        objectKey: result.objectKey,
+        error: result.error,
+      });
     }
   }
 
   return {
-    totalChecked: evidenceList.length,
+    totalChecked,
     validCount,
     tamperedCount,
     missingCount,
     tamperedItems,
+    missingItems,
   };
 }

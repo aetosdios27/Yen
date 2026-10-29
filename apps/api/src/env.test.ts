@@ -4,6 +4,7 @@ beforeEach(() => {
   vi.resetModules();
   vi.stubEnv("NODE_ENV", "test");
   vi.stubEnv("CLAMAV_HOST", undefined);
+  vi.stubEnv("EVIDENCE_STORAGE_DIR", undefined);
   vi.stubEnv("CLAMAV_PORT", undefined);
   vi.stubEnv("CLAMAV_TIMEOUT_MS", undefined);
   vi.stubEnv("CLAMAV_MAX_SIZE_BYTES", undefined);
@@ -109,12 +110,26 @@ it("requires a ClamAV host in production", async () => {
   await expect(import("./env.js")).rejects.toThrow("CLAMAV_HOST");
 });
 
+it("requires an absolute evidence storage directory in production", async () => {
+  vi.stubEnv("PORT", "3001");
+  vi.stubEnv("NODE_ENV", "production");
+  vi.stubEnv("OTP_HASH_KEY", "test-production-secret-with-at-least-32-characters");
+  vi.stubEnv("CLAMAV_HOST", "clamav.internal");
+  vi.stubEnv("DATABASE_URL", "postgres://postgres:pw@localhost:55432/postgres");
+  await expect(import("./env.js")).rejects.toThrow("EVIDENCE_STORAGE_DIR");
+
+  vi.resetModules();
+  vi.stubEnv("EVIDENCE_STORAGE_DIR", "./relative-evidence");
+  await expect(import("./env.js")).rejects.toThrow("absolute path");
+});
+
 it("accepts a PostgreSQL URL in production and rejects invalid URLs without exposing them", async () => {
   vi.stubEnv("PORT", "3001");
   vi.stubEnv("NODE_ENV", "production");
   vi.stubEnv("OTP_HASH_KEY", "test-production-secret-with-at-least-32-characters");
   vi.stubEnv("CLAMAV_HOST", "clamav.internal");
   vi.stubEnv("DATABASE_URL", "postgres://postgres:pw@localhost:55432/postgres");
+  vi.stubEnv("EVIDENCE_STORAGE_DIR", "/var/lib/yen/evidence");
   expect((await import("./env.js")).env.DATABASE_URL).toBe(
     "postgres://postgres:pw@localhost:55432/postgres",
   );
