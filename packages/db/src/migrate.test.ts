@@ -53,6 +53,7 @@ databaseSuite("migration runner", (sql, url) => {
     expect(tables.map((row) => row.tablename)).toEqual([
       "auth_otp_attempt_limits",
       "auth_otps",
+      "donation_pledges",
       "fund_events",
       "fund_notification_daily_usage",
       "fund_pseudonyms",
@@ -82,6 +83,7 @@ databaseSuite("migration runner", (sql, url) => {
     const authAttemptsSource = await readFile(join(defaultDir, "0008_auth_otp_attempt_limits.sql"));
     const pinsSource = await readFile(join(defaultDir, "0009_approval_pins.sql"));
     const notificationsSource = await readFile(join(defaultDir, "0010_notifications.sql"));
+    const donationSource = await readFile(join(defaultDir, "0011_donation_pledges.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -144,6 +146,12 @@ databaseSuite("migration runner", (sql, url) => {
         checksum: createHash("sha256").update(notificationsSource).digest("hex"),
         applied_at: expect.any(Date),
       },
+      {
+        version: 11,
+        name: "0011_donation_pledges.sql",
+        checksum: createHash("sha256").update(donationSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
     ]);
   });
 
@@ -177,7 +185,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(10);
+    expect(before).toHaveLength(11);
   });
 
   it("rejects an edited applied file and names it", async () => {

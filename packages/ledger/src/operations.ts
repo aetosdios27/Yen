@@ -313,6 +313,91 @@ export async function recordDonation(
   };
 }
 
+export interface PledgeDonationInput {
+  fundId: string;
+  amount: Paise;
+  /** The 12-digit UPI reference the donor sees in their payment app. */
+  utr: string;
+  donorDisplayName?: string;
+  donorContact?: string;
+  donationId?: string;
+  actorPseudonym?: PseudonymId | string;
+  occurredAt?: string;
+}
+
+export type PledgeDonationResult =
+  | { readonly kind: "pledged"; readonly donationId: string; readonly event: Event }
+  | { readonly kind: "duplicate_utr" };
+
+/**
+ * Records a donation the donor says they sent over UPI. No bank statement has
+ * shown it yet, so the pledge only moves value between the fund's receivable
+ * and pending-donation accounts: the spendable bank balance stays untouched
+ * until a statement match posts the real credit.
+ */
+export async function pledgeDonation(
+  tx: KontoTransactionExecutor,
+  input: PledgeDonationInput,
+): Promise<PledgeDonationResult> {
+  assertTransactionExecutor(tx);
+
+  if (typeof input.amount !== "number" || !Number.isSafeInteger(input.amount)) {
+    throw new TypeError("Paise must be a safe integer");
+  }
+  if (input.amount <= 0) {
+    throw new RangeError("Donation amount must be positive paise");
+  }
+  if (!/^[0-9]{12}$/.test(input.utr)) {
+    throw new TypeError("A UPI reference is exactly 12 digits");
+  }
+
+  // Lock before any write so concurrent pledges for one fund serialise here.
+  await acquireFundLockInTx(tx, input.fundId);
+
+  const donationId = input.donationId ?? uuidv7();
+  const inserted = await tx<{ id: string }[]>`
+    INSERT INTO donation_pledges (
+      id, fund_id, amount_paise, utr, donor_display_name, donor_contact
+    ) VALUES (
+      ${donationId},
+      ${input.fundId},
+      ${input.amount.toString()},
+      ${input.utr},
+      ${input.donorDisplayName ?? null},
+      ${input.donorContact ?? null}
+    )
+    ON CONFLICT ON CONSTRAINT donation_pledges_utr_key DO NOTHING
+    RETURNING id
+  `;
+  if (inserted.length === 0) return { kind: "duplicate_utr" };
+
+  const accounts = await ensureFundAccounts(tx, input.fundId);
+  const amountBig = BigInt(input.amount);
+  await transferInTx(tx, {
+    accountId: accounts.pledgedReceivableId,
+    idempotencyKey: `donation-pledge:${donationId}`,
+    entries: [
+      { accountId: accounts.pledgedReceivableId, amount: amountBig },
+      { accountId: accounts.donationsPendingId, amount: -amountBig },
+    ],
+    metadata: { fundId: input.fundId, donationId, amount: input.amount, source: "self_reported" },
+  });
+
+  const event = await appendFundEventInTx(
+    tx,
+    input.fundId,
+    toEventInput({
+      fund_id: input.fundId,
+      type: "donation.pledged",
+      actor: (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId,
+      occurred_at: input.occurredAt ?? nowUtcIso(),
+      payload: { donation_id: donationId, amount_paise: input.amount },
+    }),
+  );
+
+  return { kind: "pledged", donationId, event };
+}
+
 export interface ReserveForExpenseInput {
   fundId: string;
   amount: Paise;
@@ -948,6 +1033,8 @@ export async function getBalances(
       UNION ALL SELECT ${accounts.donationsId}::uuid
       UNION ALL SELECT ${accounts.expensesId}::uuid
       UNION ALL SELECT ${accounts.pendingSpendId}::uuid
+      UNION ALL SELECT ${accounts.pledgedReceivableId}::uuid
+      UNION ALL SELECT ${accounts.donationsPendingId}::uuid
     ) a
     LEFT JOIN (
       SELECT account_id, SUM(amount) AS entries_sum
@@ -970,6 +1057,7 @@ export async function getBalances(
   const pendingSpend = byId.get(accounts.bankId)?.holds ?? 0n;
   const donations = -(byId.get(accounts.donationsId)?.entries ?? 0n);
   const expenses = byId.get(accounts.expensesId)?.entries ?? 0n;
+  const pledged = byId.get(accounts.pledgedReceivableId)?.entries ?? 0n;
   const availablePaise = bank - pendingSpend;
 
   return {
@@ -978,6 +1066,7 @@ export async function getBalances(
     pendingSpendPaise: pendingSpend,
     availablePaise,
     donationsPaise: donations >= 0n ? donations : 0n,
+    pledgedPaise: pledged >= 0n ? pledged : 0n,
     expensesPaise: expenses >= 0n ? expenses : 0n,
   };
 }

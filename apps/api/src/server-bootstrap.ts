@@ -8,6 +8,7 @@ import { createClientIpResolver, type TrustedProxyHeader } from "./client-ip.js"
 import { rateLimits } from "./config.js";
 import { createDatabaseReady } from "./database-ready.js";
 import { DefaultInFlightTracker } from "./dependencies.js";
+import { PostgresDonationPledgeStore } from "./donation-store.js";
 import { createServerLifecycle, type ServerLifecycle, shutdownOnSignal } from "./lifecycle.js";
 import { PostgresPinStore } from "./pin/index.js";
 import { useMemoryStore } from "./server-config.js";
@@ -29,6 +30,9 @@ export interface ServerConfig {
   readonly TRUSTED_PROXY_HEADER: TrustedProxyHeader;
   readonly CLEANUP_INTERVAL_MS: number;
   readonly WAITLIST_MIN_RESPONSE_MS: number;
+  readonly PLEDGE_RATE_LIMIT_CAPACITY?: number;
+  readonly PLEDGE_RATE_LIMIT_REFILL_MS?: number;
+  readonly PLEDGE_BODY_LIMIT_BYTES?: number;
   readonly WAITLIST_RATE_LIMIT_CAPACITY: number;
   readonly WAITLIST_RATE_LIMIT_REFILL_MS: number;
   readonly WAITLIST_BODY_LIMIT_BYTES: number;
@@ -131,6 +135,12 @@ export async function startServer(
 
   const app = createApp({
     isShuttingDown: () => lifecycleInstance?.isShuttingDown ?? false,
+    ...(sql ? { donationPledgeStore: new PostgresDonationPledgeStore(sql) } : {}),
+    pledgeLimit: {
+      capacity: resolvedConfig.PLEDGE_RATE_LIMIT_CAPACITY ?? 10,
+      refillMs: resolvedConfig.PLEDGE_RATE_LIMIT_REFILL_MS ?? 3_600_000,
+    },
+    pledgeBodyLimit: resolvedConfig.PLEDGE_BODY_LIMIT_BYTES ?? 4096,
     ...(postgresStores ?? {
       rateLimitStore: new MemoryRateLimitStore({
         maxEntries: resolvedConfig.RATE_LIMIT_MAX_KEYS,
@@ -154,7 +164,12 @@ export async function startServer(
       trustedHops: resolvedConfig.TRUSTED_PROXY_HOPS,
       trustedHeader: resolvedConfig.TRUSTED_PROXY_HEADER,
     }),
-    rateLimits: rateLimits(resolvedConfig),
+    rateLimits: rateLimits({
+      ...resolvedConfig,
+      PLEDGE_RATE_LIMIT_CAPACITY: resolvedConfig.PLEDGE_RATE_LIMIT_CAPACITY ?? 10,
+      PLEDGE_RATE_LIMIT_REFILL_MS: resolvedConfig.PLEDGE_RATE_LIMIT_REFILL_MS ?? 3_600_000,
+      PLEDGE_BODY_LIMIT_BYTES: resolvedConfig.PLEDGE_BODY_LIMIT_BYTES ?? 4096,
+    }),
   });
 
   const server = serve({

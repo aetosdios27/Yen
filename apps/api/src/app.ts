@@ -25,6 +25,7 @@ import {
   changePolicyRoute,
   confirmPinResetRoute,
   createFundRoute,
+  donationDetailsRoute,
   type fundSchema,
   getFundRoute,
   getPinStatusRoute,
@@ -35,6 +36,7 @@ import {
   meRoute,
   openapiRoute,
   openapiSchema,
+  pledgeDonationRoute,
   principalSchema,
   readyRoute,
   rejectExpenseRoute,
@@ -55,7 +57,9 @@ import { logMethod } from "./logging.js";
 import {
   concurrencyLimit,
   idempotency,
+  isPledgeRoute,
   isPublicAuthRoute,
+  isPublicDonationRoute,
   isWaitlistRoute,
   rateLimit,
   requestContext,
@@ -159,12 +163,23 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       throw new ApiError("payload_too_large");
     },
   });
-  app.use("/v1/*", (c, next) =>
-    isWaitlistRoute(c.req.path) ? waitlistBodyLimit(c, next) : defaultBodyLimit(c, next),
-  );
+  const pledgeBodyLimit = bodyLimit({
+    maxSize: deps.pledgeBodyLimit,
+    onError: () => {
+      throw new ApiError("payload_too_large");
+    },
+  });
+  app.use("/v1/*", (c, next) => {
+    if (isWaitlistRoute(c.req.path)) return waitlistBodyLimit(c, next);
+    if (isPledgeRoute(c.req.path)) return pledgeBodyLimit(c, next);
+    return defaultBodyLimit(c, next);
+  });
   app.use("/v1/*", idempotency(deps));
   app.use("/v1/me", requireAuth);
-  app.use("/v1/funds/*", requireAuth);
+  // Anyone may pay into a fund; donors sign in later (YEN-22).
+  app.use("/v1/funds/*", (c, next) =>
+    isPublicDonationRoute(c.req.path) ? next() : requireAuth(c, next),
+  );
   app.use("/v1/auth/*", (c, next) =>
     isPublicAuthRoute(c.req.path) ? next() : requireAuth(c, next),
   );
@@ -484,6 +499,52 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const resource = { kind: "fund", fund: entry } as const;
     const principal = authorizedFund(c, "fund:read", resource);
     return c.json(deps.policy.redact(principal, resource), 200);
+  });
+  const donationResource = (id: string) => {
+    const fund = funds.get(id);
+    if (!fund) throw new ApiError("not_found");
+    return { kind: "fund", fund } as const;
+  };
+  app.openapi(donationDetailsRoute, (c) => {
+    const id = parseFundId(c.req.valid("param").fundId);
+    if (!id.ok) throw new ApiError("not_found");
+    const resource = donationResource(id.value);
+    if (!deps.policy.canDonate(resource)) throw new ApiError("not_found");
+    return c.json(deps.policy.redactDonationDetails(resource), 200);
+  });
+  app.openapi(pledgeDonationRoute, async (c) => {
+    const id = parseFundId(c.req.valid("param").fundId);
+    if (!id.ok) throw new ApiError("not_found");
+    const resource = donationResource(id.value);
+    if (!deps.policy.canDonate(resource)) throw new ApiError("not_found");
+    const input = c.req.valid("json");
+    const donorContact =
+      input.donorContact === undefined ? undefined : normalizeWaitlistContact(input.donorContact);
+    if (donorContact === null) {
+      throw new ApiError("validation_failed", [
+        {
+          path: ["json", "donorContact"],
+          message: "Expected an email address or an Indian mobile number",
+        },
+      ]);
+    }
+    const outcome = await deps.donationPledgeStore.pledge({
+      fundId: id.value,
+      amountPaise: Number(input.amountPaise),
+      utr: input.utr,
+      ...(input.donorName === undefined ? {} : { donorName: input.donorName }),
+      ...(donorContact === undefined ? {} : { donorContact }),
+    });
+    if (outcome.kind === "duplicate_utr") throw new ApiError("donation_utr_claimed");
+    return c.json(
+      {
+        donationId: outcome.donationId,
+        fundId: id.value,
+        status: "pledged" as const,
+        amountPaise: input.amountPaise,
+      },
+      201,
+    );
   });
 
   const getFundOrNotFound = (fundIdString: string) => {

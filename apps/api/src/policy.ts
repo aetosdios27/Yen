@@ -1,5 +1,12 @@
 import type { z } from "@hono/zod-openapi";
-import { type Redacted, unsafeMarkRedactedForDevPolicy } from "@yen/policy";
+import {
+  DEFAULT_FUND_POLICY,
+  can as policyCan,
+  type Redacted,
+  unsafeMarkRedactedForDevPolicy,
+} from "@yen/policy";
+import { parseFundId } from "@yen/shared";
+import type { donationDetailsSchema } from "./contract.js";
 import {
   type addMemberResponse,
   addMemberResponse as addMemberResponseSchema,
@@ -34,6 +41,7 @@ export type FundAction =
   | "fund:member:unlock";
 export type FundResource = { readonly kind: "fund"; readonly fund?: FundRecord };
 export type ExistingFundResource = { readonly kind: "fund"; readonly fund: FundRecord };
+export type DonationDetailsView = z.infer<typeof donationDetailsSchema>;
 
 export type ExpenseApprovalReceipt = z.infer<typeof expenseApprovalResponse>;
 export type ExpenseRejectionReceipt = z.infer<typeof expenseRejectionResponse>;
@@ -129,6 +137,10 @@ export function redactActionReceipt<A extends ActionReceiptAction>(
 export interface Policy {
   can(principal: Principal, action: FundAction, resource: FundResource): boolean;
   redact(viewer: Principal, resource: ExistingFundResource): Redacted<FundView>;
+  /** Donors are anonymous, so paying in is decided from the fund alone. */
+  canDonate(resource: ExistingFundResource): boolean;
+  /** The single public view of a fund's payment details. */
+  redactDonationDetails(resource: ExistingFundResource): DonationDetailsView;
   redactReceipt<A extends ActionReceiptAction>(
     viewer: Principal,
     action: A,
@@ -141,6 +153,10 @@ export const denyAllPolicy: Policy = {
   can: () => false,
   redact: () => {
     throw new Error("Fund redaction is unavailable");
+  },
+  canDonate: () => false,
+  redactDonationDetails: () => {
+    throw new Error("Donation details redaction is unavailable");
   },
   redactReceipt: () => {
     throw new Error("Receipt redaction is unavailable");
@@ -163,6 +179,20 @@ export const devPolicy: Policy = {
     return resource.fund.owner === principal.id;
   },
   redact: (_viewer, resource) => unsafeMarkRedactedForDevPolicy(resource.fund.fund),
+  canDonate: (resource) => {
+    const fundId = parseFundId(resource.fund.fund.id);
+    if (!fundId.ok) return false;
+    return policyCan({ role: "public" }, "donation:pledge", {
+      kind: "donation",
+      donation: { fundId: fundId.value, policy: { ...DEFAULT_FUND_POLICY, fundId: fundId.value } },
+    });
+  },
+  redactDonationDetails: (resource) => ({
+    fundId: resource.fund.fund.id,
+    title: resource.fund.fund.name,
+    upiVpa: resource.fund.fund.upiVpa,
+    upiPayeeName: resource.fund.fund.upiPayeeName,
+  }),
   redactReceipt: (viewer, action, receipt, resource) => {
     if (!devPolicy.can(viewer, action, resource ?? { kind: "fund" })) {
       throw new Error("Forbidden: principal cannot perform action");

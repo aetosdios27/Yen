@@ -570,6 +570,8 @@ describe("Approval PIN (YEN-25)", () => {
       const fundRes = await post("/v1/funds", {
         name: "Community Fund",
         targetPaise: "500000",
+        upiVpa: "community@yenbank",
+        upiPayeeName: "Community Fund",
       });
       expect(fundRes.status).toBe(201);
       const fund = await jsonOf(fundRes);

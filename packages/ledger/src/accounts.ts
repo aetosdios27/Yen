@@ -1,7 +1,13 @@
 import { createHash } from "node:crypto";
 import type { KontoTransactionExecutor } from "@konto-ledger/types";
 
-export type FundAccountKind = "bank" | "donations" | "expenses" | "pending_spend";
+export type FundAccountKind =
+  | "bank"
+  | "donations"
+  | "expenses"
+  | "pending_spend"
+  | "pledged_receivable"
+  | "donations_pending";
 
 export interface FundAccounts {
   fundId: string;
@@ -9,6 +15,8 @@ export interface FundAccounts {
   donationsId: string;
   expensesId: string;
   pendingSpendId: string;
+  pledgedReceivableId: string;
+  donationsPendingId: string;
 }
 
 const YEN_NAMESPACE = "f71f5e2c-f985-43d8-a969-c2b6739f8dfd";
@@ -46,6 +54,8 @@ export function getFundAccountIds(fundId: string): FundAccounts {
     donationsId: fundAccountId(fundId, "donations"),
     expensesId: fundAccountId(fundId, "expenses"),
     pendingSpendId: fundAccountId(fundId, "pending_spend"),
+    pledgedReceivableId: fundAccountId(fundId, "pledged_receivable"),
+    donationsPendingId: fundAccountId(fundId, "donations_pending"),
   };
 }
 
@@ -61,7 +71,9 @@ export async function ensureFundAccounts(
       (${accounts.bankId}, ${fundAccountName(fundId, "bank")}, 'ASSET', 'INR'),
       (${accounts.donationsId}, ${fundAccountName(fundId, "donations")}, 'REVENUE', 'INR'),
       (${accounts.expensesId}, ${fundAccountName(fundId, "expenses")}, 'EXPENSE', 'INR'),
-      (${accounts.pendingSpendId}, ${fundAccountName(fundId, "pending_spend")}, 'LIABILITY', 'INR')
+      (${accounts.pendingSpendId}, ${fundAccountName(fundId, "pending_spend")}, 'LIABILITY', 'INR'),
+      (${accounts.pledgedReceivableId}, ${fundAccountName(fundId, "pledged_receivable")}, 'ASSET', 'INR'),
+      (${accounts.donationsPendingId}, ${fundAccountName(fundId, "donations_pending")}, 'REVENUE', 'INR')
     ON CONFLICT (id) DO NOTHING
   `;
 

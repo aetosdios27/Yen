@@ -29,6 +29,7 @@
                   "not_found",
                   "conflict",
                   "idempotency_conflict",
+                  "donation_utr_claimed",
                   "rate_limited",
                   "overloaded",
                   "payload_too_large",
@@ -214,10 +215,12 @@
             "pattern": "^(0|[1-9][0-9]*)$",
             "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
           },
+          "upiVpa": { "type": "string", "pattern": "^[a-zA-Z0-9._-]{2,256}@[a-zA-Z]{2,64}$" },
+          "upiPayeeName": { "type": "string", "minLength": 1, "maxLength": 80 },
           "id": { "type": "string", "format": "uuid" },
           "createdAt": { "type": "string", "format": "date-time" }
         },
-        "required": ["name", "targetPaise", "id", "createdAt"],
+        "required": ["name", "targetPaise", "upiVpa", "upiPayeeName", "id", "createdAt"],
         "additionalProperties": false
       },
       "CreateFund": {
@@ -228,9 +231,62 @@
             "type": "string",
             "pattern": "^(0|[1-9][0-9]*)$",
             "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
+          },
+          "upiVpa": { "type": "string", "pattern": "^[a-zA-Z0-9._-]{2,256}@[a-zA-Z]{2,64}$" },
+          "upiPayeeName": { "type": "string", "minLength": 1, "maxLength": 80 }
+        },
+        "required": ["name", "targetPaise", "upiVpa", "upiPayeeName"],
+        "additionalProperties": false
+      },
+      "DonationDetails": {
+        "type": "object",
+        "properties": {
+          "fundId": { "type": "string", "format": "uuid" },
+          "title": { "type": "string" },
+          "upiVpa": { "type": "string" },
+          "upiPayeeName": { "type": "string" }
+        },
+        "required": ["fundId", "title", "upiVpa", "upiPayeeName"],
+        "additionalProperties": false
+      },
+      "DonationPledgeResult": {
+        "type": "object",
+        "properties": {
+          "donationId": { "type": "string", "format": "uuid" },
+          "fundId": { "type": "string", "format": "uuid" },
+          "status": { "type": "string", "enum": ["pledged"] },
+          "amountPaise": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$",
+            "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
           }
         },
-        "required": ["name", "targetPaise"],
+        "required": ["donationId", "fundId", "status", "amountPaise"],
+        "additionalProperties": false
+      },
+      "DonationPledge": {
+        "type": "object",
+        "properties": {
+          "amountPaise": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$",
+            "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
+          },
+          "utr": {
+            "type": "string",
+            "pattern": "^[0-9]{12}$",
+            "description": "The 12-digit reference shown in the donor's UPI app"
+          },
+          "donorName": { "type": "string", "minLength": 1, "maxLength": 60 },
+          "donorContact": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 254,
+            "pattern": "(?:^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$)|(?:^\\+[1-9][0-9]{7,14}$)|(?:^(?=.{10,19}$)[6-9](?:[ -]*[0-9]){9}[ -]*$)",
+            "description": "Email address, international phone in + digits form, or Indian 10-digit mobile number with optional spaces or hyphens."
+          }
+        },
+        "required": ["amountPaise", "utr"],
         "additionalProperties": false
       },
       "PinSetupResponse": {
@@ -1720,6 +1776,260 @@
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
                 "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/donation-details": {
+      "get": {
+        "tags": ["donations"],
+        "operationId": "getDonationDetails",
+        "description": "Public where-to-pay details for a fund: its UPI ID and the name to show the donor. Anyone may read them; an unknown or closed fund returns 404.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Canonical lowercase FundId UUID; invalid IDs return 404"
+            },
+            "required": true,
+            "description": "Canonical lowercase FundId UUID; invalid IDs return 404",
+            "name": "fundId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Where to send a donation",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/DonationDetails" } }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/donations/pledge": {
+      "post": {
+        "tags": ["donations"],
+        "operationId": "pledgeDonation",
+        "description": "Records a donor's self-reported UPI payment. The money is not spendable until a bank statement confirms it, and one 12-digit reference can only be claimed once, so a repeat returns 409. Requires Idempotency-Key; identical requests replay.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Canonical lowercase FundId UUID; invalid IDs return 404"
+            },
+            "required": true,
+            "description": "Canonical lowercase FundId UUID; invalid IDs return 404",
+            "name": "fundId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._:-]+$"
+            },
+            "required": true,
+            "name": "Idempotency-Key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/DonationPledge" } }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Pledge recorded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DonationPledgeResult" }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; details contain field paths",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "409": {
+            "description": "Reference already claimed, or idempotency conflict",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "413": {
+            "description": "Request body too large",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
                 "required": true
               }
             },

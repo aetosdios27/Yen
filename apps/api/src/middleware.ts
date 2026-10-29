@@ -12,6 +12,15 @@ export function isWaitlistRoute(path: string): boolean {
   return path.replace(/\/$/, "") === "/v1/waitlist";
 }
 
+export function isPledgeRoute(path: string): boolean {
+  return /^\/v1\/funds\/[0-9a-f-]{36}\/donations\/pledge\/?$/.test(path);
+}
+
+/** Donors are not signed in yet, so these fund routes decide from the fund alone. */
+export function isPublicDonationRoute(path: string): boolean {
+  return /^\/v1\/funds\/[0-9a-f-]{36}\/(?:donations\/pledge|donation-details)\/?$/.test(path);
+}
+
 export function isAuthRoute(path: string): boolean {
   return path.replace(/\/$/, "").startsWith("/v1/auth");
 }
@@ -158,21 +167,26 @@ export function requestTimeout(deps: AppDependencies): MiddlewareHandler<ApiEnv>
 export function rateLimit(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
   return async (c, next) => {
     const principal = c.get("principal");
-    const isWaitlist = isWaitlistRoute(c.req.path);
     const now = deps.clock();
-    const limits = isWaitlist
+    // Unauthenticated money routes get their own fixed window per IP.
+    const fixedWindow = isPledgeRoute(c.req.path)
+      ? ({ scope: "pledge", limit: deps.pledgeLimit } as const)
+      : isWaitlistRoute(c.req.path)
+        ? ({ scope: "waitlist", limit: deps.waitlistLimit } as const)
+        : null;
+    const limits = fixedWindow
       ? [
           {
             key: JSON.stringify([
-              "waitlist",
+              fixedWindow.scope,
               deps.clientIp(c),
-              Math.floor(now / deps.waitlistLimit.refillMs),
+              Math.floor(now / fixedWindow.limit.refillMs),
             ]),
             limit: {
-              capacity: deps.waitlistLimit.capacity,
-              refillMs: deps.waitlistLimit.refillMs,
+              capacity: fixedWindow.limit.capacity,
+              refillMs: fixedWindow.limit.refillMs,
               expiresAt:
-                (Math.floor(now / deps.waitlistLimit.refillMs) + 1) * deps.waitlistLimit.refillMs,
+                (Math.floor(now / fixedWindow.limit.refillMs) + 1) * fixedWindow.limit.refillMs,
             },
           },
         ]
@@ -193,11 +207,11 @@ export function rateLimit(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
         c.header(
           "retry-after",
           String(
-            isWaitlist && !result.overloaded
+            fixedWindow && !result.overloaded
               ? Math.max(
                   1,
                   Math.ceil(
-                    (deps.waitlistLimit.refillMs - (now % deps.waitlistLimit.refillMs)) / 1000,
+                    (fixedWindow.limit.refillMs - (now % fixedWindow.limit.refillMs)) / 1000,
                   ),
                 )
               : result.retryAfterSeconds,
@@ -218,8 +232,10 @@ export function idempotency(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
       isAuthRoute(c.req.path)
     )
       return next();
+    // Anonymous donors still get replay protection; their key is scoped to the caller's IP.
     const principal = c.get("principal");
-    if (!principal) throw new ApiError("unauthenticated");
+    const owner = principal?.id ?? (isPledgeRoute(c.req.path) ? `ip:${deps.clientIp(c)}` : null);
+    if (owner === null) throw new ApiError("unauthenticated");
     const key = idempotencyKey.safeParse(c.req.header("Idempotency-Key"));
     if (!key.success) {
       throw new ApiError("validation_failed", [
@@ -239,7 +255,7 @@ export function idempotency(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
     input.set(body, metadata.length);
     const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", input));
     const request = {
-      key: JSON.stringify([principal.id, key.data]),
+      key: JSON.stringify([owner, key.data]),
       requestHash: Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join(""),
       createdAt: deps.clock(),
     };
