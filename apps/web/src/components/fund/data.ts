@@ -40,19 +40,19 @@ export async function getPublicFund(fundId: string): Promise<PublicFund | null> 
     const breakdown = breakdownRes.data;
     const timeline = timelineRes.data;
 
-    const raisedPaise = summary.raisedPaise ? paise(BigInt(summary.raisedPaise)) : paise(0n);
-    const spentPaise = summary.spentPaise ? paise(BigInt(summary.spentPaise)) : paise(0n);
-    const currentBalance = paise(raisedPaise > spentPaise ? raisedPaise - spentPaise : 0n);
+    const raisedPaise = summary.raisedPaise ? paise(Number(summary.raisedPaise)) : paise(0);
+    const spentPaise = summary.spentPaise ? paise(Number(summary.spentPaise)) : paise(0);
+    const currentBalance = paise(Math.max(0, raisedPaise - spentPaise));
 
     const totalBreakdown = (breakdown?.categories ?? []).reduce(
-      (sum, cat) => sum + BigInt(cat.spentPaise),
-      0n,
+      (sum, cat) => sum + Number(cat.spentPaise),
+      0,
     );
 
     const spendingCategories: SpendingCategory[] = (breakdown?.categories ?? []).map((cat) => {
-      const catSpent = BigInt(cat.spentPaise);
+      const catSpent = Number(cat.spentPaise);
       const percentage =
-        totalBreakdown > 0n ? Math.round(Number((catSpent * 100n) / totalBreakdown)) : 0;
+        totalBreakdown > 0 ? Math.round((catSpent * 100) / totalBreakdown) : 0;
       const rawCategory = cat.category.toLowerCase();
       const id: SpendingCategoryId = VALID_CATEGORIES.includes(rawCategory as SpendingCategoryId)
         ? (rawCategory as SpendingCategoryId)
@@ -70,7 +70,7 @@ export async function getPublicFund(fundId: string): Promise<PublicFund | null> 
       type: "expense",
       title: item.message,
       description: item.actorDisplayName,
-      amount: item.amountPaise ? paise(BigInt(item.amountPaise)) : paise(0n),
+      amount: item.amountPaise ? paise(Number(item.amountPaise)) : paise(0),
       dateTime: item.occurredAt,
       status: item.verified !== "unverified" ? "verified" : "pending",
       verification: {

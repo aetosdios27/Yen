@@ -34,21 +34,20 @@ describe("TreasurerPage", () => {
     expect(screen.getByText("Ramesh Hardware")).toBeTruthy();
     expect(screen.getByText("Shakti Electricians")).toBeTruthy();
     expect(screen.getAllByText("New Expense").length).toBeGreaterThan(0);
-    expect(
-      screen.getByText(
-        "Demo data: balances, requests, and approval activity are simulated. No payment or approval is verified or sent.",
-      ),
-    ).toBeTruthy();
+    expect(screen.queryByText(/Demo data:/)).toBeNull();
   });
 
-  it("labels simulated dashboard data in Hindi", async () => {
+  it("renders live dashboard data without demo banner in Hindi", async () => {
     render(
       <LocaleProvider initialLocale="hi">
         <TreasurerPage params={Promise.resolve({ fundId: "demo-fund" })} />
       </LocaleProvider>,
     );
 
-    expect(await screen.findByText(/डेमो डेटा/)).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByText("खजांची डैशबोर्ड")).toBeTruthy();
+    });
+    expect(screen.queryByText(/डेमो डेटा/)).toBeNull();
   });
 
   it("renders graceful empty state when there are no pending expenses", async () => {

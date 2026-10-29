@@ -103,13 +103,6 @@ export default function TreasurerPage({ params }: TreasurerPageProps) {
         <h1 className="text-display font-bold text-ink">{t("treasurer.title")}</h1>
       </div>
 
-      <p
-        role="note"
-        className="rounded-control border border-pending-border bg-pending-bg p-3 text-small font-medium text-pending-ink"
-      >
-        {t("dashboard.demoNotice")}
-      </p>
-
       {/* Loading state */}
       {loading ? (
         <div
