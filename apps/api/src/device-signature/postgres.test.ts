@@ -15,7 +15,6 @@ import {
   PinService,
   PostgresPinStore,
 } from "../pin/index.js";
-import type { FundRecord } from "../policy.js";
 import { devPolicy } from "../policy.js";
 import { DeviceSignatureService } from "./service.js";
 import { PostgresDeviceSignatureStore } from "./store.js";
@@ -251,11 +250,7 @@ databaseSuite("Postgres WebAuthn device signatures", (sql) => {
       visibility: "private" as const,
       createdAt: new Date(now).toISOString(),
     };
-    fundStore.set(fundId, {
-      owner: h.userId,
-      fund,
-      deviceSignatureThresholdPaise: null,
-    } as FundRecord);
+    fundStore.set(fundId, { owner: h.userId, fund });
     const app = createApp({
       principal: { id: h.userId, role: "approver" },
       policy: devPolicy,
@@ -315,7 +310,7 @@ databaseSuite("Postgres WebAuthn device signatures", (sql) => {
       }),
     );
     expect(policyResponse.status).toBe(200);
-    expect(fundStore.get(fundId)?.deviceSignatureThresholdPaise).toBe(100);
+    expect((await fundStore.getPolicy(fundId))?.requireDeviceSignatureAbove).toBe(100);
     const expenseId = await submittedExpense();
 
     const approvalUrl = `${ORIGIN}/v1/funds/${fundId}/expenses/${expenseId}/approve`;
