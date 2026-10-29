@@ -1,4 +1,5 @@
 import type { Server } from "node:http";
+import { resolve } from "node:path";
 import { serve } from "@hono/node-server";
 import { createSql, ensureFundPseudonym, type Sql } from "@yen/db";
 import { createApp } from "./app.js";
@@ -10,7 +11,9 @@ import { createDatabaseReady } from "./database-ready.js";
 import { DefaultInFlightTracker } from "./dependencies.js";
 import { PostgresDisplayNameStore } from "./display-name-store.js";
 import { PostgresDonationPledgeStore } from "./donation-store.js";
+import { PostgresEvidenceStore } from "./evidence-store-postgres.js";
 import { PostgresExpenseStore } from "./expense-store.js";
+import { FileSystemStorageAdapter } from "./filesystem-storage.js";
 import { createServerLifecycle, type ServerLifecycle, shutdownOnSignal } from "./lifecycle.js";
 import { PostgresPinStore } from "./pin/index.js";
 import { PostgresReconciliationStore } from "./reconciliation/postgres-store.js";
@@ -31,6 +34,7 @@ export interface ServerConfig {
   readonly CLAMAV_TIMEOUT_MS?: number | undefined;
   readonly CLAMAV_MAX_SIZE_BYTES?: number | undefined;
   readonly DATABASE_URL?: string | undefined;
+  readonly EVIDENCE_STORAGE_DIR?: string | undefined;
   readonly OTP_HASH_KEY?: string | undefined;
   readonly YEN_ALLOW_MEMORY_STORES?: "true" | "false" | undefined;
   readonly READINESS_CACHE_MS: number;
@@ -82,6 +86,19 @@ export async function startServer(
         idleTimeout: resolvedConfig.DATABASE_POOL_IDLE_TIMEOUT_SECONDS,
         connectTimeout: resolvedConfig.DATABASE_POOL_ACQUIRE_TIMEOUT_SECONDS,
       })
+    : undefined;
+
+  const evidenceStorageDirectory =
+    resolvedConfig.EVIDENCE_STORAGE_DIR ??
+    (resolvedConfig.NODE_ENV === "development" ? resolve(".data/evidence") : undefined);
+  if (resolvedConfig.NODE_ENV !== "test" && !sql) {
+    throw new Error("A PostgreSQL database is required for durable evidence storage");
+  }
+  if (resolvedConfig.NODE_ENV !== "test" && !evidenceStorageDirectory) {
+    throw new Error("EVIDENCE_STORAGE_DIR is required for durable evidence storage");
+  }
+  const evidenceStorage = evidenceStorageDirectory
+    ? await FileSystemStorageAdapter.open(evidenceStorageDirectory)
     : undefined;
 
   if (memory) {
@@ -157,6 +174,12 @@ export async function startServer(
     ...(sql ? { reconciliationStore: new PostgresReconciliationStore(sql) } : {}),
     ...(sql ? { displayNameStore: new PostgresDisplayNameStore(sql) } : {}),
     ...(sql ? { expenseStore: new PostgresExpenseStore(sql) } : {}),
+    ...(sql && evidenceStorage
+      ? {
+          evidenceStore: new PostgresEvidenceStore(sql),
+          storageAdapter: evidenceStorage,
+        }
+      : {}),
     ...(sql
       ? {
           actorForUser: (userId: string, fundId: string) =>
