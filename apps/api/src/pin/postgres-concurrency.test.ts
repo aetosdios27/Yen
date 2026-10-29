@@ -89,12 +89,20 @@ databaseSuite("Postgres PIN lockout concurrency", (sql, url) => {
     );
     // A correct PIN that wins the row lock legitimately resets the counter, so how many
     // wrong guesses count after the last reset depends on scheduling. Assert only what
-    // must hold for every ordering: the budget is never exceeded, and the lock state
-    // always agrees with the counter.
+    // must hold for every ordering, including the rolling-window lockout taking
+    // precedence over the temporary consecutive-attempt lock.
     const record = await stores[0]?.get(userId);
     const failed = record?.failedAttempts ?? Number.NaN;
     expect(failed).toBeGreaterThanOrEqual(0);
     expect(failed).toBeLessThanOrEqual(5);
+    expect(record?.totalFailed24h).toBeLessThanOrEqual(10);
+    if (record?.status === "locked_out") {
+      expect(record.totalFailed24h).toBe(10);
+      await expect(attempt(at(services, 0), userId, pin)).rejects.toMatchObject({
+        code: "forbidden",
+      });
+      return;
+    }
     expect(record?.lockedUntil !== null).toBe(failed === 5);
     if (failed === 5) {
       await expect(attempt(at(services, 0), userId, pin)).rejects.toMatchObject({
