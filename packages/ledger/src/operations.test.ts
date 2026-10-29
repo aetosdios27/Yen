@@ -1,6 +1,7 @@
 import { KontoInsufficientFundsError } from "@konto-ledger/core";
 import { chainHead, checkChainStructure, verifyChain } from "@yen/eventlog";
 import { paise, parseFundId } from "@yen/shared";
+import fc from "fast-check";
 import { expect, it } from "vitest";
 import { getFundEvents } from "./eventlog.js";
 import {
@@ -19,6 +20,115 @@ import { replayFundEvents } from "./replay.js";
 import { createTestFund, ledgerDatabaseSuite } from "./test/database.js";
 
 ledgerDatabaseSuite("Ledger operations with Konto and event log integration", (sql) => {
+  it("keeps randomized donation, hold, release, commit, and refund sequences balanced and replayable", async () => {
+    const steps = fc.array(
+      fc.oneof(
+        fc.integer({ min: 1, max: 10_000 }).map((amount) => ({ kind: "donate" as const, amount })),
+        fc.integer({ min: 1, max: 10_000 }).map((amount) => ({ kind: "hold" as const, amount })),
+        fc.constant({ kind: "release" as const }),
+        fc.constant({ kind: "commit" as const }),
+        fc.constant({ kind: "refund" as const }),
+      ),
+      { minLength: 1, maxLength: 30 },
+    );
+
+    await fc.assert(
+      fc.asyncProperty(steps, async (sequence) => {
+        const fundId = await createTestFund(sql);
+        const holds: { holdId: string; expenseId: string; amount: number }[] = [];
+        const donations: { donationId: string; amount: number }[] = [];
+        let availableModel = 0;
+        let index = 0;
+        for (const step of sequence) {
+          index += 1;
+          if (step.kind === "donate") {
+            const donationId = `0194ebc4-94e8-7000-8000-${String(index).padStart(12, "0")}`;
+            await sql.begin(async (tx) => {
+              await recordDonation(tx, {
+                fundId,
+                amount: paise(step.amount),
+                donationId,
+                bankTransactionId: `0194ebc4-94e8-7000-8000-${String(index + 100).padStart(12, "0")}`,
+              });
+            });
+            donations.push({ donationId, amount: step.amount });
+            availableModel += step.amount;
+          } else if (step.kind === "hold") {
+            if (step.amount > availableModel) continue;
+            await sql.begin(async (tx) => {
+              const result = await reserveForExpense(tx, { fundId, amount: paise(step.amount) });
+              holds.push({
+                holdId: result.holdId,
+                expenseId: result.expenseId,
+                amount: step.amount,
+              });
+            });
+            availableModel -= step.amount;
+          } else if (step.kind === "release" || step.kind === "commit") {
+            const hold = holds.shift();
+            if (!hold) continue;
+            await sql.begin(async (tx) => {
+              if (step.kind === "release") {
+                await releaseExpense(tx, {
+                  fundId,
+                  holdId: hold.holdId,
+                  expenseId: hold.expenseId,
+                });
+              } else {
+                await settleExpense(tx, {
+                  fundId,
+                  holdId: hold.holdId,
+                  expenseId: hold.expenseId,
+                  bankTransactionId: `0194ebc4-94e8-7000-8000-${String(index + 200).padStart(12, "0")}`,
+                });
+              }
+            });
+            if (step.kind === "release") availableModel += hold.amount;
+          } else {
+            const donation = donations.shift();
+            if (!donation || donation.amount > availableModel) {
+              if (donation) donations.unshift(donation);
+              continue;
+            }
+            await sql.begin((tx) =>
+              recordRefund(tx, {
+                fundId,
+                donationId: donation.donationId,
+                amount: paise(donation.amount),
+              }),
+            );
+            availableModel -= donation.amount;
+          }
+
+          const balances = await getBalances(sql, fundId);
+          const events = await getFundEvents(sql, fundId);
+          const replayed = replayFundEvents(fundId, events);
+          expect(balances.bankPaise).toBeGreaterThanOrEqual(0n);
+          expect(balances.pendingSpendPaise).toBeLessThanOrEqual(balances.bankPaise);
+          expect(balances.availablePaise).toBe(BigInt(availableModel));
+          expect(replayed).toEqual(balances);
+          expect(balances.bankPaise + balances.expensesPaise).toBe(balances.donationsPaise);
+          expect(await checkChainStructure(events)).toMatchObject({
+            status: "structure-consistent",
+          });
+          const sum = await sql<{ total: string }[]>`
+            SELECT COALESCE(SUM(amount), 0)::text AS total
+            FROM konto_entries e JOIN konto_accounts a ON a.id = e.account_id
+            WHERE a.name LIKE ${`fund:${fundId}:%`}
+          `;
+          expect(BigInt(sum[0]?.total ?? "0")).toBe(0n);
+          const journals = await sql<{ id: string; total: string }[]>`
+            SELECT journal_id AS id, SUM(amount)::text AS total FROM konto_entries
+            WHERE account_id IN (SELECT id FROM konto_accounts WHERE name LIKE ${`fund:${fundId}:%`})
+            GROUP BY journal_id
+          `;
+          expect(journals.every((journal) => BigInt(journal.total) === 0n)).toBe(true);
+        }
+      }),
+      { numRuns: 8, seed: 49061 },
+    );
+  });
+
   it("uses the migrated fund event table and rejects a broken hash chain", async () => {
     const migrations = await sql<{ name: string }[]>`
       SELECT name FROM public.schema_migrations ORDER BY version
