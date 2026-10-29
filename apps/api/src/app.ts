@@ -134,10 +134,10 @@ import {
   requireAuth,
 } from "./middleware.js";
 import { verifyMimeSignature } from "./mime-signature.js";
+import { registerObjectionRoutes } from "./objection-routes.js";
 import { registerPayeeRuleRoutes } from "./payee-rules/routes.js";
 import { normalizedPayee } from "./payee-rules/schema.js";
 import { evaluateExpensePayeeRules, fingerprintPayee } from "./payee-rules/service.js";
-import { registerObjectionRoutes } from "./objection-routes.js";
 import { computeActionHash, PinService } from "./pin/index.js";
 import type {
   ExistingExpenseResource,

@@ -321,9 +321,9 @@ databaseSuite("migration runner", (sql, url) => {
     await sql`INSERT INTO expense_objections (id, expense_id, fund_id, actor_id, reason, idempotency_key, created_at)
       VALUES (${objectionId}, ${expenseId}, ${fundId}, ${actor}, 'Audit reason', 'key-1', now())`;
     await sql`DELETE FROM fund_pseudonyms WHERE user_id = ${userId}`;
-    expect(
-      await sql`SELECT actor_id FROM expense_objections WHERE id = ${objectionId}`,
-    ).toEqual([{ actor_id: actor }]);
+    expect(await sql`SELECT actor_id FROM expense_objections WHERE id = ${objectionId}`).toEqual([
+      { actor_id: actor },
+    ]);
   });
 
   it("keeps manual debit decisions immutable", async () => {
