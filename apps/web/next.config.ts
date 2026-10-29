@@ -13,5 +13,24 @@ export default async function nextConfig(phase: string): Promise<NextConfig> {
     execFileSync("git", ["rev-parse", "HEAD^{tree}"], {
       encoding: "utf8",
     }).trim();
-  return { generateBuildId: async () => buildId };
+  return {
+    generateBuildId: async () => buildId,
+    async headers() {
+      const httpsGuaranteed = process.env.VERCEL === "1";
+      return [
+        {
+          source: "/(.*)",
+          headers: [
+            { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+            { key: "X-Content-Type-Options", value: "nosniff" },
+            { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+            { key: "X-Frame-Options", value: "DENY" },
+            ...(httpsGuaranteed
+              ? [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }]
+              : []),
+          ],
+        },
+      ];
+    },
+  };
 }

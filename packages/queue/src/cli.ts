@@ -10,7 +10,7 @@ import {
   ViemRootChain,
 } from "./anchoring.js";
 import { DEFAULT_QUEUES } from "./config.js";
-import { parseWorkerEnv } from "./env.js";
+import { anchoringSignerMode, parseWorkerEnv } from "./env.js";
 import { WorkerRuntime } from "./worker.js";
 
 function fail(message: string): never {
@@ -43,9 +43,13 @@ let anchorResilience: ReturnType<typeof createAnchorRpcResilience> | undefined;
 if (anchorRpc && anchorAddress) {
   anchorChain = new ViemRootChain(anchorRpc, anchorAddress as `0x${string}`);
   anchorResilience = createAnchorRpcResilience();
-  const signer = process.env.ANCHOR_KMS_KEY_ID
-    ? new KmsRootSigner()
-    : LocalDevRootSigner.fromEnvironment();
+  let signerMode: "kms" | "local";
+  try {
+    signerMode = anchoringSignerMode(process.env);
+  } catch (error) {
+    fail(error instanceof Error ? error.message : "Invalid anchoring signer configuration");
+  }
+  const signer = signerMode === "kms" ? new KmsRootSigner() : LocalDevRootSigner.fromEnvironment();
   anchorPublisherAddress = (await signer.getAccount()).address;
   const anchoring = new AnchoringWorker(
     worker.getSql(),

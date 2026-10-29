@@ -44,3 +44,11 @@ export function parseWorkerEnv(env: NodeJS.ProcessEnv): WorkerEnv {
   }
   return result.data;
 }
+
+export function anchoringSignerMode(env: NodeJS.ProcessEnv): "kms" | "local" {
+  if (env.ANCHOR_KMS_KEY_ID) return "kms";
+  if (env.NODE_ENV !== "production" && env.ANCHOR_ALLOW_LOCAL_SIGNER === "true") return "local";
+  throw new Error(
+    "ANCHOR_KMS_KEY_ID is required; local signing requires ANCHOR_ALLOW_LOCAL_SIGNER=true outside production",
+  );
+}

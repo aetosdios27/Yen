@@ -30,6 +30,22 @@ const publicReadHeaders = {
   },
 };
 
+const evidenceDownloadHeaders = {
+  ...publicReadHeaders,
+  "content-disposition": {
+    schema: { type: "string" as const },
+    description: "Forces evidence response to download as an attachment",
+  },
+  "x-content-type-options": {
+    schema: { type: "string" as const, enum: ["nosniff"] },
+    description: "Disables MIME sniffing",
+  },
+  "content-security-policy": {
+    schema: { type: "string" as const },
+    description: "Sandboxes the evidence response",
+  },
+};
+
 const jsonResponse = <T extends z.ZodType>(schema: T, description: string) => ({
   description,
   headers: requestIdHeader,
@@ -107,7 +123,7 @@ export const publicExpenseProofsRoute = createRoute({
   responses: {
     200: {
       ...jsonResponse(publicExpenseProofsSchema, "Tier-filtered proof metadata and allowed files"),
-      headers: publicReadHeaders,
+      headers: evidenceDownloadHeaders,
     },
     ...publicExpenseErrors,
   },
