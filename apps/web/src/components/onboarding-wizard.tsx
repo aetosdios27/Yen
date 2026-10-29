@@ -35,7 +35,7 @@ function stepError(step: number, draft: OnboardingDraft): string | null {
     draft.approvers.filter((person) => person.name.trim() && isApproverContact(person.contact))
       .length < 2
   )
-    return "Nominate at least two valid approvers.";
+    return "Nominate at least two approvers with valid phone numbers for WhatsApp/SMS invites.";
   return null;
 }
 
@@ -101,18 +101,26 @@ export function OnboardingWizard() {
       for (const person of draft.approvers.filter(
         (candidate) => candidate.name.trim() && candidate.contact.trim(),
       )) {
-        if (!/^\+?[0-9]+$/.test(person.contact.trim())) continue;
+        const phone = person.contact.trim();
+        if (!isApproverContact(phone)) {
+          throw new Error(
+            `Invalid phone number for approver ${person.name.trim()}: "${phone}". Enter an international phone number (e.g. +919876543210).`,
+          );
+        }
         const invite = await fetch(`${API_URL}/v1/funds/${encodeURIComponent(fund.id)}/invites`, {
           method: "POST",
           credentials: "include",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ phone: person.contact.trim() }),
+          body: JSON.stringify({ phone }),
         });
-        if (invite.ok) {
-          const data = (await invite.json()) as { code: string };
-          const path = `${window.location.origin}/invites/accept?code=${encodeURIComponent(data.code)}`;
-          links.push(whatsappInviteLink(path, draft.clubName.trim()));
+        if (!invite.ok) {
+          throw new Error(
+            `Failed to create invite for ${person.name.trim()} (${phone}). Please verify the phone number and retry.`,
+          );
         }
+        const data = (await invite.json()) as { code: string };
+        const path = `${window.location.origin}/invites/accept?code=${encodeURIComponent(data.code)}`;
+        links.push(whatsappInviteLink(path, draft.clubName.trim()));
       }
       window.localStorage.removeItem(DRAFT_KEY);
       setCompleted({ fundId: fund.id, inviteLinks: links });
@@ -329,12 +337,13 @@ function ApproverStep({ draft, setDraft }: StepProps) {
             />
           </Field>
           <Field
-            label={`Approver ${index + 1} phone or email`}
+            label={`Approver ${index + 1} phone number`}
             id={`onboarding-approver-${index}-contact`}
           >
             <input
               id={`onboarding-approver-${index}-contact`}
               className={inputClass}
+              placeholder="+919876543210"
               value={person.contact}
               onChange={(e) => change(index, "contact", e.target.value)}
             />

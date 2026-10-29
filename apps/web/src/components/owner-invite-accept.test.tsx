@@ -36,7 +36,7 @@ it("submits name and phone to redeem invite", async () => {
   await user.click(screen.getByRole("button", { name: "Accept invite" }));
 
   expect(fetchMock).toHaveBeenCalledWith(
-    expect.stringContaining("/v1/auth/owner-invites/redeem"),
+    expect.stringContaining("/v1/auth/invites/redeem"),
     expect.objectContaining({
       method: "POST",
       body: JSON.stringify({

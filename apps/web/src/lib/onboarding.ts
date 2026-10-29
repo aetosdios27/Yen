@@ -44,7 +44,7 @@ export function isUpiVpa(value: string): boolean {
 }
 
 export function isApproverContact(value: string): boolean {
-  return /^(?:\+?[1-9][0-9]{7,14}|[^\s@]+@[^\s@]+\.[^\s@]+)$/.test(value.trim());
+  return /^\+?[1-9][0-9]{7,14}$/.test(value.trim());
 }
 
 export function whatsappInviteLink(inviteUrl: string, clubName: string): string {

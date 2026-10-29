@@ -10,8 +10,9 @@ it("accepts canonical integer paise only", () => {
 it("validates UPI and trustee contacts", () => {
   expect(isUpiVpa("club@upi")).toBe(true);
   expect(isUpiVpa("not-a-vpa")).toBe(false);
-  expect(isApproverContact("trustee@example.org")).toBe(true);
   expect(isApproverContact("+919876543210")).toBe(true);
+  expect(isApproverContact("not-a-phone")).toBe(false);
+  expect(isApproverContact("trustee@example.org")).toBe(false);
 });
 
 it("creates a bilingual WhatsApp share URL", () => {

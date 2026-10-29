@@ -15,11 +15,15 @@ export function OwnerInviteAccept() {
   const redeem = async (event: React.FormEvent) => {
     event.preventDefault();
     setMessage(null);
-    const response = await fetch(`${API_URL}/v1/auth/owner-invites/redeem`, {
+    const response = await fetch(`${API_URL}/v1/auth/invites/redeem`, {
       method: "POST",
       credentials: "include",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ code, phone, displayName: name }),
+      body: JSON.stringify({
+        code: code.trim(),
+        phone: phone.trim(),
+        displayName: name.trim(),
+      }),
     });
     if (!response.ok) return setMessage("This invite is invalid or has expired.");
     const result = (await response.json()) as {
