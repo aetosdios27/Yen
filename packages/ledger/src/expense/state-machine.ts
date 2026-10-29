@@ -1,5 +1,7 @@
 import { uuidv7 } from "@yen/db";
 import type { PseudonymId } from "@yen/eventlog";
+import type { FraudPolicy, Payee } from "@yen/policy";
+import { hasUnacknowledgedBlockingFlags } from "@yen/policy";
 import { type Paise, paise } from "@yen/shared";
 import {
   type ApprovalProofVerifier,
@@ -15,6 +17,7 @@ import {
   InvalidStateTransitionError,
   SeparationOfDutiesError,
   type SignedApproval,
+  UnacknowledgedFraudFlagsError,
 } from "./types.js";
 
 const VALID_TRANSITIONS: ReadonlyMap<ExpenseStatus, ReadonlySet<ExpenseStatus>> = new Map([
@@ -46,6 +49,8 @@ export interface CreateDraftInput {
   readonly category?: ExpenseCategory | undefined;
   readonly description: string;
   readonly recipientRef: string;
+  readonly payee?: Payee | undefined;
+  readonly invoiceNumber?: string | undefined;
   readonly evidence?: readonly ExpenseEvidence[] | undefined;
   readonly supersedesId?: string | null | undefined;
   readonly createdAt?: string | undefined;
@@ -65,6 +70,13 @@ export function createDraftRequest(input: CreateDraftInput): ExpenseRequest {
     category: input.category ?? "Other",
     description: input.description,
     recipientRef: input.recipientRef,
+    payee: input.payee ?? null,
+    payeeFingerprint: null,
+    lastPayeeChangedAt: null,
+    fraudEvaluationId: null,
+    fraudFlags: [],
+    fraudAcknowledgements: [],
+    ...(input.invoiceNumber ? { invoiceNumber: input.invoiceNumber } : {}),
     status: "draft",
     holdId: null,
     approvals: [],
@@ -192,7 +204,13 @@ export function addSignedApproval(
   policy: FundPolicy,
   verifyApprovalProof: ApprovalProofVerifier,
   nowUtc?: string,
+  fraudPolicy?: FraudPolicy,
 ): AddApprovalResult {
+  if (
+    hasUnacknowledgedBlockingFlags(expense.fraudFlags, expense.fraudAcknowledgements, fraudPolicy)
+  ) {
+    throw new UnacknowledgedFraudFlagsError();
+  }
   if (expense.status !== "submitted") {
     throw new InvalidStateTransitionError(
       expense.status,

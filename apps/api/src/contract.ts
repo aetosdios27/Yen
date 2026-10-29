@@ -1,8 +1,14 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { paiseWire } from "@yen/shared";
 import { errorEnvelope } from "./errors.js";
+import {
+  fraudAcknowledgementSchema,
+  fraudFlagSchema,
+  payeeInputSchema,
+  payeeOutputSchema,
+} from "./payee-rules/schema.js";
 
-const responseHeaders = {
+export const responseHeaders = {
   "x-request-id": {
     schema: { type: "string", format: "uuid" },
     description: "Request correlation ID",
@@ -1592,6 +1598,8 @@ export const createExpenseInput = z
       .optional(),
     description: bounded(500),
     recipientRef: bounded(128),
+    payee: payeeInputSchema.optional(),
+    invoiceNumber: bounded(128).optional(),
     evidence: z.array(expenseEvidenceSchema).optional(),
     supersedesId: z.string().uuid().optional(),
   })
@@ -1607,6 +1615,9 @@ export const expenseSchema = z
     category: z.enum(["Equipment", "Travel", "Catering", "Logistics", "Facilities", "Other"]),
     description: z.string(),
     recipientRef: z.string(),
+    payee: payeeOutputSchema.nullable().optional(),
+    fraudFlags: z.array(fraudFlagSchema).optional(),
+    fraudAcknowledgements: z.array(fraudAcknowledgementSchema).optional(),
     status: expenseStatusSchema,
     holdId: z.string().nullable(),
     approvalsCount: z.number().int().min(0),

@@ -3,7 +3,7 @@ import type { FundPolicy } from "./policy.js";
 import type { FundRole } from "./roles.js";
 
 /** Every expense lifecycle state the engine understands. Anything else fails closed. */
-export const EXPENSE_STATUSES = ["submitted", "approved", "rejected", "paid"] as const;
+export const EXPENSE_STATUSES = ["draft", "submitted", "approved", "rejected", "paid"] as const;
 export type ExpenseStatus = (typeof EXPENSE_STATUSES)[number];
 
 const EXPENSE_STATUS_SET = new Set<string>(EXPENSE_STATUSES);

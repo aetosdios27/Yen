@@ -53,6 +53,15 @@ function createFixture() {
     utr: sensitiveValues.utr,
     payeeAccount: sensitiveValues.bankAccount,
     requesterDisplayName: sensitiveValues.fullName,
+    fraudFlags: [{ code: "self_payment", reason: "Private payee profile match." }],
+    fraudAcknowledgements: [
+      {
+        code: "self_payment",
+        actorPseudonym: "psn_00000000-0000-4000-8000-000000000022",
+        reason: "Private owner review.",
+        acknowledgedAt: "2026-10-28T00:00:00.000Z",
+      },
+    ],
   } as unknown as ExpenseRequest;
   const underlyingExpenseStore = new InMemoryExpenseStore();
   const expenseStore = {
@@ -148,6 +157,9 @@ describe("public expense details and proofs", () => {
     expect(detail.headers.get("cache-control")).toContain("public");
     const detailBytes = new TextDecoder().decode(await detail.arrayBuffer());
     expect(detailBytes).not.toContain("Reliable Supplies Ltd");
+    expect(detailBytes).not.toMatch(
+      /self_payment|Private payee profile match|Private owner review/,
+    );
 
     const getObject = vi.spyOn(fixture.storageAdapter, "getObject");
     const proofs = await app.request(`/v1/funds/${fundId}/public/expenses/${expenseId}/proofs`);

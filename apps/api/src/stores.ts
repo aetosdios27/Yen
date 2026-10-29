@@ -293,6 +293,7 @@ export interface EvidenceStore {
   expenseBelongsToFund(fundId: string, expenseId: string): Promise<boolean>;
   save(evidence: StoredEvidence): Promise<StoredEvidence>;
   getByExpense(fundId: string, expenseId: string): Promise<readonly StoredEvidence[]>;
+  findBySha256(fundId: string, sha256: string): Promise<readonly StoredEvidence[]>;
 }
 
 export class MemoryEvidenceStore implements EvidenceStore {
@@ -314,6 +315,12 @@ export class MemoryEvidenceStore implements EvidenceStore {
   async getByExpense(fundId: string, expenseId: string): Promise<readonly StoredEvidence[]> {
     return Array.from(this.records.values())
       .filter((e) => e.fundId === fundId && e.expenseId === expenseId)
+      .map((evidence) => this.withDuplicateStatus(evidence));
+  }
+
+  async findBySha256(fundId: string, sha256: string): Promise<readonly StoredEvidence[]> {
+    return (this.byHash.get(sha256) ?? [])
+      .filter((evidence) => evidence.fundId === fundId)
       .map((evidence) => this.withDuplicateStatus(evidence));
   }
 

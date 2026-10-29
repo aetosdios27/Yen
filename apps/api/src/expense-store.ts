@@ -1,7 +1,9 @@
+import { randomUUID } from "node:crypto";
 import { ensureFundPseudonym, type Sql, type TransactionSql } from "@yen/db";
 import type { PseudonymId } from "@yen/eventlog";
 import {
   approveExpenseInTx,
+  assertAcknowledgementsUnchanged,
   ExpenseNotFoundError,
   type ExpenseRequest,
   type ExpenseStore,
@@ -13,14 +15,25 @@ import {
   type SignedApproval,
   submitExpenseInTx,
 } from "@yen/ledger";
+import type { FraudPolicy } from "@yen/policy";
 
 type ExpenseRow = { expense_data: ExpenseRequest | string };
 
 function decode(row: ExpenseRow | undefined): ExpenseRequest | null {
   if (!row) return null;
-  return typeof row.expense_data === "string"
-    ? (JSON.parse(row.expense_data) as ExpenseRequest)
-    : row.expense_data;
+  const expense =
+    typeof row.expense_data === "string"
+      ? (JSON.parse(row.expense_data) as ExpenseRequest)
+      : row.expense_data;
+  return {
+    ...expense,
+    payee: expense.payee ?? null,
+    payeeFingerprint: expense.payeeFingerprint ?? null,
+    lastPayeeChangedAt: expense.lastPayeeChangedAt ?? null,
+    fraudEvaluationId: expense.fraudEvaluationId ?? null,
+    fraudFlags: expense.fraudFlags ?? [],
+    fraudAcknowledgements: expense.fraudAcknowledgements ?? [],
+  };
 }
 
 async function persist(tx: TransactionSql, expense: ExpenseRequest): Promise<void> {
@@ -40,6 +53,32 @@ async function persist(tx: TransactionSql, expense: ExpenseRequest): Promise<voi
       VALUES (${expense.id}, ${approval.approverId}, ${approval.approvedAt}, ${JSON.stringify(approval)}::jsonb)
       ON CONFLICT (expense_id, approver_id) DO NOTHING
     `;
+  }
+  if (expense.fraudEvaluationId && expense.payeeFingerprint) {
+    await tx`
+      INSERT INTO expense_payee_evaluations (evaluation_id, expense_id, fund_id, payee_fingerprint, evaluated_at)
+      VALUES (${expense.fraudEvaluationId}, ${expense.id}, ${expense.fundId}, ${expense.payeeFingerprint}, ${expense.updatedAt})
+      ON CONFLICT (evaluation_id) DO NOTHING
+    `;
+    for (const flag of expense.fraudFlags) {
+      await tx`
+        INSERT INTO expense_payee_flags (evaluation_id, fund_id, expense_id, code, reason)
+        VALUES (${expense.fraudEvaluationId}, ${expense.fundId}, ${expense.id}, ${flag.code}, ${flag.reason})
+        ON CONFLICT (evaluation_id, code) DO NOTHING
+      `;
+    }
+    for (const acknowledgement of expense.fraudAcknowledgements) {
+      await tx`
+        INSERT INTO expense_payee_acknowledgements (
+          acknowledgement_id, evaluation_id, fund_id, expense_id, code,
+          actor_pseudonym_id, reason, acknowledged_at
+        ) VALUES (
+          ${randomUUID()}, ${expense.fraudEvaluationId}, ${expense.fundId}, ${expense.id},
+          ${acknowledgement.code}, ${acknowledgement.actorPseudonym.slice("psn_".length)},
+          ${acknowledgement.reason}, ${acknowledgement.acknowledgedAt}
+        ) ON CONFLICT (evaluation_id, code) DO NOTHING
+      `;
+    }
   }
 }
 
@@ -82,6 +121,7 @@ export class PostgresExpenseStore implements ExpenseStore {
         SELECT expense_data FROM expenses WHERE id = ${expense.id} FOR UPDATE
       `;
       const current = decode(rows[0]);
+      assertAcknowledgementsUnchanged(current ?? undefined, expense);
       if (!current) {
         if (expense.status !== "draft") throw new ExpenseNotFoundError(expense.id);
         await persist(tx, expense);
@@ -94,9 +134,19 @@ export class PostgresExpenseStore implements ExpenseStore {
         : context.actorId;
       let updated = expense;
       if (current.status === "draft" && expense.status === "submitted") {
+        const submitted = {
+          ...current,
+          payee: expense.payee,
+          payeeFingerprint: expense.payeeFingerprint,
+          lastPayeeChangedAt: expense.lastPayeeChangedAt,
+          fraudEvaluationId: expense.fraudEvaluationId,
+          fraudFlags: expense.fraudFlags,
+          fraudAcknowledgements: expense.fraudAcknowledgements,
+          ...(expense.invoiceNumber ? { invoiceNumber: expense.invoiceNumber } : {}),
+        };
         const result = await submitExpenseInTx({
           tx,
-          expense: current,
+          expense: submitted,
           policy,
           actorPseudonym: actorId ?? expense.requesterId,
           idempotencyKey: `expense:${expense.id}:hold`,
@@ -165,6 +215,7 @@ export class PostgresExpenseStore implements ExpenseStore {
     verifyApprovalProof: Parameters<ExpenseStore["atomicApprove"]>[3],
     nowUtc?: string,
     actorUserId?: string,
+    fraudPolicy?: FraudPolicy,
   ) {
     return this.sql.begin(async (tx) => {
       const rows = await tx<ExpenseRow[]>`
@@ -181,6 +232,7 @@ export class PostgresExpenseStore implements ExpenseStore {
         approval: { ...approval, approverId: actorId },
         policy,
         verifyApprovalProof,
+        ...(fraudPolicy ? { fraudPolicy } : {}),
         actorPseudonym: actorId,
         ...(nowUtc ? { nowUtc } : {}),
       });

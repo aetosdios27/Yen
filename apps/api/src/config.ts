@@ -32,6 +32,10 @@ export const runtimeEnv = z.object({
   SERVER_MAX_HEADER_SIZE_BYTES: z.coerce.number().int().min(1024).max(1048576).default(16384),
 });
 
+export const payeeRulesEnv = z.object({
+  PAYEE_FINGERPRINT_SALT: z.string().min(32).optional(),
+});
+
 export const clamAvEnv = z.object({
   CLAMAV_HOST: z.preprocess(
     (value) => (value === "" ? undefined : value),

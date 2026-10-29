@@ -7,6 +7,7 @@ import {
 import type { KontoTransactionExecutor } from "@konto-ledger/types";
 import { context, SpanStatusCode, trace } from "@opentelemetry/api";
 import { type Event, type PseudonymId, parsePseudonymId } from "@yen/eventlog";
+import type { FraudPolicy } from "@yen/policy";
 import { paise } from "@yen/shared";
 import { ensureFundAccounts } from "../accounts.js";
 import { appendFundEventInTx, nowUtcIso, toEventInput } from "../eventlog.js";
@@ -33,6 +34,7 @@ export interface SubmitExpenseInTxInput {
   readonly actorPseudonym?: PseudonymId;
   readonly idempotencyKey?: string;
   readonly nowUtc?: string;
+  readonly fraudPolicy?: FraudPolicy;
 }
 
 export interface SubmitExpenseInTxResult {
@@ -117,6 +119,7 @@ export interface ApproveExpenseInTxInput {
   readonly verifyApprovalProof: ApprovalProofVerifier;
   readonly actorPseudonym?: PseudonymId;
   readonly nowUtc?: string;
+  readonly fraudPolicy?: FraudPolicy;
 }
 
 export interface ApproveExpenseInTxResult {
@@ -155,6 +158,7 @@ async function approveExpenseInTxInner(
     policy,
     input.verifyApprovalProof,
     time,
+    input.fraudPolicy,
   );
 
   // Advisory lock serializes concurrent approvals

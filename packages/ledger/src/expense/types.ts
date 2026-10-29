@@ -1,4 +1,5 @@
 import type { PseudonymId } from "@yen/eventlog";
+import type { FraudAcknowledgement, FraudFlag, Payee } from "@yen/policy";
 
 export type { PseudonymId };
 
@@ -57,6 +58,13 @@ export interface ExpenseRequest {
   readonly category?: ExpenseCategory | undefined;
   readonly description: string;
   readonly recipientRef: string;
+  readonly payee: Payee | null;
+  readonly payeeFingerprint: string | null;
+  readonly lastPayeeChangedAt: string | null;
+  readonly fraudEvaluationId: string | null;
+  readonly fraudFlags: readonly FraudFlag[];
+  readonly fraudAcknowledgements: readonly FraudAcknowledgement[];
+  readonly invoiceNumber?: string | undefined;
   readonly status: ExpenseStatus;
   readonly holdId: string | null;
   readonly approvals: readonly SignedApproval[];
@@ -150,5 +158,19 @@ export class ExpenseNotFoundError extends Error {
   constructor(expenseId: string) {
     super(`Expense request ${expenseId} not found`);
     this.name = "ExpenseNotFoundError";
+  }
+}
+
+export class UnacknowledgedFraudFlagsError extends Error {
+  constructor() {
+    super("Blocking payee fraud flags require an owner acknowledgement before approval");
+    this.name = "UnacknowledgedFraudFlagsError";
+  }
+}
+
+export class FraudAcknowledgementConflictError extends Error {
+  constructor() {
+    super("An existing payee fraud acknowledgement cannot be replaced or removed");
+    this.name = "FraudAcknowledgementConflictError";
   }
 }

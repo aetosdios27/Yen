@@ -221,6 +221,7 @@ describe("Expense Requests API Routes (YEN-30)", () => {
           amountPaise: "50000",
           description: "Generator fuel and maintenance",
           recipientRef: "rcpt_fuel_vendor",
+          payee: { identity: { kind: "upi", vpa: "fuel@yenbank" }, name: "Fuel Supplier" },
         },
         "lifecycle-create",
       ),
@@ -394,7 +395,12 @@ describe("Expense Requests API Routes (YEN-30)", () => {
       req(
         "POST",
         `/v1/funds/${FUND_ID}/expenses`,
-        { amountPaise: "50000", description: "Supplies", recipientRef: "recipient-1" },
+        {
+          amountPaise: "50000",
+          description: "Supplies",
+          recipientRef: "recipient-1",
+          payee: { identity: { kind: "upi", vpa: "supplies@yenbank" }, name: "Supplies" },
+        },
         "proof-create",
       ),
     );
@@ -462,6 +468,7 @@ describe("Expense Requests API Routes (YEN-30)", () => {
           amountPaise: "30000",
           description: "Stage decor",
           recipientRef: "rcpt_decor",
+          payee: { identity: { kind: "upi", vpa: "decor@yenbank" }, name: "Decor Supplier" },
         },
         "reject-create",
       ),

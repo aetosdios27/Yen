@@ -477,6 +477,10 @@ databaseSuite("Postgres expense store", (sql, url) => {
         amountPaise: "5000",
         description: "Traceable supplies",
         recipientRef: "trace-supplier",
+        payee: {
+          identity: { kind: "upi", vpa: "trace-supplier@yenbank" },
+          name: "Trace Supplier",
+        },
       }),
     });
     expect(createResponse.status).toBe(201);

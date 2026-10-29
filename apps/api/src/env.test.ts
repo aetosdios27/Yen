@@ -8,6 +8,7 @@ beforeEach(() => {
   vi.stubEnv("CLAMAV_PORT", undefined);
   vi.stubEnv("CLAMAV_TIMEOUT_MS", undefined);
   vi.stubEnv("CLAMAV_MAX_SIZE_BYTES", undefined);
+  vi.stubEnv("PAYEE_FINGERPRINT_SALT", undefined);
   vi.stubEnv("PORT", undefined);
   vi.stubEnv("PARTNER_WEBHOOK_SECRET", undefined);
   vi.stubEnv("RATE_LIMIT_IP_CAPACITY", undefined);
@@ -107,6 +108,7 @@ it("requires a ClamAV host in production", async () => {
   vi.stubEnv("PORT", "3001");
   vi.stubEnv("NODE_ENV", "production");
   vi.stubEnv("OTP_HASH_KEY", "test-production-secret-with-at-least-32-characters");
+  vi.stubEnv("PAYEE_FINGERPRINT_SALT", "x".repeat(40));
   vi.stubEnv("DATABASE_URL", "postgres://postgres:pw@localhost:55432/postgres");
   await expect(import("./env.js")).rejects.toThrow("CLAMAV_HOST");
 });
@@ -128,6 +130,7 @@ it("accepts a PostgreSQL URL in production and rejects invalid URLs without expo
   vi.stubEnv("PORT", "3001");
   vi.stubEnv("NODE_ENV", "production");
   vi.stubEnv("OTP_HASH_KEY", "test-production-secret-with-at-least-32-characters");
+  vi.stubEnv("PAYEE_FINGERPRINT_SALT", "x".repeat(40));
   vi.stubEnv("CLAMAV_HOST", "clamav.internal");
   vi.stubEnv("DATABASE_URL", "postgres://postgres:pw@localhost:55432/postgres");
   vi.stubEnv("EVIDENCE_STORAGE_DIR", "/var/lib/yen/evidence");

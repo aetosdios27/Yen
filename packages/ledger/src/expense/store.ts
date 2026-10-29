@@ -1,9 +1,11 @@
 import type { PseudonymId } from "@yen/eventlog";
+import type { FraudPolicy } from "@yen/policy";
 import { addSignedApproval } from "./state-machine.js";
 import {
   type ApprovalProofVerifier,
   ExpenseNotFoundError,
   type ExpenseRequest,
+  FraudAcknowledgementConflictError,
   type FundPolicy,
   type SignedApproval,
 } from "./types.js";
@@ -26,6 +28,7 @@ export interface ExpenseStore {
     verifyApprovalProof: ApprovalProofVerifier,
     nowUtc?: string,
     actorUserId?: string,
+    fraudPolicy?: FraudPolicy,
   ): Promise<{ expense: ExpenseRequest; reachedQuorum: boolean }>;
 }
 
@@ -70,8 +73,12 @@ export class InMemoryExpenseStore implements ExpenseStore {
   }
 
   async save(expense: ExpenseRequest): Promise<ExpenseRequest> {
-    this.items.set(expense.id, { ...expense });
-    return { ...expense };
+    return this.acquireLock(expense.id, async () => {
+      const current = this.items.get(expense.id);
+      assertAcknowledgementsUnchanged(current, expense);
+      this.items.set(expense.id, { ...expense });
+      return { ...expense };
+    });
   }
 
   async atomicApprove(
@@ -80,15 +87,44 @@ export class InMemoryExpenseStore implements ExpenseStore {
     policy: FundPolicy,
     verifyApprovalProof: ApprovalProofVerifier,
     nowUtc?: string,
+    _actorUserId?: string,
+    fraudPolicy?: FraudPolicy,
   ): Promise<{ expense: ExpenseRequest; reachedQuorum: boolean }> {
     return this.acquireLock(expenseId, async () => {
       const current = this.items.get(expenseId);
       if (!current) {
         throw new ExpenseNotFoundError(expenseId);
       }
-      const res = addSignedApproval(current, approval, policy, verifyApprovalProof, nowUtc);
+      const res = addSignedApproval(
+        current,
+        approval,
+        policy,
+        verifyApprovalProof,
+        nowUtc,
+        fraudPolicy,
+      );
       this.items.set(expenseId, res.expense);
       return res;
     });
+  }
+}
+
+export function assertAcknowledgementsUnchanged(
+  current: ExpenseRequest | undefined,
+  next: ExpenseRequest,
+): void {
+  if (!current || current.fraudEvaluationId !== next.fraudEvaluationId) return;
+  for (const acknowledgement of current.fraudAcknowledgements) {
+    const replacement = next.fraudAcknowledgements.find(
+      (item) => item.code === acknowledgement.code,
+    );
+    if (
+      !replacement ||
+      replacement.actorPseudonym !== acknowledgement.actorPseudonym ||
+      replacement.reason !== acknowledgement.reason ||
+      replacement.acknowledgedAt !== acknowledgement.acknowledgedAt
+    ) {
+      throw new FraudAcknowledgementConflictError();
+    }
   }
 }

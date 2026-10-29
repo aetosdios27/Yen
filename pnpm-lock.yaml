@@ -430,6 +430,9 @@ importers:
       '@yen/eventlog':
         specifier: workspace:*
         version: link:../eventlog
+      '@yen/policy':
+        specifier: workspace:*
+        version: link:../policy
       '@yen/shared':
         specifier: workspace:*
         version: link:../shared

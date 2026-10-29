@@ -143,6 +143,32 @@ export class PostgresEvidenceStore implements EvidenceStore {
     return rows.map(toStoredEvidence);
   }
 
+  async findBySha256(fundId: string, sha256: string): Promise<readonly StoredEvidence[]> {
+    const rows = await this.sql<EvidenceRow[]>`
+      SELECT evidence.evidence_id, evidence.expense_id, parent_fund.fund_id AS fund_id,
+        evidence.file_sha256, evidence.file_size_bytes, evidence.content_type,
+        evidence.file_name, evidence.storage_key, evidence.scan_result,
+        evidence.scanner_name, evidence.signature_version, evidence.vendor_name,
+        evidence.gstin, evidence.invoice_number, evidence.invoice_date,
+        evidence.created_at, duplicate.expense_id AS duplicate_expense_id
+      FROM evidence_records AS evidence
+      JOIN expenses AS parent_fund ON parent_fund.id = evidence.expense_id
+      LEFT JOIN LATERAL (
+        SELECT candidate.expense_id
+        FROM evidence_records AS candidate
+        JOIN expenses AS candidate_expense ON candidate_expense.id = candidate.expense_id
+        WHERE candidate.file_sha256 = evidence.file_sha256
+          AND candidate_expense.fund_id = parent_fund.fund_id
+          AND candidate.expense_id <> evidence.expense_id
+        ORDER BY candidate.created_at, candidate.evidence_id
+        LIMIT 1
+      ) AS duplicate ON true
+      WHERE parent_fund.fund_id = ${fundId} AND evidence.file_sha256 = ${sha256}
+      ORDER BY evidence.created_at, evidence.evidence_id
+    `;
+    return rows.map(toStoredEvidence);
+  }
+
   async scanPage(
     afterEvidenceId: string | undefined,
     limit: number,

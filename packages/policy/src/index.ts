@@ -27,6 +27,7 @@ export {
   ROLE_ACTION_MATRIX,
   type RoleActionMatrix,
 } from "./matrix.js";
+export * from "./payee-rules.js";
 export {
   DEFAULT_FUND_POLICY,
   type FundPolicy,

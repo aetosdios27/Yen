@@ -1,8 +1,10 @@
+import { randomBytes } from "node:crypto";
 import type { AppendEventInput, StoredFundEvent, WaitlistEntry } from "@yen/db";
 import { uuidv7 } from "@yen/db";
 import { type PseudonymId, parsePseudonymId } from "@yen/eventlog";
 import { type ApprovalProofVerifier, type ExpenseStore, InMemoryExpenseStore } from "@yen/ledger";
 import type { FundRole } from "@yen/policy";
+import { failClosedPayeeVerifier, type PayeeVerifier } from "@yen/policy";
 import type { Context } from "hono";
 import {
   type AuthStore,
@@ -15,6 +17,7 @@ import {
 import { rateLimitEnv, rateLimits } from "./config.js";
 import { PostgresEvidenceStore } from "./evidence-store-postgres.js";
 import { jsonLogger, type Logger } from "./logging.js";
+import { MemoryPayeeProfileStore, type PayeeProfileStore } from "./payee-rules/profile-store.js";
 import {
   type ActionTokenStore,
   MemoryActionTokenStore,
@@ -340,6 +343,9 @@ export class MemoryFundStore implements FundStore {
 export interface AppDependencies {
   readonly waitlistStore: WaitlistStore;
   readonly expenseStore: ExpenseStore;
+  readonly payeeProfileStore: PayeeProfileStore;
+  readonly payeeFingerprintSalt: string;
+  readonly payeeVerifier: PayeeVerifier;
   readonly actorForUser: (userId: string, fundId: string) => Promise<PseudonymId>;
   readonly fundStore?: FundStore | undefined;
   readonly approvalProofVerifier: ApprovalProofVerifier;
@@ -419,6 +425,13 @@ export function defaultDependencies(
   const resolvedExpenseStore = expenseStore ?? new InMemoryExpenseStore();
   const resolvedEvidenceStore = evidenceStore ?? new MemoryEvidenceStore();
   const resolvedStorageAdapter = storageAdapter ?? new MemoryStorageAdapter();
+  const payeeFingerprintSalt = process.env.PAYEE_FINGERPRINT_SALT;
+  if (payeeFingerprintSalt !== undefined && payeeFingerprintSalt.length < 32) {
+    throw new Error("PAYEE_FINGERPRINT_SALT must contain at least 32 characters");
+  }
+  if (process.env.NODE_ENV === "production" && !payeeFingerprintSalt) {
+    throw new Error("Production API requires PAYEE_FINGERPRINT_SALT");
+  }
   const pinStore = new MemoryPinStore({ clock });
   const actionTokenStore = new MemoryActionTokenStore({ clock });
   const pinNotificationService = new MemoryPinNotificationService();
@@ -437,6 +450,9 @@ export function defaultDependencies(
   return {
     waitlistStore: new MemoryWaitlistStore(),
     expenseStore: resolvedExpenseStore,
+    payeeProfileStore: new MemoryPayeeProfileStore(),
+    payeeFingerprintSalt: payeeFingerprintSalt ?? randomBytes(32).toString("hex"),
+    payeeVerifier: failClosedPayeeVerifier,
     actorForUser: async (userId, fundId) => {
       const key = `${fundId}:${userId}`;
       let actor = actors.get(key);

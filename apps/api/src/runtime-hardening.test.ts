@@ -666,6 +666,7 @@ databaseSuite("SIGTERM during load", (sql, url) => {
         ...process.env,
         PORT: String(port),
         DATABASE_URL: url,
+        PAYEE_FINGERPRINT_SALT: "x".repeat(32),
         WAITLIST_MIN_RESPONSE_MS: "350",
         SHUTDOWN_TIMEOUT_MS: "5000",
       },

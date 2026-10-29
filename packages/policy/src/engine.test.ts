@@ -386,6 +386,69 @@ describe("Member management (Threat X4)", () => {
   });
 });
 
+describe("Payee profile and fraud policy actions", () => {
+  it("allows a member to change only their own profile and reserves officeholder updates for owners", () => {
+    const resource: Resource = {
+      kind: "member",
+      member: { fundId, memberId: approver1Id, targetRole: "member", policy: DEFAULT_FUND_POLICY },
+    };
+    expect(can({ id: approver1Id, role: "member" }, "member:payee_profile:set", resource)).toBe(
+      true,
+    );
+    expect(can({ id: approver1Id, role: "member" }, "member:payee_profile:clear", resource)).toBe(
+      true,
+    );
+    expect(can({ id: ownerId, role: "owner" }, "member:payee_profile:set", resource)).toBe(true);
+    expect(can({ id: approver2Id, role: "member" }, "member:payee_profile:set", resource)).toBe(
+      false,
+    );
+    expect(can({ role: "donor" }, "member:payee_profile:set", resource)).toBe(false);
+    expect(can({ role: "public" }, "member:payee_profile:clear", resource)).toBe(false);
+  });
+
+  it("restricts fraud acknowledgements to owners on submitted expenses", () => {
+    const submitted: Resource = {
+      kind: "expense",
+      expense: { ...baseSubmittedExpense(), policy: DEFAULT_FUND_POLICY },
+    };
+    const draft: Resource = {
+      kind: "expense",
+      expense: { ...baseSubmittedExpense(), status: "draft", policy: DEFAULT_FUND_POLICY },
+    };
+    expect(can({ id: ownerId, role: "owner" }, "expense:fraud:acknowledge", submitted)).toBe(true);
+    expect(can({ id: approver1Id, role: "approver" }, "expense:fraud:acknowledge", submitted)).toBe(
+      false,
+    );
+    expect(can({ id: ownerId, role: "owner" }, "expense:fraud:acknowledge", draft)).toBe(false);
+  });
+
+  it("permits payee changes only before an expense is approved", () => {
+    const draft: Resource = {
+      kind: "expense",
+      expense: { ...baseSubmittedExpense(), status: "draft" },
+    };
+    const submitted: Resource = { kind: "expense", expense: { ...baseSubmittedExpense() } };
+    const approved: Resource = {
+      kind: "expense",
+      expense: { ...baseSubmittedExpense(), status: "approved" },
+    };
+    expect(can({ id: ownerId, role: "owner" }, "expense:payee:change", draft)).toBe(true);
+    expect(can({ id: ownerId, role: "owner" }, "expense:payee:change", submitted)).toBe(true);
+    expect(can({ id: ownerId, role: "owner" }, "expense:payee:change", approved)).toBe(false);
+  });
+});
+
+function baseSubmittedExpense() {
+  return {
+    fundId,
+    requesterId,
+    amountPaise: paise(5000),
+    status: "submitted" as const,
+    approvals: [],
+    policy: DEFAULT_FUND_POLICY,
+  };
+}
+
 const treasurerApprover: Actor = {
   id: treasurerId,
   role: "treasurer",
