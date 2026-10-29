@@ -552,7 +552,7 @@ ledgerDatabaseSuite("YEN-61 real notification crash points and chain outage", (s
       clock: () => workerNow,
       random: () => 0,
     });
-    const r1 = await worker.processNextBatch(); expect(r1.failed).toBe(1);
+    expect((await worker.processNextBatch()).failed).toBe(1);
     expect((await worker.processNextBatch()).submitted).toBe(1);
     expect(sendCount).toBe(2);
     const parsedUsageFund = parseFundId(fundId);
