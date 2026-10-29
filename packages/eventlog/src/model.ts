@@ -9,6 +9,9 @@ export const pseudonymIdSchema = z
   .check(z.regex(/^psn_[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/))
   .brand<"PseudonymId">();
 export type PseudonymId = z.infer<typeof pseudonymIdSchema>;
+export function parsePseudonymId(value: string): PseudonymId {
+  return pseudonymIdSchema.parse(value);
+}
 const donationId = uuid.brand<"DonationId">();
 const expenseId = uuid.brand<"ExpenseId">();
 const evidenceId = uuid.brand<"EvidenceId">();

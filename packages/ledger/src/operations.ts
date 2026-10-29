@@ -7,7 +7,7 @@ import {
 } from "@konto-ledger/core";
 import type { KontoQueryExecutor, KontoTransactionExecutor } from "@konto-ledger/types";
 import { uuidv7 } from "@yen/db";
-import type { Event, PseudonymId } from "@yen/eventlog";
+import { type Event, type PseudonymId, parsePseudonymId } from "@yen/eventlog";
 import type { Paise } from "@yen/shared";
 import { ensureFundAccounts, getFundAccountIds } from "./accounts.js";
 import {
@@ -20,7 +20,9 @@ import {
 } from "./eventlog.js";
 import type { FundBalances } from "./replay.js";
 
-export const SYSTEM_ACTOR: PseudonymId = "psn_00000000-0000-7000-8000-000000000000" as PseudonymId;
+export const SYSTEM_ACTOR: PseudonymId = parsePseudonymId(
+  "psn_00000000-0000-7000-8000-000000000000",
+);
 
 /**
  * Asserts that the provided executor is an active database transaction handle
@@ -80,7 +82,7 @@ export interface RecordDonationInput {
   reference?: string;
   bankTransactionId?: string;
   donationId?: string;
-  actorPseudonym?: PseudonymId | string;
+  actorPseudonym?: PseudonymId;
   idempotencyKey?: string;
   occurredAt?: string;
 }
@@ -124,7 +126,7 @@ export async function recordDonation(
   const accounts = await ensureFundAccounts(tx, input.fundId);
   const donationId = input.donationId ?? uuidv7();
   const bankTransactionId = input.bankTransactionId ?? uuidv7();
-  const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
+  const actor = input.actorPseudonym ?? SYSTEM_ACTOR;
   const idempotencyKey =
     input.idempotencyKey ?? (input.reference ? `donation:${input.reference}` : undefined);
 
@@ -322,7 +324,7 @@ export interface PledgeDonationInput {
   donorContact?: string;
   donorNameChoice?: "full" | "initials" | "anonymous";
   donationId?: string;
-  actorPseudonym?: PseudonymId | string;
+  actorPseudonym?: PseudonymId;
   occurredAt?: string;
 }
 
@@ -391,7 +393,7 @@ export async function pledgeDonation(
     toEventInput({
       fund_id: input.fundId,
       type: "donation.pledged",
-      actor: (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId,
+      actor: input.actorPseudonym ?? SYSTEM_ACTOR,
       occurred_at: input.occurredAt ?? nowUtcIso(),
       payload: { donation_id: donationId, amount_paise: input.amount },
     }),
@@ -408,7 +410,7 @@ export interface ReserveForExpenseInput {
   description?: string;
   idempotencyKey?: string;
   ttlMs?: number;
-  actorPseudonym?: PseudonymId | string;
+  actorPseudonym?: PseudonymId;
   occurredAt?: string;
 }
 
@@ -439,7 +441,7 @@ export async function reserveForExpense(
 
   const accounts = await ensureFundAccounts(tx, input.fundId);
   const expenseId = input.expenseId ?? uuidv7();
-  const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
+  const actor = input.actorPseudonym ?? SYSTEM_ACTOR;
 
   // Idempotency check for existing hold
   if (input.idempotencyKey) {
@@ -638,7 +640,7 @@ export interface SettleExpenseInput {
   expenseId: string;
   receiptRef?: string;
   bankTransactionId?: string;
-  actorPseudonym?: PseudonymId | string;
+  actorPseudonym?: PseudonymId;
   occurredAt?: string;
 }
 
@@ -688,7 +690,7 @@ export async function settleExpense(
   }
 
   const bankTransactionId = input.bankTransactionId ?? uuidv7();
-  const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
+  const actor = input.actorPseudonym ?? SYSTEM_ACTOR;
 
   const { journalId, paidEvent } = await withTransactionSavepoint(tx, async () => {
     const { journalId } = await commitHoldInTx(tx, input.holdId, {
@@ -726,7 +728,7 @@ export interface ReleaseExpenseInput {
   holdId: string;
   expenseId: string;
   reason?: "quorum" | "objection" | "policy";
-  actorPseudonym?: PseudonymId | string;
+  actorPseudonym?: PseudonymId;
   occurredAt?: string;
 }
 
@@ -775,7 +777,7 @@ export async function releaseExpense(
     throw new Error(`Expense ${input.expenseId} does not belong to fund ${input.fundId}`);
   }
 
-  const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
+  const actor = input.actorPseudonym ?? SYSTEM_ACTOR;
   const { res, rejectedEvent } = await withTransactionSavepoint(tx, async () => {
     const res = await rollbackHoldInTx(tx, input.holdId);
 
@@ -807,7 +809,7 @@ export interface ExpireExpenseInput {
   fundId: string;
   holdId: string;
   expenseId: string;
-  actorPseudonym?: PseudonymId | string;
+  actorPseudonym?: PseudonymId;
   occurredAt?: string;
 }
 
@@ -856,7 +858,7 @@ export async function expireExpense(
     throw new Error(`Expense ${input.expenseId} does not belong to fund ${input.fundId}`);
   }
 
-  const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
+  const actor = input.actorPseudonym ?? SYSTEM_ACTOR;
   const { res, expiredEvent } = await withTransactionSavepoint(tx, async () => {
     const res = await rollbackHoldInTx(tx, input.holdId);
 
@@ -888,7 +890,7 @@ export interface RecordRefundInput {
   amount?: Paise;
   donationId: string;
   reason?: "unmatched" | "duplicate" | "cancelled";
-  actorPseudonym?: PseudonymId | string;
+  actorPseudonym?: PseudonymId;
   idempotencyKey?: string;
   occurredAt?: string;
 }
@@ -907,7 +909,7 @@ export async function recordRefund(
   await acquireFundLockInTx(tx, input.fundId);
 
   const accounts = await ensureFundAccounts(tx, input.fundId);
-  const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
+  const actor = input.actorPseudonym ?? SYSTEM_ACTOR;
   const idempotencyKey = input.idempotencyKey ?? uuidv7();
 
   // Find verified donation amount via targeted query

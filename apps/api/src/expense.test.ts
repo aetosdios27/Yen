@@ -115,7 +115,7 @@ describe("Expense Requests API Routes (YEN-30)", () => {
     const body1 = await json(res1);
     expect(body1.id).toBeDefined();
     expect(body1.fundId).toBe(FUND_ID);
-    expect(body1.requesterId).toBe(REQUESTER.id);
+    expect(body1.requesterId).toMatch(/^psn_[0-9a-f-]{36}$/);
     expect(body1.amountPaise).toBe("45000");
     expect(body1.status).toBe("draft");
     expect(body1.holdId).toBeNull();

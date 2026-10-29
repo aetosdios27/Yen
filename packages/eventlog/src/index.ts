@@ -30,6 +30,7 @@ export {
   occurredAtSchema,
   type PseudonymId,
   parseEvent,
+  parsePseudonymId,
   parseUnsignedEvent,
   payloadSchemas,
   pseudonymIdSchema,
