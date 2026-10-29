@@ -49,7 +49,12 @@ databaseSuite("Shared stores across API instances", (sql, url) => {
           "idempotency-key": idempotencyKey,
           "x-request-id": "00000000-0000-4000-8000-000000000099",
         },
-        body: JSON.stringify({ name: "Concurrent Fund", targetPaise: "5000" }),
+        body: JSON.stringify({
+          name: "Concurrent Fund",
+          targetPaise: "5000",
+          upiVpa: "club@upi",
+          upiPayeeName: "Concurrent Club",
+        }),
       };
 
       // Fire concurrent requests to two distinct app instances
