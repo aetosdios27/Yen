@@ -53,6 +53,7 @@ export {
   verifyEventProof,
 } from "./merkle/interval.js";
 export {
+  createEventProof,
   type EventProof,
   parseEventProof,
   parseEventProofJson,
