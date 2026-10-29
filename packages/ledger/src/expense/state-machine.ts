@@ -205,6 +205,7 @@ export function addSignedApproval(
   verifyApprovalProof: ApprovalProofVerifier,
   nowUtc?: string,
   fraudPolicy?: FraudPolicy,
+  hasOpenObjection = false,
 ): AddApprovalResult {
   if (
     hasUnacknowledgedBlockingFlags(expense.fraudFlags, expense.fraudAcknowledgements, fraudPolicy)
@@ -242,7 +243,7 @@ export function addSignedApproval(
   const objectionActive =
     expense.objectionEndsAt !== null && nowMs < Date.parse(expense.objectionEndsAt);
 
-  if (objectionActive) {
+  if (objectionActive || hasOpenObjection) {
     // Record the approval, but cannot reach quorum until objection window ends
     return {
       expense: {
@@ -281,6 +282,7 @@ export function evaluateObjectionWindow(
   expense: ExpenseRequest,
   policy: FundPolicy,
   nowUtc?: string,
+  hasOpenObjection = false,
 ): { expense: ExpenseRequest; transitioned: boolean } {
   if (expense.status !== "submitted") {
     return { expense, transitioned: false };
@@ -290,7 +292,7 @@ export function evaluateObjectionWindow(
   const objectionActive =
     expense.objectionEndsAt !== null && nowMs < Date.parse(expense.objectionEndsAt);
 
-  if (objectionActive) {
+  if (objectionActive || hasOpenObjection) {
     return { expense, transitioned: false };
   }
 

@@ -225,7 +225,7 @@ describe("public expense details and proofs", () => {
     const publicGetPaths = Object.entries(document.paths ?? {}).flatMap(([path, methods]) =>
       path.includes("/public/") && methods?.get ? [path] : [],
     );
-    expect(publicGetPaths).toHaveLength(5);
+    expect(publicGetPaths).toHaveLength(6);
 
     for (const path of publicGetPaths) {
       const url = path.replaceAll("{fundId}", fundId).replaceAll("{expenseId}", expenseId);

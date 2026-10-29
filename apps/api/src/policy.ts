@@ -176,7 +176,9 @@ export type ExpenseAction =
   | "expense:reconcile"
   | "expense:add_evidence"
   | "expense:read_evidence"
-  | "expense:fraud:acknowledge";
+  | "expense:fraud:acknowledge"
+  | "expense:raise_objection"
+  | "expense:resolve_objection";
 export type ExpenseResource =
   | { readonly kind: "expense"; readonly expense?: ExpenseRecord | undefined }
   | { readonly kind: "expense"; readonly fund: FundRecord; readonly expenseId: string };
@@ -331,6 +333,10 @@ export const devPolicy: Policy = {
         case "expense:fraud:acknowledge":
           domainAction = "expense:fraud:acknowledge";
           break;
+        case "expense:raise_objection":
+        case "expense:resolve_objection":
+          domainAction = action;
+          break;
         default:
           return false;
       }
@@ -361,6 +367,9 @@ export const devPolicy: Policy = {
           requesterId: record?.owner ?? principal.id,
           amountPaise,
           ...(supportedStatus === undefined ? {} : { status: supportedStatus }),
+          ...(view?.objectionWindowOpen === undefined
+            ? {}
+            : { objectionWindowOpen: view.objectionWindowOpen }),
           approvals: Array.from({ length: approvalCount }, (_, index) => ({
             approverId: `dev-policy-approval-${index}`,
             roleAtApproval: "approver" as const,

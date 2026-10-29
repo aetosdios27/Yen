@@ -406,6 +406,32 @@ describe("Expense Request State Machine", () => {
     });
     expect(submitted.objectionEndsAt).toBe("2026-10-29T10:00:00.000Z");
 
+    const objectionDraft = createDraftRequest({
+      fundId: FUND_ID,
+      requesterId: REQUESTER_ID,
+      amountPaise: paise(50000),
+      description: "Objected request",
+      recipientRef: "rcpt_objection",
+      createdAt: tSubmit,
+    });
+    const objected = submitExpense(objectionDraft, {
+      holdId: "h_objection",
+      policy: policyWithWindow,
+      nowUtc: tSubmit,
+    });
+    const approval = createMockPasskeyApproval(APPROVER_1, objected, "2026-10-29T11:00:00.000Z");
+    const approvalWhileObjected = addSignedApproval(
+      objected,
+      approval,
+      policyWithWindow,
+      TEST_APPROVAL_PROOF_VERIFIER,
+      "2026-10-29T11:00:00.000Z",
+      undefined,
+      true,
+    );
+    expect(approvalWhileObjected.reachedQuorum).toBe(false);
+    expect(approvalWhileObjected.expense.status).toBe("submitted");
+
     // Approving while window is active records approval, but does not transition to approved yet
     const tApprove = "2026-10-28T15:00:00.000Z";
     const app = createMockPasskeyApproval(APPROVER_1, submitted, tApprove);
@@ -466,14 +492,27 @@ describe("Expense Request State Machine", () => {
       nowUtc: t0,
     });
 
+    const windowDraft = createDraftRequest({
+      fundId: FUND_ID,
+      requesterId: REQUESTER_ID,
+      amountPaise: paise(30000),
+      description: "Window exceeds expiry",
+      recipientRef: "rcpt_window",
+    });
+    const windowExpense = submitExpense(windowDraft, {
+      holdId: "h_window_expiry",
+      policy: { approvalQuorum: 2, objectionWindowHours: 48, autoExpireHours: 24 },
+      nowUtc: t0,
+    });
+
     // Check after 30 hours: submitted1 is stale (>24h), submitted2 is fresh (<72h)
     const tCheck = "2026-10-29T16:00:00.000Z";
-    const stale = findStaleExpenses([submitted1, submitted2], tCheck);
+    const stale = findStaleExpenses([submitted1, submitted2, windowExpense], tCheck);
     expect(stale).toHaveLength(1);
     expect(stale[0]?.id).toBe(submitted1.id);
 
     const expiredList: string[] = [];
-    await processStaleExpenses([submitted1, submitted2], tCheck, (exp) => {
+    await processStaleExpenses([submitted1, submitted2, windowExpense], tCheck, (exp) => {
       expiredList.push(exp.id);
     });
     expect(expiredList).toEqual([submitted1.id]);

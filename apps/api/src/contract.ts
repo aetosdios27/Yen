@@ -20,13 +20,13 @@ export const responseHeaders = {
     required: true,
   },
 } as const;
-const replayHeader = {
+export const replayHeader = {
   "idempotent-replayed": {
     schema: { type: "string" as const, enum: ["true"] },
     description: "Present on replay",
   },
 };
-const retryHeader = {
+export const retryHeader = {
   "retry-after": {
     schema: { type: "string" as const, pattern: "^[1-9][0-9]*$" },
     description: "Seconds until retry",
@@ -51,7 +51,7 @@ const cookieHeader = {
   },
 } as const;
 
-function jsonResponse<T extends z.ZodType>(schema: T, description: string) {
+export function jsonResponse<T extends z.ZodType>(schema: T, description: string) {
   return { description, headers: responseHeaders, content: { "application/json": { schema } } };
 }
 
@@ -63,7 +63,7 @@ function jsonCookieResponse<T extends z.ZodType>(schema: T, description: string)
   };
 }
 
-function withReplay<T extends { headers: object }>(response: T) {
+export function withReplay<T extends { headers: object }>(response: T) {
   return { ...response, headers: { ...response.headers, ...replayHeader } };
 }
 
@@ -83,7 +83,7 @@ const overloadedResponse = {
   ...jsonResponse(errorEnvelope, "Rate limit store at capacity"),
   headers: { ...responseHeaders, "retry-after": { ...retryHeader["retry-after"], required: true } },
 };
-const protectedErrors = {
+export const protectedErrors = {
   400: jsonResponse(errorEnvelope, "Validation failed; details contain field paths"),
   401: jsonResponse(errorEnvelope, "Authentication required"),
   403: jsonResponse(errorEnvelope, "Access denied"),
@@ -1621,6 +1621,7 @@ export const expenseSchema = z
     status: expenseStatusSchema,
     holdId: z.string().nullable(),
     approvalsCount: z.number().int().min(0),
+    objectionWindowOpen: z.boolean().optional(),
     supersedesId: z.string().uuid().nullable(),
     submittedAt: z.iso.datetime().nullable(),
     approvedAt: z.iso.datetime().nullable(),

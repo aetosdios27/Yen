@@ -194,7 +194,7 @@ describe("frozen event hashes", () => {
     );
   });
   it("pins every versioned event, canonical string, and hash", async () => {
-    expect(events.length).toBe(26);
+    expect(events.length).toBe(27);
     expect(eventHashDomain).toBe(golden.domain_utf8);
     expect(genesisHash).toBe(golden.genesis_hash);
     expect(
@@ -238,6 +238,17 @@ describe("frozen event hashes", () => {
     const { hash, ...unsigned } = event;
     expect(await computeEventHash(unsigned)).toBe(hash);
     expect(parseEvent({ ...event, version: 1 }).ok).toBe(false);
+  });
+
+  it("pins the v2 objection raised event after the existing event chain", () => {
+    expect(events.at(-1)).toMatchObject({
+      type: "expense.objection_raised",
+      version: 2,
+      payload: {
+        expense_id: expect.any(String),
+        objection_id: expect.any(String),
+      },
+    });
   });
 
   it("reproduces the independent chain with makeNextEvent", async () => {

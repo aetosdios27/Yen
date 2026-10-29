@@ -143,6 +143,37 @@ def golden_events():
     event_hash = hashlib.sha256(DOMAIN + encoded.encode("utf-8")).hexdigest()
     events.append({"event": {**envelope, "hash": event_hash}, "canonical": encoded})
     previous = event_hash
+    index = len(events)
+    envelope = {
+        "fund_id": derive_uuid("fund"),
+        "seq": index + 1,
+        "type": "fund.payee_changed",
+        "version": 1,
+        "actor": "psn_" + derive_uuid("actor-pseudonym"),
+        "occurred_at": f"2026-01-01T00:{index:02d}:00.000Z",
+        "payload": {},
+        "prev_hash": previous,
+    }
+    encoded = canonical(envelope)
+    event_hash = hashlib.sha256(DOMAIN + encoded.encode("utf-8")).hexdigest()
+    events.append({"event": {**envelope, "hash": event_hash}, "canonical": encoded})
+    previous = event_hash
+    previous = event_hash
+    index = len(events)
+    envelope = {
+        "fund_id": derive_uuid("fund"),
+        "seq": index + 1,
+        "type": "expense.objection_raised",
+        "version": 2,
+        "actor": "psn_" + derive_uuid("actor-pseudonym"),
+        "occurred_at": f"2026-01-01T00:{index:02d}:00.000Z",
+        "payload": {"expense_id": derive_uuid("expense"), "objection_id": derive_uuid("objection")},
+        "prev_hash": previous,
+    }
+    encoded = canonical(envelope)
+    event_hash = hashlib.sha256(DOMAIN + encoded.encode("utf-8")).hexdigest()
+    events.append({"event": {**envelope, "hash": event_hash}, "canonical": encoded})
+    previous = event_hash
     return {"domain_utf8": DOMAIN.decode("utf-8"), "genesis_hash": GENESIS, "latest_hash": previous, "events": events}
 
 

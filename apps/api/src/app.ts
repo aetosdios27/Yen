@@ -134,6 +134,7 @@ import {
   requireAuth,
 } from "./middleware.js";
 import { verifyMimeSignature } from "./mime-signature.js";
+import { registerObjectionRoutes } from "./objection-routes.js";
 import { registerPayeeRuleRoutes } from "./payee-rules/routes.js";
 import { normalizedPayee } from "./payee-rules/schema.js";
 import { evaluateExpensePayeeRules, fingerprintPayee } from "./payee-rules/service.js";
@@ -1046,7 +1047,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
   const defaultFundPolicy: FundPolicy = {
     approvalQuorum: 2,
-    objectionWindowHours: 0,
+    objectionWindowHours: 24,
     autoExpireHours: 72,
   };
   const fundPolicyFor = async (fundId: string) =>
@@ -1066,6 +1067,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     status: exp.status,
     holdId: exp.holdId,
     approvalsCount: exp.approvals.length,
+    objectionWindowOpen:
+      exp.objectionEndsAt !== null && deps.clock() < Date.parse(exp.objectionEndsAt),
     supersedesId: exp.supersedesId,
     submittedAt: exp.submittedAt,
     approvedAt: exp.approvedAt,
@@ -1693,6 +1696,12 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const principal = authorizedFund(c, "fund:policy:change", resource);
 
     const body = c.req.valid("json");
+    if ("objectionWindowHours" in body.policyJson) {
+      const hours = body.policyJson.objectionWindowHours;
+      if (typeof hours !== "number" || !Number.isSafeInteger(hours) || hours < 0 || hours > 168) {
+        throw new ApiError("validation_failed");
+      }
+    }
     const approvalToken = c.req.header("x-approval-token") ?? body.approvalToken;
     const pin = c.req.header("x-approval-pin") ?? body.pin;
 
@@ -2114,6 +2123,21 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       deps.policy.redactManualMatch(principal, resource, result),
     clock: deps.clock,
   });
+  registerObjectionRoutes(
+    app,
+    deps,
+    async (fundId, expenseId) => {
+      const expense = await deps.expenseStore.get(expenseId);
+      if (!expense || expense.fundId !== fundId) throw new ApiError("not_found");
+      return expense;
+    },
+    defaultFundPolicy,
+    (context, action, expense) =>
+      authorizedExpense(context, action, {
+        kind: "expense",
+        expense: { owner: expense.requesterId, expense: toExpenseView(expense) },
+      }),
+  );
   app.openapi(openapiRoute, (c) => c.json(openapiSchema.parse(openApiDocument(app)), 200));
   app.openAPIRegistry.registerComponent("securitySchemes", "bearerAuth", {
     type: "http",

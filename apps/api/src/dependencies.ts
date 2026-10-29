@@ -16,6 +16,7 @@ import {
 } from "./auth/index.js";
 import { rateLimitEnv, rateLimits } from "./config.js";
 import { PostgresEvidenceStore } from "./evidence-store-postgres.js";
+import type { PostgresExpenseObjectionStore } from "./expense-objections.js";
 import { jsonLogger, type Logger } from "./logging.js";
 import { MemoryPayeeProfileStore, type PayeeProfileStore } from "./payee-rules/profile-store.js";
 import {
@@ -346,6 +347,7 @@ export interface AppDependencies {
   readonly payeeProfileStore: PayeeProfileStore;
   readonly payeeFingerprintSalt: string;
   readonly payeeVerifier: PayeeVerifier;
+  readonly objectionStore?: PostgresExpenseObjectionStore | undefined;
   readonly actorForUser: (userId: string, fundId: string) => Promise<PseudonymId>;
   readonly fundStore?: FundStore | undefined;
   readonly approvalProofVerifier: ApprovalProofVerifier;

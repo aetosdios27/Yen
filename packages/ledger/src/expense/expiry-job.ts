@@ -7,7 +7,11 @@ export function findStaleExpenses(
 ): ExpenseRequest[] {
   const nowMs = Date.parse(nowUtc);
   return expenses.filter(
-    (e) => e.status === "submitted" && e.expiresAt !== null && nowMs >= Date.parse(e.expiresAt),
+    (e) =>
+      e.status === "submitted" &&
+      e.expiresAt !== null &&
+      nowMs >=
+        Math.max(Date.parse(e.expiresAt), e.objectionEndsAt ? Date.parse(e.objectionEndsAt) : 0),
   );
 }
 

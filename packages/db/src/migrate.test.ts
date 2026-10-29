@@ -64,6 +64,8 @@ databaseSuite("migration runner", (sql, url) => {
       "erasure_requests",
       "evidence_records",
       "expense_approvals",
+      "expense_objection_resolutions",
+      "expense_objections",
       "expense_payee_acknowledgements",
       "expense_payee_evaluations",
       "expense_payee_flags",
@@ -121,6 +123,7 @@ databaseSuite("migration runner", (sql, url) => {
     const debitMatchingSource = await readFile(join(defaultDir, "0023_debit_matching.sql"));
     const dpdpSource = await readFile(join(defaultDir, "0024_dpdp.sql"));
     const payeeRulesSource = await readFile(join(defaultDir, "0025_payee_rules.sql"));
+    const objectionsSource = await readFile(join(defaultDir, "0026_objections.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -273,6 +276,12 @@ databaseSuite("migration runner", (sql, url) => {
         checksum: createHash("sha256").update(payeeRulesSource).digest("hex"),
         applied_at: expect.any(Date),
       },
+      {
+        version: 26,
+        name: "0026_objections.sql",
+        checksum: createHash("sha256").update(objectionsSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
     ]);
   });
 
@@ -292,6 +301,29 @@ databaseSuite("migration runner", (sql, url) => {
     expect(
       await sql`SELECT count(*)::int AS count FROM member_payee_profiles WHERE fund_id = ${fundId}`,
     ).toEqual([{ count: 0 }]);
+  });
+
+  it("lets erasure delete a member's fund pseudonym while their objections exist", async () => {
+    await migrate(sql);
+    const userId = randomUUID();
+    const orgId = randomUUID();
+    const fundId = randomUUID();
+    const pseudonymId = randomUUID();
+    const expenseId = randomUUID();
+    const objectionId = randomUUID();
+    const actor = `psn_${pseudonymId}`;
+    await sql`INSERT INTO users (id, phone, display_name) VALUES (${userId}, '+919999900004', 'Objecting Donor')`;
+    await sql`INSERT INTO orgs (id, name, legal_form, owner_id) VALUES (${orgId}, 'Objection Club', 'society', ${userId})`;
+    await sql`INSERT INTO funds (id, org_id, title, policy_json) VALUES (${fundId}, ${orgId}, 'Objection Fund', '{}')`;
+    await sql`INSERT INTO fund_pseudonyms (pseudonym_id, user_id, fund_id) VALUES (${pseudonymId}, ${userId}, ${fundId})`;
+    await sql`INSERT INTO expenses (id, fund_id, status, expense_data, created_at, updated_at)
+      VALUES (${expenseId}, ${fundId}, 'submitted', '{}'::jsonb, now(), now())`;
+    await sql`INSERT INTO expense_objections (id, expense_id, fund_id, actor_id, reason, idempotency_key, created_at)
+      VALUES (${objectionId}, ${expenseId}, ${fundId}, ${actor}, 'Audit reason', 'key-1', now())`;
+    await sql`DELETE FROM fund_pseudonyms WHERE user_id = ${userId}`;
+    expect(await sql`SELECT actor_id FROM expense_objections WHERE id = ${objectionId}`).toEqual([
+      { actor_id: actor },
+    ]);
   });
 
   it("keeps manual debit decisions immutable", async () => {
@@ -381,7 +413,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(25);
+    expect(before).toHaveLength(26);
   });
 
   it("rejects an edited applied file and names it", async () => {

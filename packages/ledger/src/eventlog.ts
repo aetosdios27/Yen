@@ -15,11 +15,12 @@ export function toEventInput(raw: {
   actor: string;
   occurred_at: string;
   payload: unknown;
+  version?: number;
 }): EventInput {
   const parsed = parseEvent({
     ...raw,
     seq: 1,
-    version: 1,
+    version: raw.version ?? 1,
     prev_hash: "0".repeat(64),
     hash: "0".repeat(64),
   });
@@ -78,7 +79,7 @@ export function parseFundEventRow(row: FundEventRow): Event {
   const parsed = parseEvent({
     fund_id: row.fund_id,
     seq: Number(row.seq),
-    version: 1,
+    version: row.version,
     type: row.type,
     actor: row.actor,
     occurred_at: row.occurred_at,

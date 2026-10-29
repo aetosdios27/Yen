@@ -120,6 +120,7 @@ export interface ApproveExpenseInTxInput {
   readonly actorPseudonym?: PseudonymId;
   readonly nowUtc?: string;
   readonly fraudPolicy?: FraudPolicy;
+  readonly hasOpenObjection?: boolean;
 }
 
 export interface ApproveExpenseInTxResult {
@@ -159,6 +160,7 @@ async function approveExpenseInTxInner(
     input.verifyApprovalProof,
     time,
     input.fraudPolicy,
+    input.hasOpenObjection ?? false,
   );
 
   // Advisory lock serializes concurrent approvals
