@@ -4584,6 +4584,368 @@
         }
       }
     },
+    "/v1/funds/{fundId}/audit-bundle": {
+      "get": {
+        "tags": ["public funds"],
+        "operationId": "getPublicAuditBundle",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Canonical FundId UUID; inaccessible funds return 404"
+            },
+            "required": true,
+            "description": "Canonical FundId UUID; inaccessible funds return 404",
+            "name": "fundId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Canonical audit bundle v1 for fund interval",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              },
+              "etag": {
+                "schema": { "type": "string" },
+                "description": "Representation validator for public-tier responses"
+              },
+              "cache-control": {
+                "schema": { "type": "string" },
+                "description": "Public short shared cache; authenticated tiers are private and no-store"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "format": { "type": "string", "enum": ["yen/audit-bundle/v1"] },
+                    "fund_id": { "type": "string", "format": "uuid" },
+                    "chain": {
+                      "type": "object",
+                      "properties": {
+                        "start_seq": { "type": "integer", "minimum": 0 },
+                        "start_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+                      },
+                      "required": ["start_seq", "start_hash"]
+                    },
+                    "events": {
+                      "type": "array",
+                      "items": { "type": "object", "additionalProperties": {} }
+                    },
+                    "roots": {
+                      "type": "array",
+                      "items": { "type": "object", "additionalProperties": {} }
+                    },
+                    "anchor": {
+                      "type": "object",
+                      "properties": {
+                        "chain_id": { "type": "integer", "exclusiveMinimum": 0 },
+                        "contract_address": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" },
+                        "tx_hash": { "type": "string", "pattern": "^0x[0-9a-fA-F]{64}$" },
+                        "root": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                        "sequence": { "type": "integer", "exclusiveMinimum": 0 }
+                      },
+                      "required": ["chain_id", "contract_address", "tx_hash", "root", "sequence"]
+                    }
+                  },
+                  "required": ["format", "fund_id", "chain", "events", "roots", "anchor"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/records/{recordId}/proof": {
+      "get": {
+        "tags": ["public funds"],
+        "operationId": "getPublicRecordProof",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Canonical FundId UUID"
+            },
+            "required": true,
+            "description": "Canonical FundId UUID",
+            "name": "fundId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Record, expense, or donation identifier"
+            },
+            "required": true,
+            "description": "Record, expense, or donation identifier",
+            "name": "recordId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Record cryptographic proof and anchor status",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              },
+              "etag": {
+                "schema": { "type": "string" },
+                "description": "Representation validator for public-tier responses"
+              },
+              "cache-control": {
+                "schema": { "type": "string" },
+                "description": "Public short shared cache; authenticated tiers are private and no-store"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "recordId": { "type": "string" },
+                    "fundId": { "type": "string", "format": "uuid" },
+                    "status": { "type": "string", "enum": ["anchored", "pending"] },
+                    "event": { "type": "object", "additionalProperties": {} },
+                    "salt": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                    "latestEventHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                    "eventProof": {
+                      "type": "object",
+                      "properties": {
+                        "index": { "type": "integer", "minimum": 0 },
+                        "size": { "type": "integer", "exclusiveMinimum": 0 },
+                        "path": {
+                          "type": "array",
+                          "items": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+                        }
+                      },
+                      "required": ["index", "size", "path"]
+                    },
+                    "fundProof": {
+                      "type": "object",
+                      "properties": {
+                        "index": { "type": "integer", "minimum": 0 },
+                        "size": { "type": "integer", "exclusiveMinimum": 0 },
+                        "path": {
+                          "type": "array",
+                          "items": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+                        }
+                      },
+                      "required": ["index", "size", "path"]
+                    },
+                    "anchor": {
+                      "type": "object",
+                      "properties": {
+                        "chainId": { "type": "integer", "exclusiveMinimum": 0 },
+                        "contractAddress": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" },
+                        "txHash": { "type": "string", "pattern": "^0x[0-9a-fA-F]{64}$" },
+                        "root": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                        "sequence": { "type": "integer", "exclusiveMinimum": 0 }
+                      },
+                      "required": ["chainId", "contractAddress", "txHash", "root", "sequence"]
+                    },
+                    "pendingWindow": {
+                      "type": "object",
+                      "properties": {
+                        "message": { "type": "string" },
+                        "estimatedAnchorMinutes": { "type": "number" }
+                      },
+                      "required": ["message", "estimatedAnchorMinutes"]
+                    }
+                  },
+                  "required": ["recordId", "fundId", "status", "event"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
     "/v1/funds/{fundId}/public/expenses/{expenseId}": {
       "get": {
         "tags": ["public funds", "expenses"],

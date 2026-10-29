@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import type { AppendEventInput, StoredFundEvent, WaitlistEntry } from "@yen/db";
+import type { AppendEventInput, Sql, StoredFundEvent, WaitlistEntry } from "@yen/db";
 import { uuidv7 } from "@yen/db";
 import { type PseudonymId, parsePseudonymId } from "@yen/eventlog";
 import { type ApprovalProofVerifier, type ExpenseStore, InMemoryExpenseStore } from "@yen/ledger";
@@ -379,6 +379,7 @@ export class MemoryFundStore implements FundStore {
 
 export interface AppDependencies {
   readonly waitlistStore: WaitlistStore;
+  readonly sql?: Sql | undefined;
   readonly expenseStore: ExpenseStore;
   readonly payeeProfileStore: PayeeProfileStore;
   readonly payeeFingerprintSalt: string;

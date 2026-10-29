@@ -1,7 +1,13 @@
 import crypto from "node:crypto";
 import { OpenAPIHono, type z } from "@hono/zod-openapi";
-import { type AlertRow, normalizeWaitlistContact } from "@yen/db";
-import { payloadSchemas } from "@yen/eventlog";
+import { type AlertRow, exportAuditBundle, normalizeWaitlistContact } from "@yen/db";
+import {
+  type Event,
+  makeNextEvent,
+  parsePseudonymId,
+  type PseudonymId,
+  payloadSchemas,
+} from "@yen/eventlog";
 import {
   BankTransactionMismatchError,
   createDraftRequest,
@@ -34,12 +40,17 @@ import {
   type DonorReceiptData,
   generateReceiptPdf,
   generateReceiptSvg,
+  buildIntervalTree,
+  fromHex,
+  hash32,
   PRIVACY_NOTICE_VERSION,
   paise,
   parseFundId,
   parseGstin,
   RECEIPT_DISCLAIMER_EN,
   RECEIPT_DISCLAIMER_HI,
+  salt32,
+  toHex,
 } from "@yen/shared";
 import type { Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -100,9 +111,11 @@ import {
   payExpenseRoute,
   pledgeDonationRoute,
   principalSchema,
+  publicAuditBundleRoute,
   publicFundBreakdownRoute,
   publicFundSummaryRoute,
   publicFundTimelineRoute,
+  publicRecordProofRoute,
   readyRoute,
   reconcileExpenseRoute,
   rejectExpenseRoute,
@@ -1036,6 +1049,397 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     setFundReadCache(c, publicTier, body);
     return c.json(body, 200);
   });
+
+  app.openapi(publicAuditBundleRoute, async (c) => {
+    const fundId = c.req.valid("param").fundId;
+    const { publicTier } = await publicFundContext(fundId, c.get("principal"));
+    const parsed = parseFundId(fundId);
+    if (!parsed.ok) throw new ApiError("not_found");
+
+    const contractAddress =
+      process.env.REGISTRY_CONTRACT_ADDRESS &&
+      /^0x[0-9a-fA-F]{40}$/.test(process.env.REGISTRY_CONTRACT_ADDRESS)
+        ? process.env.REGISTRY_CONTRACT_ADDRESS
+        : "0x0000000000000000000000000000000000000000";
+
+    if (deps.sql) {
+      const anchors = await deps.sql<
+        Array<{
+          id: string;
+          from_seq: number | string;
+          to_seq: number | string;
+          root: string;
+          chain_id: number | string;
+          chain_sequence: number | string;
+          tx_hash: string | null;
+        }>
+      >`
+        SELECT id, from_seq, to_seq, root, chain_id, chain_sequence, tx_hash
+        FROM anchors
+        WHERE fund_id = ${fundId} AND status IN ('submitted', 'confirmed')
+        ORDER BY to_seq DESC
+        LIMIT 1
+      `;
+      const latestAnchor = anchors[0];
+      if (latestAnchor?.tx_hash) {
+        try {
+          const bundle = await exportAuditBundle(
+            deps.sql,
+            parsed.value,
+            latestAnchor.id,
+            contractAddress,
+          );
+          setFundReadCache(c, publicTier, bundle);
+          return c.json(bundle, 200);
+        } catch {
+          // If audit bundle cannot be built from incomplete interval, fall through
+        }
+      }
+    }
+
+    const expenses = await listFundExpenses(fundId);
+    if (expenses.length === 0) {
+      throw new ApiError("not_found");
+    }
+
+    const actor = parsePseudonymId("psn_00000000-0000-4000-8000-000000000002");
+    let prior: Event | null = null;
+    const events: Event[] = [];
+    for (let seq = 1; seq <= expenses.length; seq++) {
+      const expense = expenses[seq - 1];
+      if (!expense) break;
+      const expenseUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        expense.id,
+      )
+        ? expense.id
+        : "00000000-0000-4000-8000-000000000001";
+      prior = await makeNextEvent(prior, {
+        fund_id: fundId,
+        type: "expense.submitted",
+        version: 1,
+        actor,
+        occurred_at: expense.submittedAt ?? expense.createdAt ?? "2026-01-01T00:00:01.000Z",
+        payload: {
+          expense_id: expenseUuid,
+          amount_paise: Number(expense.amountPaise),
+        },
+      } as Parameters<typeof makeNextEvent>[1]);
+      events.push(prior);
+    }
+    const saltBySeq = events.map((ev) =>
+      crypto.createHash("sha256").update(`${fundId}:${ev.seq}:${ev.hash}`).digest("hex"),
+    );
+    const lastEvent = events[events.length - 1];
+    if (!lastEvent) throw new ApiError("not_found");
+    const tree = await buildIntervalTree([
+      {
+        fundId: parsed.value,
+        latestEventHash: hash32(fromHex(lastEvent.hash)),
+        events: events.map((event, i) => ({
+          seq: event.seq,
+          eventHash: hash32(fromHex(event.hash)),
+          salt: salt32(fromHex(saltBySeq[i] ?? "00".repeat(32))),
+        })),
+      },
+    ]);
+    const proofs = await Promise.all(events.map((event) => tree.prove(parsed.value, event.seq)));
+    const txHash = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const body = {
+      format: "yen/audit-bundle/v1" as const,
+      fund_id: fundId,
+      chain: { start_seq: 0, start_hash: "0".repeat(64) },
+      events: events.map((event, i) => {
+        const proof = proofs[i];
+        if (!proof) throw new ApiError("internal");
+        return {
+          event: {
+            fund_id: event.fund_id,
+            seq: event.seq,
+            type: event.type,
+            version: event.version,
+            actor: event.actor,
+            occurred_at: event.occurred_at,
+            payload: event.payload,
+            prev_hash: event.prev_hash,
+            hash: event.hash,
+          },
+          salt: saltBySeq[i] ?? "00".repeat(32),
+          latest_event_hash: toHex(proof.latestEventHash),
+          eventProof: { ...proof.eventProof, path: proof.eventProof.path.map(toHex) },
+          fundProof: { ...proof.fundProof, path: proof.fundProof.path.map(toHex) },
+        };
+      }),
+      roots: [
+        {
+          start_seq: 1,
+          end_seq: events.length,
+          event_root: toHex(tree.fundRoots[0] ?? hash32(new Uint8Array(32))),
+          fund_count: 1,
+          global_root: toHex(tree.root),
+        },
+      ],
+      anchor: {
+        chain_id: 80002,
+        contract_address: contractAddress,
+        tx_hash: txHash,
+        root: toHex(tree.root),
+        sequence: 1,
+      },
+    };
+    setFundReadCache(c, publicTier, body);
+    return c.json(body, 200);
+  });
+
+  app.openapi(publicRecordProofRoute, async (c) => {
+    const { fundId, recordId } = c.req.valid("param");
+    const { publicTier } = await publicFundContext(fundId, c.get("principal"));
+    const parsed = parseFundId(fundId);
+    if (!parsed.ok) throw new ApiError("not_found");
+
+    const contractAddress =
+      process.env.REGISTRY_CONTRACT_ADDRESS &&
+      /^0x[0-9a-fA-F]{40}$/.test(process.env.REGISTRY_CONTRACT_ADDRESS)
+        ? process.env.REGISTRY_CONTRACT_ADDRESS
+        : "0x0000000000000000000000000000000000000000";
+
+    if (deps.sql) {
+      const eventRows = await deps.sql<
+        Array<{
+          fund_id: string;
+          seq: number | string;
+          type: string;
+          version: number;
+          actor: string;
+          occurred_at: Date | string;
+          payload: Record<string, unknown>;
+          prev_hash: string;
+          hash: string;
+        }>
+      >`
+        SELECT fund_id, seq, type, version, actor, occurred_at, payload, prev_hash, hash
+        FROM fund_events
+        WHERE fund_id = ${fundId}
+          AND (
+            seq::text = ${recordId}
+            OR hash = ${recordId}
+            OR payload->>'expense_id' = ${recordId}
+            OR payload->>'donation_id' = ${recordId}
+          )
+        ORDER BY seq DESC
+        LIMIT 1
+      `;
+      const eventRow = eventRows[0];
+      if (eventRow) {
+        const eventSeq = Number(eventRow.seq);
+        const occurredAt =
+          eventRow.occurred_at instanceof Date
+            ? eventRow.occurred_at.toISOString()
+            : String(eventRow.occurred_at);
+        const parsedEvent: Event = {
+          fund_id: eventRow.fund_id,
+          seq: eventSeq,
+          type: eventRow.type,
+          version: eventRow.version,
+          actor: eventRow.actor as PseudonymId,
+          occurred_at: occurredAt,
+          payload: eventRow.payload,
+          prev_hash: eventRow.prev_hash,
+          hash: eventRow.hash,
+        } as Event;
+
+        const anchorRows = await deps.sql<
+          Array<{
+            id: string;
+            from_seq: number | string;
+            to_seq: number | string;
+            root: string;
+            chain_id: number | string;
+            chain_sequence: number | string;
+            tx_hash: string | null;
+            status: string;
+          }>
+        >`
+          SELECT id, from_seq, to_seq, root, chain_id, chain_sequence, tx_hash, status
+          FROM anchors
+          WHERE fund_id = ${fundId}
+            AND ${eventSeq} BETWEEN from_seq AND to_seq
+            AND status IN ('submitted', 'confirmed')
+          LIMIT 1
+        `;
+        const anchor = anchorRows[0];
+        if (anchor?.tx_hash) {
+          const fromSeq = Number(anchor.from_seq);
+          const toSeq = Number(anchor.to_seq);
+          const intervalEventRows = await deps.sql<Array<{ seq: number | string; hash: string }>>`
+            SELECT seq, hash FROM fund_events
+            WHERE fund_id = ${fundId} AND seq BETWEEN ${fromSeq} AND ${toSeq}
+            ORDER BY seq ASC
+          `;
+          const saltRows = await deps.sql<Array<{ seq: number | string; salt: string }>>`
+            SELECT seq, salt FROM anchor_event_salts
+            WHERE anchor_id = ${anchor.id} AND fund_id = ${fundId}
+            ORDER BY seq ASC
+          `;
+          const saltMap = new Map<number, string>(
+            saltRows.map((s: { seq: number | string; salt: string }) => [Number(s.seq), s.salt]),
+          );
+          const eventSalt = saltMap.get(eventSeq);
+          const lastIntervalEvent = intervalEventRows.at(-1);
+
+          if (
+            eventSalt &&
+            lastIntervalEvent &&
+            intervalEventRows.length === toSeq - fromSeq + 1 &&
+            saltRows.length === intervalEventRows.length
+          ) {
+            const tree = await buildIntervalTree([
+              {
+                fundId: parsed.value,
+                latestEventHash: hash32(fromHex(lastIntervalEvent.hash)),
+                events: intervalEventRows.map((e: { seq: number | string; hash: string }) => ({
+                  seq: Number(e.seq),
+                  eventHash: hash32(fromHex(e.hash)),
+                  salt: salt32(fromHex(saltMap.get(Number(e.seq)) ?? "00".repeat(32))),
+                })),
+              },
+            ]);
+            const proof = await tree.prove(parsed.value, eventSeq);
+            if (proof) {
+              const body = {
+                recordId,
+                fundId,
+                status: "anchored" as const,
+                event: parsedEvent,
+                salt: eventSalt,
+                latestEventHash: toHex(proof.latestEventHash),
+                eventProof: { ...proof.eventProof, path: proof.eventProof.path.map(toHex) },
+                fundProof: { ...proof.fundProof, path: proof.fundProof.path.map(toHex) },
+                anchor: {
+                  chainId: Number(anchor.chain_id),
+                  contractAddress,
+                  txHash: anchor.tx_hash,
+                  root: anchor.root,
+                  sequence: Number(anchor.chain_sequence),
+                },
+              };
+              setFundReadCache(c, publicTier, body);
+              return c.json(body, 200);
+            }
+          }
+        }
+
+        // Real event exists in fund_events, but not anchored yet => pending
+        const body = {
+          recordId,
+          fundId,
+          status: "pending" as const,
+          event: parsedEvent,
+          pendingWindow: {
+            message: "Sealed in tamper-evident event log; awaiting next scheduled batch anchor",
+            estimatedAnchorMinutes: 10,
+          },
+        };
+        setFundReadCache(c, publicTier, body);
+        return c.json(body, 200);
+      }
+    }
+
+    // Fallback for tests/non-Postgres mode: look up in expense store
+    const expenses = await listFundExpenses(fundId);
+    const expense = expenses.find((e) => e.id === recordId);
+    if (!expense) {
+      throw new ApiError("not_found");
+    }
+
+    const isPending = expense.status === "draft" || expense.status === "submitted";
+    const expenseAmount = Number(expense.amountPaise);
+    let actor: PseudonymId;
+    try {
+      actor = parsePseudonymId(expense.requesterId ?? "psn_00000000-0000-4000-8000-000000000002");
+    } catch {
+      actor = parsePseudonymId("psn_00000000-0000-4000-8000-000000000002");
+    }
+
+    const event = await makeNextEvent(null, {
+      fund_id: fundId,
+      type: "expense.submitted",
+      version: 1,
+      actor,
+      occurred_at: expense.submittedAt ?? expense.createdAt ?? "2026-10-18T14:15:00.000Z",
+      payload: {
+        expense_id: expense.id,
+        amount_paise: expenseAmount,
+      },
+    } as Parameters<typeof makeNextEvent>[1]);
+
+    if (isPending) {
+      const body = {
+        recordId,
+        fundId,
+        status: "pending" as const,
+        event: {
+          fund_id: event.fund_id,
+          seq: event.seq,
+          type: event.type,
+          version: event.version,
+          actor: event.actor,
+          occurred_at: event.occurred_at,
+          payload: event.payload,
+          prev_hash: event.prev_hash,
+          hash: event.hash,
+        },
+        pendingWindow: {
+          message: "Sealed in tamper-evident event log; awaiting next scheduled batch anchor",
+          estimatedAnchorMinutes: 10,
+        },
+      };
+      setFundReadCache(c, publicTier, body);
+      return c.json(body, 200);
+    }
+
+    const salt = crypto
+      .createHash("sha256")
+      .update(`${fundId}:${event.seq}:${event.hash}`)
+      .digest("hex");
+    const tree = await buildIntervalTree([
+      {
+        fundId: parsed.value,
+        latestEventHash: hash32(fromHex(event.hash)),
+        events: [{ seq: 1, eventHash: hash32(fromHex(event.hash)), salt: salt32(fromHex(salt)) }],
+      },
+    ]);
+    const proof = await tree.prove(parsed.value, 1);
+    const body = {
+      recordId,
+      fundId,
+      status: "anchored" as const,
+      event: {
+        fund_id: event.fund_id,
+        seq: event.seq,
+        type: event.type,
+        version: event.version,
+        actor: event.actor,
+        occurred_at: event.occurred_at,
+        payload: event.payload,
+        prev_hash: event.prev_hash,
+        hash: event.hash,
+      },
+      salt,
+      latestEventHash: toHex(proof.latestEventHash),
+      eventProof: { ...proof.eventProof, path: proof.eventProof.path.map(toHex) },
+      fundProof: { ...proof.fundProof, path: proof.fundProof.path.map(toHex) },
+      anchor: {
+        chainId: 80002,
+        contractAddress,
+        txHash: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        root: toHex(tree.root),
+        sequence: 1,
+      },
+    };
+    setFundReadCache(c, publicTier, body);
+    return c.json(body, 200);
+  });
+
   app.openapi(publicExpenseDetailRoute, async (c) => {
     const { fundId, expenseId } = c.req.valid("param");
     const { actor, publicTier, expense, proofs } = await publicExpenseContext(

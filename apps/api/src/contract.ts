@@ -391,6 +391,116 @@ export const publicFundTimelineRoute = createRoute({
   },
 });
 
+export const publicAuditBundleSchema = z
+  .object({
+    format: z.literal("yen/audit-bundle/v1"),
+    fund_id: z.string().uuid(),
+    chain: z.object({
+      start_seq: z.number().int().nonnegative(),
+      start_hash: z.string().regex(/^[0-9a-f]{64}$/),
+    }),
+    events: z.array(z.record(z.string(), z.unknown())),
+    roots: z.array(z.record(z.string(), z.unknown())),
+    anchor: z.object({
+      chain_id: z.number().int().positive(),
+      contract_address: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+      tx_hash: z.string().regex(/^0x[0-9a-fA-F]{64}$/),
+      root: z.string().regex(/^[0-9a-f]{64}$/),
+      sequence: z.number().int().positive(),
+    }),
+  })
+  .strict();
+
+export const publicAuditBundleRoute = createRoute({
+  method: "get",
+  path: "/v1/funds/{fundId}/audit-bundle",
+  tags: ["public funds"],
+  operationId: "getPublicAuditBundle",
+  request: { params: publicFundIdParams },
+  responses: {
+    200: {
+      ...jsonResponse(publicAuditBundleSchema, "Canonical audit bundle v1 for fund interval"),
+      headers: fundReadHeaders,
+    },
+    ...publicFundErrors,
+  },
+});
+
+const publicRecordProofParams = z.object({
+  fundId: z
+    .string()
+    .uuid()
+    .openapi({
+      description: "Canonical FundId UUID",
+      param: { name: "fundId", in: "path" },
+    }),
+  recordId: z.string().openapi({
+    description: "Record, expense, or donation identifier",
+    param: { name: "recordId", in: "path" },
+  }),
+});
+
+export const publicRecordProofSchema = z
+  .object({
+    recordId: z.string(),
+    fundId: z.string().uuid(),
+    status: z.enum(["anchored", "pending"]),
+    event: z.record(z.string(), z.unknown()),
+    salt: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
+    latestEventHash: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
+    eventProof: z
+      .object({
+        index: z.number().int().nonnegative(),
+        size: z.number().int().positive(),
+        path: z.array(z.string().regex(/^[0-9a-f]{64}$/)),
+      })
+      .optional(),
+    fundProof: z
+      .object({
+        index: z.number().int().nonnegative(),
+        size: z.number().int().positive(),
+        path: z.array(z.string().regex(/^[0-9a-f]{64}$/)),
+      })
+      .optional(),
+    anchor: z
+      .object({
+        chainId: z.number().int().positive(),
+        contractAddress: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+        txHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/),
+        root: z.string().regex(/^[0-9a-f]{64}$/),
+        sequence: z.number().int().positive(),
+      })
+      .optional(),
+    pendingWindow: z
+      .object({
+        message: z.string(),
+        estimatedAnchorMinutes: z.number(),
+      })
+      .optional(),
+  })
+  .strict();
+
+export const publicRecordProofRoute = createRoute({
+  method: "get",
+  path: "/v1/funds/{fundId}/records/{recordId}/proof",
+  tags: ["public funds"],
+  operationId: "getPublicRecordProof",
+  request: { params: publicRecordProofParams },
+  responses: {
+    200: {
+      ...jsonResponse(publicRecordProofSchema, "Record cryptographic proof and anchor status"),
+      headers: fundReadHeaders,
+    },
+    ...publicFundErrors,
+  },
+});
+
 const consentPurpose = z.enum([
   "account_otp",
   "donation_receipt_contact",
