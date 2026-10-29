@@ -923,7 +923,7 @@ databaseSuite("fund_events persistence layer", (sql, url) => {
       for (const item of events) {
         seenTypes.add(item.event.type);
       }
-      expect(seenTypes.size).toBe(24);
+      expect(seenTypes.size).toBe(25);
 
       // Verify each event type can be inserted when valid
       for (const item of events) {

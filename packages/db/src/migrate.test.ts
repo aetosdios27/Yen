@@ -106,6 +106,7 @@ databaseSuite("migration runner", (sql, url) => {
     );
     const bankTransactionsSource = await readFile(join(defaultDir, "0019_bank_transactions.sql"));
     const evidenceSource = await readFile(join(defaultDir, "0020_evidence_records.sql"));
+    const fundSettingsSource = await readFile(join(defaultDir, "0021_funds_settings.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -228,6 +229,12 @@ databaseSuite("migration runner", (sql, url) => {
         checksum: createHash("sha256").update(evidenceSource).digest("hex"),
         applied_at: expect.any(Date),
       },
+      {
+        version: 21,
+        name: "0021_funds_settings.sql",
+        checksum: createHash("sha256").update(fundSettingsSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
     ]);
   });
 
@@ -261,7 +268,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(20);
+    expect(before).toHaveLength(21);
   });
 
   it("rejects an edited applied file and names it", async () => {

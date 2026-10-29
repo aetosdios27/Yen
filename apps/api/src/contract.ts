@@ -122,6 +122,7 @@ export const fundSchema = z
   .object({
     ...fundFields,
     visibility: fundVisibility,
+    version: z.number().int().positive().optional(),
     id: z.string().uuid(),
     createdAt: z.iso.datetime(),
   })
@@ -230,6 +231,42 @@ export const getFundRoute = createRoute({
     }),
   },
   responses: { 200: jsonResponse(fundSchema, "Fake fund"), ...protectedErrors },
+});
+
+export const changeFundVisibilityRoute = createRoute({
+  method: "put",
+  path: "/v1/funds/{fundId}/visibility",
+  tags: ["funds", "policy"],
+  operationId: "changeFundVisibility",
+  security,
+  description:
+    "Changes fund visibility using an optimistic version and records the v2 audit event.",
+  request: {
+    params: z.object({ fundId: z.string().uuid() }),
+    headers: z.object({ "Idempotency-Key": idempotencyKey }),
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z
+            .object({
+              visibility: z.enum(["public", "donors", "members", "private"]),
+              expectedVersion: z.number().int().positive(),
+            })
+            .strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: withReplay(jsonResponse(fundSchema, "Fund visibility updated")),
+    400: withReplay(protectedErrors[400]),
+    401: withReplay(protectedErrors[401]),
+    403: withReplay(protectedErrors[403]),
+    404: withReplay(protectedErrors[404]),
+    409: withReplay(protectedErrors[409]),
+    500: withReplay(protectedErrors[500]),
+  },
 });
 
 const publicFundIdParams = z.object({

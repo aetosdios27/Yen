@@ -103,11 +103,13 @@ import {
   type ApiEnv,
   type AppDependencies,
   defaultDependencies,
+  type FundStore,
   MemoryFundStore,
   type Principal,
 } from "./dependencies.js";
 import { ApiError, errorBody, errorStatus, ReadinessError, StoreError } from "./errors.js";
 import { stripExifMetadata } from "./exif-strip.js";
+import { registerFundVisibilityRoute } from "./fund-routes.js";
 import { getVerifiedEvidenceObject } from "./integrity-job.js";
 import { logMethod } from "./logging.js";
 import {
@@ -156,6 +158,9 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     ),
     ...overrides,
   };
+  if (process.env.NODE_ENV === "production" && baseDeps.fundStore?.persistent !== true) {
+    throw new Error("Production API requires a PostgreSQL fund store");
+  }
   const otpVerifier =
     overrides.otpVerifier === undefined
       ? new AuthPinOtpVerifier({
@@ -209,7 +214,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       "*",
       cors({
         origin: deps.corsOrigins,
-        allowMethods: ["GET", "HEAD", "POST", "OPTIONS"],
+        allowMethods: ["GET", "HEAD", "POST", "PUT", "OPTIONS"],
         allowHeaders: [
           "Content-Type",
           "Idempotency-Key",
@@ -312,13 +317,30 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       ? next()
       : requireAuth(c, next),
   );
+  app.use("/v1/funds/*", async (c, next) => {
+    const principal = c.get("principal");
+    if (principal && deps.fundStore?.rolesFor) {
+      const match = /^\/v1\/funds\/([0-9a-f-]{36})(?:\/|$)/.exec(c.req.path);
+      const parsed = match?.[1] ? parseFundId(match[1]) : null;
+      if (parsed?.ok) {
+        const roles = await deps.fundStore.rolesFor(parsed.value, principal.id);
+        const { role: _oldRole, ...identity } = principal;
+        c.set("principal", {
+          ...identity,
+          roles,
+          ...(roles[0] ? { role: roles[0] as NonNullable<Principal["role"]> } : {}),
+        });
+      }
+    }
+    await next();
+  });
   app.use("/v1/auth/*", (c, next) =>
     isPublicAuthRoute(c.req.path) || isPendingDeviceAuthRoute(c.req.path)
       ? next()
       : requireAuth(c, next),
   );
 
-  const funds = deps.fundStore ?? new MemoryFundStore();
+  const funds: FundStore = deps.fundStore ?? new MemoryFundStore();
   const authorizedFund = (c: Context<ApiEnv>, action: FundAction, resource: FundResource) => {
     const principal = c.get("principal");
     if (!principal) throw new ApiError("unauthenticated");
@@ -347,7 +369,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       consentText: input.consent.text,
       consentVersion: input.consent.version,
     });
-    return c.json({ status: "received" }, 201);
+    return c.json({ status: "received" as const }, 201);
   });
   app.openapi(healthRoute, (c) => c.json({ status: "ok" as const }, 200));
   app.openapi(versionRoute, (c) => c.json(buildInfo, 200));
@@ -633,7 +655,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     }
     return c.json({ status: "revoked" as const }, 200);
   });
-  app.openapi(createFundRoute, (c) => {
+  app.openapi(createFundRoute, async (c) => {
     const principal = authorizedFund(c, "fund:create", { kind: "fund" });
     const id = parseFundId(deps.idGenerator());
     if (!id.ok) throw new ApiError("internal");
@@ -642,36 +664,61 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       ...input,
       visibility: input.visibility ?? "private",
       id: id.value,
+      version: 1,
       createdAt: new Date(deps.clock()).toISOString(),
     };
     const resource = { kind: "fund", fund: { owner: principal.id, fund } } as const;
-    funds.set(id.value, resource.fund);
+    if (funds.create) await funds.create(id.value, resource.fund, principal.id);
+    else funds.set(id.value, resource.fund);
     return c.json(deps.policy.redact(principal, resource), 201);
   });
-  app.openapi(getFundRoute, (c) => {
+  app.openapi(getFundRoute, async (c) => {
     const id = parseFundId(c.req.valid("param").fundId);
     if (!id.ok) throw new ApiError("not_found");
-    const entry = funds.get(id.value);
+    const entry = await funds.get(id.value);
     if (!entry) throw new ApiError("not_found");
     const resource = { kind: "fund", fund: entry } as const;
     const principal = authorizedFund(c, "fund:read", resource);
     return c.json(deps.policy.redact(principal, resource), 200);
   });
+  const getFundOrNotFound = async (fundIdString: string) => {
+    const id = parseFundId(fundIdString);
+    if (!id.ok) throw new ApiError("not_found");
+    const entry = await funds.get(id.value);
+    if (!entry) throw new ApiError("not_found");
+    return { id: id.value, resource: { kind: "fund", fund: entry } as const };
+  };
+  registerFundVisibilityRoute(app, {
+    fundStore: funds,
+    getFund: getFundOrNotFound,
+    authorizeFund: authorizedFund,
+    policy: deps.policy,
+    clock: deps.clock,
+  });
   const publicFundContext = async (fundId: string, principal: Principal | null) => {
     const startedAt = performance.now();
-    const entry = funds.get(fundId);
+    const entry = await funds.get(fundId);
     const parsedFundId = parseFundId(fundId);
     if (!parsedFundId.ok) throw new ApiError("not_found");
     const visibilityTier = entry?.fund.visibility ?? "private";
     const requestedRole: string | undefined =
       principal?.role ?? principal?.roles?.find(isValidRole);
-    const role =
-      principal?.id === entry?.owner
-        ? "owner"
-        : requestedRole && isValidRole(requestedRole)
-          ? requestedRole
-          : "public";
-    const actor = principal ? { id: principal.id, role } : { role: "public" as const };
+    const isOwner =
+      principal !== null &&
+      principal.id === entry?.owner &&
+      (deps.fundStore?.persistent !== true || principal.roles?.includes("owner") === true);
+    const role = isOwner
+      ? "owner"
+      : requestedRole && isValidRole(requestedRole)
+        ? requestedRole
+        : "public";
+    const actor = principal
+      ? {
+          id: principal.id,
+          role,
+          ...(principal.roles ? { roles: principal.roles.filter(isValidRole) } : {}),
+        }
+      : { role: "public" as const };
     const allowed = policyCan(actor, "fund:read", {
       kind: "fund",
       fund: {
@@ -885,6 +932,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     objectionWindowHours: 0,
     autoExpireHours: 72,
   };
+  const fundPolicyFor = async (fundId: string) =>
+    (await deps.fundStore?.getPolicy?.(fundId)) ?? defaultFundPolicy;
 
   const toExpenseView = (exp: ExpenseRequest): z.infer<typeof expenseSchema> => ({
     id: exp.id,
@@ -1008,16 +1057,17 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     }
     const now = new Date(deps.clock()).toISOString();
     const actorId = await actorFor(principal, fundIdResult.value);
+    const fundPolicy = await fundPolicyFor(fundIdResult.value);
     const holdId = deps.idGenerator();
     const updated = submitExpense(expense, {
       holdId,
-      policy: defaultFundPolicy,
+      policy: fundPolicy,
       nowUtc: now,
     });
     const persisted = await deps.expenseStore.save(updated, {
       actorId,
       actorUserId: principal.id,
-      policy: defaultFundPolicy,
+      policy: fundPolicy,
     });
     const finalExpense = persisted ?? updated;
     const updatedView = toExpenseView(finalExpense);
@@ -1074,13 +1124,14 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       },
       approvedAt: now,
     };
+    const fundPolicy = await fundPolicyFor(fundIdResult.value);
     try {
       const res = await withMoneyOperation("approve", () =>
         withSpan("db.expense.atomic_approve", () =>
           deps.expenseStore.atomicApprove(
             expenseId,
             approval,
-            defaultFundPolicy,
+            fundPolicy,
             deps.approvalProofVerifier,
             now,
             principal.id,
@@ -1146,11 +1197,12 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       approvalToken: c.req.header("x-approval-token") ?? input.approvalToken,
     });
     const updated = rejectExpense(expense, input.reason, now);
+    const fundPolicy = await fundPolicyFor(fundIdResult.value);
     const persisted = await withMoneyOperation("pay", () =>
       deps.expenseStore.save(updated, {
         actorId,
         actorUserId: principal.id,
-        policy: defaultFundPolicy,
+        policy: fundPolicy,
       }),
     );
     const finalExpense = persisted ?? updated;
@@ -1193,6 +1245,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const input = c.req.valid("json");
     const now = new Date(deps.clock()).toISOString();
     const actorId = await actorFor(principal, fundIdResult.value);
+    const fundPolicy = await fundPolicyFor(fundIdResult.value);
     const updated = await withSpan("ledger.pay", async () =>
       payExpense(expense, input.bankTransactionId, now),
     );
@@ -1201,7 +1254,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         deps.expenseStore.save(updated, {
           actorId,
           actorUserId: principal.id,
-          policy: defaultFundPolicy,
+          policy: fundPolicy,
         }),
       ),
     );
@@ -1245,12 +1298,13 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       if (err instanceof BankTransactionMismatchError) throw new ApiError("conflict");
       throw err;
     }
+    const fundPolicy = await fundPolicyFor(fundIdResult.value);
     await withMoneyOperation("reconcile", () =>
       withSpan("db.expense.save", () =>
         deps.expenseStore.save(updated, {
           actorId,
           actorUserId: principal.id,
-          policy: defaultFundPolicy,
+          policy: fundPolicy,
         }),
       ),
     );
@@ -1263,22 +1317,22 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       200,
     );
   });
-  const donationResource = (id: string) => {
-    const fund = funds.get(id);
+  const donationResource = async (id: string) => {
+    const fund = await funds.get(id);
     if (!fund) throw new ApiError("not_found");
     return { kind: "fund", fund } as const;
   };
-  app.openapi(donationDetailsRoute, (c) => {
+  app.openapi(donationDetailsRoute, async (c) => {
     const id = parseFundId(c.req.valid("param").fundId);
     if (!id.ok) throw new ApiError("not_found");
-    const resource = donationResource(id.value);
+    const resource = await donationResource(id.value);
     if (!deps.policy.canDonate(resource)) throw new ApiError("not_found");
     return c.json(deps.policy.redactDonationDetails(resource), 200);
   });
   app.openapi(pledgeDonationRoute, async (c) => {
     const id = parseFundId(c.req.valid("param").fundId);
     if (!id.ok) throw new ApiError("not_found");
-    const resource = donationResource(id.value);
+    const resource = await donationResource(id.value);
     if (!deps.policy.canDonate(resource)) throw new ApiError("not_found");
     const input = c.req.valid("json");
     const donorPrincipal = c.get("principal");
@@ -1328,14 +1382,6 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       201,
     );
   });
-
-  const getFundOrNotFound = (fundIdString: string) => {
-    const id = parseFundId(fundIdString);
-    if (!id.ok) throw new ApiError("not_found");
-    const entry = funds.get(id.value);
-    if (!entry) throw new ApiError("not_found");
-    return { id: id.value, resource: { kind: "fund", fund: entry } as const };
-  };
 
   registerOwnerInviteRoutes(app, deps, getFundOrNotFound, authorizedFund);
 
@@ -1445,7 +1491,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
   app.openapi(changePayeeRoute, async (c) => {
     const { fundId } = c.req.valid("param");
-    const { id, resource } = getFundOrNotFound(fundId);
+    const { id, resource } = await getFundOrNotFound(fundId);
     const principal = authorizedFund(c, "fund:payee:change", resource);
 
     const body = c.req.valid("json");
@@ -1454,6 +1500,13 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
     const actionDetails = { action: "payee:change", fundId: id, vpa: body.vpa };
     await deps.pinService.verifyAction(principal.id, actionDetails, { pin, approvalToken });
+    if (!funds.changePayee) throw new StoreError();
+    await funds.changePayee({
+      fundId: id,
+      actorUserId: principal.id,
+      vpa: body.vpa,
+      occurredAt: new Date(deps.clock()).toISOString(),
+    });
 
     return c.json(
       deps.policy.redactReceipt(
@@ -1468,7 +1521,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
   app.openapi(changePolicyRoute, async (c) => {
     const { fundId } = c.req.valid("param");
-    const { id, resource } = getFundOrNotFound(fundId);
+    const { id, resource } = await getFundOrNotFound(fundId);
     const principal = authorizedFund(c, "fund:policy:change", resource);
 
     const body = c.req.valid("json");
@@ -1477,6 +1530,13 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
     const actionDetails = { action: "policy:change", fundId: id, policy: body.policyJson };
     await deps.pinService.verifyAction(principal.id, actionDetails, { pin, approvalToken });
+    if (!funds.changePolicy) throw new StoreError();
+    await funds.changePolicy({
+      fundId: id,
+      actorUserId: principal.id,
+      policy: body.policyJson,
+      occurredAt: new Date(deps.clock()).toISOString(),
+    });
 
     return c.json(
       deps.policy.redactReceipt(
@@ -1491,7 +1551,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
   app.openapi(addMemberRoute, async (c) => {
     const { fundId } = c.req.valid("param");
-    const { id, resource } = getFundOrNotFound(fundId);
+    const { id, resource } = await getFundOrNotFound(fundId);
     const principal = authorizedFund(c, "fund:member:add", resource);
 
     const body = c.req.valid("json");
@@ -1505,6 +1565,14 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       role: body.role,
     };
     await deps.pinService.verifyAction(principal.id, actionDetails, { pin, approvalToken });
+    if (!funds.addMember) throw new StoreError();
+    await funds.addMember({
+      fundId: id,
+      actorUserId: principal.id,
+      userId: body.userId,
+      role: body.role,
+      occurredAt: new Date(deps.clock()).toISOString(),
+    });
 
     return c.json(
       deps.policy.redactReceipt(
@@ -1519,7 +1587,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
   app.openapi(removeMemberRoute, async (c) => {
     const { fundId, memberId } = c.req.valid("param");
-    const { id, resource } = getFundOrNotFound(fundId);
+    const { id, resource } = await getFundOrNotFound(fundId);
     const principal = authorizedFund(c, "fund:member:remove", resource);
 
     const body = c.req.valid("json");
@@ -1528,6 +1596,13 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
     const actionDetails = { action: "member:remove", fundId: id, targetId: memberId };
     await deps.pinService.verifyAction(principal.id, actionDetails, { pin, approvalToken });
+    if (!funds.removeMember) throw new StoreError();
+    await funds.removeMember({
+      fundId: id,
+      actorUserId: principal.id,
+      userId: memberId,
+      occurredAt: new Date(deps.clock()).toISOString(),
+    });
 
     return c.json(
       deps.policy.redactReceipt(
@@ -1543,7 +1618,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   app.openapi(uploadEvidenceRoute, async (c) => {
     const fundParam = parseFundId(c.req.valid("param").fundId);
     if (!fundParam.ok) throw new ApiError("not_found");
-    const fundEntry = funds.get(fundParam.value);
+    const fundEntry = await funds.get(fundParam.value);
     if (!fundEntry) throw new ApiError("not_found");
 
     const expenseId = c.req.valid("param").expenseId;
@@ -1707,7 +1782,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   app.openapi(getEvidenceRoute, async (c) => {
     const fundParam = parseFundId(c.req.valid("param").fundId);
     if (!fundParam.ok) throw new ApiError("not_found");
-    const fundEntry = funds.get(fundParam.value);
+    const fundEntry = await funds.get(fundParam.value);
     if (!fundEntry) throw new ApiError("not_found");
 
     const expenseId = c.req.valid("param").expenseId;
@@ -1729,7 +1804,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const input = c.req.valid("json");
     const id = parseFundId(input.fundId);
     if (!id.ok) throw new ApiError("not_found");
-    const entry = funds.get(id.value);
+    const entry = await funds.get(id.value);
     if (!entry) throw new ApiError("not_found");
     const resource = { kind: "fund", fund: entry } as const;
     const principal = authorizedFund(c, "fund:reconcile", resource);
@@ -1786,7 +1861,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   app.openapi(unmatchedCreditsRoute, async (c) => {
     const id = parseFundId(c.req.valid("param").fundId);
     if (!id.ok) throw new ApiError("not_found");
-    const entry = funds.get(id.value);
+    const entry = await funds.get(id.value);
     if (!entry) throw new ApiError("not_found");
     const resource = { kind: "fund", fund: entry } as const;
     const principal = authorizedFund(c, "fund:reconcile", resource);
@@ -1810,7 +1885,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   app.openapi(manualMatchRoute, async (c) => {
     const id = parseFundId(c.req.valid("param").fundId);
     if (!id.ok) throw new ApiError("not_found");
-    const entry = funds.get(id.value);
+    const entry = await funds.get(id.value);
     if (!entry) throw new ApiError("not_found");
     const resource = { kind: "fund", fund: entry } as const;
     const principal = authorizedFund(c, "fund:reconcile", resource);

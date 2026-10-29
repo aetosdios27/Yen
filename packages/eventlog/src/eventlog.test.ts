@@ -194,7 +194,7 @@ describe("frozen event hashes", () => {
     );
   });
   it("pins every versioned event, canonical string, and hash", async () => {
-    expect(events.length).toBe(25);
+    expect(events.length).toBe(26);
     expect(eventHashDomain).toBe(golden.domain_utf8);
     expect(genesisHash).toBe(golden.genesis_hash);
     expect(
@@ -226,7 +226,9 @@ describe("frozen event hashes", () => {
   });
 
   it("pins the v2 visibility transition schema without changing v1 vectors", async () => {
-    const event = events.at(-1);
+    const event = events.find(
+      (entry) => entry.type === "fund.visibility_changed" && entry.version === 2,
+    );
     expect(event).toMatchObject({
       type: "fund.visibility_changed",
       version: 2,
@@ -840,6 +842,9 @@ describe("chain verification", () => {
     );
   }, 30_000);
 
+  // Exhaustive: every field and every hash byte of every pinned event re-verifies the whole
+  // chain, so cost grows with the number of golden events. It took 21-30 s on CI against a
+  // 30 s limit and began failing once more events were pinned; the limit follows the cost.
   it("covers every pinned event field and each of its 32 hash bytes", async () => {
     for (const [index, event] of events.entries()) {
       const fieldCount = Object.keys(event).length + Object.keys(event.payload).length;
@@ -861,7 +866,7 @@ describe("chain verification", () => {
         ).toBe(false);
       }
     }
-  }, 30_000);
+  }, 120_000);
 
   it("detects removal, reordering, duplication, and insertion", async () => {
     await fc.assert(

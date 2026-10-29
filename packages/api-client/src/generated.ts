@@ -253,6 +253,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/funds/{fundId}/visibility": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** @description Changes fund visibility using an optimistic version and records the v2 audit event. */
+    put: operations["changeFundVisibility"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/funds/{fundId}/public/summary": {
     parameters: {
       query?: never;
@@ -989,6 +1006,7 @@ export interface components {
       upiPayeeName: string;
       /** @enum {string} */
       visibility: "public" | "donors" | "members" | "private";
+      version?: number;
       /** Format: uuid */
       id: string;
       /** Format: date-time */
@@ -2657,6 +2675,120 @@ export interface operations {
           "x-request-id": string;
           /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
           "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  changeFundVisibility: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path: {
+        fundId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          /** @enum {string} */
+          visibility: "public" | "donors" | "members" | "private";
+          expectedVersion: number;
+        };
+      };
+    };
+    responses: {
+      /** @description Fund visibility updated */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Fund"];
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource conflict, changed idempotency input, or request in progress */
+      409: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
           [name: string]: unknown;
         };
         content: {

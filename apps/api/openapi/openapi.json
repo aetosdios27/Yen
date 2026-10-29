@@ -230,6 +230,7 @@
           "upiVpa": { "type": "string", "pattern": "^[a-zA-Z0-9._-]{2,256}@[a-zA-Z]{2,64}$" },
           "upiPayeeName": { "type": "string", "minLength": 1, "maxLength": 80 },
           "visibility": { "type": "string", "enum": ["public", "donors", "members", "private"] },
+          "version": { "type": "integer", "exclusiveMinimum": 0 },
           "id": { "type": "string", "format": "uuid" },
           "createdAt": { "type": "string", "format": "date-time" }
         },
@@ -2646,6 +2647,171 @@
                 "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
                 "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
                 "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/visibility": {
+      "put": {
+        "tags": ["funds", "policy"],
+        "operationId": "changeFundVisibility",
+        "security": [{ "bearerAuth": [] }],
+        "description": "Changes fund visibility using an optimistic version and records the v2 audit event.",
+        "parameters": [
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "fundId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._:-]+$"
+            },
+            "required": true,
+            "name": "Idempotency-Key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "visibility": {
+                    "type": "string",
+                    "enum": ["public", "donors", "members", "private"]
+                  },
+                  "expectedVersion": { "type": "integer", "exclusiveMinimum": 0 }
+                },
+                "required": ["visibility", "expectedVersion"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Fund visibility updated",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Fund" } } }
+          },
+          "400": {
+            "description": "Validation failed; details contain field paths",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "409": {
+            "description": "Resource conflict, changed idempotency input, or request in progress",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
               }
             },
             "content": {
