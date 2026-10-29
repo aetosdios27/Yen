@@ -1830,3 +1830,217 @@ export const getEvidenceRoute = createRoute({
     ...protectedErrors,
   },
 });
+
+export const statementTransactionSummarySchema = z
+  .object({
+    id: z.string(),
+    bankReference: z.string(),
+    utr: z.string().optional(),
+    amountPaise: paiseWire,
+    type: z.enum(["credit", "debit"]),
+    reconciliationStatus: z.enum(["unmatched", "matched", "manually_matched", "ignored"]),
+    matchedPledgeId: z.string().optional(),
+    duplicate: z.boolean().optional(),
+  })
+  .strict()
+  .openapi("StatementTransactionSummary");
+
+export const statementUploadResultSchema = z
+  .object({
+    totalProcessed: z.number().int().nonnegative(),
+    ingestedCount: z.number().int().nonnegative(),
+    matchedCount: z.number().int().nonnegative(),
+    unmatchedCount: z.number().int().nonnegative(),
+    duplicateCount: z.number().int().nonnegative(),
+    transactions: z.array(statementTransactionSummarySchema),
+  })
+  .strict()
+  .openapi("StatementUploadResult");
+
+export const statementUploadInput = z
+  .object({
+    fundId: z.string().uuid(),
+    csvContent: z.string().min(1),
+  })
+  .strict()
+  .openapi("StatementUploadInput");
+
+export const statementUploadRoute = createRoute({
+  method: "post",
+  path: "/v1/reconciliation/statements",
+  tags: ["reconciliation"],
+  operationId: "uploadStatement",
+  security,
+  summary: "Upload bank statement CSV",
+  description:
+    "Uploads and ingests a bank statement CSV for reconciliation against pending donation pledges.",
+  request: {
+    body: { required: true, content: { "application/json": { schema: statementUploadInput } } },
+  },
+  responses: {
+    200: jsonResponse(statementUploadResultSchema, "Statement parsed and ingested"),
+    ...protectedErrors,
+  },
+});
+
+export const partnerWebhookResultSchema = z
+  .object({
+    status: z.literal("processed"),
+    duplicate: z.boolean().optional(),
+    transactionId: z.string(),
+    reconciliationStatus: z.enum(["unmatched", "matched", "manually_matched", "ignored"]),
+    matchedPledgeId: z.string().optional(),
+  })
+  .strict()
+  .openapi("PartnerWebhookResult");
+
+export const partnerWebhookInput = z
+  .object({
+    event: z.string().min(1).max(100),
+    timestamp: z.string().datetime(),
+    data: z
+      .object({
+        fund_id: z.string().uuid(),
+        bank_reference: z.string().trim().min(1).max(128),
+        amount_paise: z.union([z.number().int().positive(), z.string().regex(/^[1-9][0-9]*$/)]),
+        type: z.enum(["credit", "debit"]).default("credit"),
+        posted_at: z.string().datetime(),
+        utr: z
+          .string()
+          .regex(/^[0-9]{12}$/)
+          .optional(),
+        narration: z.string().trim().max(500).optional(),
+        counterparty: z
+          .object({
+            vpa: z.string().trim().max(256).optional(),
+            name: z.string().trim().max(120).optional(),
+          })
+          .optional(),
+      })
+      .passthrough(),
+  })
+  .strict()
+  .openapi("PartnerWebhookInput");
+
+export const partnerWebhookRoute = createRoute({
+  method: "post",
+  path: "/v1/reconciliation/webhooks/partner",
+  tags: ["reconciliation"],
+  operationId: "partnerWebhook",
+  summary: "Payment partner webhook",
+  description:
+    "Idempotent webhook receiver for payment partner notifications (e.g. UPI virtual account credit).",
+  request: {
+    body: { required: true, content: { "application/json": { schema: partnerWebhookInput } } },
+  },
+  responses: {
+    200: jsonResponse(partnerWebhookResultSchema, "Webhook processed"),
+    400: protectedErrors[400],
+    404: protectedErrors[404],
+    429: limitedResponse,
+    500: internalResponse,
+    503: overloadedResponse,
+  },
+});
+
+export const candidatePledgeSchema = z
+  .object({
+    pledgeId: z.string(),
+    amountPaise: paiseWire,
+    utr: z.string(),
+    donorName: z.string().optional(),
+    createdAt: z.string().datetime(),
+    timeDifferenceHours: z.number().int().nonnegative(),
+  })
+  .strict()
+  .openapi("CandidatePledge");
+
+export const unmatchedCreditSchema = z
+  .object({
+    id: z.string(),
+    fundId: z.string().uuid(),
+    bankReference: z.string(),
+    utr: z.string().optional(),
+    amountPaise: paiseWire,
+    postedAt: z.string().datetime(),
+    narration: z.string().optional(),
+    counterpartyVpa: z.string().optional(),
+    candidates: z.array(candidatePledgeSchema),
+  })
+  .strict()
+  .openapi("UnmatchedCredit");
+
+export const unmatchedCreditsSchema = z
+  .array(unmatchedCreditSchema)
+  .openapi("UnmatchedCreditsResponse");
+
+export const unmatchedCreditsRoute = createRoute({
+  method: "get",
+  path: "/v1/funds/{fundId}/reconciliation/unmatched",
+  tags: ["reconciliation"],
+  operationId: "getUnmatchedCredits",
+  security,
+  summary: "Treasurer review queue for unmatched credits",
+  description:
+    "Lists unmatched bank credits for a fund with potential matching candidate pledges for treasurer review.",
+  request: { params: fundIdParam },
+  responses: {
+    200: jsonResponse(unmatchedCreditsSchema, "Queue of unmatched credits"),
+    ...protectedErrors,
+  },
+});
+
+export const manualMatchInput = z
+  .object({
+    bankTransactionId: z
+      .string()
+      .min(1)
+      .openapi({ description: "ID of the unmatched bank transaction" }),
+    pledgeId: z.string().min(1).openapi({ description: "ID of the pledge to match" }),
+    reason: z
+      .string()
+      .trim()
+      .min(3)
+      .max(500)
+      .openapi({ description: "Audit reason for manual match by treasurer" }),
+  })
+  .strict()
+  .openapi("ManualMatchInput");
+
+export const manualMatchResultSchema = z
+  .object({
+    status: z.literal("matched"),
+    bankTransactionId: z.string(),
+    pledgeId: z.string(),
+    amountPaise: paiseWire,
+    matchedAt: z.string().datetime(),
+  })
+  .strict()
+  .openapi("ManualMatchResult");
+
+export const manualMatchRoute = createRoute({
+  method: "post",
+  path: "/v1/funds/{fundId}/reconciliation/manual-match",
+  tags: ["reconciliation"],
+  operationId: "manualMatch",
+  security,
+  summary: "Treasurer manual reconciliation match",
+  description:
+    "Manually matches an unmatched bank transaction with a donation pledge with mandatory audit reason.",
+  request: {
+    params: fundIdParam,
+    headers: z.object({ "Idempotency-Key": idempotencyKey }),
+    body: { required: true, content: { "application/json": { schema: manualMatchInput } } },
+  },
+  responses: {
+    200: withReplay(jsonResponse(manualMatchResultSchema, "Manual match successful")),
+    400: protectedErrors[400],
+    401: protectedErrors[401],
+    403: protectedErrors[403],
+    404: protectedErrors[404],
+    409: jsonResponse(errorEnvelope, "Transaction or pledge already matched"),
+    429: limitedResponse,
+    500: internalResponse,
+    503: overloadedResponse,
+  },
+});

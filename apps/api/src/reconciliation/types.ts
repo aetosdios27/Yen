@@ -8,13 +8,13 @@ export type MatchMethod = "exact_utr" | "heuristic_amount_time" | "manual";
 export interface ParsedBankTransaction {
   fundId: string;
   bankReference: string;
-  utr?: string;
+  utr?: string | undefined;
   amountPaise: Paise;
   type: TransactionType;
   postedAt: string; // ISO-8601 UTC string
-  narration?: string;
-  counterpartyVpa?: string;
-  counterpartyName?: string;
+  narration?: string | undefined;
+  counterpartyVpa?: string | undefined;
+  counterpartyName?: string | undefined;
   source: TransactionSource;
   rawPayload: Record<string, unknown>;
 }
@@ -22,12 +22,12 @@ export interface ParsedBankTransaction {
 export interface IngestedTransactionSummary {
   id: string;
   bankReference: string;
-  utr?: string;
+  utr?: string | undefined;
   amountPaise: Paise;
   type: TransactionType;
   reconciliationStatus: ReconciliationStatus;
-  matchedPledgeId?: string;
-  duplicate?: boolean;
+  matchedPledgeId?: string | undefined;
+  duplicate?: boolean | undefined;
 }
 
 export interface IngestResult {
@@ -43,7 +43,7 @@ export interface CandidatePledge {
   pledgeId: string;
   amountPaise: Paise;
   utr: string;
-  donorName?: string;
+  donorName?: string | undefined;
   createdAt: string;
   timeDifferenceHours: number;
 }
@@ -52,11 +52,11 @@ export interface UnmatchedCreditWithCandidates {
   id: string;
   fundId: string;
   bankReference: string;
-  utr?: string;
+  utr?: string | undefined;
   amountPaise: Paise;
   postedAt: string;
-  narration?: string;
-  counterpartyVpa?: string;
+  narration?: string | undefined;
+  counterpartyVpa?: string | undefined;
   candidates: CandidatePledge[];
 }
 

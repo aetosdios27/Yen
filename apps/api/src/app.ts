@@ -68,9 +68,11 @@ import {
   logoutAllRoute,
   logoutRoute,
   MAX_EVIDENCE_FILE_SIZE_BYTES,
+  manualMatchRoute,
   meRoute,
   openapiRoute,
   openapiSchema,
+  partnerWebhookRoute,
   payExpenseRoute,
   pledgeDonationRoute,
   principalSchema,
@@ -86,9 +88,11 @@ import {
   rotateSessionRoute,
   sendOtpRoute,
   setupPinRoute,
+  statementUploadRoute,
   submitExpenseRoute,
   unlockPinRoute,
   unlockTrustedDeviceRoute,
+  unmatchedCreditsRoute,
   uploadEvidenceRoute,
   verifyOtpRoute,
   verifyPinRoute,
@@ -133,6 +137,8 @@ import type {
 } from "./policy.js";
 import { redactActionReceipt as redactReceipt } from "./policy.js";
 import { publicExpenseDetailRoute, publicExpenseProofsRoute } from "./public-expense-contract.js";
+import { parseBankStatementCsv } from "./reconciliation/csv-parser.js";
+import { normalizePartnerWebhook } from "./reconciliation/partner-schema.js";
 import { buildOpaqueEvidenceKey, sanitizeEvidenceFilename } from "./storage.js";
 import type { AllowedEvidenceMimeType, StoredEvidence } from "./stores.js";
 import type { VirusScanResult } from "./virus-scanner.js";
@@ -1264,6 +1270,16 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       ...(donorPrincipal ? { actorUserId: donorPrincipal.id } : {}),
     });
     if (outcome.kind === "duplicate_utr") throw new ApiError("donation_utr_claimed");
+    deps.reconciliationStore.addPledge({
+      id: outcome.donationId,
+      fundId: id.value,
+      amountPaise: paise(Number(input.amountPaise)),
+      utr: input.utr,
+      ...(input.donorName !== undefined ? { donorName: input.donorName } : {}),
+      ...(donorContact !== undefined ? { donorContact } : {}),
+      status: "pledged",
+      createdAt: new Date(deps.clock()).toISOString(),
+    });
     return c.json(
       {
         donationId: outcome.donationId,
@@ -1668,6 +1684,137 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const evidence = await deps.evidenceStore.getByExpense(fundParam.value, expenseId);
     for (const item of evidence) await getVerifiedEvidenceObject(item, deps.storageAdapter);
     return c.json(deps.policy.redact(principal, { kind: "evidence_list", evidence }), 200);
+  });
+  app.openapi(statementUploadRoute, async (c) => {
+    const input = c.req.valid("json");
+    const id = parseFundId(input.fundId);
+    if (!id.ok) throw new ApiError("not_found");
+    const entry = funds.get(id.value);
+    if (!entry) throw new ApiError("not_found");
+    const resource = { kind: "fund", fund: entry } as const;
+    const principal = authorizedFund(c, "fund:reconcile", resource);
+
+    let transactions: ReturnType<typeof parseBankStatementCsv>;
+    try {
+      transactions = parseBankStatementCsv(input.csvContent, id.value);
+    } catch {
+      throw new ApiError("validation_failed", [
+        { path: ["json", "csvContent"], message: "Unable to parse bank statement CSV" },
+      ]);
+    }
+
+    const result = await deps.reconciliationStore.ingest(transactions);
+    const wireTransactions = result.transactions.map((t) => ({
+      ...t,
+      amountPaise: String(t.amountPaise),
+    }));
+
+    const redact = <T>(value: T): T => value;
+    return c.json(
+      redact(
+        deps.policy.redactStatementResult(principal, resource, {
+          totalProcessed: result.totalProcessed,
+          ingestedCount: result.ingestedCount,
+          matchedCount: result.matchedCount,
+          unmatchedCount: result.unmatchedCount,
+          duplicateCount: result.duplicateCount,
+          transactions: wireTransactions,
+        }),
+      ),
+      200,
+    );
+  });
+  app.openapi(partnerWebhookRoute, async (c) => {
+    const raw = c.req.valid("json");
+    const parsed = normalizePartnerWebhook(raw);
+    const result = await deps.reconciliationStore.ingest([parsed]);
+    const summary = result.transactions[0];
+
+    return c.json(
+      {
+        status: "processed" as const,
+        duplicate: summary?.duplicate ?? false,
+        transactionId: summary?.id ?? "",
+        reconciliationStatus: summary?.reconciliationStatus ?? "unmatched",
+        ...(summary?.matchedPledgeId !== undefined
+          ? { matchedPledgeId: summary.matchedPledgeId }
+          : {}),
+      },
+      200,
+    );
+  });
+  app.openapi(unmatchedCreditsRoute, async (c) => {
+    const id = parseFundId(c.req.valid("param").fundId);
+    if (!id.ok) throw new ApiError("not_found");
+    const entry = funds.get(id.value);
+    if (!entry) throw new ApiError("not_found");
+    const resource = { kind: "fund", fund: entry } as const;
+    const principal = authorizedFund(c, "fund:reconcile", resource);
+
+    const credits = await deps.reconciliationStore.getUnmatchedCredits(id.value);
+    const wireCredits = credits.map((cr) => ({
+      ...cr,
+      amountPaise: String(cr.amountPaise),
+      candidates: cr.candidates.map((cand) => ({
+        ...cand,
+        amountPaise: String(cand.amountPaise),
+      })),
+    }));
+
+    const redact = <T>(value: T): T => value;
+    return c.json(
+      redact(deps.policy.redactUnmatchedCredits(principal, resource, wireCredits)),
+      200,
+    );
+  });
+  app.openapi(manualMatchRoute, async (c) => {
+    const id = parseFundId(c.req.valid("param").fundId);
+    if (!id.ok) throw new ApiError("not_found");
+    const entry = funds.get(id.value);
+    if (!entry) throw new ApiError("not_found");
+    const resource = { kind: "fund", fund: entry } as const;
+    const principal = authorizedFund(c, "fund:reconcile", resource);
+    const input = c.req.valid("json");
+
+    const matchOutcome = await deps.reconciliationStore.manualMatch({
+      fundId: id.value,
+      bankTransactionId: input.bankTransactionId,
+      pledgeId: input.pledgeId,
+      reason: input.reason,
+      actorPseudonym: principal.id,
+    });
+
+    if (
+      matchOutcome.kind === "bank_transaction_not_found" ||
+      matchOutcome.kind === "pledge_not_found"
+    ) {
+      throw new ApiError("not_found");
+    }
+    if (matchOutcome.kind === "already_matched") {
+      throw new ApiError("conflict");
+    }
+    if (matchOutcome.kind === "amount_mismatch") {
+      throw new ApiError("validation_failed", [
+        {
+          path: ["json", "pledgeId"],
+          message: `Amount mismatch: bank transaction is ${matchOutcome.expectedPaise} paise, pledge is ${matchOutcome.actualPaise} paise`,
+        },
+      ]);
+    }
+
+    const redact = <T>(value: T): T => value;
+    return c.json(
+      redact(
+        deps.policy.redactManualMatch(principal, resource, {
+          status: "matched" as const,
+          bankTransactionId: matchOutcome.bankTransactionId,
+          pledgeId: matchOutcome.pledgeId,
+          amountPaise: String(matchOutcome.amountPaise),
+          matchedAt: matchOutcome.matchedAt,
+        }),
+      ),
+      200,
+    );
   });
   app.openapi(openapiRoute, (c) => c.json(openapiSchema.parse(openApiDocument(app)), 200));
   app.openAPIRegistry.registerComponent("securitySchemes", "bearerAuth", {

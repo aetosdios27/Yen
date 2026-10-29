@@ -6,8 +6,8 @@ export interface MatchCandidate {
   fundId: string;
   amountPaise: Paise;
   utr: string;
-  donorName?: string;
-  donorContact?: string;
+  donorName?: string | undefined;
+  donorContact?: string | undefined;
   createdAt: string; // ISO-8601
 }
 

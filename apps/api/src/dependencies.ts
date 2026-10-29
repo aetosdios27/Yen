@@ -25,6 +25,10 @@ import {
 } from "./pin/index.js";
 import type { FundRecord } from "./policy.js";
 import { denyAllPolicy, type Policy } from "./policy.js";
+import {
+  MemoryReconciliationStore,
+  type ReconciliationStore,
+} from "./reconciliation/memory-store.js";
 import { MemoryStorageAdapter, type StorageAdapter } from "./storage.js";
 import {
   type EvidenceStore,
@@ -35,10 +39,6 @@ import {
   type RateLimit,
   type RateLimitStore,
 } from "./stores.js";
-import {
-  MemoryReconciliationStore,
-  type ReconciliationStore,
-} from "./reconciliation/memory-store.js";
 import { UnconfiguredVirusScannerAdapter, type VirusScannerAdapter } from "./virus-scanner.js";
 
 export interface Principal {
