@@ -6,14 +6,12 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 const ruleset = JSON.parse(read("rulesets/main.json"));
 const rule = (type) => ruleset.rules.find((candidate) => candidate.type === type);
 
-test("main requires a real second reviewer who owns the code", () => {
+test("main merges on CI and Greptile, with stale approvals dismissed and threads resolved", () => {
   const review = rule("pull_request")?.parameters;
   assert.ok(review, "main ruleset must contain a pull_request rule");
-  assert.ok(review.required_approving_review_count >= 1, "at least one approval is required");
-  assert.equal(review.require_code_owner_review, true, "code-owner review must stay on");
-  assert.equal(review.require_last_push_approval, true, "the last pusher cannot approve");
-  assert.equal(review.dismiss_stale_reviews_on_push, true, "new commits need a fresh approval");
+  assert.equal(review.dismiss_stale_reviews_on_push, true, "new commits void earlier approvals");
   assert.equal(review.required_review_thread_resolution, true, "review threads must be resolved");
+  assert.deepEqual(review.allowed_merge_methods, ["squash"], "squash is the only merge method");
 });
 
 test("nobody can bypass the main ruleset", () => {
@@ -21,12 +19,14 @@ test("nobody can bypass the main ruleset", () => {
   assert.deepEqual(ruleset.bypass_actors, []);
 });
 
-test("CI Gate and CodeQL are required checks", () => {
+test("CI Gate, CodeQL and the Greptile gate are required checks", () => {
   const contexts = rule("required_status_checks")?.parameters.required_status_checks.map(
     (check) => check.context,
   );
   assert.ok(contexts?.includes("CI Gate"));
   assert.ok(contexts?.includes("Analyze (javascript-typescript)"));
+  assert.ok(contexts?.includes("Greptile 5/5"), "the Greptile 5/5 gate must be required");
+  assert.ok(contexts?.includes("Greptile Review"), "the Greptile review check must be required");
 });
 
 test("Vercel is a preview signal, never a required merge check", () => {

@@ -1,0 +1,39 @@
+name: Greptile Gate
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  greptile-review:
+    name: Greptile 5/5
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # The evaluator comes from the base branch, never from the PR, so a PR cannot weaken its own gate.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          sparse-checkout: scripts/greptile-gate.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Check live Greptile review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_JSON: ${{ runner.temp }}/greptile-pr.json
+        run: |
+          if [ ! -f scripts/greptile-gate.mjs ]; then
+            echo "::notice::scripts/greptile-gate.mjs is not on the base branch yet; the gate starts once this change is merged."
+            exit 0
+          fi
+          # Read the live body: the event payload can be stale after Greptile edits the description.
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" \
+            --jq '{body: .body, headSha: .head.sha}' > "$PR_JSON"
+          node scripts/greptile-gate.mjs "$PR_JSON"
+
+# Greptile's PR-description edits trigger the `edited` event and rerun this check.

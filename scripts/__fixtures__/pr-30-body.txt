@@ -1,0 +1,57 @@
+Stacked on #28 (per-fund pseudonyms), which sits on #24 and #20. Retarget as each merges.
+
+## What this does
+
+The private ID people can read out over the phone: nine digits in groups of three, e.g. `482 739 105`, always shown next to the person's name. New package `@yen/identity` plus migration `0006_yen_ids.sql`.
+
+- **Check digit:** the Damm algorithm over the first eight digits. It catches every single-digit error and every adjacent swap, so a mistyped ID is rejected before any lookup. The quasigroup table and the worked example (572 gives check digit 4) are checked in tests, and the two cited sources were opened: Damm's 2004 Marburg dissertation, and the 2007 paper in Discrete Mathematics 307, pp. 715 to 729.
+- **Format:** random via `crypto.randomInt`, first digit 1 to 9 so a spreadsheet cannot drop it. Parsing accepts spaces, dashes and Devanagari digits, and never letters.
+- **Storage:** `yen_ids` belongs to the account, one per user. `ON DELETE SET NULL` leaves a tombstone row when a user is erased, so a number is never re-issued. `assignYenId` is idempotent and race-safe, with collision retry.
+- **Lookup** for "add by Yen ID": parses and checks the digit first, so a bad ID never touches the database or the limiter. It then needs a rate-limit token and returns only a masked name (`R**** P****`) or null.
+
+## How it was checked
+
+`pnpm verify` is green (24 of 24 tasks) on Postgres 16 and lint is clean. 27 identity tests cover the known vector, exhaustive single-digit and swap detection, format and parse round trips, 50-way assignment concurrency, tombstones, and lookup behaviour. I broke each guard once, and a test failed every time: a changed table entry, an allowed leading zero, a removed rate limit, a removed `ON DELETE SET NULL`, a removed unique constraint, and a removed ID-shape check.
+
+## Fixed during review
+
+The agent hit an infrastructure error partway and left uncommitted work, which I finished and checked. Things I removed or changed:
+- It had loosened the migration runner's rule that migration numbers are sequential, to get past a gap. That guard exists to keep history safe, so I reverted it and numbered the migration `0006` on this branch instead.
+- It exported the test database helper from the public `@yen/db` index, which would pull test tooling into production imports. I reverted that and import the helper by path, as other packages do.
+- It had copied the foreign-key index check files from #22. Removed.
+- Lint errors in the tests, and the package's `turbo.json` so the test database reaches the tests.
+
+## What this does not do
+
+- No routes, no profile screen, no display-name choice on donations.
+- It does not check who may call lookup: the route must verify that the caller is an owner who is inviting.
+- The Yen ID is never in events, receipts or public pages, but nothing yet scans responses to prove that.
+- Migration numbering: `0006` collides with the auth branch; whichever merges later is renumbered.
+
+Part of YEN-70.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+
+<!-- greptile_comment -->
+
+<!-- greptile_summary -->
+
+<h2><a href="https://app.greptile.com/api/retrigger?id=89646089"><picture><source media="(prefers-color-scheme: dark)" srcset="https://greptile-static-assets.s3.amazonaws.com/badges/RetriggerDark.svg?v=2"><source media="(prefers-color-scheme: light)" srcset="https://greptile-static-assets.s3.amazonaws.com/badges/Retrigger.svg?v=2"><img alt="Retrigger" src="https://greptile-static-assets.s3.amazonaws.com/badges/Retrigger.svg?v=2" align="right"></picture></a><a href="https://app.greptile.com/aetos/github/aetosdios27/yen/-/pull/30?utm_source=greptile_review&amp;utm_medium=github&amp;utm_campaign=view_in_greptile"><picture><source media="(prefers-color-scheme: dark)" srcset="https://greptile-static-assets.s3.amazonaws.com/badges/ViewInGreptileDark.svg?v=2"><source media="(prefers-color-scheme: light)" srcset="https://greptile-static-assets.s3.amazonaws.com/badges/ViewInGreptile.svg?v=2"><img alt="View in Greptile" src="https://greptile-static-assets.s3.amazonaws.com/badges/ViewInGreptile.svg?v=2" align="right"></picture></a>Confidence Score: 5/5</h2>
+
+<!-- greptile-impact-verdict --> The PR appears safe to merge; all previous findings are addressed and no new blocking issue was found.
+
+<h3>Summary</h3>
+
+Adds `@yen/identity` for readable Yen IDs, with Damm check digits, account-level storage, and rate-limited masked-name lookup.
+
+- Yen IDs are generated, grouped, and checked before callers use them.
+- Yen IDs stay tied to accounts and are never reused.
+- Yen ID lookup returns only a masked name after rate checks.
+
+<!-- greptile_confidence_score:5 -->
+
+<sub>Reviews (2) · Last reviewed commit: ["fix(identity): recover transaction colli..."](https://github.com/aetosdios27/yen/commit/7bea98259322d49a439a178ad432bbef11d36e6c) · [Reviewed by Greptile](https://www.greptile.com/?utm_source=greptile_review&utm_medium=github&utm_campaign=review_public&utm_content=aetosdios27/yen)</sub>
+
+<!-- /greptile_comment -->

@@ -235,15 +235,15 @@ Each README claim that has a row carries a `<!-- claim: CLAIM-ID -->` marker. Th
 - **Reference:** `rfc-6585`, `stripe-rate-limiters`
 - **Missing:** Buckets are in memory and per process. Production needs a shared store for consistent limits across processes (apps/api/README.md:131).
 
-### CLAIM-23 Direct pushes to main are blocked and changes need review
+### CLAIM-23 Direct pushes to main are blocked and changes need CI and an automated review
 
 - **Status:** partial
-- **Wording:** "Direct pushes to `main` are blocked. Every change requires an independent review and passing CI checks."
+- **Wording:** "Direct pushes to `main` are blocked. Every change needs passing CI checks and a perfect Greptile review."
 - **Where:** README.md:143
 - **Mechanism:** `.github/rulesets/main.json`
-- **Test:** `.github/scripts/governance.test.mjs` "main requires a real second reviewer who owns the code"; `.github/scripts/governance.test.mjs` "nobody can bypass the main ruleset"
+- **Test:** `.github/scripts/governance.test.mjs` "main merges on CI and Greptile, with stale approvals dismissed and threads resolved"; `.github/scripts/governance.test.mjs` "nobody can bypass the main ruleset"
 - **Reference:** none yet (gap)
-- **Missing:** The tests read the JSON file in this repository. They do not query GitHub, so CI cannot show that the ruleset is live. An admin applies it with `.github/scripts/apply-repo-settings.sh`, which runs outside CI.
+- **Missing:** No human approval is required to merge; the gate is CI plus the Greptile 5/5 check. The tests read the JSON file in this repository. They do not query GitHub, so CI cannot show that the ruleset is live. An admin applies it with `.github/scripts/apply-repo-settings.sh`, which runs outside CI.
 
 ### CLAIM-24 Applied migrations are immutable
 

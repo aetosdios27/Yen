@@ -1,0 +1,101 @@
+## What and why
+
+Integrates hardened Konto (`@konto-ledger/*@0.2.0`) behind a small Yen ledger interface in `packages/ledger`, tying double-entry money movements (`bank`, `donations`, `expenses`, `pending_spend`) to append-only hash-chained events in `@yen/eventlog` within the exact same database transaction.
+
+Linear: YEN-24
+
+## How to test
+
+```bash
+pnpm check
+pnpm -r typecheck
+pnpm build
+pnpm --filter @yen/ledger test
+```
+
+## Risk
+
+High (Financial logic & core transaction integrity):
+- Money balance invariants: `bank - pending_spend = available`, and `bank + expenses = donations` across zero-sum entries.
+- Dual-write transaction atomicity: failure between ledger write and event log write rolls back the entire transaction so neither persists.
+- All 4 acceptance criteria covered with property-based and integration test suites.
+
+## Checklist
+
+- [x] Acceptance criteria in the Linear issue are met
+- [x] Tests added or updated for behavior changes
+- [x] No secrets, no PII in logs, events or fixtures
+- [x] Docs updated (README, Linear docs) if setup or behavior changed
+
+
+
+
+
+
+
+<!-- greptile_comment -->
+
+<!-- greptile_summary -->
+
+<h2><a href="https://app.greptile.com/api/retrigger?id=89233057"><picture><source media="(prefers-color-scheme: dark)" srcset="https://greptile-static-assets.s3.amazonaws.com/badges/RetriggerDark.svg?v=2"><source media="(prefers-color-scheme: light)" srcset="https://greptile-static-assets.s3.amazonaws.com/badges/Retrigger.svg?v=2"><img alt="Retrigger" src="https://greptile-static-assets.s3.amazonaws.com/badges/Retrigger.svg?v=2" align="right"></picture></a><a href="https://app.greptile.com/aetos/github/aetosdios27/yen/-/pull/27?utm_source=greptile_review&amp;utm_medium=github&amp;utm_campaign=view_in_greptile"><picture><source media="(prefers-color-scheme: dark)" srcset="https://greptile-static-assets.s3.amazonaws.com/badges/ViewInGreptileDark.svg?v=2"><source media="(prefers-color-scheme: light)" srcset="https://greptile-static-assets.s3.amazonaws.com/badges/ViewInGreptile.svg?v=2"><img alt="View in Greptile" src="https://greptile-static-assets.s3.amazonaws.com/badges/ViewInGreptile.svg?v=2" align="right"></picture></a>Confidence Score: 3/5</h2>
+
+<!-- greptile-risk -->
+
+The PR needs changes before merging because repeated refunds can debit a donation twice, and replay still counts one bank payment twice.
+
+<h2>Findings</h2>
+
+1. <img alt="P1" src="https://greptile-static-assets.s3.amazonaws.com/badges/p1.svg?v=9" align="top">&nbsp;**One donation refunded twice** <a href="https://github.com/aetosdios27/Yen/pull/27#discussion_r4398474890">▶</a>
+2. <img alt="P1" src="https://greptile-static-assets.s3.amazonaws.com/badges/p1.svg?v=9" align="top">&nbsp;**One payment counts twice** <a href="https://github.com/aetosdios27/Yen/pull/27#discussion_r4393889936">▶</a>
+
+<details><summary>Fix with agent prompt</summary>
+
+`````markdown
+### Issue 1
+packages/ledger/src/operations.ts:549-554
+`recordRefund` posts another full refund when the same donation is passed again with an absent or different `idempotencyKey`. It finds the original pledge but never checks for an earlier `donation.rejected`. The event append checks the chain, not whether the donation was already refunded.
+
+With enough money left in the fund, a retry takes money from other donations. Replay subtracts only the first refund, so its balance also differs from the books. Give each donation a stable refund key and check its refund state under a lock before posting.
+
+### Issue 2
+packages/ledger/src/replay.ts:115-119
+The new `bank.debit_seen` branch counts a payment again when `expense.paid` already records the same `bank_transaction_id`. A 3,000-paise expense followed by its bank observation removes 6,000 paise from replayed bank funds and adds 6,000 paise to expenses.
+
+Neither branch checks whether the other already counted that transaction. Track counted bank debits across both event types, in either order, as the credit side already does.
+
+---
+
+For each issue above, determine whether it is valid and should be fixed. If so, fix it directly.
+`````
+
+</details>
+
+<h3>Summary</h3>
+
+Adds Konto-backed fund accounts and pairs money changes with hash-chained events in the caller's database transaction.
+- Fund callers can track donations and expense spending in Konto.
+- Fund event history can rebuild the ledger balances.
+- Ledger tests use isolated databases and workspace-aware build settings.
+
+<details open><summary><h3>Diagram</h3></summary>
+
+```mermaid
+sequenceDiagram
+  participant Caller
+  participant Ledger
+  participant Konto
+  participant Events as Fund events
+  Caller->>Ledger: Run operation inside database transaction
+  Ledger->>Konto: Post entries or change hold
+  Ledger->>Events: Lock fund and read chain head
+  Ledger->>Events: Append matching hashed event
+  Ledger-->>Caller: Return result
+  Note over Caller,Events: Commit together, or roll back together
+```
+</details>
+
+<!-- greptile_confidence_score:3 -->
+
+<sub>Reviews (4) · Last reviewed commit: ["Merge branch &#39;main&#39; into pranav718/yen-2..."](https://github.com/aetosdios27/yen/commit/a6cd7881f7876d18e9324dc1fbaff8a35e57c2d3) · [Reviewed by Greptile](https://www.greptile.com/?utm_source=greptile_review&utm_medium=github&utm_campaign=review_public&utm_content=aetosdios27/yen)</sub>
+
+<!-- /greptile_comment -->
