@@ -20,7 +20,9 @@ Tests  3 passed (3)
 Duration  358.55s
 ```
 
-The earlier PR #47 database failure tests also ran in the required `pnpm verify`: backend termination during a transaction, rollback after ledger/event work, concurrent reserve contention, and concurrent settlement retries. The Postgres container restart case was run separately with `YEN_CHAOS_CONTAINER` set so it did not restart the database while the parallel full verification was using it.
+The DB-backed verification passed with `YEN_TEST_DATABASE_URL` set: Biome checked 483 files, and Turborepo completed 36 of 36 tasks. The ledger package had 74 passing tests; its two opt-in tests (the 1,000-scenario run and container restart) were run separately. The queue package had 52 passing tests and one optional Anvil test skipped. The `useMathMinMax` diagnostics in anchoring are warnings; Biome exited successfully.
+
+The PR #47 database failure tests ran in `pnpm verify`: backend termination during a transaction, rollback after ledger/event work, concurrent reserve contention, and concurrent settlement retries. The Postgres container restart case passed separately with `YEN_CHAOS_CONTAINER` set so it did not restart the database while parallel full verification was using it.
 
 ## Worker failure drills
 
