@@ -136,6 +136,53 @@ export interface FundTimelineRecord {
 }
 export type FundReadRecord = FundSummaryRecord | FundBreakdownRecord | FundTimelineRecord;
 
+export type ExpenseReadStatus =
+  | "draft"
+  | "submitted"
+  | "approved"
+  | "rejected"
+  | "expired"
+  | "paid"
+  | "reconciled";
+
+export interface ExpenseProofReadRecord {
+  readonly sha256: string;
+  readonly scanStatus: "clean" | "infected" | "unavailable";
+  readonly mimeType?: "image/jpeg" | "image/png" | "image/webp" | "application/pdf" | undefined;
+  readonly contentBase64?: string | undefined;
+}
+
+export interface ExpenseDetailsReadRecord {
+  readonly kind: "expense_details";
+  readonly expenseId: string;
+  readonly fundId: string;
+  readonly amountPaise: Paise;
+  readonly category: string;
+  readonly status: ExpenseReadStatus;
+  readonly payeeName?: string | undefined;
+  readonly payeeVerified: boolean;
+  readonly requesterDisplayName?: string | undefined;
+  readonly description?: string | undefined;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface ExpenseProofsReadRecord {
+  readonly kind: "expense_proofs";
+  readonly expenseId: string;
+  readonly proofs: readonly ExpenseProofReadRecord[];
+}
+
+export type ExpenseDetailsReadView = Omit<
+  ExpenseDetailsReadRecord,
+  "kind" | "payeeVerified" | "amountPaise"
+> & { readonly amountPaise: string };
+export type ExpenseProofReadView = ExpenseProofReadRecord;
+export type ExpenseProofsReadView = {
+  readonly expenseId: string;
+  readonly proofs: ExpenseProofReadView[];
+};
+
 interface FundViewShape {
   readonly id: string;
   readonly name: string;
@@ -492,6 +539,141 @@ export function redactFundReadModel<T extends FundReadRecord>(
   return markRedacted(safe as unknown as Omit<T, "kind">);
 }
 
+/** Role-aware allowlist for a single expense read. Public payees are generic and only shown
+ * after an explicit verification signal; names, descriptions, and other free text stay private. */
+export function redactExpenseDetails(
+  viewer: Actor | ViewerContext,
+  record: ExpenseDetailsReadRecord,
+): Redacted<ExpenseDetailsReadView> {
+  const role = viewerRole(viewer);
+  const base: ExpenseDetailsReadView = {
+    expenseId: str(record.expenseId),
+    fundId: str(record.fundId),
+    amountPaise: String(requirePaise(record.amountPaise)),
+    category: safeText(record.category),
+    status: expenseStatus(record.status),
+    createdAt: str(record.createdAt),
+    updatedAt: str(record.updatedAt),
+  };
+
+  if (role === "public") {
+    return markRedacted({
+      ...base,
+      ...(record.payeeVerified ? { payeeName: "Vendor (verified)" } : {}),
+    });
+  }
+
+  const result: ExpenseDetailsReadView = {
+    ...base,
+    ...(optionalSafeText(record.payeeName) === undefined
+      ? {}
+      : { payeeName: optionalSafeText(record.payeeName) }),
+  };
+  if (role === "donor") return markRedacted(result);
+
+  return markRedacted({
+    ...result,
+    ...(optionalSafeText(record.requesterDisplayName) === undefined
+      ? {}
+      : { requesterDisplayName: optionalSafeText(record.requesterDisplayName) }),
+    ...(optionalSafeText(record.description) === undefined
+      ? {}
+      : { description: optionalSafeText(record.description) }),
+  });
+}
+
+/** Evidence names and object keys are never part of the read model. Only donor and member
+ * tiers receive verified file bytes; every tier can receive the pinned hash and scan result. */
+export function redactExpenseProofs(
+  viewer: Actor | ViewerContext,
+  record: ExpenseProofsReadRecord,
+): Redacted<ExpenseProofsReadView> {
+  const role = viewerRole(viewer);
+  const canReadFiles = role !== "public";
+  return markRedacted({
+    expenseId: str(record.expenseId),
+    proofs: record.proofs.map((proof) => {
+      const metadata: ExpenseProofReadView = {
+        sha256: sha256(proof.sha256),
+        scanStatus: scanStatus(proof.scanStatus),
+      };
+      if (!canReadFiles) return metadata;
+      return {
+        ...metadata,
+        ...(proof.mimeType === undefined ? {} : { mimeType: proofMimeType(proof.mimeType) }),
+        ...(proof.contentBase64 === undefined
+          ? {}
+          : { contentBase64: base64(proof.contentBase64) }),
+      };
+    }),
+  });
+}
+
+function viewerRole(viewer: Actor | ViewerContext): FundRole {
+  return viewer && typeof viewer === "object" && isValidRole(viewer.role) ? viewer.role : "public";
+}
+
+function expenseStatus(value: unknown): ExpenseReadStatus {
+  if (
+    value === "draft" ||
+    value === "submitted" ||
+    value === "approved" ||
+    value === "rejected" ||
+    value === "expired" ||
+    value === "paid" ||
+    value === "reconciled"
+  ) {
+    return value;
+  }
+  throw new RedactionError("Invalid expense status");
+}
+
+function scanStatus(value: unknown): ExpenseProofReadRecord["scanStatus"] {
+  if (value === "clean" || value === "infected" || value === "unavailable") return value;
+  throw new RedactionError("Invalid evidence scan status");
+}
+
+function proofMimeType(value: unknown): NonNullable<ExpenseProofReadRecord["mimeType"]> {
+  if (
+    value === "image/jpeg" ||
+    value === "image/png" ||
+    value === "image/webp" ||
+    value === "application/pdf"
+  ) {
+    return value;
+  }
+  throw new RedactionError("Invalid evidence MIME type");
+}
+
+function sha256(value: unknown): string {
+  const hash = str(value);
+  if (!/^[a-f0-9]{64}$/.test(hash)) throw new RedactionError("Invalid evidence SHA-256 hash");
+  return hash;
+}
+
+function base64(value: unknown): string {
+  const encoded = str(value);
+  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)) {
+    throw new RedactionError("Invalid base64 evidence payload");
+  }
+  return encoded;
+}
+
+function optionalSafeText(value: unknown): string | undefined {
+  return value === undefined ? undefined : safeText(value);
+}
+
+function safeText(value: unknown): string {
+  return str(value)
+    .replace(/\b[a-z0-9._-]{2,}@[a-z0-9.-]{2,}\b/gi, "[redacted]")
+    .replace(
+      /\b(?:utr|transaction\s*(?:id|reference)|account\s*(?:number|no\.?))\s*[:#-]?\s*[a-z0-9-]{4,}\b/gi,
+      "[redacted]",
+    )
+    .replace(/\+?\d[\d\s().-]{8,}\d/g, "[redacted]")
+    .replace(/\b\d{9,18}\b/g, "[redacted]");
+}
+
 function verificationState(value: unknown): FundVerificationState {
   if (value === "bank-matched" || value === "anchored" || value === "unverified") return value;
   throw new RedactionError("Invalid verification state");
@@ -508,6 +690,7 @@ function paiseString(value: unknown): string {
 function publicText(value: unknown): string {
   return str(value)
     .replace(/\bhttps?:\/\/\S+/gi, "[redacted]")
+    .replace(/\b[a-z0-9._-]{2,}@[a-z0-9.-]{2,}\b/gi, "[redacted]")
     .replace(
       /\b(?:utr|transaction\s*(?:id|reference)|account\s*(?:number|no\.?))\s*[:#-]?\s*[a-z0-9-]{6,}\b/gi,
       "[redacted]",

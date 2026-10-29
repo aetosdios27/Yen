@@ -113,11 +113,16 @@ export const payloadSchemas = {
   }),
   "anchor.published": z.strictObject({ anchor_id: anchorId, global_root: hex32 }),
 } as const;
+// v1 is immutable. Visibility updates use a distinct v2 payload so the transition
+// itself is auditable while old event hashes remain valid.
+export const visibilityChangedV2PayloadSchema = z.strictObject({
+  old_visibility: z.enum(["private", "donors", "members", "public"]),
+  new_visibility: z.enum(["private", "donors", "members", "public"]),
+});
 
 const envelope = {
   fund_id: fundIdSchema,
   seq: positiveInt,
-  version: z.literal(1),
   actor: pseudonymIdSchema,
   occurred_at: occurredAtSchema,
   prev_hash: hashHexSchema,
@@ -127,127 +132,163 @@ const envelope = {
 const eventSchema = z.union([
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("fund.created"),
     payload: payloadSchemas["fund.created"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(2),
+    type: z.literal("fund.visibility_changed"),
+    payload: visibilityChangedV2PayloadSchema,
+  }),
+  z.strictObject({
+    ...envelope,
+    version: z.literal(1),
     type: z.literal("fund.policy_changed"),
     payload: payloadSchemas["fund.policy_changed"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("fund.visibility_changed"),
     payload: payloadSchemas["fund.visibility_changed"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("member.added"),
     payload: payloadSchemas["member.added"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("member.removed"),
     payload: payloadSchemas["member.removed"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("donation.pledged"),
     payload: payloadSchemas["donation.pledged"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("donation.verified"),
     payload: payloadSchemas["donation.verified"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("donation.rejected"),
     payload: payloadSchemas["donation.rejected"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("expense.submitted"),
     payload: payloadSchemas["expense.submitted"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("expense.evidence_added"),
     payload: payloadSchemas["expense.evidence_added"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("expense.flagged"),
     payload: payloadSchemas["expense.flagged"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("expense.objection_raised"),
     payload: payloadSchemas["expense.objection_raised"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("expense.objection_resolved"),
     payload: payloadSchemas["expense.objection_resolved"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("expense.approved"),
     payload: payloadSchemas["expense.approved"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("expense.rejected"),
     payload: payloadSchemas["expense.rejected"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("expense.expired"),
     payload: payloadSchemas["expense.expired"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("expense.paid"),
     payload: payloadSchemas["expense.paid"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("expense.reversed"),
     payload: payloadSchemas["expense.reversed"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("bank.credit_seen"),
     payload: payloadSchemas["bank.credit_seen"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("bank.debit_seen"),
     payload: payloadSchemas["bank.debit_seen"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("bank.balance_checked"),
     payload: payloadSchemas["bank.balance_checked"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("discrepancy.raised"),
     payload: payloadSchemas["discrepancy.raised"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("discrepancy.resolved"),
     payload: payloadSchemas["discrepancy.resolved"],
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(1),
     type: z.literal("anchor.published"),
     payload: payloadSchemas["anchor.published"],
   }),
 ]);
 
 export type Event = z.infer<typeof eventSchema>;
+export function isKnownEventVersion(type: string, version: number): boolean {
+  return (
+    (version === 1 && Object.hasOwn(payloadSchemas, type)) ||
+    (type === "fund.visibility_changed" && version === 2)
+  );
+}
 type WithoutChain<T> = T extends Event ? Omit<T, "seq" | "prev_hash" | "hash"> : never;
 type WithoutHash<T> = T extends Event ? Omit<T, "hash"> : never;
 export type EventInput = WithoutChain<Event>;
@@ -257,7 +298,7 @@ const unsignedEventSchema = z.strictObject({
   fund_id: fundIdSchema,
   seq: positiveInt,
   type: z.string(),
-  version: z.literal(1),
+  version: z.int().check(z.minimum(1), z.maximum(2)),
   actor: pseudonymIdSchema,
   occurred_at: occurredAtSchema,
   payload: z.unknown(),

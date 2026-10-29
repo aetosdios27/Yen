@@ -21,7 +21,9 @@ export function isPublicDonationRoute(path: string): boolean {
 }
 
 export function isPublicFundReadRoute(path: string): boolean {
-  return /^\/v1\/funds\/[0-9a-f-]{36}\/public\/(?:summary|breakdown|timeline)\/?$/.test(path);
+  return /^\/v1\/funds\/[0-9a-f-]{36}\/public\/(?:summary|breakdown|timeline|expenses\/[0-9a-f-]{36}(?:\/proofs)?)\/?$/.test(
+    path,
+  );
 }
 
 export function isAuthRoute(path: string): boolean {

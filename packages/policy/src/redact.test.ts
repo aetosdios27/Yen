@@ -2,11 +2,14 @@ import { type Paise, type PseudonymId, paise, parsePseudonymId } from "@yen/shar
 import { describe, expect, it } from "vitest";
 import {
   type DonationRecord,
+  type ExpenseProofsReadRecord,
   type ExpenseRecord,
   maskNameToInitials,
   type Redacted,
   RedactionError,
   redact,
+  redactExpenseDetails,
+  redactExpenseProofs,
 } from "./redact.js";
 import type { FundRole } from "./roles.js";
 
@@ -44,7 +47,7 @@ describe("Field-level redaction (redact)", () => {
         contentSha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         fileUrl: "https://storage.internal.yen/bills/secret-invoice.pdf",
         filename: "secret-invoice.pdf",
-        mimeType: "application/pdf",
+        mimeType: "application/pdf" as const,
       },
     ],
     createdAt: "2026-10-27T12:00:00.000Z",
@@ -632,5 +635,86 @@ describe("Evidence redaction with and without evidenceId for each viewer class",
         expect(Object.keys(ev ?? {})).toEqual(["contentSha256"]);
       }
     });
+  });
+});
+
+describe("tiered public expense reads", () => {
+  const details = {
+    kind: "expense_details" as const,
+    expenseId: "00000000-0000-4000-8000-000000000001",
+    fundId: "00000000-0000-4000-8000-000000000002",
+    amountPaise: paise(2500),
+    category: "Office supplies",
+    status: "paid" as const,
+    payeeName: "Vendor Name",
+    payeeVerified: false,
+    requesterDisplayName: "Sensitive Person",
+    description: "Receipt sent to +919876543210, UTR ABCDEF123456789, acct 1234567890123456",
+    createdAt: "2026-10-28T00:00:00.000Z",
+    updatedAt: "2026-10-28T00:00:00.000Z",
+  };
+  const proofs: ExpenseProofsReadRecord = {
+    kind: "expense_proofs",
+    expenseId: details.expenseId,
+    proofs: [
+      {
+        sha256: "a".repeat(64),
+        scanStatus: "clean" as const,
+        mimeType: "application/pdf",
+        contentBase64: "c2VjcmV0",
+      },
+    ],
+  };
+
+  it("gives public viewers only safe detail fields and never proof bytes", () => {
+    const publicDetails = redactExpenseDetails({ role: "public" }, details);
+    const publicProofs = redactExpenseProofs({ role: "public" }, proofs);
+    const bytes = JSON.stringify({ publicDetails, publicProofs });
+    expect(publicDetails).not.toHaveProperty("payeeName");
+    expect(publicDetails).not.toHaveProperty("description");
+    expect(publicDetails).not.toHaveProperty("requesterDisplayName");
+    expect(publicProofs.proofs[0]).toEqual({
+      sha256: "a".repeat(64),
+      scanStatus: "clean",
+    });
+    expect(bytes).not.toMatch(
+      /Sensitive Person|919876543210|ABCDEF123456789|1234567890123456|c2VjcmV0/,
+    );
+  });
+
+  it("uses a generic public payee label only when the source explicitly verifies it", () => {
+    expect(
+      redactExpenseDetails({ role: "public" }, { ...details, payeeVerified: true }),
+    ).toHaveProperty("payeeName", "Vendor (verified)");
+  });
+
+  it("gives donors full payee names and verified files without filenames", () => {
+    const donorDetails = redactExpenseDetails({ role: "donor" }, details);
+    const donorProofs = redactExpenseProofs({ role: "donor" }, proofs);
+    expect(donorDetails.payeeName).toBe("Vendor Name");
+    expect(donorDetails).not.toHaveProperty("requesterDisplayName");
+    expect(donorDetails).not.toHaveProperty("description");
+    expect(donorProofs.proofs[0]).toMatchObject({
+      sha256: "a".repeat(64),
+      scanStatus: "clean",
+      mimeType: "application/pdf",
+      contentBase64: "c2VjcmV0",
+    });
+    expect(donorProofs.proofs[0]).not.toHaveProperty("fileName");
+  });
+
+  it("gives members expense details while excluding unexpected bank fields", () => {
+    const memberDetails = redactExpenseDetails({ role: "member" }, {
+      ...details,
+      bankAccount: "1234567890123456",
+      vpa: "committee@bank",
+    } as never);
+    const memberProofs = redactExpenseProofs({ role: "member" }, proofs);
+    const bytes = JSON.stringify({ memberDetails, memberProofs });
+    expect(memberDetails).toHaveProperty("requesterDisplayName", "Sensitive Person");
+    expect(memberDetails).not.toHaveProperty("bankAccount");
+    expect(memberDetails).not.toHaveProperty("vpa");
+    expect(bytes).not.toContain("1234567890123456");
+    expect(bytes).not.toContain("committee@bank");
   });
 });
