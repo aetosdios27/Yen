@@ -136,6 +136,10 @@ From the workspace root, set `DATABASE_URL` to the database you intend to migrat
 DATABASE_URL=postgres://postgres:pw@localhost:55432/yen pnpm --filter @yen/db migrate
 ```
 
+## Retention cleanup
+
+`pnpm --filter @yen/db retention -- --dry-run` reports expired operational rows without changing them. Run `pnpm --filter @yen/db retention` to purge expired OTP challenges (24 hours after creation), sessions and trusted devices (30 days after expiry or revocation), invites (30 days after expiry), idempotency rows (30 days), expired rate limits, and terminal notification rows (30 days). `runRetentionJob` accepts period overrides for deployments. The job never reads, updates, or deletes `fund_events` or anchor/Merkle records. Consent capture and erasure execution are not yet wired to API routes.
+
 The CLI runs TypeScript directly on Node 24, so it needs no prior build. For programmatic use, call `await migrate(sql)` or `await migrate(sql, { dir: absoluteDirectory })` with a client from `createSql()`.
 
 `DATABASE_URL` and `YEN_TEST_DATABASE_URL` accept `postgres://` and `postgresql://` URLs with a nonempty host. Credentials, ports, database paths, query parameters, IPv6 hosts, and valid percent escapes are supported. Whitespace and malformed percent escapes are rejected. Invalid settings fail validation before client construction, and validation errors name the variable without including its value.

@@ -120,7 +120,7 @@ export const en = {
   legal: {
     terms: {
       title: "Terms of use",
-      updated: "Last updated 26 October 2026",
+      updated: "Last updated 29 October 2026 · Notice version 2026-10-29",
       intro:
         "These terms explain how Yen works and what you can expect from it. Using Yen means you agree to them.",
       serviceTitle: "Yen is a technology service, not a bank",
@@ -143,25 +143,25 @@ export const en = {
       title: "Privacy notice",
       updated: "Last updated 26 October 2026",
       intro:
-        "This notice explains what personal data Yen collects, why we collect it, and your rights under India's Digital Personal Data Protection Act (DPDP).",
+        "This notice describes personal data currently stored by Yen and the privacy controls being built. It is not legal advice.",
       collectTitle: "What we collect",
       collectBody:
-        "When you join the waitlist we collect your name, your phone number or email address, and your club, society or organisation name. Nothing else.",
+        "Depending on the feature you use, Yen stores account phone numbers and display names, club membership details, sign-in session and device data, waitlist contact details, donation contact choices, and notification settings. Yen also stores financial and audit records for clubs.",
       whyTitle: "Why we collect it",
       whyBody:
-        "Only to contact you about the Yen pilot and to record that you agreed to be contacted.",
+        "We use this data to sign you in, run club features, show chosen names, deliver requested notifications, prevent abuse, and keep club records. The database has consent and erasure record tables, but user-facing consent and erasure workflows are not yet available.",
       publicTitle: "What is never public",
       publicBody:
-        "Your name and contact details are never written into public records. Only club activity appears there.",
+        "Names, phone numbers, email addresses, and contact hashes are kept outside fund events and Merkle data. Public records use fund-scoped pseudonyms. Do not put personal details in event descriptions.",
       storageTitle: "Where it is stored",
       storageBody:
-        "Personal data is handled with strict confidentiality and never sold or shared for advertising.",
+        "Account and contact data is stored in ordinary database tables. The append-only event history is designed to contain no personal data. We do not currently offer a self-service deletion flow. A club may need to retain some financial records where another law requires it; Yen assumes the stricter reading and records such retention with a reason.",
       trackingTitle: "No tracking",
       trackingBody:
         "Yen uses no third-party tracking cookies, no advertising cookies and no analytics scripts.",
       rightsTitle: "Your choices",
       rightsBody:
-        "You can ask us to correct or delete your personal data, or withdraw your consent, by writing to raypranav718@gmail.com at any time. You may also raise a complaint with the Data Protection Board of India.",
+        "Contact the Yen team to request correction or deletion. The API does not yet provide consent withdrawal or erasure requests. This product notice does not determine your legal rights; seek qualified advice for legal questions.",
       changesTitle: "Changes to this notice",
       changesBody:
         "When this notice changes, the updated version appears on this page with a new date.",

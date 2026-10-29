@@ -52,6 +52,12 @@ export {
 } from "./foreign-keys.js";
 export { migrate } from "./migrate.js";
 export {
+  DEFAULT_RETENTION_PERIODS,
+  runRetentionJob,
+  type RetentionPeriods,
+  type RetentionReport,
+} from "./retention.js";
+export {
   type EnsureFundPseudonymParams,
   ensureFundPseudonym,
 } from "./pseudonyms.js";

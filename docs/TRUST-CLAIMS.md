@@ -123,7 +123,7 @@ Each README claim that has a row carries a `<!-- claim: CLAIM-ID -->` marker. Th
 - **Mechanism:** `contracts/src/RootRegistry.sol` `publishRoot` accepts only a `bytes32` root. `packages/eventlog/src/model.ts` `parseEvent` rejects unknown payload fields and raw user IDs.
 - **Test:** `packages/eventlog/src/eventlog.test.ts` "rejects a raw user UUID as actor and unversioned payload additions"
 - **Reference:** `dpdp-act`, `ico-pseudonymisation`
-- **Missing:** No chain writer exists (CLAIM-10), so nothing is published yet. Payload schemas are provisional (packages/eventlog/README.md:9-36). No test scans a published artifact for personal data. Pseudonymisation alone does not make data anonymous. Real names and phone numbers are stored outside the log. Per-fund pseudonyms (#28) and private 9-digit Yen ID storage (#30) are planned protections in separate, unmerged PRs (YEN-46, YEN-70); this branch does not provide them.
+- **Missing:** This is a schema and payload boundary claim, not a guarantee that every user-entered string is safe. No privacy consent, erasure, or end-to-end PII scan workflow is implemented by this change. A chain publisher is not part of this claim; no personal data column is intentionally included in event payloads or Merkle leaves.
 
 ### CLAIM-12 Spending needs the configured approvals
 
