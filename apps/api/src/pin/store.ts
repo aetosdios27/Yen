@@ -1,11 +1,12 @@
 import crypto from "node:crypto";
-import type { Sql } from "@yen/db";
+import type { CreateApprovalPinInput, Sql, SqlClient, UpdateApprovalPinInput } from "@yen/db";
 import {
   createApprovalPin,
   deleteApprovalPin,
   getApprovalPin,
   type UserApprovalPinRow,
   updateApprovalPin,
+  withLockedApprovalPin,
 } from "@yen/db";
 
 export interface PinRecord {
@@ -22,18 +23,33 @@ export interface PinRecord {
   readonly updatedAt: number;
 }
 
+export type NewPinRecord = Omit<PinRecord, "createdAt" | "updatedAt">;
+export type PinRecordUpdate = Partial<Omit<PinRecord, "userId" | "createdAt">>;
+
+export interface LockedPinTransaction {
+  create(record: NewPinRecord): Promise<PinRecord>;
+  update(updates: PinRecordUpdate): Promise<PinRecord>;
+}
+
 export interface PinStore {
   get(userId: string): Promise<PinRecord | null>;
-  create(record: Omit<PinRecord, "createdAt" | "updatedAt">): Promise<PinRecord>;
-  update(
-    userId: string,
-    updates: Partial<Omit<PinRecord, "userId" | "createdAt">>,
-  ): Promise<PinRecord>;
+  create(record: NewPinRecord): Promise<PinRecord>;
+  update(userId: string, updates: PinRecordUpdate): Promise<PinRecord>;
   delete(userId: string): Promise<void>;
+  /**
+   * Runs `work` with exclusive access to one user's PIN record. The record passed in is read
+   * after the lock is held, and writes made through the transaction commit together. Anything
+   * thrown by `work` discards those writes, so callers return rejections as values instead.
+   */
+  withLock<T>(
+    userId: string,
+    work: (record: PinRecord | null, tx: LockedPinTransaction) => Promise<T>,
+  ): Promise<T>;
 }
 
 export class MemoryPinStore implements PinStore {
   private readonly records = new Map<string, PinRecord>();
+  private readonly locks = new Map<string, Promise<unknown>>();
   private readonly clock: () => number;
 
   constructor(options: { clock?: () => number } = {}) {
@@ -45,7 +61,7 @@ export class MemoryPinStore implements PinStore {
     return record ? { ...record } : null;
   }
 
-  async create(record: Omit<PinRecord, "createdAt" | "updatedAt">): Promise<PinRecord> {
+  async create(record: NewPinRecord): Promise<PinRecord> {
     if (this.records.has(record.userId)) {
       throw new Error(`PIN record already exists for user ${record.userId}`);
     }
@@ -59,10 +75,7 @@ export class MemoryPinStore implements PinStore {
     return { ...created };
   }
 
-  async update(
-    userId: string,
-    updates: Partial<Omit<PinRecord, "userId" | "createdAt">>,
-  ): Promise<PinRecord> {
+  async update(userId: string, updates: PinRecordUpdate): Promise<PinRecord> {
     const existing = this.records.get(userId);
     if (!existing) {
       throw new Error(`PIN record not found for user ${userId}`);
@@ -78,6 +91,36 @@ export class MemoryPinStore implements PinStore {
 
   async delete(userId: string): Promise<void> {
     this.records.delete(userId);
+  }
+
+  async withLock<T>(
+    userId: string,
+    work: (record: PinRecord | null, tx: LockedPinTransaction) => Promise<T>,
+  ): Promise<T> {
+    const previous = this.locks.get(userId) ?? Promise.resolve();
+    const run = previous.then(async () => {
+      const snapshot = this.records.get(userId);
+      try {
+        return await work(snapshot ? { ...snapshot } : null, {
+          create: (record) => this.create(record),
+          update: (updates) => this.update(userId, updates),
+        });
+      } catch (error) {
+        if (snapshot) this.records.set(userId, snapshot);
+        else this.records.delete(userId);
+        throw error;
+      }
+    });
+    const tail = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.locks.set(userId, tail);
+    try {
+      return await run;
+    } finally {
+      if (this.locks.get(userId) === tail) this.locks.delete(userId);
+    }
   }
 }
 
@@ -97,6 +140,48 @@ function rowToRecord(row: UserApprovalPinRow): PinRecord {
   };
 }
 
+function newRecordInput(record: NewPinRecord): CreateApprovalPinInput {
+  return {
+    userId: record.userId,
+    salt: record.salt,
+    pinHash: record.pinHash,
+    failedAttempts: record.failedAttempts,
+    totalFailed24h: record.totalFailed24h,
+    firstFailedAt: record.firstFailedAt === null ? null : new Date(record.firstFailedAt),
+    lockedUntil: record.lockedUntil === null ? null : new Date(record.lockedUntil),
+    coolingOffUntil: record.coolingOffUntil === null ? null : new Date(record.coolingOffUntil),
+    status: record.status,
+  };
+}
+
+function optionalDate(value: number | null | undefined): Date | null | undefined {
+  if (value === undefined) return undefined;
+  return value === null ? null : new Date(value);
+}
+
+function updateInput(updates: PinRecordUpdate): UpdateApprovalPinInput {
+  return {
+    salt: updates.salt,
+    pinHash: updates.pinHash,
+    failedAttempts: updates.failedAttempts,
+    totalFailed24h: updates.totalFailed24h,
+    firstFailedAt: optionalDate(updates.firstFailedAt),
+    lockedUntil: optionalDate(updates.lockedUntil),
+    coolingOffUntil: optionalDate(updates.coolingOffUntil),
+    status: updates.status,
+  };
+}
+
+async function updateRecord(
+  sql: SqlClient,
+  userId: string,
+  updates: PinRecordUpdate,
+): Promise<PinRecord> {
+  const row = await updateApprovalPin(sql, userId, updateInput(updates));
+  if (!row) throw new Error(`PIN record not found for user ${userId}`);
+  return rowToRecord(row);
+}
+
 export class PostgresPinStore implements PinStore {
   constructor(private readonly sql: Sql) {}
 
@@ -105,56 +190,28 @@ export class PostgresPinStore implements PinStore {
     return row ? rowToRecord(row) : null;
   }
 
-  async create(record: Omit<PinRecord, "createdAt" | "updatedAt">): Promise<PinRecord> {
-    const row = await createApprovalPin(this.sql, {
-      userId: record.userId,
-      salt: record.salt,
-      pinHash: record.pinHash,
-      failedAttempts: record.failedAttempts,
-      totalFailed24h: record.totalFailed24h,
-      firstFailedAt: record.firstFailedAt ? new Date(record.firstFailedAt) : null,
-      lockedUntil: record.lockedUntil ? new Date(record.lockedUntil) : null,
-      coolingOffUntil: record.coolingOffUntil ? new Date(record.coolingOffUntil) : null,
-      status: record.status,
-    });
-    return rowToRecord(row);
+  async create(record: NewPinRecord): Promise<PinRecord> {
+    return rowToRecord(await createApprovalPin(this.sql, newRecordInput(record)));
   }
 
-  async update(
-    userId: string,
-    updates: Partial<Omit<PinRecord, "userId" | "createdAt">>,
-  ): Promise<PinRecord> {
-    const row = await updateApprovalPin(this.sql, userId, {
-      salt: updates.salt,
-      pinHash: updates.pinHash,
-      failedAttempts: updates.failedAttempts,
-      totalFailed24h: updates.totalFailed24h,
-      firstFailedAt:
-        updates.firstFailedAt !== undefined
-          ? updates.firstFailedAt === null
-            ? null
-            : new Date(updates.firstFailedAt)
-          : undefined,
-      lockedUntil:
-        updates.lockedUntil !== undefined
-          ? updates.lockedUntil === null
-            ? null
-            : new Date(updates.lockedUntil)
-          : undefined,
-      coolingOffUntil:
-        updates.coolingOffUntil !== undefined
-          ? updates.coolingOffUntil === null
-            ? null
-            : new Date(updates.coolingOffUntil)
-          : undefined,
-      status: updates.status,
-    });
-    if (!row) throw new Error(`PIN record not found for user ${userId}`);
-    return rowToRecord(row);
+  async update(userId: string, updates: PinRecordUpdate): Promise<PinRecord> {
+    return updateRecord(this.sql, userId, updates);
   }
 
   async delete(userId: string): Promise<void> {
     await deleteApprovalPin(this.sql, userId);
+  }
+
+  async withLock<T>(
+    userId: string,
+    work: (record: PinRecord | null, tx: LockedPinTransaction) => Promise<T>,
+  ): Promise<T> {
+    return withLockedApprovalPin(this.sql, userId, (tx, row) =>
+      work(row ? rowToRecord(row) : null, {
+        create: async (record) => rowToRecord(await createApprovalPin(tx, newRecordInput(record))),
+        update: (updates) => updateRecord(tx, userId, updates),
+      }),
+    );
   }
 }
 

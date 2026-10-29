@@ -23,9 +23,12 @@ export {
 } from "./service.js";
 export {
   type ActionTokenStore,
+  type LockedPinTransaction,
   MemoryActionTokenStore,
   MemoryPinStore,
+  type NewPinRecord,
   type PinRecord,
+  type PinRecordUpdate,
   type PinStore,
   PostgresPinStore,
 } from "./store.js";
