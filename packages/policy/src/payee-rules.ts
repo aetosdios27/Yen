@@ -1,5 +1,4 @@
-import type { Paise } from "@yen/shared";
-import { isValidGstinFormat, validateGstinChecksum } from "@yen/shared";
+import { type Paise, isValidGstinFormat, paise, validateGstinChecksum } from "@yen/shared";
 
 export type PayeeIdentity =
   | { readonly kind: "upi"; readonly vpa: string }
@@ -41,9 +40,9 @@ export interface FraudPolicy {
   readonly velocityMaxPaise: Paise; readonly blockedFlagCodes: readonly FraudFlagCode[];
 }
 export const DEFAULT_FRAUD_POLICY: FraudPolicy = {
-  newPayeeFirstPaymentPaise: 100_000, largeExpensePaise: 500_000,
-  coolingOffHours: 24, splitWindowHours: 24, approvalThresholdPaise: 1_000_000,
-  velocityWindowHours: 24, velocityMaxPaise: 2_000_000,
+  newPayeeFirstPaymentPaise: paise(100_000), largeExpensePaise: paise(500_000),
+  coolingOffHours: 24, splitWindowHours: 24, approvalThresholdPaise: paise(1_000_000),
+  velocityWindowHours: 24, velocityMaxPaise: paise(2_000_000),
   blockedFlagCodes: ["self_payment", "duplicate_invoice", "duplicate_evidence"],
 };
 export type FraudFlagCode = "new_payee_large_first_payment" | "payee_changed_cooling_off" | "self_payment" | "split_requests" | "duplicate_invoice" | "duplicate_evidence" | "gstin_name_mismatch" | "payee_velocity";

@@ -20,6 +20,14 @@ describe("payee fraud rules", () => {
     const flags = evaluatePayeeFraud({ ...base, expense: { ...base.expense, invoiceNumber: "I-1", evidenceHashes: ["abc"] }, existingEvidence: { invoiceAlreadyUsed: true, evidenceHashesAlreadyUsed: ["abc"] } });
     expect(flags.map(flag => flag.code)).toEqual(["duplicate_invoice", "duplicate_evidence"]);
   });
+  it("flags payee changes inside the cooling-off period", () => {
+    const flags = evaluatePayeeFraud({ ...base, changedPayeeAt: "2025-12-31T23:00:00.000Z", expense: { ...base.expense, amountPaise: 500_000 as never } });
+    expect(flags.map(flag => flag.code)).toContain("payee_changed_cooling_off");
+  });
+  it("flags malformed declared GSTIN values", () => {
+    const flags = evaluatePayeeFraud({ ...base, declaredGstin: "not-a-gstin" });
+    expect(flags.map(flag => flag.code)).toContain("gstin_name_mismatch");
+  });
   it("verifier defaults fail closed and the fake provider is deterministic", async () => {
     const payee = { identity: { kind: "upi" as const, vpa: " shop@bank " }, name: "Shop", verification: { status: "unverified" as const } };
     expect(await failClosedPayeeVerifier.verify(payee)).toEqual({ status: "unverified" });
