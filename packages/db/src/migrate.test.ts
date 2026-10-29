@@ -138,9 +138,7 @@ databaseSuite("migration runner", (sql, url) => {
     const alertNotificationsSource = await readFile(
       join(defaultDir, "0031_alert_notifications.sql"),
     );
-    const fundSubscriptionsSource = await readFile(
-      join(defaultDir, "0032_fund_subscriptions.sql"),
-    );
+    const fundSubscriptionsSource = await readFile(join(defaultDir, "0032_fund_subscriptions.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {

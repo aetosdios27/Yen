@@ -32,10 +32,10 @@ import {
   type DonorReceiptData,
   generateReceiptPdf,
   generateReceiptSvg,
+  PRIVACY_NOTICE_VERSION,
   paise,
   parseFundId,
   parseGstin,
-  PRIVACY_NOTICE_VERSION,
   RECEIPT_DISCLAIMER_EN,
   RECEIPT_DISCLAIMER_HI,
 } from "@yen/shared";

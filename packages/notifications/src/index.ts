@@ -1,4 +1,3 @@
-export { DeliveryChannelBridge } from "./channels/delivery-bridge.js";
 export {
   type AlertTriggerCheck,
   type AlertTriggerKind,
@@ -6,6 +5,7 @@ export {
   createAlertsForEvent,
   DEFAULT_LARGE_EXPENSE_THRESHOLD_PAISE,
 } from "./alerts.js";
+export { DeliveryChannelBridge } from "./channels/delivery-bridge.js";
 export {
   EMAIL_MESSAGE_COST_PAISE,
   EmailChannelProvider,

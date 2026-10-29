@@ -41,7 +41,12 @@ export function generateUnsubscribeToken(): string {
 }
 
 export function buildUnsubscribeUrl(baseUrl: string, token: string): string {
-  const normalized = baseUrl.trim().replace(/\/+$/, "");
+  const trimmed = baseUrl.trim();
+  let end = trimmed.length;
+  while (end > 0 && trimmed.charCodeAt(end - 1) === 47) {
+    end--;
+  }
+  const normalized = trimmed.slice(0, end);
   return `${normalized}/unsubscribe?token=${encodeURIComponent(token)}`;
 }
 
