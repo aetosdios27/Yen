@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { createSql } from "@yen/db";
 import { PgBoss } from "pg-boss";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { observePgBossErrors } from "./boss.js";
 import { describePostgres, waitFor } from "./test-utils.js";
 
 const packageDir = fileURLToPath(new URL("..", import.meta.url));
@@ -120,7 +121,7 @@ describePostgres("queue CLI runtime", (adminUrl) => {
     }
     try {
       await sql.end({ timeout: 5 });
-      await admin`DROP DATABASE IF EXISTS ${admin(testDbName)} WITH (FORCE)`;
+      await admin`DROP DATABASE IF EXISTS ${admin(testDbName)}`;
     } finally {
       await admin.end({ timeout: 5 });
     }
@@ -176,13 +177,15 @@ describePostgres("queue CLI runtime", (adminUrl) => {
     const proc = startDocumentedWorker();
     await waitForOutput(proc, "Worker runtime started");
 
-    const boss = new PgBoss({
-      connectionString: targetUrl.toString(),
-      schema: "pgboss",
-      migrate: false,
-      supervise: false,
-      schedule: false,
-    });
+    const boss = observePgBossErrors(
+      new PgBoss({
+        connectionString: targetUrl.toString(),
+        schema: "pgboss",
+        migrate: false,
+        supervise: false,
+        schedule: false,
+      }),
+    );
     await boss.start();
     let jobId: string | null;
     try {

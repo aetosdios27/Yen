@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createSql } from "@yen/db";
 import { PgBoss } from "pg-boss";
 import { afterAll, beforeAll, expect, it } from "vitest";
+import { observePgBossErrors } from "./boss.js";
 import { buildIdempotencyKey, transactionalEnqueue } from "./outbox.js";
 import { describePostgres } from "./test-utils.js";
 
@@ -24,13 +25,15 @@ describePostgres("Transactional Outbox Enqueue", (adminUrl) => {
       )
     `;
 
-    boss = new PgBoss({
-      connectionString: targetUrl.toString(),
-      schema: "pgboss",
-      migrate: true,
-      supervise: false,
-      schedule: false,
-    });
+    boss = observePgBossErrors(
+      new PgBoss({
+        connectionString: targetUrl.toString(),
+        schema: "pgboss",
+        migrate: true,
+        supervise: false,
+        schedule: false,
+      }),
+    );
     await boss.start();
     await boss.createQueue("outbox-domain-queue");
   });
@@ -39,7 +42,7 @@ describePostgres("Transactional Outbox Enqueue", (adminUrl) => {
     try {
       await boss.stop();
       await sql.end({ timeout: 5 });
-      await admin`DROP DATABASE IF EXISTS ${admin(testDbName)} WITH (FORCE)`;
+      await admin`DROP DATABASE IF EXISTS ${admin(testDbName)}`;
     } finally {
       await admin.end({ timeout: 5 });
     }

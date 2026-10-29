@@ -84,7 +84,7 @@ export function ledgerDatabaseSuite(name: string, tests: (sql: Sql, url: string)
     afterAll(async () => {
       try {
         await sql.end({ timeout: 5 });
-        await admin`DROP DATABASE IF EXISTS ${admin(dbName)} WITH (FORCE)`;
+        await admin`DROP DATABASE IF EXISTS ${admin(dbName)}`;
       } finally {
         await admin.end({ timeout: 5 });
       }
