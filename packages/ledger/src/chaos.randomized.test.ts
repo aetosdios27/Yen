@@ -489,6 +489,8 @@ ledgerDatabaseSuite("YEN-61 real notification crash points and chain outage", (s
       quiet_hours_end: null,
       timezone: "UTC",
     });
+    await sql`INSERT INTO consent_records (id, user_id, purpose, notice_version, granted_at)
+      VALUES (${uuidv7()}, ${user.value}, 'notification_whatsapp', ${PRIVACY_NOTICE_VERSION}, now())`;
     const id = uuidv7();
     await enqueueNotification(sql as never, {
       fund_id: fundId,
@@ -550,7 +552,7 @@ ledgerDatabaseSuite("YEN-61 real notification crash points and chain outage", (s
       clock: () => workerNow,
       random: () => 0,
     });
-    expect((await worker.processNextBatch()).failed).toBe(1);
+    const r1 = await worker.processNextBatch(); console.error('DEBUG r1:', JSON.stringify(r1)); expect(r1.failed).toBe(1);
     expect((await worker.processNextBatch()).submitted).toBe(1);
     expect(sendCount).toBe(2);
     const parsedUsageFund = parseFundId(fundId);
