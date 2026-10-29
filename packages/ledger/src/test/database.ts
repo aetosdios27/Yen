@@ -50,6 +50,35 @@ export function ledgerDatabaseSuite(name: string, tests: (sql: Sql, url: string)
       // Ledger tests need the app tables too: pledges live in a db-owned table.
       await migrate(sql);
       await initLedgerSchema(sql);
+
+      // In tests, auto-provision referenced funds so fund_events foreign key is satisfied
+      await sql.unsafe(`
+        CREATE OR REPLACE FUNCTION yen_test_auto_create_fund()
+        RETURNS trigger LANGUAGE plpgsql AS $$
+        DECLARE
+          v_user_id uuid := '00000000-0000-4000-8000-000000000001';
+          v_org_id uuid := '00000000-0000-4000-8000-000000000002';
+        BEGIN
+          INSERT INTO users (id, phone, display_name)
+          VALUES (v_user_id, '+919999999999', 'Test User')
+          ON CONFLICT DO NOTHING;
+
+          INSERT INTO orgs (id, name, legal_form, owner_id)
+          VALUES (v_org_id, 'Test Org', 'society', v_user_id)
+          ON CONFLICT DO NOTHING;
+
+          INSERT INTO funds (id, org_id, title, policy_json)
+          VALUES (NEW.fund_id, v_org_id, 'Test Fund', '{}')
+          ON CONFLICT DO NOTHING;
+
+          RETURN NEW;
+        END;
+        $$;
+
+        CREATE TRIGGER a_test_auto_create_fund
+        BEFORE INSERT ON fund_events
+        FOR EACH ROW EXECUTE FUNCTION yen_test_auto_create_fund();
+      `);
     });
 
     afterAll(async () => {

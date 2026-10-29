@@ -402,6 +402,193 @@ export async function pledgeDonation(
   return { kind: "pledged", donationId, event };
 }
 
+export interface ReconcilePledgeInput {
+  fundId: string;
+  pledgeId: string;
+  bankTransactionId: string;
+  idempotencyKey?: string;
+  actorPseudonym?: PseudonymId | string;
+  occurredAt?: string;
+  matchMethod?: "exact_utr" | "heuristic_amount_time" | "manual";
+  matchConfidence?: number;
+  auditReason?: string;
+}
+
+export type ReconcilePledgeResult =
+  | {
+      readonly kind: "reconciled";
+      readonly pledgeId: string;
+      readonly bankTransactionId: string;
+      readonly journalId: string;
+      readonly verifiedEvent: Event;
+      readonly duplicate?: boolean;
+    }
+  | { readonly kind: "pledge_not_found" }
+  | { readonly kind: "pledge_rejected" };
+
+/**
+ * Reconciles an existing unconfirmed donation pledge with an ingested bank transaction.
+ * Promotes pledge from 'pledged' to 'verified', transfers money from receivable/pending
+ * into spendable bank balance and realized donations revenue on the Konto ledger,
+ * updates the bank transaction with matching metadata, and appends a donation.verified event.
+ */
+export async function reconcilePledge(
+  tx: KontoTransactionExecutor,
+  input: ReconcilePledgeInput,
+): Promise<ReconcilePledgeResult> {
+  assertTransactionExecutor(tx);
+
+  // Lock before reading/writing so concurrent operations on the fund serialize.
+  await acquireFundLockInTx(tx, input.fundId);
+
+  const accounts = await ensureFundAccounts(tx, input.fundId);
+  const idempotencyKey =
+    input.idempotencyKey ?? `reconcile:${input.pledgeId}:${input.bankTransactionId}`;
+
+  // Check if this reconciliation was already recorded
+  const existingJournals = await tx<
+    {
+      id: string;
+      metadata: {
+        fundId?: string;
+        pledgeId?: string;
+        bankTransactionId?: string;
+      } | null;
+    }[]
+  >`
+    SELECT id, metadata FROM konto_journals
+    WHERE account_id = ${accounts.bankId} AND idempotency_key = ${idempotencyKey}
+    LIMIT 1
+  `;
+
+  if (existingJournals[0]) {
+    const verifiedRows = await tx<FundEventRow[]>`
+      SELECT fund_id, seq, version, type, actor, occurred_at, payload, prev_hash, hash
+      FROM fund_events
+      WHERE fund_id = ${input.fundId}
+        AND type = 'donation.verified'
+        AND (payload->>'donation_id') = ${input.pledgeId}
+      LIMIT 1
+    `;
+    if (verifiedRows[0]) {
+      return {
+        kind: "reconciled",
+        pledgeId: input.pledgeId,
+        bankTransactionId: input.bankTransactionId,
+        journalId: existingJournals[0].id,
+        verifiedEvent: parseFundEventRow(verifiedRows[0]),
+        duplicate: true,
+      };
+    }
+  }
+
+  const pledgeRows = await tx<
+    {
+      id: string;
+      fund_id: string;
+      amount_paise: string;
+      status: string;
+      utr: string;
+    }[]
+  >`
+    SELECT id, fund_id, amount_paise::text, status, utr
+    FROM donation_pledges
+    WHERE id = ${input.pledgeId}
+    FOR UPDATE
+  `;
+
+  const pledge = pledgeRows[0];
+  if (!pledge) return { kind: "pledge_not_found" };
+  if (pledge.fund_id !== input.fundId) {
+    throw new Error(
+      `Pledge ${input.pledgeId} belongs to fund ${pledge.fund_id}, not ${input.fundId}`,
+    );
+  }
+  if (pledge.status === "rejected") {
+    return { kind: "pledge_rejected" };
+  }
+  if (pledge.status === "verified") {
+    const verifiedRows = await tx<FundEventRow[]>`
+      SELECT fund_id, seq, version, type, actor, occurred_at, payload, prev_hash, hash
+      FROM fund_events
+      WHERE fund_id = ${input.fundId}
+        AND type = 'donation.verified'
+        AND (payload->>'donation_id') = ${input.pledgeId}
+      LIMIT 1
+    `;
+    if (verifiedRows[0]) {
+      return {
+        kind: "reconciled",
+        pledgeId: input.pledgeId,
+        bankTransactionId: input.bankTransactionId,
+        journalId: existingJournals[0]?.id ?? "existing",
+        verifiedEvent: parseFundEventRow(verifiedRows[0]),
+        duplicate: true,
+      };
+    }
+  }
+
+  const amountBig = BigInt(pledge.amount_paise);
+  const res = await transferInTx(tx, {
+    accountId: accounts.bankId,
+    idempotencyKey,
+    entries: [
+      { accountId: accounts.bankId, amount: amountBig },
+      { accountId: accounts.donationsId, amount: -amountBig },
+      { accountId: accounts.pledgedReceivableId, amount: -amountBig },
+      { accountId: accounts.donationsPendingId, amount: amountBig },
+    ],
+    metadata: {
+      fundId: input.fundId,
+      pledgeId: input.pledgeId,
+      bankTransactionId: input.bankTransactionId,
+      amount: Number(amountBig),
+    },
+  });
+
+  await tx`
+    UPDATE donation_pledges
+    SET status = 'verified', verified_at = CURRENT_TIMESTAMP
+    WHERE id = ${input.pledgeId}
+  `;
+
+  await tx`
+    UPDATE bank_transactions
+    SET
+      reconciliation_status = ${input.matchMethod === "manual" ? "manually_matched" : "matched"},
+      matched_pledge_id = ${input.pledgeId},
+      matched_at = CURRENT_TIMESTAMP,
+      match_confidence = ${input.matchConfidence ?? 1.0},
+      match_method = ${input.matchMethod ?? "exact_utr"},
+      manual_match_reason = ${input.auditReason ?? null},
+      manual_match_by = ${input.actorPseudonym ?? null}
+    WHERE id = ${input.bankTransactionId}
+  `;
+
+  const verifiedEvent = await appendFundEventInTx(
+    tx,
+    input.fundId,
+    toEventInput({
+      fund_id: input.fundId,
+      type: "donation.verified",
+      actor: input.actorPseudonym ?? SYSTEM_ACTOR,
+      occurred_at: input.occurredAt ?? nowUtcIso(),
+      payload: {
+        donation_id: input.pledgeId,
+        bank_transaction_id: input.bankTransactionId,
+      },
+    }),
+  );
+
+  return {
+    kind: "reconciled",
+    pledgeId: input.pledgeId,
+    bankTransactionId: input.bankTransactionId,
+    journalId: res.journalId,
+    verifiedEvent,
+  };
+}
+
 export interface ReserveForExpenseInput {
   fundId: string;
   amount: Paise;
