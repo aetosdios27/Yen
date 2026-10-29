@@ -210,7 +210,7 @@ describe("Expense Requests API Routes (YEN-30)", () => {
 
   it("executes complete lifecycle: draft -> submitted -> approved -> paid -> reconciled", async () => {
     const expenseStore = new InMemoryExpenseStore();
-    const { app } = setup({ expenseStore });
+    const { app, advance } = setup({ expenseStore });
 
     // 1. Create draft
     const createRes = await app.request(
@@ -317,6 +317,7 @@ describe("Expense Requests API Routes (YEN-30)", () => {
 
     // Approver 2 signs: reaches quorum of 2!
     const approver2Setup = setup({ principal: APPROVER_2, expenseStore });
+    approver2Setup.advance(25 * 60 * 60 * 1000);
     const app2 = approver2Setup.app;
     await approver2Setup.pinService.setupPin(APPROVER_2.id, "482915", {
       userId: APPROVER_2.id,
@@ -336,6 +337,7 @@ describe("Expense Requests API Routes (YEN-30)", () => {
     expect(app2Body.approvalsCount).toBe(2);
 
     // 4. Pay (commits hold)
+    advance(25 * 60 * 60 * 1000);
     const bankTxId = "00000000-0000-4000-8000-000000000077";
     const payRes = await app.request(
       req(

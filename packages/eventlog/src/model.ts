@@ -217,6 +217,12 @@ const eventSchema = z.union([
   }),
   z.strictObject({
     ...envelope,
+    version: z.literal(2),
+    type: z.literal("expense.objection_raised"),
+    payload: payloadSchemas["expense.objection_raised"],
+  }),
+  z.strictObject({
+    ...envelope,
     version: z.literal(1),
     type: z.literal("expense.objection_resolved"),
     payload: payloadSchemas["expense.objection_resolved"],
@@ -293,6 +299,7 @@ export type Event = z.infer<typeof eventSchema>;
 export function isKnownEventVersion(type: string, version: number): boolean {
   return (
     (version === 1 && Object.hasOwn(payloadSchemas, type)) ||
+    (type === "expense.objection_raised" && version === 2) ||
     (type === "fund.visibility_changed" && version === 2)
   );
 }

@@ -12,6 +12,7 @@ import { DefaultInFlightTracker } from "./dependencies.js";
 import { PostgresDisplayNameStore } from "./display-name-store.js";
 import { PostgresDonationPledgeStore } from "./donation-store.js";
 import { PostgresEvidenceStore } from "./evidence-store-postgres.js";
+import { PostgresExpenseObjectionStore } from "./expense-objections.js";
 import { PostgresExpenseStore } from "./expense-store.js";
 import { FileSystemStorageAdapter } from "./filesystem-storage.js";
 import { PostgresFundStore } from "./fund-store.js";
@@ -208,6 +209,7 @@ export async function startServer(
           payeeFingerprintSalt,
         }
       : {}),
+    ...(sql ? { objectionStore: new PostgresExpenseObjectionStore(sql) } : {}),
     ...(sql
       ? {
           actorForUser: (userId: string, fundId: string) =>

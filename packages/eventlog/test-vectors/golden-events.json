@@ -1,7 +1,7 @@
 {
   "domain_utf8": "yen/eventlog/event/v1\u0000",
   "genesis_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-  "latest_hash": "613c51070eb6f97a2f35b38550b18b92af80598b7ba3905c5ce25bb63947144f",
+  "latest_hash": "4e3956ab250a216c460a5035ce6bd9173f57789477152caed361e11a14494f01",
   "events": [
     {
       "event": {
@@ -439,6 +439,23 @@
         "hash": "613c51070eb6f97a2f35b38550b18b92af80598b7ba3905c5ce25bb63947144f"
       },
       "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:25:00.000Z\",\"payload\":{},\"prev_hash\":\"674156767184ebeaada98e9e93fe8aba25672bc5867abb8683d1f99f4df8a435\",\"seq\":26,\"type\":\"fund.payee_changed\",\"version\":1}"
+    },
+    {
+      "event": {
+        "fund_id": "e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd",
+        "seq": 27,
+        "type": "expense.objection_raised",
+        "version": 2,
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
+        "occurred_at": "2026-01-01T00:26:00.000Z",
+        "payload": {
+          "expense_id": "efc4f4d1-0804-fe94-a7b7-8fb9194e9845",
+          "objection_id": "d76b0a2d-6f74-2b8e-3383-bf23a8261699"
+        },
+        "prev_hash": "613c51070eb6f97a2f35b38550b18b92af80598b7ba3905c5ce25bb63947144f",
+        "hash": "4e3956ab250a216c460a5035ce6bd9173f57789477152caed361e11a14494f01"
+      },
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:26:00.000Z\",\"payload\":{\"expense_id\":\"efc4f4d1-0804-fe94-a7b7-8fb9194e9845\",\"objection_id\":\"d76b0a2d-6f74-2b8e-3383-bf23a8261699\"},\"prev_hash\":\"613c51070eb6f97a2f35b38550b18b92af80598b7ba3905c5ce25bb63947144f\",\"seq\":27,\"type\":\"expense.objection_raised\",\"version\":2}"
     }
   ]
 }

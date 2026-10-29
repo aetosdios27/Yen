@@ -2,7 +2,12 @@ import { type FundId, type PseudonymId, paise, parseFundId, parsePseudonymId } f
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type { Action } from "./actions.js";
 import { can, isExpenseFullyApproved } from "./engine.js";
-import { DEFAULT_FUND_POLICY, type FundPolicy, requiredQuorumForExpense } from "./policy.js";
+import {
+  DEFAULT_FUND_POLICY,
+  type FundPolicy,
+  isValidFundPolicy,
+  requiredQuorumForExpense,
+} from "./policy.js";
 import type { Resource } from "./resources.js";
 import type { Actor, FundRole } from "./roles.js";
 
@@ -325,6 +330,13 @@ describe("Evidence tamper resistance (Threat E4)", () => {
 });
 
 describe("Objection window", () => {
+  it("defaults to 24 hours and enforces the 0 to 168 hour range", () => {
+    expect(DEFAULT_FUND_POLICY.objectionWindowHours).toBe(24);
+    expect(isValidFundPolicy({ ...DEFAULT_FUND_POLICY, objectionWindowHours: 0 })).toBe(true);
+    expect(isValidFundPolicy({ ...DEFAULT_FUND_POLICY, objectionWindowHours: 168 })).toBe(true);
+    expect(isValidFundPolicy({ ...DEFAULT_FUND_POLICY, objectionWindowHours: 169 })).toBe(false);
+  });
+
   it("allows raising objections when window is open", () => {
     const res: Resource = {
       kind: "expense",
@@ -337,6 +349,7 @@ describe("Objection window", () => {
       },
     };
     expect(can({ role: "donor" }, "expense:raise_objection", res)).toBe(true);
+    expect(can({ role: "member" }, "expense:raise_objection", res)).toBe(true);
   });
 
   it("denies raising objections when window is closed", () => {

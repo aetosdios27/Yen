@@ -4,36 +4,39 @@ This package defines the v1 wire format and computes event hashes without I/O. T
 
 Hash input is the canonical JSON encoding of the unsigned event envelope under [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) (JCS), hashed with SHA-256 and domain-separated by the UTF-8 bytes of `yen/eventlog/event/v1\0`.
 
-## Event types and v1 payloads
+## Event types and payloads by version
 
-| Event type                   | Required payload properties                                                                                 | Status      |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------- |
-| `fund.created`               | `org_id`, `visibility` (`private`, `members`, `public`)                                                     | Provisional |
-| `fund.policy_changed`        | `approval_quorum`, `objection_window_hours`                                                                 | Provisional |
-| `fund.visibility_changed`    | `visibility` (`private`, `members`, `public`)                                                               | Provisional |
-| `member.added`               | `member_id`, `role` (`member`, `approver`, `treasurer`)                                                     | Provisional |
-| `member.removed`             | `member_id`                                                                                                 | Provisional |
-| `donation.pledged`           | `donation_id`, `amount_paise`                                                                               | Provisional |
-| `donation.verified`          | `donation_id`, `bank_transaction_id`                                                                        | Provisional |
-| `donation.rejected`          | `donation_id`, `reason` (`unmatched`, `duplicate`, `cancelled`)                                             | Provisional |
-| `expense.submitted`          | `expense_id`, `amount_paise`                                                                                | Provisional |
-| `expense.evidence_added`     | `expense_id`, `evidence_id`, `content_sha256`                                                               | Provisional |
-| `expense.flagged`            | `expense_id`, `reason` (`missing_evidence`, `policy`, `suspicious`)                                         | Provisional |
-| `expense.objection_raised`   | `expense_id`, `objection_id`                                                                                | Provisional |
-| `expense.objection_resolved` | `expense_id`, `objection_id`, `resolution` (`upheld`, `dismissed`)                                          | Provisional |
-| `expense.approved`           | `expense_id`                                                                                                | Provisional |
-| `expense.rejected`           | `expense_id`, `reason` (`quorum`, `objection`, `policy`)                                                    | Provisional |
-| `expense.expired`            | `expense_id`                                                                                                | Provisional |
-| `expense.paid`               | `expense_id`, `bank_transaction_id`                                                                         | Provisional |
-| `expense.reversed`           | `expense_id`, `bank_transaction_id`                                                                         | Provisional |
-| `bank.credit_seen`           | `bank_transaction_id`, `amount_paise`                                                                       | Provisional |
-| `bank.debit_seen`            | `bank_transaction_id`, `amount_paise`                                                                       | Provisional |
-| `bank.balance_checked`       | `balance_paise`                                                                                             | Provisional |
-| `discrepancy.raised`         | `discrepancy_id`, `bank_transaction_id`, `kind` (`unmatched_credit`, `unmatched_debit`, `balance_mismatch`) | Provisional |
-| `discrepancy.resolved`       | `discrepancy_id`, `resolution` (`matched`, `corrected`, `dismissed`)                                        | Provisional |
-| `anchor.published`           | `anchor_id`, `global_root`                                                                                  | Provisional |
+| Event type                    | Required payload properties                                                                                 | Status                                                                         |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `fund.created`                | `org_id`, `visibility` (`private`, `members`, `public`)                                                     | Provisional                                                                    |
+| `fund.policy_changed`         | `approval_quorum`, `objection_window_hours`                                                                 | Provisional                                                                    |
+| `fund.visibility_changed`     | `visibility` (`private`, `members`, `public`)                                                               | Provisional                                                                    |
+| `member.added`                | `member_id`, `role` (`member`, `approver`, `treasurer`)                                                     | Provisional                                                                    |
+| `member.removed`              | `member_id`                                                                                                 | Provisional                                                                    |
+| `donation.pledged`            | `donation_id`, `amount_paise`                                                                               | Provisional                                                                    |
+| `donation.verified`           | `donation_id`, `bank_transaction_id`                                                                        | Provisional                                                                    |
+| `donation.rejected`           | `donation_id`, `reason` (`unmatched`, `duplicate`, `cancelled`)                                             | Provisional                                                                    |
+| `expense.submitted`           | `expense_id`, `amount_paise`                                                                                | Provisional                                                                    |
+| `expense.evidence_added`      | `expense_id`, `evidence_id`, `content_sha256`                                                               | Provisional                                                                    |
+| `expense.flagged`             | `expense_id`, `reason` (`missing_evidence`, `policy`, `suspicious`)                                         | Provisional                                                                    |
+| `expense.objection_raised` v1 | `expense_id`, `objection_id`                                                                                | Provisional                                                                    |
+| `expense.objection_raised` v2 | `expense_id`, `objection_id`                                                                                | Current objection event; actor and reason remain outside the canonical payload |
+| `expense.objection_resolved`  | `expense_id`, `objection_id`, `resolution` (`upheld`, `dismissed`)                                          | Provisional                                                                    |
+| `expense.approved`            | `expense_id`                                                                                                | Provisional                                                                    |
+| `expense.rejected`            | `expense_id`, `reason` (`quorum`, `objection`, `policy`)                                                    | Provisional                                                                    |
+| `expense.expired`             | `expense_id`                                                                                                | Provisional                                                                    |
+| `expense.paid`                | `expense_id`, `bank_transaction_id`                                                                         | Provisional                                                                    |
+| `expense.reversed`            | `expense_id`, `bank_transaction_id`                                                                         | Provisional                                                                    |
+| `bank.credit_seen`            | `bank_transaction_id`, `amount_paise`                                                                       | Provisional                                                                    |
+| `bank.debit_seen`             | `bank_transaction_id`, `amount_paise`                                                                       | Provisional                                                                    |
+| `bank.balance_checked`        | `balance_paise`                                                                                             | Provisional                                                                    |
+| `discrepancy.raised`          | `discrepancy_id`, `bank_transaction_id`, `kind` (`unmatched_credit`, `unmatched_debit`, `balance_mismatch`) | Provisional                                                                    |
+| `discrepancy.resolved`        | `discrepancy_id`, `resolution` (`matched`, `corrected`, `dismissed`)                                        | Provisional                                                                    |
+| `anchor.published`            | `anchor_id`, `global_root`                                                                                  | Provisional                                                                    |
 
 `fund.visibility_changed` v1 remains immutable with its original single `visibility` field. Version 2 of that same event type records `old_visibility` and `new_visibility`; its actor remains the envelope's per-fund pseudonym. The independent golden chain includes a v2 vector after all pinned v1 events, so the v1 event hashes remain unchanged.
+
+`expense.objection_raised` v1 remains immutable. Version 2 is the event emitted for new objections and carries the same canonical payload; the independent golden vector is appended after the existing chain, preserving every previously published event hash. Objection reasons and user identifiers never enter canonical event payloads; the actor is the fund-scoped pseudonym.
 
 `parseEvent(unknown)` returns a `Result<Event>` and rejects unknown type/version pairs and raw properties that canonical JSON would omit. `parseEvent(...).ok === true` checks **format only**. It says nothing about whether the stored hash is correct or whether the event belongs to an intact chain. `makeNextEvent(previous, input)` checks the preceding event, assigns `seq` and `prev_hash`, and computes `hash`. `computeEventHash(unsignedEvent)` accepts exactly the eight fields without `hash`; extra or missing fields throw before hashing.
 

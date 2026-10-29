@@ -33,7 +33,7 @@ export const DEFAULT_FUND_POLICY: FundPolicy = {
   visibilityTier: "members",
   approvalQuorum: 2,
   spendThresholds: [],
-  objectionWindowHours: 48,
+  objectionWindowHours: 24,
 };
 
 /** A money amount in paise: a safe, non-negative integer number. Never a float, string, or bigint. */
@@ -63,7 +63,8 @@ export function isValidFundPolicy(policy: unknown): policy is FundPolicy {
     if (
       typeof p.objectionWindowHours !== "number" ||
       !Number.isSafeInteger(p.objectionWindowHours) ||
-      p.objectionWindowHours < 0
+      p.objectionWindowHours < 0 ||
+      p.objectionWindowHours > 168
     ) {
       return false;
     }

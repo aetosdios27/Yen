@@ -84,7 +84,7 @@ async function persist(tx: TransactionSql, expense: ExpenseRequest): Promise<voi
 
 const DEFAULT_EXPENSE_POLICY: FundPolicy = {
   approvalQuorum: 2,
-  objectionWindowHours: 0,
+  objectionWindowHours: 24,
   autoExpireHours: 72,
 };
 
@@ -226,6 +226,12 @@ export class PostgresExpenseStore implements ExpenseStore {
       const actorId = actorUserId
         ? await ensureFundPseudonym(tx, { userId: actorUserId, fundId: expense.fundId })
         : approval.approverId;
+      const openObjections = await tx<{ count: number }[]>`
+        SELECT count(*)::int AS count
+        FROM expense_objections o
+        LEFT JOIN expense_objection_resolutions r ON r.objection_id = o.id
+        WHERE o.expense_id = ${expenseId} AND r.objection_id IS NULL
+      `;
       const result = await approveExpenseInTx({
         tx,
         expense,
@@ -234,6 +240,7 @@ export class PostgresExpenseStore implements ExpenseStore {
         verifyApprovalProof,
         ...(fraudPolicy ? { fraudPolicy } : {}),
         actorPseudonym: actorId,
+        hasOpenObjection: (openObjections[0]?.count ?? 0) > 0,
         ...(nowUtc ? { nowUtc } : {}),
       });
       await persist(tx, result.updatedExpense);

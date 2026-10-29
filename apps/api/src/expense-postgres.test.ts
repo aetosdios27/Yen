@@ -19,6 +19,7 @@ import { createApp } from "./app.js";
 import { fundSchema } from "./contract.js";
 import { MemoryFundStore } from "./dependencies.js";
 import { PostgresDonationPledgeStore } from "./donation-store.js";
+import { PostgresExpenseObjectionStore } from "./expense-objections.js";
 import { PostgresExpenseStore } from "./expense-store.js";
 import {
   MemoryActionTokenStore,
@@ -142,6 +143,233 @@ databaseSuite("Postgres expense store", (sql, url) => {
     await expect(
       sql`UPDATE expense_approvals SET approved_at = ${now} WHERE expense_id = ${expense.id}`,
     ).rejects.toThrow("expense_approvals is append-only: UPDATE is forbidden");
+  });
+
+  it("serializes objections against approval and resolves uphold/dismiss outcomes", async () => {
+    const fundId = await fund();
+    const actorUserId = uuidv7();
+    const startAt = Date.now() + 10_000;
+    const at = (hours: number) => new Date(startAt + hours * 3_600_000).toISOString();
+    const phone = `+91${randomInt(1_000_000_000, 10_000_000_000)}`;
+    await sql`INSERT INTO users (id, phone, display_name) VALUES (${actorUserId}, ${phone}, 'Objector')`;
+    const { recordDonation, SYSTEM_ACTOR } = await import("@yen/ledger");
+    await sql.begin((tx) =>
+      recordDonation(tx, { fundId, amount: paise(5000), actorPseudonym: SYSTEM_ACTOR }),
+    );
+    const expenseStore = new PostgresExpenseStore(sql);
+    const objectionStore = new PostgresExpenseObjectionStore(sql);
+    const policy = { approvalQuorum: 1, objectionWindowHours: 24, autoExpireHours: 72 } as const;
+    const expense = draft(fundId);
+    await expenseStore.save(expense);
+    const submitted = await expenseStore.save(
+      {
+        ...expense,
+        status: "submitted",
+        holdId: uuidv7(),
+        submittedAt: at(0),
+      },
+      { policy },
+    );
+    if (!submitted?.holdId) throw new Error("Submitted expense did not create a hold");
+
+    await expect(
+      objectionStore.raise({
+        expenseId: expense.id,
+        actorUserId,
+        reason: "Please call me at +919876543210",
+        idempotencyKey: "raise-pii",
+        nowUtc: at(1),
+      }),
+    ).rejects.toThrow("Invalid objection input");
+    await expect(
+      objectionStore.raise({
+        expenseId: expense.id,
+        actorUserId,
+        reason: "x".repeat(501),
+        idempotencyKey: "raise-too-long",
+        nowUtc: at(1),
+      }),
+    ).rejects.toThrow("Invalid objection input");
+
+    const raised = await objectionStore.raise({
+      expenseId: expense.id,
+      actorUserId,
+      reason: "Please clarify the expense purpose",
+      idempotencyKey: "raise-window-1",
+      nowUtc: at(1),
+    });
+    expect(raised.duplicate).toBe(false);
+    const appFor = (role: "donor" | "member" | null) =>
+      createApp({
+        principal: role ? { id: actorUserId, role } : null,
+        policy: devPolicy,
+        expenseStore,
+        objectionStore,
+        logger: { log: () => undefined },
+      });
+    const objectionPath = `/v1/funds/${fundId}/public/expenses/${expense.id}/objections`;
+    const memberApp = appFor("member");
+    const raiseRequest = () =>
+      memberApp.request(`/v1/funds/${fundId}/expenses/${expense.id}/objections`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "Idempotency-Key": "route-objection-idempotency",
+        },
+        body: JSON.stringify({ reason: "Please clarify the expense purpose" }),
+      });
+    expect((await raiseRequest()).status).toBe(201);
+    const replay = await raiseRequest();
+    expect(replay.status).toBe(201);
+    expect(replay.headers.get("idempotent-replayed")).toBe("true");
+
+    const publicResponse = await appFor(null).request(objectionPath);
+    expect(await publicResponse.json()).toEqual({ count: 1, openCount: 1 });
+    const donorResponse = await appFor("donor").request(objectionPath);
+    const donorBody = (await donorResponse.json()) as {
+      objections: Array<Record<string, unknown>>;
+    };
+    expect(donorBody.objections[0]).not.toHaveProperty("reason");
+    const memberResponse = await memberApp.request(objectionPath);
+    const memberBody = (await memberResponse.json()) as {
+      objections: Array<Record<string, unknown>>;
+    };
+    expect(memberBody.objections[0]?.reason).toBe("Please clarify the expense purpose");
+
+    const approval = {
+      approverId: `psn_${uuidv7()}` as PseudonymId,
+      passkeySignature: {
+        credentialId: "pin",
+        signatureHex: "00",
+        clientDataJson: "{}",
+        authenticatorDataHex: "00",
+      },
+      approvedAt: at(25),
+    };
+    const approvalResult = await expenseStore.atomicApprove(
+      expense.id,
+      approval,
+      policy,
+      verified,
+      approval.approvedAt,
+    );
+    expect(approvalResult.reachedQuorum).toBe(false);
+    expect(approvalResult.expense.status).toBe("submitted");
+
+    const rejected = await objectionStore.resolve({
+      expenseId: expense.id,
+      objectionId: raised.id,
+      actorUserId,
+      resolution: "upheld",
+      reason: "The request is outside the fund purpose",
+      policy,
+      nowUtc: at(26),
+    });
+    expect(rejected.status).toBe("rejected");
+    expect(rejected.rejectionReason).toBe("objection");
+    expect(await sql`SELECT status FROM konto_holds WHERE id = ${submitted.holdId}`).toEqual([
+      { status: "ROLLED_BACK" },
+    ]);
+
+    const dismissedDraft = draft(fundId);
+    await expenseStore.save(dismissedDraft);
+    const dismissedSubmitted = await expenseStore.save(
+      {
+        ...dismissedDraft,
+        status: "submitted",
+        holdId: uuidv7(),
+        submittedAt: at(27),
+      },
+      { policy },
+    );
+    if (!dismissedSubmitted?.holdId) throw new Error("Submitted expense did not create a hold");
+    const dismissedObjection = await objectionStore.raise({
+      expenseId: dismissedDraft.id,
+      actorUserId,
+      reason: "I need the supporting receipt",
+      idempotencyKey: "raise-window-dismissed",
+      nowUtc: at(28),
+    });
+    const dismissedApproval = await expenseStore.atomicApprove(
+      dismissedDraft.id,
+      { ...approval, approverId: `psn_${uuidv7()}` as PseudonymId },
+      policy,
+      verified,
+      at(52),
+    );
+    expect(dismissedApproval.expense.status).toBe("submitted");
+    const continued = await objectionStore.resolve({
+      expenseId: dismissedDraft.id,
+      objectionId: dismissedObjection.id,
+      actorUserId,
+      resolution: "dismissed",
+      reason: "Receipt review completed",
+      policy,
+      nowUtc: at(53),
+    });
+    expect(continued.status).toBe("approved");
+    expect(
+      await sql`SELECT status FROM konto_holds WHERE id = ${dismissedSubmitted.holdId}`,
+    ).toEqual([{ status: "PENDING" }]);
+
+    const raceDraft = draft(fundId);
+    await expenseStore.save(raceDraft);
+    await expenseStore.save(
+      { ...raceDraft, status: "submitted", holdId: uuidv7(), submittedAt: at(54) },
+      { policy },
+    );
+    const race = await Promise.allSettled([
+      objectionStore.raise({
+        expenseId: raceDraft.id,
+        actorUserId,
+        reason: "Need an additional purpose explanation",
+        idempotencyKey: "raise-window-race",
+        nowUtc: at(55),
+      }),
+      expenseStore.atomicApprove(
+        raceDraft.id,
+        { ...approval, approverId: `psn_${uuidv7()}` as PseudonymId, approvedAt: at(80) },
+        policy,
+        verified,
+        at(80),
+      ),
+    ]);
+    const racedExpense = await expenseStore.get(raceDraft.id);
+    expect(race[1]?.status).toBe("fulfilled");
+    expect(racedExpense?.status).toBe(race[0]?.status === "fulfilled" ? "submitted" : "approved");
+    expect(race[0]?.status === "fulfilled" || racedExpense?.status === "approved").toBe(true);
+    expect(
+      await sql`SELECT seq FROM fund_events WHERE fund_id = ${fundId} AND type = 'expense.objection_raised' AND version = 2`,
+    ).toHaveLength(2 + (race[0]?.status === "fulfilled" ? 1 : 0));
+  });
+
+  it("does not let a donor object to an expense through another fund URL", async () => {
+    const actualFundId = await fund();
+    const otherFundId = await fund();
+    const donorId = uuidv7();
+    const phone = `+91${randomInt(1_000_000_000, 10_000_000_000)}`;
+    await sql`INSERT INTO users (id, phone, display_name) VALUES (${donorId}, ${phone}, 'Donor')`;
+    const expenseStore = new PostgresExpenseStore(sql);
+    const objectionStore = new PostgresExpenseObjectionStore(sql);
+    const expense = draft(actualFundId);
+    await expenseStore.save(expense);
+    const app = createApp({
+      principal: { id: donorId, role: "donor" },
+      policy: devPolicy,
+      expenseStore,
+      objectionStore,
+      logger: { log: () => undefined },
+    });
+
+    const response = await app.request(
+      `/v1/funds/${otherFundId}/expenses/${expense.id}/objections`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", "Idempotency-Key": "cross-fund-objection" },
+        body: JSON.stringify({ reason: "Please explain this expense" }),
+      },
+    );
+    expect(response.status).toBe(404);
   });
 
   it("rolls back a hold when expense persistence fails after the hold was made", async () => {
