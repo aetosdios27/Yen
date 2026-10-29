@@ -8,7 +8,7 @@ CREATE TABLE member_payee_profiles (
   updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (fund_id, pseudonym_id),
   FOREIGN KEY (fund_id, pseudonym_id)
-    REFERENCES fund_pseudonyms(fund_id, pseudonym_id)
+    REFERENCES fund_pseudonyms(fund_id, pseudonym_id) ON DELETE CASCADE
 );
 
 CREATE TABLE fund_payee_rule_policies (
@@ -69,15 +69,11 @@ CREATE TABLE expense_payee_acknowledgements (
   reason text NOT NULL CHECK (length(trim(reason)) > 0 AND length(reason) <= 1000),
   acknowledged_at timestamptz NOT NULL,
   UNIQUE (evaluation_id, code),
-  FOREIGN KEY (fund_id, actor_pseudonym_id)
-    REFERENCES fund_pseudonyms(fund_id, pseudonym_id),
   FOREIGN KEY (evaluation_id, fund_id, expense_id, code)
     REFERENCES expense_payee_flags(evaluation_id, fund_id, expense_id, code)
 );
 CREATE INDEX expense_payee_acknowledgements_flag_fk_idx
   ON expense_payee_acknowledgements (evaluation_id, fund_id, expense_id, code);
-CREATE INDEX expense_payee_acknowledgements_actor_fk_idx
-  ON expense_payee_acknowledgements (fund_id, actor_pseudonym_id);
 
 CREATE FUNCTION yen_payee_rule_rows_immutable()
 RETURNS trigger

@@ -276,6 +276,24 @@ databaseSuite("migration runner", (sql, url) => {
     ]);
   });
 
+  it("lets erasure delete a member's fund pseudonym while payee profiles exist", async () => {
+    await migrate(sql);
+    const userId = randomUUID();
+    const orgId = randomUUID();
+    const fundId = randomUUID();
+    const pseudonymId = randomUUID();
+    await sql`INSERT INTO users (id, phone, display_name) VALUES (${userId}, '+919999900003', 'Erased Member')`;
+    await sql`INSERT INTO orgs (id, name, legal_form, owner_id) VALUES (${orgId}, 'Erasure Club', 'society', ${userId})`;
+    await sql`INSERT INTO funds (id, org_id, title, policy_json) VALUES (${fundId}, ${orgId}, 'Erasure Fund', '{}')`;
+    await sql`INSERT INTO fund_pseudonyms (pseudonym_id, user_id, fund_id) VALUES (${pseudonymId}, ${userId}, ${fundId})`;
+    await sql`INSERT INTO member_payee_profiles (fund_id, pseudonym_id, fingerprint)
+      VALUES (${fundId}, ${pseudonymId}, ${"a".repeat(64)})`;
+    await sql`DELETE FROM fund_pseudonyms WHERE user_id = ${userId}`;
+    expect(
+      await sql`SELECT count(*)::int AS count FROM member_payee_profiles WHERE fund_id = ${fundId}`,
+    ).toEqual([{ count: 0 }]);
+  });
+
   it("keeps manual debit decisions immutable", async () => {
     await migrate(sql);
     const fundId = randomUUID();
