@@ -315,3 +315,13 @@ Each README claim that has a row carries a `<!-- claim: CLAIM-ID -->` marker. Th
 - **Test:** none
 - **Reference:** `nist-800-63b`, `owasp-auth`, `owasp-password-storage`, `rfc-2104`
 - **Missing:** Approvals are recorded by Yen after PIN confirmation and attested by the server rather than signed by the approver's device; a compromised server or operator could record an approval nobody gave (the event log stops later edits but not write-time fabricated approvals). Device-signed approvals via WebAuthn (YEN-71) are planned before Yen moves money. No PIN storage, keyed hashing, lockout tracking, or cooling-off reset notification code exists in the repository. Named tests to be written: `apps/api/src/pin.test.ts` "locks out after 5 consecutive failed attempts for 30 minutes", `apps/api/src/pin.test.ts` "requires owner reset with 24-hour cooling-off and member notifications after 10 failures", and `apps/api/src/pin.test.ts` "verifies single-use action-bound PIN and expires token within 60 seconds".
+
+### CLAIM-31 Audit bundle verifier checks supplied event integrity and inclusion
+
+- **Status:** partial
+- **Wording:** "The standalone verifier checks event hashes, chain links, batch ranges, and salted Merkle inclusion proofs in an audit bundle."
+- **Where:** packages/verifier/README.md:3
+- **Mechanism:** `packages/verifier/src/verify.ts` checks eventlog v1 hashes, chain structure, ranges and the two-level salted Merkle proof. `verifiers/python/yen_verify.py` is an independent standard-library implementation. `packages/db/src/audit-bundle.ts` exports intervals from persisted events, salts, and anchor metadata.
+- **Test:** `packages/verifier/src/verify.test.ts` "detects an edited event"
+- **Reference:** `rfc-6962`, `rfc-8785`, `fips-180-4`
+- **Missing:** The tools verify the supplied segment and do not establish completeness or authenticate the start checkpoint by themselves. RPC mode compares a root at a caller-supplied registry address, but no publication pipeline or deployed registry is in use. The database exporter operates on a fixture and is not wired into a public export flow.

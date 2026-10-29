@@ -19,6 +19,7 @@
     "test": "vitest run",
     "migrate": "node src/cli.ts",
     "verify-chain": "node src/verify-cli.ts",
+    "export-audit-bundle": "node src/export-audit-cli.ts",
     "check:fk-indexes": "node src/check-fk-indexes-cli.ts"
   },
   "dependencies": {
