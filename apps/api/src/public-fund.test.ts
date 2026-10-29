@@ -6,6 +6,7 @@ import { createApp } from "./app.js";
 import {
   type AppDependencies,
   type DisplayNameStore,
+  MemoryPublicFundReadStore,
   MemoryDisplayNameStore,
 } from "./dependencies.js";
 import { devPolicy } from "./policy.js";
@@ -16,6 +17,7 @@ const fundId = "00000000-0000-4000-8000-000000000010";
 function fixtureApp(
   displayNameStore: DisplayNameStore = new MemoryDisplayNameStore(),
   principalValue: AppDependencies["principal"] = owner,
+  publicFundReadStore = new MemoryPublicFundReadStore(),
 ) {
   const expenses = new InMemoryExpenseStore();
   const expense = {
@@ -54,6 +56,7 @@ function fixtureApp(
     idGenerator: () => fundId,
     policy: devPolicy,
     displayNameStore,
+    publicFundReadStore,
     expenseStore: {
       ...expenses,
       get: expenses.get.bind(expenses),
@@ -94,7 +97,7 @@ describe("public fund read API", () => {
     expect(JSON.parse(summaryText)).toMatchObject({
       fundId,
       name: "Community fund",
-      raisedPaise: null,
+      raisedPaise: "0",
       spentPaise: "2500",
       verification: "unverified",
     });
@@ -102,7 +105,7 @@ describe("public fund read API", () => {
     const breakdown = await app.request(`/v1/funds/${fundId}/public/breakdown`);
     const breakdownText = await breakdown.text();
     expect(JSON.parse(breakdownText)).toMatchObject({
-      categories: [{ category: "Uncategorized", spentPaise: "2500" }],
+      categories: [{ category: "Other", spentPaise: "2500", transactionCount: 1 }],
     });
     const timeline = await app.request(`/v1/funds/${fundId}/public/timeline`);
     const timelineText = await timeline.text();
@@ -122,18 +125,54 @@ describe("public fund read API", () => {
     }
   });
 
-  it("makes unknown donation and verification sources explicit", async () => {
+  it("returns zero rather than a stub when a fund has no verified donations", async () => {
     const app = fixtureApp();
     await createPublicFund(app);
     const response = await app.request(`/v1/funds/${fundId}/public/summary`);
     const body = (await response.json()) as { dataGaps: string[]; raisedPaise: string | null };
-    expect(body.raisedPaise).toBeNull();
-    expect(body.dataGaps).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining("Donation records are not queryable"),
-        expect.stringContaining("donation display labels cannot be shown"),
-      ]),
+    expect(body.raisedPaise).toBe("0");
+    expect(body.dataGaps).not.toEqual(
+      expect.arrayContaining([expect.stringContaining("Donation records are not queryable")]),
     );
+  });
+
+  it("uses verified bank credits and applies every donor display preference", async () => {
+    const donations = new MemoryPublicFundReadStore();
+    donations.set(fundId, [
+      {
+        id: "00000000-0000-4000-8000-000000000051",
+        occurredAt: "2026-10-28T01:00:00.000Z",
+        amountPaise: 1500n,
+        donorDisplayName: "Aarav Sharma",
+        donorNameChoice: "full",
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000052",
+        occurredAt: "2026-10-28T02:00:00.000Z",
+        amountPaise: 2500n,
+        donorDisplayName: "Beena Kumari",
+        donorNameChoice: "initials",
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000053",
+        occurredAt: "2026-10-28T03:00:00.000Z",
+        amountPaise: 3000n,
+        donorDisplayName: "Private Donor",
+        donorNameChoice: "anonymous",
+      },
+    ]);
+    const app = fixtureApp(new MemoryDisplayNameStore(), owner, donations);
+    await createPublicFund(app);
+    const summary = (await app.request(`/v1/funds/${fundId}/public/summary`)).json();
+    await expect(summary).resolves.toMatchObject({ raisedPaise: "7000", verification: "bank-matched" });
+    const timeline = (await app.request(`/v1/funds/${fundId}/public/timeline`)).json();
+    await expect(timeline).resolves.toMatchObject({
+      items: expect.arrayContaining([
+        expect.objectContaining({ id: "00000000-0000-4000-8000-000000000051", actorDisplayName: "Aarav Sharma" }),
+        expect.objectContaining({ id: "00000000-0000-4000-8000-000000000052", actorDisplayName: "B. K." }),
+        expect.not.objectContaining({ actorDisplayName: "Private Donor" }),
+      ]),
+    });
   });
 
   it("resolves timeline labels from the display-name store and honors the fund officeholder setting", async () => {
