@@ -51,13 +51,19 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
-      - name: Install PostgreSQL client tools
+      - name: Use PostgreSQL 16 client tools
+        # The runner ships a newer pg_dump whose archives set parameters that the
+        # Postgres 16 service rejects on restore, so run the tools from the server image.
         run: |
-          if ! command -v pg_dump >/dev/null || ! command -v pg_restore >/dev/null; then
-            sudo apt-get update
-            sudo apt-get install --yes postgresql-client
-          fi
-          pg_dump --version
+          bin="$RUNNER_TEMP/pg16-bin"
+          mkdir -p "$bin"
+          docker pull --quiet postgres:16 >/dev/null
+          for tool in pg_dump pg_restore createdb dropdb; do
+            printf '#!/usr/bin/env bash\nexec docker run --rm -i --network host postgres:16 %s "$@"\n' "$tool" > "$bin/$tool"
+            chmod +x "$bin/$tool"
+          done
+          echo "$bin" >> "$GITHUB_PATH"
+          "$bin/pg_dump" --version
       - run: pnpm install --frozen-lockfile
       - name: Run seeded ledger invariants
         run: |
