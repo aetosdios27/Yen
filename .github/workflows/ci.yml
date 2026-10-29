@@ -57,6 +57,15 @@ jobs:
 
       - name: Verify published audit vectors in Node and Python
         run: pnpm --filter @yen/verifier vectors:check
+      - name: Rehearse release archive checks (no publish or signing)
+        if: github.event_name == 'pull_request'
+        run: |
+          rehearsal_dir="$(mktemp -d)"
+          trap 'rm -rf "$rehearsal_dir"' EXIT
+          release_tag="local-${GITHUB_SHA:0:12}"
+          YEN_RELEASE_TAG="$release_tag" bash scripts/repro-build.sh "$rehearsal_dir"
+          printf '{"bomFormat":"CycloneDX","specVersion":"1.6","components":[]}\n' > "$rehearsal_dir/rehearsal-sbom.json"
+          bash scripts/prepare-release-assets.sh "$rehearsal_dir" "$release_tag" "$rehearsal_dir/rehearsal-sbom.json"
 
       - name: Lint and format
         run: pnpm check

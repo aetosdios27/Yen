@@ -58,13 +58,11 @@ jobs:
           upload-artifact: false
           upload-release-assets: false
 
-      - name: Add SBOM and checksums
+      - name: Add SBOM and check release assets
         env:
           SBOM_FILE: ${{ runner.temp }}/sbom.cdx.json
         run: |
-          cp "$SBOM_FILE" "$ARTIFACT_DIR/sbom.cdx.json"
-          cd "$ARTIFACT_DIR"
-          sha256sum "yen-${YEN_RELEASE_TAG}.tar" sbom.cdx.json > SHA256SUMS
+          bash scripts/prepare-release-assets.sh "$ARTIFACT_DIR" "$YEN_RELEASE_TAG" "$SBOM_FILE"
 
       - name: Upload unsigned release files
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
