@@ -490,16 +490,16 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 
 - **Source:** W3C; W3C Recommendation, 2021.
 - **URL:** https://www.w3.org/TR/webauthn-2/
-- **What we use it for:** Relying parties generate random challenges and verify returned assertions. The current API reserves an authentication contract; passkey verification and transaction approval are future work.
-- **Where in this repo:** apps/api/README.md; YEN-22
+- **What we use it for:** Registration and authentication use fresh challenges, user verification and relying-party checks. Yen uses WebAuthn as an optional device-signing factor added on top of the PIN, not as the approval credential by itself.
+- **Where in this repo:** apps/api/README.md; YEN-71
 
 <a id="webauthn-3"></a>
 ### Web Authentication: An API for accessing Public Key Credentials Level 3
 
 - **Source:** W3C; W3C Recommendation, 2026.
 - **URL:** https://www.w3.org/TR/webauthn-3/
-- **What we use it for:** Relying parties use random challenges and verify returned values to resist replay. Yen does not yet implement passkeys or transaction approvals.
-- **Where in this repo:** apps/api/README.md; YEN-22
+- **What we use it for:** Relying parties verify origin, RP ID, challenge and returned authenticator data. Yen binds each device assertion challenge to the action hash used by its PIN proof, then limits the proof to one use and 60 seconds.
+- **Where in this repo:** apps/api/README.md; YEN-71
 
 <a id="owasp-api"></a>
 ### OWASP Top 10 API Security Risks – 2023

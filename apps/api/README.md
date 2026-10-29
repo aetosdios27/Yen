@@ -52,10 +52,47 @@ in the authenticated session/device list, and revoked by sign-out or
 sign-out-everywhere. The policy sets a 7-day idle timeout and a 30-day
 absolute lifetime. After idle expiry, PIN reauthentication is required while
 the session remains within its absolute lifetime. OTP is required again after
-absolute expiry, on a new device, and for recovery or PIN reset. A
-device-bound fingerprint/biometric authenticator is out of scope; YEN-71 owns
-that extension. It should be a device-local activation factor and must not
-send biometric data to Yen.
+absolute expiry, on a new device, and for recovery or PIN reset.
+
+WebAuthn device credentials are optional in addition to the Yen PIN. Registration
+requires a fresh PIN verification. Assertion challenges include the exact action
+hash already used by the PIN proof; both challenges and resulting device proofs
+expire after 60 seconds and are single-use. A money action still needs its PIN
+proof even when a device signature is present. A fund may set
+`requireDeviceSignatureAbove` to a non-negative paise threshold; approvals for
+amounts strictly above it require a valid device proof. The default is `null`
+(disabled). Fund policy is process-local today and does not survive an API
+restart.
+
+Yen stores the WebAuthn credential ID, public key, signature counter and a
+user-provided device label. It stores neither biometric data nor a biometric
+template; the device's authenticator performs local user verification. Yen
+requires a platform authenticator, WebAuthn user verification and checks the
+configured RP ID and origin.
+Registration requests `attestation: "none"`; Yen does not verify device
+attestation or claim that a credential is hardware-backed. Counter regression
+is rejected as clone-like behavior, but authenticators that always return a
+zero counter provide no counter-based clone signal. Browser support for
+platform authenticators varies, and older Android versions may not offer one;
+registration can fail on those devices. WebAuthn user verification can use a
+device PIN or another local factor instead of a biometric.
+
+Invalid WebAuthn assertions count against the same per-user PIN failure budget:
+five consecutive failures lock approvals for 30 minutes, while ten failures in
+24 hours require the existing recovery reset. Missing optional proofs and
+expired/replayed proof-token submissions do not count as failed assertions. A
+valid device assertion does not clear PIN failures because it does not satisfy
+the mandatory PIN check; a valid PIN resets the consecutive failure count.
+The `@simplewebauthn/server` verifier is pinned to current version 14.0.3; it
+handles WebAuthn client-data, authenticator-data, COSE key and signature
+verification instead of adding a partial local implementation.
+
+Credential management is available at `/v1/auth/device-credentials`; the
+registration and assertion option/verification routes are under
+`/v1/auth/device-credentials` and `/v1/auth/device-signatures`. Approval rows
+store whether a signature was present and a SHA-256 hash of the credential ID.
+These fields stay out of canonical event payloads, whose schemas and hashes are
+immutable.
 
 For a pilot where OTP delivery is unavailable, a fund owner may issue a
 single-use invite bound to the phone number they enter. The invite code is
@@ -70,8 +107,9 @@ is lost, the owner issues another invite. These accounts cannot be described
 as OTP-verified.
 
 The `trusted_devices` table stores session and user identifiers, timestamps,
-and revocation state only. Session tokens remain hashed in `sessions`; the PIN
-and biometric secrets are not stored in the trusted-device record.
+and revocation state only. Session tokens remain hashed in `sessions`; PINs and
+biometric data are never stored. WebAuthn public keys and credential metadata
+are stored separately in `device_credentials`.
 
 These are Yen product decisions, not a claim of NIST conformance. NIST SP
 800-63B-4 distinguishes centrally verified memorized secrets from local device
@@ -80,9 +118,8 @@ authenticator binding records, and calls for documented inactivity and overall
 session timeouts. Yen's PIN is centrally verified and is protected by the
 shared lockout counter. See [NIST SP 800-63B-4](../../docs/REFERENCES.md#nist-800-63b).
 
-The device unlock endpoint is method-shaped so YEN-71 can add a device-bound
-biometric verifier without changing session or device-list semantics. The API
-does not receive or store fingerprint data.
+Device unlock remains a PIN operation and does not use WebAuthn approval
+credentials. The API does not receive or store fingerprint data.
 
 Fund data is still held in a process-local store and disappears on restart; this
 PR does not add a Postgres fund store. A fund starts with `name` and `targetPaise`.
@@ -410,4 +447,4 @@ Lifecycle management is handled by `createServerLifecycle` in `lifecycle.ts`:
 - [Stripe idempotency](../../docs/REFERENCES.md#stripe-idempotency) motivates safe retries; Yen scopes keys to principals and hashes exact request bytes, and its in-memory store is not durable.
 - [Stripe rate limiters](../../docs/REFERENCES.md#stripe-rate-limiters) describes token buckets; Yen’s default buckets are per process.
 - [Square Money](../../docs/REFERENCES.md#square-money) uses minor units; Yen encodes paise as decimal strings to preserve large integers.
-- [WebAuthn Level 2](../../docs/REFERENCES.md#webauthn-2) is relevant to planned authentication, which the current bearer contract does not implement.
+- [WebAuthn Level 2](../../docs/REFERENCES.md#webauthn-2) and [Level 3](../../docs/REFERENCES.md#webauthn-3) inform YEN-71's optional, action-bound approval signature. This feature does not change the phone OTP and trusted-device sign-in policy.

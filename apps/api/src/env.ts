@@ -15,6 +15,9 @@ const schema = z
     EVIDENCE_STORAGE_DIR: z.string().min(1).optional(),
     OTP_HASH_KEY: z.string().min(32).optional(),
     PARTNER_WEBHOOK_SECRET: z.string().min(32).optional(),
+    WEBAUTHN_RP_ID: z.string().min(1).optional(),
+    WEBAUTHN_ORIGIN: z.url().optional(),
+    WEBAUTHN_RP_NAME: z.string().min(1).max(80).default("Yen"),
     YEN_ALLOW_MEMORY_STORES: z.enum(["true", "false"]).optional(),
     READINESS_CACHE_MS: z.coerce.number().int().min(0).max(60000).default(1000),
     TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
@@ -59,6 +62,20 @@ const schema = z
         code: "custom",
         path: ["EVIDENCE_STORAGE_DIR"],
         message: "Must be an absolute path in production",
+      });
+    }
+    if (value.NODE_ENV === "production" && value.WEBAUTHN_RP_ID === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["WEBAUTHN_RP_ID"],
+        message: "Required in production for device credential verification",
+      });
+    }
+    if (value.NODE_ENV === "production" && value.WEBAUTHN_ORIGIN === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["WEBAUTHN_ORIGIN"],
+        message: "Required in production for device credential verification",
       });
     }
     if (value.SERVER_HEADERS_TIMEOUT_MS <= value.SERVER_KEEP_ALIVE_TIMEOUT_MS) {

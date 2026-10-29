@@ -58,6 +58,9 @@ databaseSuite("migration runner", (sql, url) => {
       "bank_transactions",
       "consent_records",
       "debit_reconciliation_actions",
+      "device_credentials",
+      "device_signature_proofs",
+      "device_webauthn_challenges",
       "display_name_contact_salts",
       "display_names",
       "donation_pledges",
@@ -124,6 +127,7 @@ databaseSuite("migration runner", (sql, url) => {
     const dpdpSource = await readFile(join(defaultDir, "0024_dpdp.sql"));
     const payeeRulesSource = await readFile(join(defaultDir, "0025_payee_rules.sql"));
     const objectionsSource = await readFile(join(defaultDir, "0026_objections.sql"));
+    const deviceCredentialsSource = await readFile(join(defaultDir, "0027_device_credentials.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -282,6 +286,12 @@ databaseSuite("migration runner", (sql, url) => {
         checksum: createHash("sha256").update(objectionsSource).digest("hex"),
         applied_at: expect.any(Date),
       },
+      {
+        version: 27,
+        name: "0027_device_credentials.sql",
+        checksum: createHash("sha256").update(deviceCredentialsSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
     ]);
   });
 
@@ -403,6 +413,34 @@ databaseSuite("migration runner", (sql, url) => {
     expect(await sql`SELECT key FROM idempotency_keys`).toEqual([{ key: "keep" }]);
   });
 
+  it("lets erasure delete a member's fund pseudonym while device credentials and signed approvals exist", async () => {
+    await migrate(sql);
+    const userId = randomUUID();
+    const orgId = randomUUID();
+    const fundId = randomUUID();
+    const pseudonymId = randomUUID();
+    const expenseId = randomUUID();
+    const actor = `psn_${pseudonymId}`;
+    const credentialIdHash = "c".repeat(64);
+    await sql`INSERT INTO users (id, phone, display_name) VALUES (${userId}, '+919999900005', 'Signing Member')`;
+    await sql`INSERT INTO orgs (id, name, legal_form, owner_id) VALUES (${orgId}, 'Device Club', 'society', ${userId})`;
+    await sql`INSERT INTO funds (id, org_id, title, policy_json) VALUES (${fundId}, ${orgId}, 'Device Fund', '{}')`;
+    await sql`INSERT INTO fund_pseudonyms (pseudonym_id, user_id, fund_id) VALUES (${pseudonymId}, ${userId}, ${fundId})`;
+    await sql`INSERT INTO expenses (id, fund_id, status, expense_data, created_at, updated_at)
+      VALUES (${expenseId}, ${fundId}, 'submitted', '{}'::jsonb, now(), now())`;
+    await sql`INSERT INTO expense_approvals (expense_id, approver_id, approved_at, approval_data, device_signature_present, credential_id_hash)
+      VALUES (${expenseId}, ${actor}, now(), '{}'::jsonb, true, ${credentialIdHash})`;
+    await sql`INSERT INTO device_credentials (credential_id, user_id, public_key, label)
+      VALUES ('cred-erasure', ${userId}, ${Buffer.from([1, 2, 3])}, 'Phone')`;
+    await sql`DELETE FROM fund_pseudonyms WHERE user_id = ${userId}`;
+    expect(
+      await sql`SELECT device_signature_present, credential_id_hash FROM expense_approvals WHERE expense_id = ${expenseId}`,
+    ).toEqual([{ device_signature_present: true, credential_id_hash: credentialIdHash }]);
+    expect(
+      await sql`SELECT count(*)::int AS count FROM device_credentials WHERE user_id = ${userId}`,
+    ).toEqual([{ count: 1 }]);
+  });
+
   it("runs the workspace CLI twice against the throwaway database", async () => {
     const run = () =>
       promisify(execFile)("pnpm", ["--filter", "@yen/db", "migrate"], {
@@ -413,7 +451,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(26);
+    expect(before).toHaveLength(27);
   });
 
   it("rejects an edited applied file and names it", async () => {

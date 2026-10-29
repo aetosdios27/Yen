@@ -164,6 +164,57 @@ export class PinService {
     await this.verifyPinCredential(userId, pin, "device_unlock");
   }
 
+  /** Count a cryptographically invalid device assertion against the same online PIN budget. */
+  async recordFailedDeviceAssertion(userId: string): Promise<void> {
+    const record = await this.pinStore.get(userId);
+    if (!record || record.status === "locked_out") return;
+    const now = this.clock();
+    if (record.lockedUntil !== null && now < record.lockedUntil) return;
+
+    const isNewWindow =
+      record.firstFailedAt === null || now - record.firstFailedAt > 24 * 60 * 60 * 1000;
+    const totalFailed24h = isNewWindow ? 1 : record.totalFailed24h + 1;
+    const firstFailedAt = isNewWindow ? now : record.firstFailedAt;
+    const failedAttempts = (record.lockedUntil !== null ? 0 : record.failedAttempts) + 1;
+    const expiredLock = record.lockedUntil !== null && now >= record.lockedUntil;
+    const baseUpdate = expiredLock ? { lockedUntil: null } : {};
+
+    if (totalFailed24h >= 10) {
+      await this.pinStore.update(userId, {
+        ...baseUpdate,
+        status: "locked_out",
+        failedAttempts,
+        totalFailed24h,
+        firstFailedAt,
+      });
+      await this.notificationService.notify({
+        kind: "pin_lockout",
+        userId,
+        recipientRoles: ["approver", "owner"],
+        reason: "max_attempts_exceeded",
+      });
+      return;
+    }
+
+    if (failedAttempts >= 5) {
+      await this.pinStore.update(userId, {
+        ...baseUpdate,
+        failedAttempts,
+        totalFailed24h,
+        firstFailedAt,
+        lockedUntil: now + this.lockoutDurationMs,
+      });
+      return;
+    }
+
+    await this.pinStore.update(userId, {
+      ...baseUpdate,
+      failedAttempts,
+      totalFailed24h,
+      firstFailedAt,
+    });
+  }
+
   private async verifyPinCredential(
     userId: string,
     pin: string,

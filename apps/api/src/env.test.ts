@@ -27,6 +27,8 @@ beforeEach(() => {
   vi.stubEnv("SERVER_REQUEST_TIMEOUT_MS", undefined);
   vi.stubEnv("SERVER_KEEP_ALIVE_TIMEOUT_MS", undefined);
   vi.stubEnv("SERVER_MAX_HEADER_SIZE_BYTES", undefined);
+  vi.stubEnv("WEBAUTHN_RP_ID", undefined);
+  vi.stubEnv("WEBAUTHN_ORIGIN", undefined);
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -132,6 +134,8 @@ it("accepts a PostgreSQL URL in production and rejects invalid URLs without expo
   vi.stubEnv("OTP_HASH_KEY", "test-production-secret-with-at-least-32-characters");
   vi.stubEnv("PAYEE_FINGERPRINT_SALT", "x".repeat(40));
   vi.stubEnv("CLAMAV_HOST", "clamav.internal");
+  vi.stubEnv("WEBAUTHN_RP_ID", "yen.example");
+  vi.stubEnv("WEBAUTHN_ORIGIN", "https://yen.example");
   vi.stubEnv("DATABASE_URL", "postgres://postgres:pw@localhost:55432/postgres");
   vi.stubEnv("EVIDENCE_STORAGE_DIR", "/var/lib/yen/evidence");
   expect((await import("./env.js")).env.DATABASE_URL).toBe(

@@ -1,4 +1,4 @@
-import { randomBytes, randomInt } from "node:crypto";
+import { createHash, randomBytes, randomInt } from "node:crypto";
 import { trace } from "@opentelemetry/api";
 import { InMemorySpanExporter, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
@@ -370,6 +370,59 @@ databaseSuite("Postgres expense store", (sql, url) => {
       },
     );
     expect(response.status).toBe(404);
+  });
+
+  it("stores device-signature metadata on the approval row, outside the immutable event payload", async () => {
+    const fundId = await fund();
+    const expense = {
+      ...draft(fundId),
+      status: "submitted" as const,
+      holdId: uuidv7(),
+      submittedAt: new Date(Date.now() - 1000).toISOString(),
+    };
+    const store = new PostgresExpenseStore(sql);
+    await store.save({ ...expense, status: "draft", holdId: null, submittedAt: null });
+    await sql`
+      UPDATE expenses SET status = 'submitted', hold_id = ${expense.holdId},
+        expense_data = ${JSON.stringify(expense)}::jsonb WHERE id = ${expense.id}
+    `;
+    const credentialIdHash = createHash("sha256")
+      .update(randomInt(0, 2 ** 30).toString())
+      .digest("hex");
+    await store.atomicApprove(
+      expense.id,
+      {
+        approverId: `psn_${uuidv7()}` as PseudonymId,
+        passkeySignature: {
+          credentialId: "pin",
+          signatureHex: "00",
+          clientDataJson: "{}",
+          authenticatorDataHex: "00",
+        },
+        approvedAt: new Date().toISOString(),
+        deviceSignaturePresent: true,
+        credentialIdHash,
+      },
+      { approvalQuorum: 1, objectionWindowHours: 0, autoExpireHours: 0 },
+      verified,
+    );
+
+    const approvals = await sql<
+      { device_signature_present: boolean; credential_id_hash: string; approval_data: unknown }[]
+    >`
+      SELECT device_signature_present, credential_id_hash, approval_data
+      FROM expense_approvals WHERE expense_id = ${expense.id}
+    `;
+    expect(approvals).toHaveLength(1);
+    expect(approvals[0]).toMatchObject({
+      device_signature_present: true,
+      credential_id_hash: credentialIdHash,
+    });
+    const events = await sql<{ payload: Record<string, unknown> }[]>`
+      SELECT payload FROM fund_events WHERE fund_id = ${fundId} AND type = 'expense.approved'
+    `;
+    expect(events).toHaveLength(1);
+    expect(events[0]?.payload).toEqual({ expense_id: expense.id });
   });
 
   it("rolls back a hold when expense persistence fails after the hold was made", async () => {

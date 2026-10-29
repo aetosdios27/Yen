@@ -5,6 +5,7 @@ import { type PseudonymId, parsePseudonymId } from "@yen/eventlog";
 import { type ApprovalProofVerifier, type ExpenseStore, InMemoryExpenseStore } from "@yen/ledger";
 import type { FundRole } from "@yen/policy";
 import { failClosedPayeeVerifier, type PayeeVerifier } from "@yen/policy";
+import { paise } from "@yen/shared";
 import type { Context } from "hono";
 import {
   type AuthStore,
@@ -15,6 +16,8 @@ import {
   TRUSTED_DEVICE_IDLE_TIMEOUT_MS,
 } from "./auth/index.js";
 import { rateLimitEnv, rateLimits } from "./config.js";
+import { type DeviceSignatureConfig, DeviceSignatureService } from "./device-signature/service.js";
+import { type DeviceSignatureStore, MemoryDeviceSignatureStore } from "./device-signature/store.js";
 import { PostgresEvidenceStore } from "./evidence-store-postgres.js";
 import type { PostgresExpenseObjectionStore } from "./expense-objections.js";
 import { jsonLogger, type Logger } from "./logging.js";
@@ -325,7 +328,13 @@ export class MemoryFundStore implements FundStore {
     const objectionWindowHours = Number(
       input.policy.objectionWindowHours ?? input.policy.objection_window_hours ?? 0,
     );
-    this.policies.set(input.fundId, { approvalQuorum, objectionWindowHours, autoExpireHours: 72 });
+    const threshold = input.policy.requireDeviceSignatureAbove ?? null;
+    this.policies.set(input.fundId, {
+      approvalQuorum,
+      objectionWindowHours,
+      autoExpireHours: 72,
+      requireDeviceSignatureAbove: threshold === null ? null : paise(Number(threshold)),
+    });
     this.bumpVersion(input.fundId);
   }
 
@@ -395,6 +404,9 @@ export interface AppDependencies {
   readonly sessionCookieName: string;
   readonly sessionMaxAgeSeconds: number;
   readonly trustedDeviceIdleTimeoutMs: number;
+  readonly deviceSignatureStore: DeviceSignatureStore;
+  readonly deviceSignatureConfig: DeviceSignatureConfig;
+  readonly deviceSignatureService: DeviceSignatureService;
   readonly concurrencyLimit: number;
   readonly requestTimeoutMs: number;
   readonly inFlightTracker: InFlightTracker;
@@ -437,6 +449,18 @@ export function defaultDependencies(
   const pinStore = new MemoryPinStore({ clock });
   const actionTokenStore = new MemoryActionTokenStore({ clock });
   const pinNotificationService = new MemoryPinNotificationService();
+  const deviceSignatureStore = new MemoryDeviceSignatureStore();
+  const deviceSignatureConfig = {
+    rpId: process.env.WEBAUTHN_RP_ID ?? "localhost",
+    origin: process.env.WEBAUTHN_ORIGIN ?? "http://localhost:3000",
+    rpName: process.env.WEBAUTHN_RP_NAME ?? "Yen",
+  } satisfies DeviceSignatureConfig;
+  if (
+    process.env.NODE_ENV === "production" &&
+    (!process.env.WEBAUTHN_RP_ID || !process.env.WEBAUTHN_ORIGIN)
+  ) {
+    throw new Error("WEBAUTHN_RP_ID and WEBAUTHN_ORIGIN are required in production");
+  }
   const rawPinSecret = process.env.PIN_HMAC_SECRET;
   const pinSecret = rawPinSecret ? validatePinSecret(rawPinSecret) : null;
   const pinService = new PinService({
@@ -508,6 +532,13 @@ export function defaultDependencies(
     sessionCookieName: "yen_session",
     sessionMaxAgeSeconds: 30 * 24 * 3600,
     trustedDeviceIdleTimeoutMs: TRUSTED_DEVICE_IDLE_TIMEOUT_MS,
+    deviceSignatureStore,
+    deviceSignatureConfig,
+    deviceSignatureService: new DeviceSignatureService({
+      store: deviceSignatureStore,
+      config: deviceSignatureConfig,
+      clock,
+    }),
     concurrencyLimit: 100,
     requestTimeoutMs: 15000,
     inFlightTracker: new DefaultInFlightTracker(),

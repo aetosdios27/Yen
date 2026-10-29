@@ -113,6 +113,8 @@ import {
   MemoryFundStore,
   type Principal,
 } from "./dependencies.js";
+import { registerDeviceSignatureRoutes } from "./device-signature/routes.js";
+import { DeviceSignatureFailure, DeviceSignatureService } from "./device-signature/service.js";
 import { ApiError, errorBody, errorStatus, ReadinessError, StoreError } from "./errors.js";
 import { registerFundVisibilityRoute } from "./fund-routes.js";
 import { getVerifiedEvidenceObject } from "./integrity-job.js";
@@ -203,7 +205,14 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       otpVerifier,
       clock: baseDeps.clock,
     });
-  const deps = { ...baseDeps, pinService };
+  const deviceSignatureService =
+    overrides.deviceSignatureService ??
+    new DeviceSignatureService({
+      store: baseDeps.deviceSignatureStore,
+      config: baseDeps.deviceSignatureConfig,
+      clock: baseDeps.clock,
+    });
+  const deps = { ...baseDeps, pinService, deviceSignatureService };
   const actorFor = (principal: Principal, fundId: string) =>
     deps.actorForUser(principal.id, fundId);
   const app = new OpenAPIHono<ApiEnv>({
@@ -1049,6 +1058,36 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     approvalQuorum: 2,
     objectionWindowHours: 24,
     autoExpireHours: 72,
+    requireDeviceSignatureAbove: null,
+  };
+  const consumeDeviceProof = async (
+    c: Context<ApiEnv>,
+    userId: string,
+    actionDetails: Record<string, unknown>,
+    proofId: string | undefined,
+    route: string,
+  ): Promise<string | null> => {
+    if (!proofId) return null;
+    try {
+      return await deps.deviceSignatureService.consumeProof(
+        userId,
+        computeActionHash(actionDetails),
+        proofId,
+      );
+    } catch (error) {
+      if (!(error instanceof DeviceSignatureFailure)) throw error;
+      deps.logger.log({
+        event: "http_failure",
+        requestId: c.get("requestId"),
+        method: logMethod(c.req.method),
+        route,
+        errorKind: "validation",
+        errorName: `DeviceSignatureFailure:${error.reason}`,
+      });
+      throw new ApiError("validation_failed", [
+        { path: ["json", "deviceProof"], message: "Device signature could not be verified" },
+      ]);
+    }
   };
   const fundPolicyFor = async (fundId: string) =>
     (await deps.fundStore?.getPolicy?.(fundId)) ?? defaultFundPolicy;
@@ -1269,11 +1308,30 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       fundId: fundIdResult.value,
       targetId: expenseId,
     };
+    // Fund policy (persisted, including the device-signature threshold) gates the approval.
+    const fundPolicy = await fundPolicyFor(fundIdResult.value);
+    if (
+      fundPolicy.requireDeviceSignatureAbove !== undefined &&
+      fundPolicy.requireDeviceSignatureAbove !== null &&
+      expense.amountPaise > fundPolicy.requireDeviceSignatureAbove &&
+      !input.deviceProof
+    ) {
+      throw new ApiError("forbidden", [
+        { path: ["json", "deviceProof"], message: "This approval requires a device signature" },
+      ]);
+    }
     await withSpan("pin.verify", () =>
       deps.pinService.verifyAction(principal.id, actionDetails, {
         pin: c.req.header("x-approval-pin") ?? input.pin,
         approvalToken: c.req.header("x-approval-token") ?? input.approvalToken,
       }),
+    );
+    const credentialIdHash = await consumeDeviceProof(
+      c,
+      principal.id,
+      actionDetails,
+      input.deviceProof,
+      "/v1/funds/{fundId}/expenses/{expenseId}/approve",
     );
     const approval: SignedApproval = {
       approverId,
@@ -1284,8 +1342,9 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         authenticatorDataHex: "00",
       },
       approvedAt: now,
+      deviceSignaturePresent: credentialIdHash !== null,
+      ...(credentialIdHash === null ? {} : { credentialIdHash }),
     };
-    const fundPolicy = await fundPolicyFor(fundIdResult.value);
     try {
       const fraudPolicy = await deps.payeeProfileStore.getPolicy(fundIdResult.value);
       const res = await withMoneyOperation("approve", () =>
@@ -1360,6 +1419,13 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       pin: c.req.header("x-approval-pin") ?? input.pin,
       approvalToken: c.req.header("x-approval-token") ?? input.approvalToken,
     });
+    await consumeDeviceProof(
+      c,
+      principal.id,
+      actionDetails,
+      input.deviceProof,
+      "/v1/funds/{fundId}/expenses/{expenseId}/reject",
+    );
     const updated = rejectExpense(expense, input.reason, now);
     const fundPolicy = await fundPolicyFor(fundIdResult.value);
     const persisted = await withMoneyOperation("pay", () =>
@@ -1409,6 +1475,23 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const input = c.req.valid("json");
     const now = new Date(deps.clock()).toISOString();
     const actorId = await actorFor(principal, fundIdResult.value);
+    const actionDetails = {
+      action: "expense:pay",
+      fundId: fundIdResult.value,
+      targetId: expenseId,
+      bankTransactionId: input.bankTransactionId,
+    };
+    await deps.pinService.verifyAction(principal.id, actionDetails, {
+      pin: input.pin,
+      approvalToken: input.approvalToken,
+    });
+    await consumeDeviceProof(
+      c,
+      principal.id,
+      actionDetails,
+      input.deviceProof,
+      "/v1/funds/{fundId}/expenses/{expenseId}/pay",
+    );
     const fundPolicy = await fundPolicyFor(fundIdResult.value);
     const updated = await withSpan("ledger.pay", async () =>
       payExpense(expense, input.bankTransactionId, now),
@@ -1700,6 +1783,20 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       const hours = body.policyJson.objectionWindowHours;
       if (typeof hours !== "number" || !Number.isSafeInteger(hours) || hours < 0 || hours > 168) {
         throw new ApiError("validation_failed");
+      }
+    }
+    if (Object.hasOwn(body.policyJson, "requireDeviceSignatureAbove")) {
+      const threshold = body.policyJson.requireDeviceSignatureAbove;
+      if (
+        threshold !== null &&
+        (typeof threshold !== "number" || !Number.isSafeInteger(threshold) || threshold < 0)
+      ) {
+        throw new ApiError("validation_failed", [
+          {
+            path: ["json", "policyJson", "requireDeviceSignatureAbove"],
+            message: "Expected a non-negative safe integer amount in paise or null to disable",
+          },
+        ]);
       }
     }
     const approvalToken = c.req.header("x-approval-token") ?? body.approvalToken;
@@ -2138,6 +2235,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         expense: { owner: expense.requesterId, expense: toExpenseView(expense) },
       }),
   );
+  registerDeviceSignatureRoutes(app, deps);
   app.openapi(openapiRoute, (c) => c.json(openapiSchema.parse(openApiDocument(app)), 200));
   app.openAPIRegistry.registerComponent("securitySchemes", "bearerAuth", {
     type: "http",

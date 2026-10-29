@@ -9,6 +9,7 @@ import { createClientIpResolver, type TrustedProxyHeader } from "./client-ip.js"
 import { rateLimits } from "./config.js";
 import { createDatabaseReady } from "./database-ready.js";
 import { DefaultInFlightTracker } from "./dependencies.js";
+import { PostgresDeviceSignatureStore } from "./device-signature/store.js";
 import { PostgresDisplayNameStore } from "./display-name-store.js";
 import { PostgresDonationPledgeStore } from "./donation-store.js";
 import { PostgresEvidenceStore } from "./evidence-store-postgres.js";
@@ -229,6 +230,7 @@ export async function startServer(
     ...(sql ? { authStore: new PostgresAuthStore(sql) } : {}),
     ...(sql ? { privacyStore: new PostgresPrivacyStore(sql) } : {}),
     ...(sql ? { pinStore: new PostgresPinStore(sql) } : {}),
+    ...(sql ? { deviceSignatureStore: new PostgresDeviceSignatureStore(sql) } : {}),
     otpHashKey: resolvedConfig.OTP_HASH_KEY ?? "development-only-otp-hash-key-change-me",
     partnerWebhookSecret: resolvedConfig.PARTNER_WEBHOOK_SECRET ?? null,
     otpDeliveryProvider: createOtpDeliveryProvider(resolvedConfig.NODE_ENV),

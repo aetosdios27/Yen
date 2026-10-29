@@ -81,7 +81,7 @@ We only claim what a skeptic can check.
 | Data & ledger      | PostgreSQL 16, [Konto](https://github.com/aetosdios27/Konto) double-entry ledger integration (planned) |
 | Event log          | Hash-chained event log (planned)                                                                       |
 | Proofs & anchoring | SHA-256, Merkle trees, Polygon Amoy testnet anchoring (planned for MVP)                                |
-| Auth               | Phone OTP, WebAuthn passkeys for approvals (planned)                                                   |
+| Auth               | Phone OTP, Yen PIN approvals, optional WebAuthn device signatures                                      |
 
 <a id="status"></a>
 ## Roadmap
