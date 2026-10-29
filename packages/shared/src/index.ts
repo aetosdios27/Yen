@@ -56,3 +56,4 @@ export {
   rootRegistryAbi,
   rootRegistryAddress,
 } from "./registry/abi.js";
+export { type ResilienceOptions, ResilientCall } from "./resilience.js";

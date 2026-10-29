@@ -1,0 +1,33 @@
+name: Nightly Chaos
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  chaos:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - run: node packages/ledger/scripts/random-chaos.mjs
+        id: chaos
+        continue-on-error: true
+      - name: Open or update the chaos issue
+        if: steps.chaos.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title='Nightly chaos scenarios failed'
+          issue=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number // empty')
+          body="Nightly chaos run failed in $GITHUB_RUN_URL. Please inspect the logs and seed."
+          if [ -n "$issue" ]; then gh issue comment "$issue" --body "$body"; else gh issue create --title "$title" --body "$body"; fi
+      - name: Fail workflow after reporting
+        if: steps.chaos.outcome == 'failure'
+        run: exit 1
