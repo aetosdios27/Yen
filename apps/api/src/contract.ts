@@ -1448,6 +1448,9 @@ const evidenceSchema = z
     gstin: z.string().optional(),
     invoiceNumber: z.string().optional(),
     invoiceDate: z.string().optional(),
+    scan: z
+      .object({ scannerName: z.string(), signatureVersion: z.string(), result: z.literal("clean") })
+      .strict(),
     createdAt: z.iso.datetime(),
   })
   .strict();
@@ -1501,7 +1504,7 @@ export const uploadEvidenceRoute = createRoute({
   tags: ["expenses", "evidence"],
   operationId: "uploadEvidence",
   description:
-    "Uploads bill or receipt evidence. Computes SHA-256 server-side, validates GSTIN and MIME type, enforces the 10MB limit, and detects duplicates within the fund.",
+    "Uploads bill or receipt evidence after malware scanning. Computes SHA-256 server-side, validates GSTIN and MIME type, enforces the 10MB limit, and detects duplicates within the fund. Scanner errors and infected files fail closed.",
   security,
   request: {
     params: evidenceParams,

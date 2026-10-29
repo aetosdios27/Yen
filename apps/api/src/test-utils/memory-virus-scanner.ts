@@ -17,12 +17,21 @@ export class MemoryVirusScannerAdapter implements VirusScannerAdapter {
     mimeType: string;
   }): Promise<VirusScanResult> {
     if (this.quarantinedKeys.has(input.objectKey)) {
-      return { status: "quarantined", reason: "Test quarantine rule matched" };
+      return {
+        status: "quarantined",
+        reason: "Test quarantine rule matched",
+        scannerName: "EICAR test double",
+      };
     }
     const text = new TextDecoder("utf-8", { fatal: false }).decode(input.data);
     if (text.includes(MemoryVirusScannerAdapter.EICAR_SIGNATURE)) {
-      return { status: "infected", threatName: "EICAR-Test-Signature" };
+      return {
+        status: "infected",
+        threatName: "EICAR-Test-Signature",
+        scannerName: "EICAR test double",
+        signatureVersion: "fixture",
+      };
     }
-    return { status: "clean" };
+    return { status: "clean", scannerName: "EICAR test double", signatureVersion: "fixture" };
   }
 }

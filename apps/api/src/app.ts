@@ -116,6 +116,7 @@ import type {
 import { redactActionReceipt as redactReceipt } from "./policy.js";
 import { buildOpaqueEvidenceKey, sanitizeEvidenceFilename } from "./storage.js";
 import type { AllowedEvidenceMimeType, StoredEvidence } from "./stores.js";
+import type { VirusScanResult } from "./virus-scanner.js";
 
 export { devPolicy } from "./policy.js";
 
@@ -1189,20 +1190,28 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const evidenceId = deps.idGenerator();
     const objectKey = buildOpaqueEvidenceKey(fundParam.value, expenseId, evidenceId);
 
-    // No real malware scanner is integrated; the runtime adapter must explicitly approve uploads.
-    const scanResult = await deps.virusScanner.scan({
-      objectKey,
-      data: bytes,
-      mimeType: file.type,
-    });
+    let scanResult: VirusScanResult;
+    try {
+      scanResult = await deps.virusScanner.scan({ objectKey, data: bytes, mimeType: file.type });
+    } catch {
+      throw new ApiError("overloaded", [
+        {
+          path: ["form", "file"],
+          message: "Upload quarantined because the malware scanner is unavailable",
+        },
+      ]);
+    }
     if (scanResult.status === "infected") {
       throw new ApiError("validation_failed", [
         { path: ["form", "file"], message: `Malicious file rejected: ${scanResult.threatName}` },
       ]);
     }
     if (scanResult.status === "quarantined") {
-      throw new ApiError("validation_failed", [
-        { path: ["form", "file"], message: `Upload quarantined: ${scanResult.reason}` },
+      throw new ApiError("overloaded", [
+        {
+          path: ["form", "file"],
+          message: `Upload quarantined because it could not be scanned: ${scanResult.reason}`,
+        },
       ]);
     }
 
@@ -1237,6 +1246,11 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       invoiceNumber: form.invoiceNumber?.trim() || undefined,
       invoiceDate: form.invoiceDate?.trim() || undefined,
       createdAt: new Date(deps.clock()).toISOString(),
+      scan: {
+        scannerName: scanResult.scannerName,
+        signatureVersion: scanResult.signatureVersion,
+        result: "clean",
+      },
     };
 
     // If an authenticated event log appender is available, atomically record expense.evidence_added

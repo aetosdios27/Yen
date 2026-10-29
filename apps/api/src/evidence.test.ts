@@ -1,12 +1,14 @@
 import crypto from "node:crypto";
+import { createServer } from "node:net";
 import type { AppendEventInput, StoredFundEvent } from "@yen/db";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
 import { checkEvidenceIntegrity, runEvidenceIntegrityJob } from "./integrity-job.js";
 import { devPolicy } from "./policy.js";
 import { MemoryStorageAdapter } from "./storage.js";
 import { MemoryEvidenceStore, type StoredEvidence } from "./stores.js";
 import { MemoryVirusScannerAdapter } from "./test-utils/memory-virus-scanner.js";
+import { ClamAvVirusScannerAdapter, type VirusScannerAdapter } from "./virus-scanner.js";
 
 const FUND_OWNER = { id: "00000000-0000-4000-8000-000000000001" };
 const EXPENSE_ID_1 = "00000000-0000-4000-8000-000000000011";
@@ -41,7 +43,7 @@ function createTestApp(
     clock?: number;
     loggedEntries?: unknown[];
     storageAdapter?: MemoryStorageAdapter;
-    virusScanner?: MemoryVirusScannerAdapter;
+    virusScanner?: VirusScannerAdapter;
     evidenceStore?: MemoryEvidenceStore;
     eventAppender?: ((input: AppendEventInput) => Promise<StoredFundEvent>) | undefined;
   } = {},
@@ -101,8 +103,13 @@ describe("Evidence Upload API Endpoint", () => {
       { method: "POST", body: form },
     );
 
-    expect(response.status).toBe(500);
-    expect(await response.json()).toMatchObject({ error: { code: "internal" } });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: "overloaded",
+        details: [{ message: expect.stringContaining("scanner is unavailable") }],
+      },
+    });
   });
 
   it("uploads an evidence bill and computes server-side cryptographic SHA-256", async () => {
@@ -349,6 +356,66 @@ describe("Evidence Upload API Endpoint", () => {
     };
     expect(body.error.code).toBe("validation_failed");
     expect(body.error.details?.[0]?.message).toContain("Malicious file rejected");
+  });
+
+  it("scans the EICAR test string through ClamAV before storing bytes or appending an event", async () => {
+    const daemon = createServer((socket) => {
+      let received = Buffer.alloc(0);
+      socket.on("data", (chunk) => {
+        received = Buffer.concat([
+          received,
+          typeof chunk === "string" ? Buffer.from(chunk) : chunk,
+        ]);
+        if (received.toString().startsWith("VERSION\n")) socket.end("ClamAV 1.4.1/27900\n");
+        else if (
+          received.includes(Buffer.from("EICAR-STANDARD-ANTIVIRUS-TEST-FILE")) &&
+          received.subarray(-4).equals(Buffer.alloc(4))
+        )
+          socket.end("stream: Eicar-Test-Signature FOUND\0");
+      });
+    });
+    await new Promise<void>((resolve) => daemon.listen(0, "127.0.0.1", resolve));
+    const address = daemon.address();
+    if (!address || typeof address === "string") throw new Error("Fake clamd did not bind");
+    const scanner = new ClamAvVirusScannerAdapter({
+      host: "127.0.0.1",
+      port: address.port,
+      timeoutMs: 1000,
+      maxSizeBytes: 1024 * 1024,
+    });
+    const storageAdapter = new MemoryStorageAdapter();
+    const putObject = vi.spyOn(storageAdapter, "putObject");
+    const events: AppendEventInput[] = [];
+    const { app, evidenceStore } = createTestApp({
+      virusScanner: scanner,
+      storageAdapter,
+      eventAppender: async (event) => {
+        events.push(event);
+        return {} as StoredFundEvent;
+      },
+    });
+    const fundId = await createTestFund(app);
+    const eicar = new TextEncoder().encode(
+      "%PDF-1.4\nX5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*",
+    );
+    const form = new FormData();
+    form.append("file", new File([eicar], "eicar.pdf", { type: "application/pdf" }));
+    try {
+      const response = await evidenceRequest(
+        app,
+        `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`,
+        { method: "POST", body: form },
+      );
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        error: { details: [{ message: expect.stringContaining("Malicious file rejected") }] },
+      });
+      expect(await evidenceStore.getByExpense(fundId, EXPENSE_ID_1)).toHaveLength(0);
+      expect(events).toHaveLength(0);
+      expect(putObject).not.toHaveBeenCalled();
+    } finally {
+      await new Promise<void>((resolve) => daemon.close(() => resolve()));
+    }
   });
 
   it("detects and flags duplicate evidence attached to a different expense within the same fund", async () => {
