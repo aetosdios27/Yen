@@ -1,7 +1,7 @@
 {
   "domain_utf8": "yen/eventlog/event/v1\u0000",
   "genesis_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-  "latest_hash": "c15ddb6e14f5cc19846bb3fdd360485590951c372fe474293cfd9f046123c906",
+  "latest_hash": "674156767184ebeaada98e9e93fe8aba25672bc5867abb8683d1f99f4df8a435",
   "events": [
     {
       "event": {
@@ -408,6 +408,23 @@
         "hash": "c15ddb6e14f5cc19846bb3fdd360485590951c372fe474293cfd9f046123c906"
       },
       "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:23:00.000Z\",\"payload\":{\"anchor_id\":\"22346efb-31e8-ad19-c458-69e99f00f890\",\"global_root\":\"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"},\"prev_hash\":\"d94e44c3ab6585cd836e3fee064acf44fdac1eba985db61b16457500d8ebf257\",\"seq\":24,\"type\":\"anchor.published\",\"version\":1}"
+    },
+    {
+      "event": {
+        "fund_id": "e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd",
+        "seq": 25,
+        "type": "fund.visibility_changed",
+        "version": 2,
+        "actor": "psn_918b37f5-3b70-e315-a753-9362a01396f7",
+        "occurred_at": "2026-01-01T00:24:00.000Z",
+        "payload": {
+          "old_visibility": "private",
+          "new_visibility": "public"
+        },
+        "prev_hash": "c15ddb6e14f5cc19846bb3fdd360485590951c372fe474293cfd9f046123c906",
+        "hash": "674156767184ebeaada98e9e93fe8aba25672bc5867abb8683d1f99f4df8a435"
+      },
+      "canonical": "{\"actor\":\"psn_918b37f5-3b70-e315-a753-9362a01396f7\",\"fund_id\":\"e3fb2fc4-03f9-f5b1-bcef-464ab0d87ddd\",\"occurred_at\":\"2026-01-01T00:24:00.000Z\",\"payload\":{\"new_visibility\":\"public\",\"old_visibility\":\"private\"},\"prev_hash\":\"c15ddb6e14f5cc19846bb3fdd360485590951c372fe474293cfd9f046123c906\",\"seq\":25,\"type\":\"fund.visibility_changed\",\"version\":2}"
     }
   ]
 }

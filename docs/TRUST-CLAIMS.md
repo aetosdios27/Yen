@@ -81,9 +81,9 @@ Each README claim that has a row carries a `<!-- claim: CLAIM-ID -->` marker. Th
 - **Wording:** "`hash = SHA-256(UTF-8("yen/eventlog/event/v1\\0") || UTF-8(RFC8785(envelope without hash)))`."
 - **Where:** packages/eventlog/README.md:5
 - **Mechanism:** `packages/eventlog/src/chain.ts` `computeEventHash`; `packages/eventlog/src/canonical.ts` `canonicalize`
-- **Test:** `packages/eventlog/src/eventlog.test.ts` "pins every v1 event, canonical string, and hash"; `packages/eventlog/src/eventlog.test.ts` "hashes only an exact unsigned event envelope"
+- **Test:** `packages/eventlog/src/eventlog.test.ts` "pins every versioned event, canonical string, and hash"; `packages/eventlog/src/eventlog.test.ts` "hashes only an exact unsigned event envelope"
 - **Reference:** `rfc-8785`, `rfc-6234`
-- **Mutation:** Dropped the domain prefix from the SHA-256 call in `computeEventHash`. "pins every v1 event, canonical string, and hash" failed, along with other hash tests.
+- **Mutation:** Dropped the domain prefix from the SHA-256 call in `computeEventHash`. "pins every versioned event, canonical string, and hash" failed, along with other hash tests.
 
 ### CLAIM-08 Two-level Merkle proofs detect tampering against the global root
 
