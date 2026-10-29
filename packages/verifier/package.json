@@ -1,0 +1,23 @@
+{
+  "name": "@yen/verifier",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "yen-verify": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@yen/eventlog": "workspace:*",
+    "@yen/shared": "workspace:*",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}
