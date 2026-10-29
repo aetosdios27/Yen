@@ -1,476 +1,107 @@
-# Early threat model
+# Threat model — current implementation (YEN-47, 2026-10-29)
 
-This model is written before event persistence, roles, approvals, and passkeys exist. It describes the code at `b63082c`, the base of `aetosdios27/yen-66-early-threat-model`, and the planned work that the repo names. Its purpose is to shape the design now, while the v1 event payloads are still provisional.
+This replaces the early pre-implementation snapshot. It records the code and tests reviewed for YEN-47 on `origin/main` at `0182c1c6e00e65752cbe04072ac5f419b0063d4f`. Status describes the reviewed code, not an unverified deployment.
 
-No threat in this model is fully mitigated today. Most money paths have no code. The controls that do exist are the event hash chain, the RootRegistry contract (not yet deployed), the API's default-deny policy, and the HTTP idempotency and rate-limit middleware.
+## Method and status meanings
 
-## How to read this
+STRIDE was applied to the browser/API, API/database, bank-feed, background-worker, and chain boundaries. Evidence pointers name source or tests opened during this review. An open status may point to the vulnerable path or state that the repository contains no implementation for the modeled capability.
 
-- **Severity** rates the threat for the design as scoped. Most money paths have no code yet, so the likelihood today is lower than the severity.
-- **Status** means:
-  - `exists`: a control in this repo covers the threat as scoped.
-  - `partial`: a control covers part of the threat, or covers it only once planned code lands.
-  - `planned`: a doc names the control, but no code exists.
-  - `none`: no control exists, and no doc names one.
-- **Exists today** names a real file, function, and test. Where a test does not cover a claim, the text says so.
-- **Planned** gives the Linear id from a README or doc. `untracked` means no README or doc names an id.
-- **Method.** Threats come from STRIDE over a data-flow diagram ([STRIDE](REFERENCES.md#stride-approach)). Responses use the mitigate, eliminate, transfer, and accept options from the [OWASP Threat Modeling Cheat Sheet](REFERENCES.md#owasp-threat-modeling).
+- **Mitigated:** code and a relevant test demonstrate the stated control for the scoped path.
+- **Partial:** a control exists, but does not cover the whole threat or has a concrete residual risk.
+- **Open:** no effective control was found for the threat in the reviewed code.
 
-## Summary
+`Severity` estimates impact if the threat succeeds. High findings SEC-1 and SEC-2 are tracked in [issue #102](https://github.com/aetosdios27/Yen/issues/102) and [issue #103](https://github.com/aetosdios27/Yen/issues/103); details and fixes are in [`docs/security/review-2026-10.md`](security/review-2026-10.md).
 
-| ID  | Threat                                                | STRIDE | Severity | Why                                                                                                  | Status  |
-| --- | ----------------------------------------------------- | ------ | -------- | ---------------------------------------------------------------------------------------------------- | ------- |
-| D1  | Donation marked verified without a bank credit        | S, T   | high     | Verified donations drive public totals, and no bank check exists                                     | none    |
-| D2  | Replayed pledge creates a duplicate                   | R, T   | medium   | HTTP idempotency exists but is in memory, and no donation route exists                               | partial |
-| D3  | Amount or fund changed before verification            | T      | medium   | Money wire rules exist, but no append path binds the amount yet                                      | partial |
-| D4  | QR swap at collection point                           | T, S   | high     | Payee UPI ID hash committed to events; no QR intake code exists                                      | planned |
-| E1  | Forged approval                                       | S      | high     | Approvals confirmed by server PIN check, not device-signed; no PIN code exists                       | none    |
-| E2  | Replayed request or approval action                   | R, T   | medium   | Only HTTP-level idempotency exists, not domain-level                                                 | partial |
-| E3  | Treasurer approves own request (self-approval)        | E      | high     | Memberships allow multiple roles, and no submitter-approver separation exists                        | none    |
-| E4  | Evidence swapped after approval                       | T      | high     | The event carries a hash field, but nothing stores or checks the bytes                               | none    |
-| E5  | Objection suppressed or resolved silently             | R, D   | medium   | The envelope actor names who resolves, but nothing checks who may, and no window is built            | none    |
-| P1  | Payout without an approved request                    | S, E   | high     | `expense.paid` links to no approval, and no payout code exists                                       | none    |
-| P2  | Payout amount or payee differs from approval          | T      | high     | `expense.paid` carries neither amount nor payee                                                      | none    |
-| P3  | Duplicate or hidden payout                            | R, T   | medium   | No idempotency covers bank calls, and reversal is only a planned event                               | none    |
-| R1  | Insider with DB write access rewrites history         | T, R   | high     | The chain detects tampering only after the fact, and triggers are not built                          | partial |
-| R2  | Truncated log                                         | T, R   | high     | `verifyChain` needs an authenticated head, but structure checks miss truncation                      | partial |
-| R3  | Backdated event                                       | T, R   | medium   | Monotonic time is checked, and any monotonic time passes                                             | partial |
-| R4  | Unapproved debit matched to an approved request       | S, T   | high     | No reconciliation exists, and `packages/ledger` is empty                                             | none    |
-| V1  | Split view: different roots shown to different people | T, R   | high     | The registry rejects overwrites, but no monitor or consistency proof exists                          | partial |
-| V2  | Publisher key compromise                              | S, E   | high     | One key with a two-step transfer, but no timelock, multisig, or key policy                           | partial |
-| V3  | PII or sensitive linkage on chain                     | I      | high     | Payloads are strict, and leaves are salted, but disclosed proofs and public roots still leak linkage | partial |
-| V4  | Verify page shows an unqualified "verified" badge     | T      | medium   | The rule is written, but no verify page exists                                                       | planned |
-| V5  | Cross-fund linking through pseudonyms                 | I      | medium   | Single global pseudonym in schema; per-fund pseudonyms unmerged                                      | planned |
-| V6  | Erasure request conflicts with statutory retention    | R, I   | medium   | Erasable identity tables; statutory retention marking unbuilt                                        | planned |
-| X1  | Phone or waitlist enumeration                         | I      | medium   | Phone uniqueness constraint exists; uniform WhatsApp/SMS OTP planned; no code exists                 | none    |
-| X2  | Rate-limit evasion                                    | D      | medium   | Per-IP and per-principal buckets exist, but they are per process and evictable                       | partial |
-| X3  | External attacker on the public API                   | S, E   | medium   | Default deny and `requireAuth` apply, but the bearer token is not validated                          | partial |
-| X4  | Member grants self a role                             | E      | high     | Membership inserts have no authorization rule                                                        | none    |
-| X5  | Compromised platform operator                         | T, R   | high     | Roots resist rewrites, but operator can fabricate PIN approvals at write time                        | partial |
-| X6  | Dev principal reaches production                      | E      | low      | The mock server refuses production, but `createApp` deps accept any principal                        | partial |
-| X7  | Approver credential or PIN compromise                 | S      | high     | 6-digit PIN lockout plus OTP-bound trusted devices; biometric unlock deferred to YEN-71              | partial |
-| X8  | SIM swap or recycled phone number inherits roles      | S, E   | high     | OTP proves phone; trusted devices require PIN; number change and role reassignment need recovery     | partial |
-| X9  | PIN online brute force                                | S      | high     | 5-attempt lockout for 30m, 10-attempt support reset; unbuilt                                         | planned |
-| X10 | PIN offline cracking after database leak              | I, S   | high     | Keyed hash with external secret pepper outside DB; unbuilt                                           | planned |
-| X11 | PIN phishing on lookalike site                        | S      | high     | Reusable PIN can be phished; only action proofs expire and are single-use; device-signing planned    | planned |
-| X12 | Owner-vouched invite interception                     | S, E   | medium   | Five-minute phone-bound code, hashed at rest, owner confirmation, member-only assurance              | partial |
+## Assets, actors, and trust boundaries
 
-Counts. High: 20 (D1, D4, E1, E3, E4, P1, P2, R1, R2, R4, V1, V2, V3, X4, X5, X7, X8, X9, X10, X11). Medium: 13 (D2, D3, E2, E5, P3, R3, V4, V5, V6, X1, X2, X3, X12). Low: 1 (X6).
+**Assets:** money balances and holds; expense requests and approvals; bank transaction assertions; OTPs, PINs, sessions and trusted devices; member roles; evidence bytes and metadata; event history and anchor keys; private identity/contact data.
 
-Status: `exists` 0, `partial` 14, `planned` 8, `none` 12.
-
-## Assets
-
-- **Ledger.** The planned money record. `packages/ledger/src/index.ts` exports nothing. The Konto ledger is tracked as YEN-18.
-- **Event log.** The v1 wire format and hashing are in `packages/eventlog`. No persistence exists. The event table and append path are planned under YEN-18.
-- **Published roots.** `contracts/src/RootRegistry.sol` stores one `bytes32` per publication. No deployment exists. `contracts/deployments/amoy.json` is a template with null fields.
-- **Evidence files.** Bills and receipts. No storage, upload, or table exists. The `evidence_id` and `content_sha256` fields in `expense.evidence_added` are the only planned link.
-- **PII.** `users.phone` and `users.display_name` in `packages/db/migrations/0001_app_tables.sql`. The `pseudonyms` table maps a public UUID to a user, so it can be erased.
-- **Signing and anchoring keys.** The publisher address comes from `ROOT_REGISTRY_PUBLISHER`, and a deployer keystore signs deployments. The repo has no key management. Event hashes are unsigned, so no event signing key exists.
-- **Approver credentials and PIN.** 6-digit Yen PIN for MVP money action confirmations (YEN-25), checked by server with keyed hash and pepper held outside database. WebAuthn passkeys (YEN-71) planned before money movement. The bearer scheme in code is a placeholder that validates nothing.
-- **Payee UPI ID and QR collection points.** Planned payee UPI IDs for club intake. Published on verify pages; event logs commit only a hash of the payee ID.
-- **PII and pseudonyms.** `users.phone` and `users.display_name` in application tables. Pseudonyms are strictly per person per fund (YEN-70, planned) so public records cannot link one person across funds. The private Yen ID is a 9-digit number with a check digit, never in events, receipts, or public pages. Identity tables are erasable, while logs hold only pseudonyms (YEN-46).
-- **Operational state.** Idempotency responses and rate-limit buckets live in memory, per process.
-
-## Actors
-
-- **Treasurer.** Records donations and submits expense requests. Trusted for intent. Not trusted to approve own requests.
-- **Approver.** Confirms money actions with a 6-digit Yen PIN for MVP (server-attested); device-signed approvals via WebAuthn (YEN-71) are planned before moving money. Trusted to approve honestly within the quorum.
-- **Donor.** Pledges and objects. Sees only what the visibility tier allows.
-- **Platform operator.** Runs the API, the database, and the publisher. Trusted with availability. Not trusted with history after publication is the design goal.
-- **Compromised operator.** An attacker with operator-level access. Covered by X5.
-- **Attacker with database access.** Holds SQL credentials, through a leak, a backup, or an insider. Covered by R1.
-- **External attacker on the public API.** Anonymous network client. Covered by X1, X2, and X3.
-- **Malicious club member.** Holds a fund membership and tries to act above its role. Covered by X4.
-- **Payment partner.** The source of bank credits and debits. Treated as a trusted data source that may be wrong or forged.
-
-## Trust boundaries and data flow
-
-Each subgraph in the diagram is a trust boundary. A trust boundary is the border between trusted and untrusted elements ([STRIDE](REFERENCES.md#stride-approach)).
-
-1. **Browser to API.** Every request is untrusted until `requireAuth` and the policy check pass.
-2. **API to database.** The API is the only writer in the design. Triggers and revoked privileges, planned under YEN-18, are meant to enforce this for the database too.
-3. **Operator to publication.** The publisher key signs root publications. Once a root is on chain, the operator cannot change it.
-4. **Chain to verifier.** The verifier must authenticate a checkpoint from outside the API.
-5. **Bank feed to API.** Bank data is an input that the system cannot authenticate today.
+**Actors:** anonymous donor; signed-in member; approver/treasurer; fund owner; payment partner; API/database operator; anchoring worker; external verifier; network attacker with or without a stolen session.
 
 ```mermaid
 flowchart LR
-  subgraph untrusted["Untrusted: internet"]
-    donor["Donor browser"]
-    staff["Treasurer or approver browser"]
-    verifier["Public verifier browser"]
-    attacker["External attacker"]
+  subgraph internet["Untrusted clients"]
+    browser["Browser / donor"]
+    attacker["Network attacker"]
+    verifier["External verifier"]
   end
-  subgraph operator["Operator-run platform"]
-    api["API: apps/api"]
-    eventlog["Event log: packages/eventlog"]
-    db[("Postgres: app tables")]
-    evidence[("Evidence storage: planned")]
-    publisher["Publisher job: planned"]
+  subgraph app["Yen service boundary"]
+    api["Hono API"]
+    auth["OTP / session / PIN"]
+    ledger["Ledger and event log"]
+    worker["Queue / anchoring worker"]
   end
-  bank["Bank or payment partner"]
-  chain[("RootRegistry on Polygon Amoy")]
-  donor -->|"pledge over HTTPS"| api
-  staff -->|"request or approval"| api
-  attacker -->|"public API"| api
-  api -->|"SQL"| db
-  api -->|"append: planned YEN-18"| eventlog
-  eventlog -->|"rows: planned YEN-18"| db
-  staff -->|"bill upload: planned"| evidence
-  bank -->|"bank feed: untracked"| api
-  publisher -->|"reads roots"| db
-  publisher -->|"publishRoot"| chain
-  verifier -->|"proof bundles"| api
-  verifier -->|"authenticated root"| chain
+  db[("Postgres 16")]
+  partner["Bank or payment partner"]
+  kms["AWS KMS or local key"]
+  chain[("RootRegistry")]
+  browser -->|"HTTPS / cookie or bearer"| api
+  attacker -->|"public endpoints"| api
+  api --> auth
+  api --> ledger
+  ledger --> db
+  partner -->|"webhook or statement"| api
+  worker --> db
+  worker --> kms
+  worker -->|"root publication"| chain
+  verifier --> chain
+  verifier --> api
 ```
 
-## Abuse cases by money path
-
-Each path lists its abuse cases. Each entry gives the STRIDE category, what exists, what is planned, and the residual risk.
-
-### Donation path
-
-Stages: pledge, bank verification, and the verified total.
-
-#### D1. Donation marked verified without a bank credit
-
-- **STRIDE.** Spoofing, tampering.
-- **Abuse case.** A treasurer, the operator, or an attacker records `donation.verified` with a `bank_transaction_id` that has no matching bank credit. A pledge that was never paid is verified.
-- **Exists today.** None. `donation.verified` is a provisional payload in `payloadSchemas` in `packages/eventlog/src/model.ts`. `parseEvent` checks format only. No code writes or matches bank transactions.
-- **Planned.** The event append path is YEN-18. Role checks are YEN-26. The bank feed integration is untracked.
-- **Residual risk.** Yen cannot prove a bank transfer happened. A matching credit is a claim from the bank feed, which is a trust input. Once a false verification is hashed and published, it is hard to remove.
-
-#### D2. Replayed pledge creates a duplicate
-
-- **STRIDE.** Repudiation, tampering.
-- **Abuse case.** A client resends the same pledge request. The result is two pledges, or two verifications of one transfer.
-- **Exists today.** Partial. `idempotency` in `apps/api/src/middleware.ts` reserves a key, and `MemoryIdempotencyStore.begin` in `apps/api/src/stores.ts` returns `new`, `in_progress`, or `complete`. The test "replays the full response without executing the handler twice" in `apps/api/src/app.test.ts` covers this. Keys are scoped to the principal, and the request hash covers exact body bytes. The store is in memory, so a restart loses it. No donation route exists.
-- **Planned.** The Postgres idempotency adapter is YEN-24. A domain-level uniqueness rule for a transfer is untracked.
-- **Residual risk.** Idempotency guards HTTP retries only. Two requests with different keys still create two records. A released or expired key runs again, so side effects need transactional coordination.
-- **Sources.** [Stripe idempotency](REFERENCES.md#stripe-idempotency), [AWS idempotent APIs](REFERENCES.md#aws-idempotency).
-
-#### D3. Amount or fund changed before verification
-
-- **STRIDE.** Tampering.
-- **Abuse case.** A pledge is written with one amount and later shown or verified with another. Or it is moved to a different fund.
-- **Exists today.** Partial. `paiseWire` in `packages/shared/src/paise-wire.ts` accepts canonical nonnegative decimal strings only. The money contract tests in `packages/eventlog/src/eventlog.test.ts` reject fractional, unsafe, and nonnumeric balances. Event hashes bind the amount, but nothing appends events yet. The fund ID is part of the event envelope. Nothing enforces that a pledge stays in one fund.
-- **Planned.** YEN-18 for the append path.
-- **Residual risk.** A changed amount is detected only after the event is appended and anchored. Before that, the record is editable.
-- **Sources.** [Square Money](REFERENCES.md#square-money), [Fowler Money](REFERENCES.md#fowler-money).
-
-#### D4. QR swap at collection point
-
-- **STRIDE.** Tampering, spoofing.
-- **Abuse case.** An attacker replaces a club's printed or posted QR code at a collection point with a fraudulent QR code pointing to the attacker's own UPI VPA. Donors scanning the altered physical QR transfer money to the attacker, which never reaches the club's account and never appears in the bank feed.
-- **Exists today.** None. No QR code generation, payee VPA publishing, or payment intake route exists in code.
-- **Planned.** The club's official payee UPI ID is published on public fund and verification pages. Any change to the official payee UPI ID is treated as a high-risk, multi-approver-confirmed, publicly announced event. The payee ID itself stays out of event payloads; only a hash is committed to the public event log.
-- **Residual risk.** Physical QR placards in public venues cannot be cryptographically protected from physical tampering. Donors who scan a fraudulent QR code without verifying that the destination UPI ID matches the club's published official payee ID will transfer money off-platform to the attacker.
-- **Sources.** Design decision (planned QR/UPI payment path plan).
-
-### Expense request and approval path
-
-Stages: submit with evidence, approve by quorum, objection window, and final status.
-
-#### E1. Forged approval
-
-- **STRIDE.** Spoofing.
-- **Abuse case.** An approval is recorded without the approver's authentic consent. The attacker uses a compromised session, steals or guesses the approver's PIN, or an operator/server injects a forged approval event.
-- **Exists today.** None. `expense.approved` has a payload of `expense_id` only (`packages/eventlog/README.md`). Every event envelope carries an `actor` pseudonym (`packages/eventlog/src/model.ts`), so the approver is whoever appended the event. No PIN verification, quorum check, or actor role validation exists in code. The bearer security scheme in `apps/api/src/app.ts` is a placeholder.
-- **Planned.** For MVP, money actions are confirmed with a 6-digit Yen PIN (YEN-25), checked by Yen's server using a keyed hash with an external secret outside the database. Verification is bound to the exact action payload, is strictly single-use, and expires within 60 seconds. Rate limiting locks out after 5 consecutive failures for 30 minutes; 10 failures in 24 hours require owner/support reset with an OTP and a 24-hour cooling-off period notifying all members. WebAuthn device-signed approvals (YEN-71, fingerprint/face) are planned for later, labelled "Signed on device" versus "Confirmed with PIN". Invariant: PIN confirmation is acceptable while Yen only records; before Yen ever moves money, approvals must be device-signed.
-- **Residual risk.** Because MVP approvals are attested by the server after PIN confirmation rather than signed by the approver's hardware device, a compromised platform server or operator could record an approval nobody gave. The Merkle event log prevents retrospective alterations, but cannot prevent write-time fabrication of server-attested approvals. Furthermore, a 6-digit PIN is susceptible to phishing, shoulder-surfing, or coercion. [NIST SP 800-63B-4](REFERENCES.md#nist-800-63b) Section 3.2.2 requires effective rate limiting for centrally verified memorized secrets. [OWASP Transaction Authorization](REFERENCES.md#owasp-transaction) requires users to identify transaction data before authorizing.
-- **Sources.** [NIST SP 800-63B](REFERENCES.md#nist-800-63b), [OWASP Transaction Authorization](REFERENCES.md#owasp-transaction), [OWASP Authentication](REFERENCES.md#owasp-auth).
-
-#### E2. Replayed request or approval action
-
-- **STRIDE.** Repudiation, tampering.
-- **Abuse case.** A captured approval, or a repeated submit, is replayed. It counts twice toward quorum, or it creates a second expense.
-- **Exists today.** Partial. The same HTTP idempotency as D2 applies to every unsafe `/v1` request, through `apps/api/src/middleware.ts`. The `(principal, key)` tuple prevents cross-user replay. Domain-level replay is not covered. No approval route exists.
-- **Planned.** YEN-24 for the durable store. YEN-26 for approval rules, which would need a per-approver, per-request uniqueness rule.
-- **Residual risk.** A replay with a fresh key and a valid passkey assertion is not blocked by HTTP idempotency. The approval rule must enforce one approval per approver per request.
-- **Sources.** [Stripe idempotency](REFERENCES.md#stripe-idempotency), [WebAuthn Level 3](REFERENCES.md#webauthn-3).
-
-#### E3. Treasurer approves own request (self-approval)
-
-- **STRIDE.** Elevation of privilege.
-- **Abuse case.** A treasurer submits an expense and then approves it. Or one person holds both the treasurer and approver roles in the same fund.
-- **Exists today.** None. The `memberships` table in `packages/db/migrations/0001_app_tables.sql` lets one user hold several roles in a fund. `packages/db/README.md` states, "Multiple roles per user and fund are valid." No rule separates submitter and approver.
-- **Planned.** Separation of duties under YEN-26 will forbid a treasurer from approving their own expense submissions, and require independent approver quorum.
-- **Residual risk.** Separation of duties enforces organizational process in code. Even with separation, collusion between the treasurer and sufficient approvers cannot be detected by cryptographic checks alone; the chain only proves that the configured quorum confirmed the transaction.
-
-#### E4. Evidence swapped after approval
-
-- **STRIDE.** Tampering.
-- **Abuse case.** The bill is replaced after approval, so donors and approvers see a different document than the one approved.
-- **Exists today.** None. `expense.evidence_added` carries `evidence_id` and `content_sha256` (`packages/eventlog/src/model.ts`). The hash field can bind bytes, but nothing computes it, stores bytes, or checks that the stored bytes match. No rule requires evidence to precede approval.
-- **Planned.** Bill uploads are in the root README's "Funds and spending" row as planned work. No Linear id is named, so the work is untracked.
-- **Residual risk.** A content hash binds a file only if the hash is recorded before approval and checked on every read. The hash itself is SHA-256 ([RFC 6234](REFERENCES.md#rfc-6234)), which this model assumes is collision resistant.
-
-#### E5. Objection suppressed or resolved silently
-
-- **STRIDE.** Repudiation, denial of service.
-- **Abuse case.** A donor objects, and the objection is never recorded, or it is resolved without a visible resolver.
-- **Exists today.** None. `expense.objection_raised` and `expense.objection_resolved` are provisional payloads (`packages/eventlog/README.md`). The envelope `actor` records who resolved an objection, but nothing checks that the actor may resolve it or ties the resolution to a credential. No objection window exists in code.
-- **Planned.** The objection window is named in the root README as part of the product flow. No Linear id is named, so it is untracked.
-- **Residual risk.** Once events are appended, a resolution is visible in the chain. Until then, nothing records who resolved it.
-
-### Payout path
-
-Stages: bank instruction, bank confirmation, and reversal.
-
-#### P1. Payout without an approved request
-
-- **STRIDE.** Spoofing, elevation of privilege.
-- **Abuse case.** A payout is recorded or sent with no approved expense behind it.
-- **Exists today.** None. `expense.paid` carries `expense_id` and `bank_transaction_id` only. No payout code exists. No code links a payment to an approval.
-- **Planned.** The root README lists bank feed integration as planned, but it names no payout flow and no Linear id, so payouts are untracked. Role checks are YEN-26.
-- **Residual risk.** Yen can record a payout that the bank made. It cannot stop a payout made outside Yen.
-
-#### P2. Payout amount or payee differs from the approval
-
-- **STRIDE.** Tampering.
-- **Abuse case.** An approval covers one amount and one payee. The payout sends another amount to another payee.
-- **Exists today.** None. `expense.paid` has no amount and no payee field (`packages/eventlog/README.md`). A reviewer comparing events cannot see a mismatch in the chain, because the chain does not record one.
-- **Planned.** None names a fix. This is a design gap to close before v1 is persisted (see Decisions).
-- **Residual risk.** The gap stays until the payload changes. Under the README's v1 rule, changing this after persistence needs a v2 event.
-
-#### P3. Duplicate or hidden payout
-
-- **STRIDE.** Repudiation, tampering.
-- **Abuse case.** A payout instruction is retried, so it sends twice. Or a payout is reversed, and the reversal is not shown.
-- **Exists today.** None. `expense.reversed` is a provisional event type, and no code emits it. No idempotency covers bank calls. The HTTP idempotency store in `apps/api` does not reach the bank.
-- **Planned.** Bank integration is untracked. Durable idempotency is YEN-24.
-- **Residual risk.** Idempotency needs the bank's own idempotency or a reconciliation step. Yen cannot assume either.
-- **Sources.** [Stripe idempotency](REFERENCES.md#stripe-idempotency), [AWS idempotent APIs](REFERENCES.md#aws-idempotency).
-
-### Reconciliation path
-
-Stages: bank feed ingest, match, debit review, and discrepancy.
-
-#### R1. Insider with database write access rewrites history
-
-- **STRIDE.** Tampering, repudiation.
-- **Abuse case.** A person with SQL write access edits or deletes events, then recomputes hashes for every later event so the chain still verifies.
-- **Exists today.** Partial. Detection exists. `verifyChain` in `packages/eventlog/src/chain.ts` recomputes each hash and checks the links. The test "detects a changed field at that event or its successor" and "detects removal, reordering, duplication, and insertion" in `packages/eventlog/src/eventlog.test.ts` cover this. Prevention does not exist. No event table exists, and the triggers and revoked privileges that would block writes are not built.
-- **Planned.** The insert trigger, update, delete, and truncate rejection, and revoked direct insert are YEN-18, as described in `packages/eventlog/README.md`.
-- **Residual risk.** Table owners and superusers bypass privileges that others cannot ([PostgreSQL privileges](REFERENCES.md#pg-privileges)). Row security also does not stop owners ([PostgreSQL row security](REFERENCES.md#pg-row-security)). A rewrite that recomputes hashes is detected only against a previously authenticated head or root. An unanchored suffix can be rewritten without detection. Compromised logging machines are the class [Schneier and Kelsey](REFERENCES.md#schneier-kelsey) address.
-
-#### R2. Truncated log
-
-- **STRIDE.** Tampering, repudiation.
-- **Abuse case.** The newest events are removed, and a verifier that trusts the shorter chain reports it as complete.
-- **Exists today.** Partial. `verifyChain` needs a fund-bound `ChainHead` with a count and latest hash, so a shorter chain fails against the expected count. The test "requires an authenticated head for complete array and stream verification" in `packages/eventlog/src/eventlog.test.ts` covers this. `checkChainStructure` returns no `ok: true`, and it does not exclude truncation (`packages/eventlog/README.md`).
-- **Planned.** The authenticated head comes from an anchored root, which is planned. Consistency proofs are not implemented, and the repo does not plan them under a Linear id.
-- **Residual risk.** A truncation is detected only against a head that was authenticated after the removed events. Events that were never published can disappear without a trace. Consistency proofs, which [RFC 9162](REFERENCES.md#rfc-9162) and [Cox](REFERENCES.md#cox-tlog) describe, would let an auditor check that a newer log extends an older one. Yen does not implement them.
-
-#### R3. Backdated event
-
-- **STRIDE.** Tampering, repudiation.
-- **Abuse case.** An event is written with an `occurred_at` earlier than its real time, or earlier than a payment it refers to.
-- **Exists today.** Partial. `makeNextEvent` in `packages/eventlog/src/chain.ts` throws on backward time. `verifyChain` reports `non-monotonic time` at `chain.ts:204`. The test "reports first-break reasons and verifies async streams" covers this. Time is an injected input. No check compares `occurred_at` with receipt time, and a monotonic backdate passes.
-- **Planned.** The database trigger for canonical UTC time order is YEN-18.
-- **Residual risk.** Order is checked. Truth is not. A recorded time is an assertion by the writer, and the chain only proves it was not changed after.
-
-#### R4. Unapproved debit matched to an approved request
-
-- **STRIDE.** Spoofing, tampering.
-- **Abuse case.** A bank debit with no approval is matched to an approved expense, so the public view shows it as approved.
-- **Exists today.** None. `packages/ledger/src/index.ts` exports nothing. No matching or discrepancy code exists. `discrepancy.raised` and `discrepancy.resolved` are provisional payloads.
-- **Planned.** The root README lists "unapproved debit alerts" as planned work. The ledger is tracked as YEN-18. The reconciliation work is untracked.
-- **Residual risk.** A match is a claim by the matcher. A wrong or malicious match is recorded as a fact once it is appended. Yen cannot prove a bank transfer happened.
-- **Sources.** [Stripe Ledger](REFERENCES.md#stripe-ledger), which describes reconciliation metrics for money movement.
-
-### Publication and verification path
-
-Stages: root computation, publication to the registry, publisher transfer, and client verification.
-
-#### V1. Split view: different roots shown to different people
-
-- **STRIDE.** Tampering, repudiation.
-- **Abuse case.** The operator shows donor A one root and donor B another. Each root is internally valid, so each client's proof checks out.
-- **Exists today.** Partial. `RootRegistry` rejects overwrites and replays and keeps a gapless sequence (`contracts/src/RootRegistry.sol`). Tests include `testReplayAndOverwriteAreRejected` and `testSequenceCannotWrap` in `contracts/test/RootRegistry.t.sol`. The invariants `invariantSequenceIsGaplessAndStrictlyIncreasing` and `invariantEveryPastRootIsImmutable` check the same. The verify page rule in `packages/eventlog/README.md` requires an authenticated checkpoint. Nothing monitors or compares roots across clients. The registry is not deployed, and `contracts/deployments/amoy.json` is a template.
-- **Planned.** Registry deployment is YEN-16. Monitoring is untracked.
-- **Residual risk.** A registry shows a sequence of roots. It cannot show that every client saw the same sequence. Clients must compare what they saw. [RFC 9162](REFERENCES.md#rfc-9162) describes monitoring and comparing tree heads for this. [CONIKS](REFERENCES.md#coniks) describes auditing equivocation while protecting privacy. Yen does neither. Withheld publication is not detected at all.
-
-#### V2. Publisher key compromise
-
-- **STRIDE.** Spoofing, elevation of privilege.
-- **Abuse case.** An attacker with the publisher key publishes a root for a fabricated history, or proposes a new publisher the attacker controls.
-- **Exists today.** Partial. Published roots cannot be overwritten, so a compromise cannot rewrite history already on chain. `publishRoot` needs the current publisher. `proposePublisher` and `acceptPublisher` need an accept step, which the current publisher cannot skip. `testFuzzUnauthorizedPublisher` and `testAcceptEmitsClearsProposalAndTransfersAllAuthority` cover those rules. The registry has one publisher, with no owner, timelock, multisig, or recovery role (`contracts/README.md`). An attacker can publish new roots at the next sequence.
-- **Planned.** Key policy is untracked. The deployment check uses a throwaway key in `contracts/script/test-deploy.sh`, which is not a production policy.
-- **Residual risk.** Compromise lets an attacker add false but immutable roots, and each one is then authentic. The registry cannot tell a false root from a true one. A timelock would give the community time to react, and the design does not have one.
-
-#### V3. PII or sensitive linkage on chain
-
-- **STRIDE.** Information disclosure.
-- **Abuse case.** A name, phone number, or an identifier that links to one is written into an event or a published root.
-- **Exists today.** Partial. Payloads are strict, so unknown fields are rejected. The test "rejects a raw user UUID as actor and unversioned payload additions" in `packages/eventlog/src/eventlog.test.ts` covers this. Person references are pseudonyms, and `packages/eventlog/README.md` states that names, phone numbers, VPAs, free-form notes, and raw evidence are not accepted. Only the 32-byte global root is public. Event leaves are salted with `leafHash(salt, eventHash)`, and the test "swapping salts or event hashes between distinct events fails" in `packages/shared/src/merkle/properties.test.ts` covers that. The `pseudonyms` table can be erased without cascading to history (`packages/db/README.md`). API logs omit principals, phones, and bodies (`apps/api/src/logging.ts`).
-- **Planned.** The database must enforce the same payload rules under YEN-18.
-- **Residual risk.** Amounts, `bank_transaction_id`, and `fund_id` stay in the disclosed proof bundles. Proof bundles go to authorized recipients. A `bank_transaction_id` may link to a bank statement and so identify a donor. Published hashes cannot be erased, which matters under the [DPDP Act](REFERENCES.md#dpdp-act). A pseudonym is not anonymous ([ICO pseudonymisation](REFERENCES.md#ico-pseudonymisation)). Whether `bank_transaction_id` is personal data is an open decision.
-
-#### V4. Verify page shows an unqualified "verified" badge
-
-- **STRIDE.** Tampering, in the sense that the displayed claim is altered.
-- **Abuse case.** The verifier shows "verified" with no date, so a stale or obsolete checkpoint looks current.
-- **Exists today.** None in code. There is no verify page. `apps/web/src/app/page.tsx` is a placeholder. `packages/eventlog/README.md` requires the UI to show "verified up to event N as of <checkpoint time>". A successful integrity result carries `verifiedAgainst`, which the UI must show.
-- **Planned.** The root README lists client-side verification as in progress. No Linear id is named, so the page is untracked.
-- **Residual risk.** An authentic checkpoint can still be stale. Clients must read the checkpoint time, and the design only works if the UI shows it.
-
-#### V5. Cross-fund linking through pseudonyms
-
-- **STRIDE.** Information disclosure.
-- **Abuse case.** An observer analyzes public event logs across multiple funds and correlates pseudonym identifiers to track an individual's financial activity, donations, and role memberships across independent clubs.
-- **Exists today.** None. `packages/db/migrations/0001_app_tables.sql` defines a single global `pseudonyms` table mapping `user_id` to a single pseudonym UUID. The per-fund pseudonym schema and helper (`fund_pseudonyms`, `ensureFundPseudonym`) are developed in branch `origin/aetosdios27/yen-70-fund-pseudonyms` but remain unmerged on this branch, and no application route calls per-fund pseudonyms.
-- **Planned.** YEN-70 establishes that pseudonyms are strictly per person per fund. Each `(user_id, fund_id)` pair receives an independent, random UUIDv4 pseudonym (`fund_pseudonyms` table), ensuring public records from one fund cannot be linked to another fund. The Yen ID is a private 9-digit number with a check digit, stored in application tables and never exposed in event logs, receipts, or public pages. Donor names live outside the log, with donor choice between full name, initials, or "a donor".
-- **Residual risk.** Per-fund pseudonyms prevent identifier linkage. However, external observers may attempt correlation via side-channels (e.g. matching identical paise amounts, public bank statement timestamps, or donation patterns).
-- **Sources.** [ICO Pseudonymisation](REFERENCES.md#ico-pseudonymisation), [DPDP Act](REFERENCES.md#dpdp-act).
-
-#### V6. Erasure request conflicts with statutory retention
-
-- **STRIDE.** Repudiation, information disclosure.
-- **Abuse case.** A member or donor submits a request for personal data erasure under Section 12(3) of the DPDP Act 2023. Deleting all records could violate statutory tax, accounting, or audit log retention requirements under Indian law (e.g. Section 8(7) retention exception). Conversely, retaining data without statutory grounds violates DPDP principles.
-- **Exists today.** None. No user data erasure workflow, retention flag, or log retention scheduler exists in code.
-- **Planned.** DPDP research note (YEN-46): under DPDP Act Sections 12(3) and 8(7), the right to erasure yields to retention required by applicable law for the time being in force. Yen's architecture stores personal identity in erasable database tables (`users`, `fund_pseudonyms`) while committing only pseudonyms and cryptographic hashes to the permanent, immutable event log. Clubs can flag records as "retention required" when statutory retention applies. Audit logs must be retained for at least one year per commentary (secondary legal source, unverified against the official Gazette). Not legal advice.
-- **Residual risk.** Sectoral retention rules in India vary. If a club fails to flag records or if secondary commentary on log retention periods differs from final gazetted rules, the platform could either violate erasure rights or unlawfully destroy required financial audit trails.
-- **Sources.** [DPDP Act Transcription](REFERENCES.md#dpdpa-transcription), [DPDP Act](REFERENCES.md#dpdp-act).
-
-### Cross-cutting threats
-
-#### X1. Phone or waitlist enumeration
-
-- **STRIDE.** Information disclosure.
-- **Abuse case.** An attacker systematically queries login, OTP request, recovery, or waitlist endpoints to map registered phone numbers.
-- **Exists today.** None. `users.phone` has a UNIQUE constraint in `packages/db/migrations/0001_app_tables.sql`, but no login, OTP, or waitlist endpoint exists in code.
-- **Planned.** Sign-in policy (YEN-72): OTP is delivered via WhatsApp or SMS based on user choice, with no silent fallback and a single live code. Strict cross-channel rate limits apply per phone number. Login and recovery endpoints return uniform response shapes, error messages, and timing regardless of whether a number is registered. Accounts belong to the account, not the phone number, mitigating recycled number enumeration.
-- **Residual risk.** Differences in third-party delivery latency (WhatsApp delivery receipts vs SMS gateway delays) can create a side-channel timing oracle unless equalized by the server.
-- **Sources.** [NIST SP 800-63B](REFERENCES.md#nist-800-63b), [OWASP Authentication](REFERENCES.md#owasp-auth).
-
-#### X2. Rate-limit evasion
-
-- **STRIDE.** Denial of service.
-- **Abuse case.** An attacker rotates IP addresses, or passes forwarded headers, to exceed the limit. Or the attacker fills the bucket table to evict its own exhausted bucket.
-- **Exists today.** Partial. `rateLimit` in `apps/api/src/middleware.ts` applies a per-IP bucket to every `/v1` request. It also applies a per-principal bucket when a principal exists. `MemoryRateLimitStore` in `apps/api/src/stores.ts` holds 10,000 entries and evicts the oldest when full. The test "does not trust forwarded IP headers" in `apps/api/src/app.test.ts` covers forwarded headers. The test "refills token buckets by elapsed time and isolates keys" in `apps/api/src/stores.test.ts` covers refill. The server takes the socket peer address (`apps/api/src/server.ts`).
-- **Planned.** A shared store is needed for more than one process. Its Linear id is untracked, although `apps/api/README.md` says it is required.
-- **Residual risk.** Each process has its own buckets. More processes mean more total allowance. An attacker with enough distinct addresses is not limited by the per-IP bucket. Eviction resets an old bucket to full, so an attacker who creates more than 10,000 keys can reset its own bucket. [Stripe rate limiters](REFERENCES.md#stripe-rate-limiters) and [RFC 6585](REFERENCES.md#rfc-6585) describe the mechanism. [AWS load shedding](REFERENCES.md#aws-load-shedding) and [SRE overload](REFERENCES.md#sre-overload) describe the limit of rate limiting alone.
-
-#### X3. External attacker on the public API
-
-- **STRIDE.** Spoofing, elevation of privilege.
-- **Abuse case.** An anonymous client calls a fund route, or sends a forged bearer token, and reads or changes data.
-- **Exists today.** Partial. `requireAuth` guards `/v1/me` and `/v1/funds/*` in `apps/api/src/app.ts`. `createApp` defaults to `denyAllPolicy` (`apps/api/src/dependencies.ts`). `apps/api/src/server.ts` injects no principal, so the production entrypoint returns `unauthenticated` for these routes. The test "denies every documented funds route with the default policy" in `apps/api/src/app.test.ts` covers the policy. The bearer scheme is a placeholder, and no token is validated (`apps/api/README.md`).
-- **Planned.** Token validation is YEN-22. Object-level authorization is YEN-26 and YEN-31.
-- **Residual risk.** Default deny protects the current stub routes. It does not protect a future route that forgets `requireAuth`. Object-level authorization is the class [OWASP API Security](REFERENCES.md#owasp-api) names.
-
-#### X4. Member grants self a role
-
-- **STRIDE.** Elevation of privilege.
-- **Abuse case.** A member inserts a `memberships` row for themselves with the `approver` or `treasurer` role.
-- **Exists today.** None. The `memberships` table constrains the role to five values, but nothing constrains who may insert a row (`packages/db/migrations/0001_app_tables.sql`). `member.added` is a provisional event (`packages/eventlog/README.md`), and no code checks who adds a member.
-- **Planned.** Role checks are YEN-26.
-- **Residual risk.** Once a membership is inserted, the role takes effect unless policy checks it. A later event would record the change, but nothing prevents the change.
-
-#### X5. Compromised platform operator
-
-- **STRIDE.** Tampering, repudiation.
-- **Abuse case.** An operator rewrites events before publication, withholds publication, presents split histories to different clients, or fabricates server-confirmed PIN approvals at write time.
-- **Exists today.** Partial. Published roots on Polygon Amoy resist rewrite (V1, V2). Verify rules require a head outside the API (`packages/eventlog/README.md`). However, because MVP approvals are confirmed via server-side PIN checks (YEN-25) rather than device-bound cryptographic signatures, a compromised operator can forge approvals at write time that satisfy all schema and hash checks.
-- **Planned.** YEN-16 for root publication. Independent log auditing ([RFC 9162](REFERENCES.md#rfc-9162)). YEN-71 requires WebAuthn device-signed approvals before Yen moves money, closing the write-time fabrication window.
-- **Residual risk.** While Yen operates in recording-only mode with server-attested PIN approvals, the platform operator cannot be prevented from creating synthetic approvals at write time; the Merkle log only prevents retrospective modification. Before any money movement, device-signed approvals must be strictly enforced.
-- **Sources.** [RFC 9162](REFERENCES.md#rfc-9162), [Crosby and Wallach](REFERENCES.md#crosby-wallach), [NIST SP 800-63B](REFERENCES.md#nist-800-63b).
-
-#### X6. Dev principal reaches production
-
-- **STRIDE.** Elevation of privilege.
-- **Abuse case.** The mock server, which injects a fixed principal and uses the permissive `devPolicy`, runs in production, or its dependencies are copied into a production entrypoint.
-- **Exists today.** Partial. `apps/api/src/mock-server.ts` throws when `NODE_ENV` is `production`, and it binds `127.0.0.1`. `createMockApp` in `apps/api/src/mock-app.ts` injects the dev principal. `createApp` takes any principal through its dependencies, and nothing forbids that in production.
-- **Planned.** None named.
-- **Residual risk.** The guard covers the mock entrypoint only. A future production entrypoint that copies the mock's deps would not be guarded.
-
-#### X7. Approver credential or PIN compromise
-
-- **STRIDE.** Spoofing.
-- **Abuse case.** An attacker steals or guesses an approver's 6-digit PIN, hijacks an active browser session, or intercepts an OTP to authorize expenses.
-- **Exists today.** Phone OTP issues sessions; Yen PIN verification uses a keyed hash, shared per-user failed-attempt counters, temporary and permanent lockout states, OTP-backed reset with a 24-hour cooling-off period, and single-use action-bound proofs. OTP sessions are gated to PIN setup, PIN reset, or device unlock until trusted. A trusted-device row binds to the session after PIN setup or verification. The current device can be locked explicitly; after 7 idle days it requires PIN reauthentication. The absolute session lifetime is 30 days. Session listing and per-session/global revocation exist.
-- **Planned.** Device-bound fingerprint/biometric unlock is out of scope for YEN-72; YEN-71 owns the device-bound extension. An attacker with an unlocked session and the PIN can still authorize actions until lock or idle expiry.
-- **Residual risk.** An attacker who obtains physical access to an unlocked, active device during an approval session can authorize actions if they know or guess the PIN before lockout occurs.
-- **Sources.** [NIST SP 800-63B](REFERENCES.md#nist-800-63b), [OWASP Authentication](REFERENCES.md#owasp-auth), [OWASP Transaction Authorization](REFERENCES.md#owasp-transaction).
-
-#### X8. SIM swap or recycled phone number inherits roles
-
-- **STRIDE.** Spoofing, elevation of privilege.
-- **Abuse case.** An attacker executes a SIM swap on a member's mobile number, or a telecom provider recycles an inactive mobile number and reassigns it to a new subscriber. The new holder requests an OTP, logs in, and inherits the previous owner's account, fund memberships, or approver privileges.
-- **Exists today.** Phone OTP via the user's selected WhatsApp or SMS channel proves possession of that number and issues a limited session. PIN setup/reset or PIN verification binds a trusted-device record to the session. A PIN alone cannot mint a session for a new device. The existing session list supports individual and global revocation.
-- **Planned.** Accounts belong to the account, not the phone number. For an account whose phone number changes hands, re-authenticating on a new device requires secondary account recovery or owner-vouched re-invitation. Reassigning roles requires explicit owner approval.
-- **Residual risk.** In India, prepaid mobile numbers are routinely recycled after 90 days of inactivity. If a departing club member abandons their number without updating their Yen profile and the club fails to remove their membership, a new recipient of the recycled SIM who also circumvents secondary recovery could attempt account takeover.
-- **Sources.** [NIST SP 800-63B](REFERENCES.md#nist-800-63b), [OWASP Authentication](REFERENCES.md#owasp-auth).
-
-#### X9. PIN online brute force
-
-- **STRIDE.** Spoofing.
-- **Abuse case.** An attacker with an active or compromised user session systematically submits guessed 6-digit PINs (10^6 combinations) against the approval confirmation endpoint.
-- **Exists today.** None. No PIN confirmation route or attempt tracking exists in code.
-- **Planned.** YEN-25 enforces server-side lockout: 5 consecutive failed attempts trigger an automatic 30-minute lockout. 10 failures in 24 hours escalate to a full account lock requiring owner/support reset. Reset requires an OTP plus a mandatory 24-hour cooling-off period with alerts dispatched to all fund members. Action verification tokens are single-use, bound to the exact payload hash, and expire in 60 seconds.
-- **Residual risk.** An attacker who deliberately submits 5 incorrect PINs can lock out a legitimate approver for 30 minutes, mounting an application-level denial-of-service during an urgent expense approval or objection window.
-- **Sources.** [NIST SP 800-63B](REFERENCES.md#nist-800-63b), [OWASP Authentication](REFERENCES.md#owasp-auth).
-
-#### X10. PIN offline cracking after database leak
-
-- **STRIDE.** Information disclosure, spoofing.
-- **Abuse case.** An attacker gains read access to the database (via SQL injection, database dump, or backup compromise) and attempts offline brute-force cracking of stored PIN hashes. Because a 6-digit numeric PIN has only 1,000,000 possible values (~20 bits of entropy), standard unsalted or even salted hashes can be cracked in seconds using commodity hardware.
-- **Exists today.** None. No PIN storage table or hashing mechanism exists in code.
-- **Planned.** YEN-25 uses a keyed hash (scrypt, then HMAC-SHA-256 under a server secret) where the secret key is stored outside the database (e.g. in KMS or runtime environment variables). Without the external secret key, offline dictionary attacks on leaked database tables are prevented.
-- **Residual risk.** If the application server environment is compromised concurrently with the database, the external pepper secret is exposed, enabling immediate offline exhaustion of the 6-digit PIN space.
-- **Sources.** [OWASP Password Storage](REFERENCES.md#owasp-password-storage), [RFC 2104](REFERENCES.md#rfc-2104), [NIST SP 800-63B](REFERENCES.md#nist-800-63b).
-
-#### X11. PIN phishing on lookalike site
-
-- **STRIDE.** Spoofing.
-- **Abuse case.** An attacker creates a spoofed domain or phishing interface that mimics Yen and tricks an approver into entering their phone number, OTP, and 6-digit PIN. Unlike WebAuthn passkeys, memorized PINs have no cryptographic origin binding.
-- **Exists today.** None.
-- **Planned.** Under YEN-72, a PIN alone never authorizes a new device; an attacker must harvest an active OTP within its short validity window to bind a new device. PIN action authorizations expire in 60 seconds and are single-use. For post-MVP money movement, YEN-71 requires WebAuthn device-signed approvals (fingerprint/face), which provide hardware-backed origin binding that is cryptographically immune to credential harvesting on lookalike domains. Rule: PIN is acceptable while Yen only records; before Yen ever moves money, approvals must be device-signed.
-- **Residual risk.** Real-time adversary-in-the-middle (AiTM) phishing proxies can relay both OTP and PIN to authorize an action within the 60-second validity window. Only WebAuthn device signing (YEN-71) provides cryptographic origin binding.
-- **Sources.** [NIST SP 800-63B](REFERENCES.md#nist-800-63b), [OWASP Authentication](REFERENCES.md#owasp-auth).
-
-#### X12. Owner-vouched invite interception
-
-- **STRIDE.** Spoofing, elevation of privilege.
-- **Abuse case.** An attacker intercepts an in-person vouched invitation link, token, or QR code generated by a club owner as a pilot fallback for users without reliable SMS/WhatsApp delivery, and redeems it to gain unauthorized membership or roles.
-- **Exists today.** The `owner_invites` migration stores only a hash of the random code. `createOwnerInviteRoute`, `redeemOwnerInviteRoute`, and `confirmOwnerInviteRoute` bind the invite to the typed phone, expire it after five minutes, require owner confirmation after redemption, and create only a `member` membership. User records carry `assurance = 'owner_vouched'`; `authorizedExpense` blocks expense approval for that assurance. The auth integration test checks mismatch refusal, confirmation, single completion, and log redaction. No event-log audit record is written yet.
-- **Planned.** Production membership and role loading must continue to treat owner-vouched accounts as member-only until an explicit assurance upgrade flow exists.
-- **Residual risk.** Owner-vouched invites rely on manual in-person identity checking. Interception alone is insufficient without the bound phone, but an owner who enters the wrong phone or confirms the wrong person can still admit them. Confirmation is stored in the database, not in the append-only event log.
-- **Sources.** [OWASP Authentication](REFERENCES.md#owasp-auth).
-
-## Decisions the model asks for before persistence
-
-The v1 payloads are provisional. Under `packages/eventlog/README.md`, a payload changes only by defining v2 once v1 is released or persisted. So these decisions belong before YEN-18 writes a row.
-
-1. **Money actions confirmed with 6-digit Yen PIN (Decided 2026-10-28; YEN-25, YEN-71).** For the MVP, money actions are confirmed with a server-verified 6-digit PIN (keyed hash with external secret outside the DB, 5-attempt lockout for 30 min, 10 failures in 24h require support reset, reset requires OTP plus a 24-hour cooling-off that notifies all members, verification bound to exact action, single use, expires within 60 seconds). Consequence: approvals are attested by the server, not signed by the approver's device; a compromised server or operator could record an approval nobody gave. A later optional device-signed approval (YEN-71, fingerprint/face via WebAuthn) is recorded separately, labelled "Signed on device" versus "Confirmed with PIN". Rule: PIN is acceptable while Yen only records; before Yen ever moves money, approvals must be device-signed. This updates E1, X5, and X7.
-2. **Sign-in policy (Decided 2026-10-28; YEN-72).** OTP by WhatsApp or SMS (user's choice, no silent fallback, one live code, unified cross-channel limits per number) proves the phone for first sign-in, new-device binding, account recovery, PIN reset, and after the 30-day absolute session lifetime. A trusted device is bound to the OTP-proven session after PIN setup or verification. PIN unlock is required after an explicit device lock or 7 idle days. A PIN alone never authorizes a new device. Device-bound biometric unlock is out of scope for YEN-72; YEN-71 owns it. Accounts belong to the account, not the phone number, acknowledging number recycling. This updates X1, X7, and adds X8.
-3. **Identity and pseudonyms (Decided 2026-10-28; YEN-70).** Pseudonyms are strictly per person per fund so public records cannot link one person across funds. The private Yen ID is a 9-digit number with a check digit, never in events, receipts, or public pages. Donor names live outside the event log, with donor choice between full name, initials, or "a donor". This adds V5.
-4. **DPDP research note (Decided 2026-10-28; YEN-46).** Erasure under Sections 12(3) and 8(7) yields to retention required by another law. Identity is kept in erasable database tables and only pseudonyms in the permanent log. Clubs can mark a record "retention required". Logs must be kept at least a year per commentary (secondary source, unverified against the Gazette). Not legal advice. This adds V6.
-5. **QR/UPI payment path plan (Decided 2026-10-28).** To mitigate QR-swap fraud at collection points, the club's official payee UPI ID is published on public pages; any change is a high-risk, approver-confirmed, announced event. Payee ID stays out of event payloads; only a hash is committed. This adds D4.
-6. **Record what was paid.** Require `expense.paid` to record the actual amount and payee, or link it to a checked bank record containing both. Compare those details with the approved amount and payee. An approved-event hash can identify the approval, but cannot replace the actual payment details. This closes P2.
-7. **Separate submitter from approver.** Decide whether a treasurer may approve. Then enforce the rule in the approval path (YEN-26). This closes E3 and part of X4.
-8. **Bind evidence before approval.** Require the evidence hash to be recorded before approval. Store the bytes content-addressed, and verify the hash on every read. This closes E4. The product must decide how bill replacement works.
-9. **Choose a publisher key policy.** The registry has one publisher and a two-step transfer (`proposePublisher`, then `acceptPublisher`). It has no delayed transfer, shared control, or written key-management policy. Decide whether to add a multisig or a timelock, and write the policy. This is a product and operations decision (V2).
-10. **Name the monitors.** Decide who compares roots across clients, and how they do it. Without this, V1 and X5 stay partial.
-11. **Make rate limits and idempotency shared before scale.** The Postgres idempotency adapter is YEN-24. The shared rate-limit store has no id yet (X2, D2).
-12. **Check the identifiers.** Decide whether `bank_transaction_id` is personal data or can be linked to a person (V3).
-
-## Out of scope and assumptions
-
-- **Host and runtime.** The OS, Node runtime, and Postgres host are trusted, except where X5 models an operator who has turned hostile.
-- **Client devices.** Malware on an approver's device is out of scope. Passkeys protect against credential theft, not against a compromised device that the user confirms.
-- **Bank honesty.** The bank feed and the payment partner are trusted data sources. Yen does not verify that a transfer happened off-platform (D1, R4).
-- **Collusion.** If all approvers, or the treasurer and enough approvers, collude, Yen cannot detect it. The record only shows what was recorded.
-- **Off-platform money.** Cash donations and spending outside the platform are out of scope. The system sees only what is recorded.
-- **Chain consensus.** Polygon consensus, reorganization, finality, and testnet resets are out of scope. Publication timing and finality are assessed separately ([Ethereum attack and defense](REFERENCES.md#ethereum-reorg)).
-- **Cryptographic breaks.** SHA-256 and the signature scheme of the publisher account are assumed secure.
-- **Legal sufficiency.** This model does not decide whether any design complies with the DPDP Act or tax law. Commencement and rules must be checked separately ([DPDP commencement](REFERENCES.md#dpdp-commencement)).
-- **Availability.** Availability of the API, the verifier, and the chain is not guaranteed. Large-scale denial of service beyond one process is out of scope (X2).
-- **Frontend and supply chain.** Browser-side XSS and CSRF, dependency compromise, and CI are not covered here. CI pinning is covered by [GitHub Actions secure use](REFERENCES.md#github-actions) and [SLSA](REFERENCES.md#slsa), which this model does not assess.
-- **Public versus private fields.** Which fields are public is a product decision (YEN-31). This model assumes the minimal public set described in the root README.
-
-## Sources
-
-Entries in `docs/REFERENCES.md` are linked where used. The frame comes from STRIDE and the OWASP Threat Modeling Cheat Sheet. Two entries were opened and checked in this change: STRIDE on Microsoft Learn, and the OWASP cheat sheet. The other entries were reused as recorded in that file. Claims that no entry supports are marked as design guidance.
+**Reachability note:** the current server bootstrap wires persistent auth, PIN, expense, pledge, and reconciliation stores but not a persistent fund store or an allowing production policy (`apps/api/src/server-bootstrap.ts:144`, `apps/api/src/dependencies.ts:252`). The default policy denies all (`apps/api/src/dependencies.ts:282`). Protected money-route findings therefore describe handler behavior under a policy that grants the relevant action; the committed bootstrap currently denies those actions. The partner webhook is outside those auth gates and is independently reachable.
+
+## Existing threats
+
+| ID                                                       | STRIDE | Severity | Status        | Evidence and residual risk                                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------------- | ------ | -------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1 Donation verified without a bank credit               | S, T   | High     | **Open**      | `apps/api/src/app.ts:1727` accepts partner JSON without sender authentication; `apps/api/src/reconciliation/reconciliation.test.ts:179` exercises an unsigned request. See SEC-1.                                                                                                                                                               |
+| D2 Replayed pledge creates a duplicate                   | R, T   | Medium   | **Partial**   | UTR is unique across pledges (`packages/db/migrations/0011_donation_pledges.sql:15`) and HTTP retries bind to a request hash (`apps/api/src/middleware.ts:302`); webhook records are deduplicated by `(fund_id, bank_reference)` (`packages/db/migrations/0019_bank_transactions.sql:26`). Forged unique references remain possible under D1.   |
+| D3 Amount or fund changes before verification            | T      | Medium   | **Partial**   | Pledge amounts require safe integer paise (`packages/ledger/src/operations.ts:347`) and exact amount/UTR matching (`apps/api/src/reconciliation/matching-engine.ts:54`), but an unauthenticated webhook can make the matching transaction assertion (`apps/api/src/app.ts:1729`).                                                               |
+| D4 QR swap at collection point                           | T, S   | High     | **Open**      | No QR generation or payment destination confirmation flow was found in the API contract; donation pledge handling starts at `apps/api/src/contract.ts:1412`.                                                                                                                                                                                    |
+| E1 Forged approval                                       | S      | High     | **Partial**   | Approvals require `can()` and action-bound PIN proof (`apps/api/src/app.ts:1034`, `apps/api/src/app.ts:1044`); concurrent PIN failures can defeat the lockout (`apps/api/src/pin/service.ts:243`). See SEC-2.                                                                                                                                   |
+| E2 Replayed request or approval action                   | R, T   | Medium   | **Partial**   | HTTP replay protection is implemented (`apps/api/src/middleware.ts:281`) and action tokens are one-use in memory (`apps/api/src/pin/store.ts:193`); OTP and auth routes bypass HTTP idempotency and rely on database challenge consumption (`apps/api/src/auth/stores.ts:617`). Action tokens are not shared across API processes.              |
+| E3 Treasurer approves own request                        | E      | High     | **Mitigated** | Route and state-machine checks reject requester self-approval (`apps/api/src/app.ts:1036`, `packages/ledger/src/expense/state-machine.ts:199`); tests cover this (`apps/api/src/expense.test.ts:270`, `packages/ledger/src/expense/state-machine.test.ts:162`).                                                                                 |
+| E4 Evidence swapped after approval                       | T      | High     | **Partial**   | Upload computes a server hash (`apps/api/src/app.ts:1608`) and reads verify it (`apps/api/src/integrity-job.ts:45`), but EXIF-stripped bytes are discarded and original bytes are returned to evidence readers (`apps/api/src/app.ts:1615`, `apps/api/src/app.ts:853`).                                                                         |
+| E5 Objection suppressed or resolved silently             | R, D   | Medium   | **Partial**   | The ledger state machine models objection windows and tests their transitions (`packages/ledger/src/expense/state-machine.test.ts:390`); no corresponding objection API route was found in `apps/api/src/contract.ts` or `apps/api/src/app.ts`, so end-to-end availability and authorization are not established.                               |
+| P1 Payout without an approved request                    | S, E   | High     | **Mitigated** | `/pay` checks `can()` and `status === approved` before committing the hold (`apps/api/src/app.ts:1167`); Postgres locks the expense row and commits the hold transactionally (`apps/api/src/expense-store.ts:80`, `apps/api/src/expense-store.ts:115`). API lifecycle tests cover status transitions (`apps/api/src/expense.test.ts:211`).      |
+| P2 Payout amount or payee differs from approval          | T      | High     | **Open**      | `/pay` trusts the supplied bank transaction ID (`apps/api/src/app.ts:1174`) and ledger settlement does not look up a bank debit (`packages/ledger/src/expense/service.ts:297`). The payee is not bound to an observed bank transaction. See SEC-3.                                                                                              |
+| P3 Duplicate or hidden payout                            | R, T   | Medium   | **Partial**   | HTTP requests are idempotent (`apps/api/src/middleware.ts:281`) and hold commits happen in the DB transaction (`packages/ledger/src/expense/service.ts:297`); no external bank transfer is executed or idempotently controlled by this repository.                                                                                              |
+| R1 Insider with DB write access rewrites history         | T, R   | High     | **Partial**   | Event rows are append-only for the app role, enforced by grants and triggers (`packages/db/migrations/0003_fund_events.sql:582`); tests verify UPDATE/DELETE/TRUNCATE rejection (`packages/db/src/events.test.ts:720`). A database owner can still bypass application-level controls; anchoring detects committed roots only after publication. |
+| R2 Truncated log                                         | T, R   | High     | **Mitigated** | Verification accepts an authenticated expected head and detects truncation (`packages/eventlog/src/chain.ts:82`, `packages/eventlog/src/eventlog.test.ts:749`). The caller must retain or obtain a trustworthy head.                                                                                                                            |
+| R3 Backdated event                                       | T, R   | Medium   | **Partial**   | Event construction rejects time moving before the prior event (`packages/eventlog/src/chain.ts:53`); it does not require event time to be close to trusted server time.                                                                                                                                                                         |
+| R4 Unapproved debit matched to an approved request       | S, T   | High     | **Open**      | Expense reconciliation compares only the caller-supplied transaction ID and writes `bank.debit_seen` without checking an ingested bank row (`apps/api/src/app.ts:1213`, `packages/ledger/src/expense/service.ts:351`). See SEC-3.                                                                                                               |
+| V1 Split view: different roots shown to different people | T, R   | High     | **Partial**   | The registry has one append-only sequence (`contracts/src/RootRegistry.sol:44`); worker reconciliation compares recomputed, persisted, and on-chain roots (`packages/queue/src/anchoring.ts:328`). A client consistency monitor and reorg recovery are not complete (`packages/queue/README.md:44`).                                            |
+| V2 Publisher key compromise                              | S, E   | High     | **Partial**   | KMS signing is supported (`packages/queue/src/anchoring.ts:98`), but CLI falls back to a local private key whenever KMS is unset (`packages/queue/src/cli.ts:43`). The contract has one publisher with two-step transfer, not a multisig (`contracts/src/RootRegistry.sol:29`, `contracts/src/RootRegistry.sol:63`). See SEC-5.                 |
+| V3 PII or sensitive linkage on chain                     | I      | High     | **Mitigated** | Event schemas are strict and use per-fund pseudonyms, with no phone, display name, contact, or user UUID fields (`packages/eventlog/src/model.ts:43`); pseudonym tests assert different IDs per fund (`packages/db/src/pseudonyms.test.ts:50`).                                                                                                 |
+| V4 Verify page shows unqualified “verified”              | T      | Medium   | **Mitigated** | Public timeline items are explicitly marked `unverified` (`apps/api/src/app.ts:802`); public proof tests check that raw evidence content is withheld from public viewers (`apps/api/src/public-expense.test.ts:160`).                                                                                                                           |
+| V5 Cross-fund linking through pseudonyms                 | I      | Medium   | **Mitigated** | Random pseudonyms are keyed per `(user, fund)` (`packages/db/src/pseudonyms.ts:35`); tests verify distinct pseudonyms across funds (`packages/db/src/pseudonyms.test.ts:50`).                                                                                                                                                                   |
+| V6 Erasure request conflicts with statutory retention    | R, I   | Medium   | **Open**      | Identity/contact data lives in `users` (`packages/db/migrations/0001_app_tables.sql:1`); no user-erasure workflow was found in `apps/api/src/auth/stores.ts` or the API contract. Retention and erasure policy remains unimplemented in this code review.                                                                                       |
+| X1 Phone or waitlist enumeration                         | I      | Medium   | **Mitigated** | Unknown phone and invalid code return the same error (`apps/api/src/auth.test.ts:455`); OTP attempts are limited across channels (`apps/api/src/auth.test.ts:415`).                                                                                                                                                                             |
+| X2 Rate-limit evasion                                    | D      | Medium   | **Partial**   | Production bootstrap uses Postgres-backed rate limits (`apps/api/src/server-bootstrap.ts:114`); client IP ignores forwarded headers unless trusted hops are configured (`apps/api/src/client-ip.ts:109`). Distributed sources can still spread requests across IP buckets.                                                                      |
+| X3 External attacker on the public API                   | S, E   | Medium   | **Partial**   | Fund/auth routes require a principal (`apps/api/src/app.ts:290`, `apps/api/src/app.ts:303`) and public read/donation paths are explicit (`apps/api/src/middleware.ts:19`). Partner webhook is an unauthenticated exception (`apps/api/src/app.ts:1727`).                                                                                        |
+| X4 Member grants self a role                             | E      | High     | **Partial**   | Fund member routes call `authorizedFund` (`apps/api/src/auth/invite-routes.ts:37`); owner-vouched completion creates only role `member` (`apps/api/src/auth/stores.ts:715`). The production bootstrap currently has no persistent fund policy adapter, so full deployed membership authorization was not established.                           |
+| X5 Compromised platform operator                         | T, R   | High     | **Partial**   | Hash chaining and append-only triggers help detect retrospective edits (`packages/db/src/events.ts:295`, `packages/db/migrations/0003_fund_events.sql:582`); an operator can still append false data before it is anchored, and D1 is an unauthenticated false-data path.                                                                       |
+| X6 Dev principal reaches production                      | E      | Low      | **Mitigated** | Default principal is null and default policy is deny-all (`apps/api/src/dependencies.ts:282`); production server startup requires a Postgres expense store and does not accept a principal override (`apps/api/src/dependencies.ts:233`, `apps/api/src/server-bootstrap.ts:144`).                                                               |
+| X7 Approver credential or PIN compromise                 | S      | High     | **Partial**   | PINs use a keyed HMAC (`apps/api/src/pin/crypto.ts:20`), protected routes require PIN or bound one-use token (`apps/api/src/pin/service.ts:468`), but lockout counters race under concurrency (SEC-2).                                                                                                                                          |
+| X8 SIM swap or recycled number inherits roles            | S, E   | High     | **Partial**   | OTP authenticates phone possession, but an untrusted device does not get a principal until device trust requirements pass (`apps/api/src/middleware.ts:105`); reset enters a cooling-off period and notifies members (`apps/api/src/pin/service.ts:423`). Phone recycling and recovery policy still depend on operational response.             |
+| X9 PIN online brute force                                | S      | High     | **Partial**   | Sequential failures trigger five-attempt/30-minute and ten-attempt/24-hour lockouts (`apps/api/src/pin/service.ts:251`, `apps/api/src/pin/service.ts:274`), but lost updates allow concurrent attempts to bypass those counters (SEC-2).                                                                                                        |
+| X10 PIN offline cracking after database leak             | I, S   | High     | **Partial**   | PIN hash is keyed with `PIN_HMAC_SECRET` (`apps/api/src/pin/crypto.ts:20`) and invalid short keys are rejected (`apps/api/src/dependencies.ts:130`); production env parsing does not require this key, though missing key makes PIN actions fail closed (`apps/api/src/pin/service.ts:60`).                                                     |
+| X11 PIN phishing on lookalike site                       | S      | High     | **Open**      | Approval proof binds to action details and expires (`apps/api/src/pin/service.ts:468`), but the PIN itself is reusable and no hardware-backed approval is used by this route.                                                                                                                                                                   |
+| X12 Owner-vouched invite interception                    | S, E   | Medium   | **Partial**   | Invite code is random, stored hashed, time-limited, phone-bound, and owner-confirmed (`apps/api/src/auth/invite-routes.ts:42`, `apps/api/src/auth/stores.ts:664`, `apps/api/src/auth/stores.ts:679`). It remains a bearer secret delivered by an out-of-band channel.                                                                           |
+
+## Additional findings from this review
+
+| Finding                                              | STRIDE | Severity | Status   | Evidence                                                                                                                              |
+| ---------------------------------------------------- | ------ | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| SEC-1 Unauthenticated partner webhook                | S, T   | High     | **Open** | `apps/api/src/app.ts:1727`; [issue #102](https://github.com/aetosdios27/Yen/issues/102).                                              |
+| SEC-2 PIN lockout lost-update race                   | S, T   | High     | **Open** | `apps/api/src/pin/service.ts:243`, `packages/db/src/approval-pin.ts:63`; [issue #103](https://github.com/aetosdios27/Yen/issues/103). |
+| SEC-3 Caller-chosen expense bank transaction ID      | T, R   | Medium   | **Open** | `apps/api/src/app.ts:1174`, `apps/api/src/app.ts:1213`, `packages/ledger/src/expense/service.ts:351`.                                 |
+| SEC-4 Raw evidence retains EXIF                      | I      | Medium   | **Open** | `apps/api/src/app.ts:1615`, `apps/api/src/app.ts:853`.                                                                                |
+| SEC-5 Local signer fallback is not environment-gated | E      | Medium   | **Open** | `packages/queue/src/cli.ts:43`.                                                                                                       |
+| SEC-6 No repository-defined browser security headers | E, I   | Low      | **Open** | `apps/web/next.config.ts:11`, `apps/web/vercel.json:1`.                                                                               |
+
+## Operational and deployment limits
+
+- The RootRegistry contract contains only roots and publication sequence; it cannot prove event completeness, off-chain availability, or finality (`contracts/src/RootRegistry.sol:5`, `contracts/src/RootRegistry.sol:10`).
+- Queue anchoring has KMS support and root comparison, but production key selection must be fixed before claims about KMS-only custody are made (`packages/queue/src/cli.ts:43`).
+- The code review did not verify a live bank partner, a production policy/fund-store adapter, production proxy/CORS/header settings, deployed contracts, AWS KMS IAM policy, or a production evidence-storage bucket. Those deployment controls remain outside the evidence in this repository.
