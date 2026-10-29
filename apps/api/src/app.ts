@@ -506,6 +506,52 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const principal = authorizedFund(c, "fund:read", resource);
     return c.json(deps.policy.redact(principal, resource), 200);
   });
+  const donationResource = (id: string) => {
+    const fund = funds.get(id);
+    if (!fund) throw new ApiError("not_found");
+    return { kind: "fund", fund } as const;
+  };
+  app.openapi(donationDetailsRoute, (c) => {
+    const id = parseFundId(c.req.valid("param").fundId);
+    if (!id.ok) throw new ApiError("not_found");
+    const resource = donationResource(id.value);
+    if (!deps.policy.canDonate(resource)) throw new ApiError("not_found");
+    return c.json(deps.policy.redactDonationDetails(resource), 200);
+  });
+  app.openapi(pledgeDonationRoute, async (c) => {
+    const id = parseFundId(c.req.valid("param").fundId);
+    if (!id.ok) throw new ApiError("not_found");
+    const resource = donationResource(id.value);
+    if (!deps.policy.canDonate(resource)) throw new ApiError("not_found");
+    const input = c.req.valid("json");
+    const donorContact =
+      input.donorContact === undefined ? undefined : normalizeWaitlistContact(input.donorContact);
+    if (donorContact === null) {
+      throw new ApiError("validation_failed", [
+        {
+          path: ["json", "donorContact"],
+          message: "Expected an email address or an Indian mobile number",
+        },
+      ]);
+    }
+    const outcome = await deps.donationPledgeStore.pledge({
+      fundId: id.value,
+      amountPaise: Number(input.amountPaise),
+      utr: input.utr,
+      ...(input.donorName === undefined ? {} : { donorName: input.donorName }),
+      ...(donorContact === undefined ? {} : { donorContact }),
+    });
+    if (outcome.kind === "duplicate_utr") throw new ApiError("donation_utr_claimed");
+    return c.json(
+      {
+        donationId: outcome.donationId,
+        fundId: id.value,
+        status: "pledged" as const,
+        amountPaise: input.amountPaise,
+      },
+      201,
+    );
+  });
 
   const defaultFundPolicy: FundPolicy = {
     approvalQuorum: 2,
