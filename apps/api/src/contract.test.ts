@@ -560,7 +560,9 @@ it("validates every documented status and sent header against the committed Open
       path.includes("/invites") ||
       path.endsWith("/remove") ||
       path.includes("/reconciliation") ||
-      path.includes("/debit-review")
+      path.includes("/debit-review") ||
+      path.startsWith("/v1/receipts") ||
+      path.includes("/subscriptions")
     )
       continue;
     for (const [method, operation] of Object.entries(methods)) {

@@ -27,6 +27,14 @@ export function isPublicDonationRoute(path: string): boolean {
   return /^\/v1\/funds\/[0-9a-f-]{36}\/(?:donations\/pledge|donation-details)\/?$/.test(path);
 }
 
+export function isSubscriptionRoute(path: string): boolean {
+  const clean = path.replace(/\/$/, "");
+  return (
+    clean === "/v1/subscriptions/unsubscribe" ||
+    /^\/v1\/funds\/[0-9a-f-]{36}\/subscriptions\/?$/.test(clean)
+  );
+}
+
 export function isPartnerWebhookRoute(path: string): boolean {
   return path.replace(/\/$/, "") === "/v1/reconciliation/webhooks/partner";
 }
@@ -333,6 +341,7 @@ export function idempotency(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
       ["GET", "HEAD", "OPTIONS"].includes(c.req.method) ||
       isWaitlistRoute(c.req.path) ||
       isAuthRoute(c.req.path) ||
+      isSubscriptionRoute(c.req.path) ||
       (c.req.method === "POST" && isOwnerInviteIssueRoute(c.req.path)) ||
       isPartnerWebhookRoute(c.req.path) ||
       isStatementUploadRoute(c.req.path)

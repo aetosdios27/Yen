@@ -3,6 +3,7 @@ import type { AppendEventInput, StoredFundEvent, WaitlistEntry } from "@yen/db";
 import { uuidv7 } from "@yen/db";
 import { type PseudonymId, parsePseudonymId } from "@yen/eventlog";
 import { type ApprovalProofVerifier, type ExpenseStore, InMemoryExpenseStore } from "@yen/ledger";
+import { type FundSubscriptionStore, MemoryFundSubscriptionStore } from "@yen/notifications";
 import type { FundRole } from "@yen/policy";
 import { failClosedPayeeVerifier, type PayeeVerifier } from "@yen/policy";
 import type { DeliveryProvider } from "@yen/shared";
@@ -36,6 +37,7 @@ import {
 import type { FundRecord } from "./policy.js";
 import { DEFAULT_OBJECTION_WINDOW_HOURS, denyAllPolicy, type Policy } from "./policy.js";
 import { MemoryPrivacyStore, type PrivacyStore } from "./privacy-store.js";
+import { MemoryReceiptStore, type ReceiptStore } from "./receipt-store.js";
 import {
   MemoryReconciliationStore,
   type ReconciliationStore,
@@ -160,10 +162,27 @@ export class MemoryDisplayNameStore implements DisplayNameStore {
 export class MemoryDonationPledgeStore implements DonationPledgeStore {
   private readonly claimed = new Set<string>();
 
+  constructor(private readonly receiptStore?: ReceiptStore) {}
+
   async pledge(request: DonationPledgeRequest): Promise<DonationPledgeOutcome> {
     if (this.claimed.has(request.utr)) return { kind: "duplicate_utr" };
     this.claimed.add(request.utr);
-    return { kind: "pledged", donationId: crypto.randomUUID() };
+    const donationId = crypto.randomUUID();
+    if (this.receiptStore?.addReceipt) {
+      await this.receiptStore.addReceipt({
+        donationId,
+        fundId: request.fundId,
+        fundTitle: "Community Fund",
+        amountPaise: request.amountPaise,
+        utr: request.utr,
+        donorDisplayName: request.donorName,
+        donorNameChoice: request.donorNameChoice,
+        status: "pledged",
+        createdAt: new Date().toISOString(),
+        proofUrl: `/verify?donationId=${encodeURIComponent(donationId)}`,
+      });
+    }
+    return { kind: "pledged", donationId };
   }
 }
 
@@ -367,6 +386,8 @@ export interface AppDependencies {
   readonly donationPledgeStore: DonationPledgeStore;
   readonly publicFundReadStore: PublicFundReadStore;
   readonly reconciliationStore: ReconciliationStore;
+  readonly receiptStore: ReceiptStore;
+  readonly fundSubscriptionStore: FundSubscriptionStore;
   readonly displayNameStore: DisplayNameStore;
   readonly pledgeLimit: RateLimit;
   readonly pledgeBodyLimit: number;
@@ -477,6 +498,9 @@ export function defaultDependencies(
   });
   const actors = new Map<string, PseudonymId>();
 
+  const receiptStore = new MemoryReceiptStore();
+  const fundSubscriptionStore = new MemoryFundSubscriptionStore();
+
   return {
     waitlistStore: new MemoryWaitlistStore(),
     expenseStore: resolvedExpenseStore,
@@ -494,9 +518,11 @@ export function defaultDependencies(
     },
     alertStore: new MemoryAlertStore(),
     approvalProofVerifier: (signature) => signature.credentialId === "pin-proof",
-    donationPledgeStore: new MemoryDonationPledgeStore(),
+    donationPledgeStore: new MemoryDonationPledgeStore(receiptStore),
     publicFundReadStore: new MemoryPublicFundReadStore(),
     reconciliationStore: new MemoryReconciliationStore(),
+    receiptStore,
+    fundSubscriptionStore,
     displayNameStore: new MemoryDisplayNameStore(),
     pledgeLimit: { capacity: 10, refillMs: 3600000 },
     pledgeBodyLimit: 4096,
