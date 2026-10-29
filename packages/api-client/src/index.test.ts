@@ -4,7 +4,7 @@ import { createYenClient } from "./index.js";
 
 function client() {
   const app = createApp({
-    principal: { id: "00000000-0000-4000-8000-000000000001" },
+    principal: { id: "00000000-0000-4000-8000-000000000001", role: "owner" },
     logger: { log: () => undefined },
     policy: devPolicy,
   });
@@ -18,7 +18,12 @@ it("creates, reads, and replays a fund using the generated contract", async () =
   const api = client();
   const options = {
     params: { header: { "Idempotency-Key": "frontend-create-fund" } },
-    body: { name: "Festival", targetPaise: "9007199254740993" },
+    body: {
+      name: "Festival",
+      targetPaise: "9007199254740993",
+      upiVpa: "festival@yenbank",
+      upiPayeeName: "Festival Committee",
+    },
   };
   const created = await api.POST("/v1/funds", options);
   expect(created.response.status).toBe(201);
@@ -37,7 +42,12 @@ it("exposes typed errors and validation field paths", async () => {
   const api = client();
   const response = await api.POST("/v1/funds", {
     params: { header: { "Idempotency-Key": "invalid-input" } },
-    body: { name: "", targetPaise: "-1" },
+    body: {
+      name: "",
+      targetPaise: "-1",
+      upiVpa: "festival@yenbank",
+      upiPayeeName: "Festival Committee",
+    },
   });
   expect(response.data).toBeUndefined();
   expect(response.error?.error.code).toBe("validation_failed");

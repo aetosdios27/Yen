@@ -30,10 +30,13 @@ const pseudoMessages = flatten(catalog["en-XA"]);
 /** Brand names and autonyms are intentionally the same in every locale. */
 const IDENTICAL_BY_DESIGN = new Set([
   "app.name",
-  "home.title",
   "locale.en",
   "locale.hi",
   "designSystem.inputErrorPlaceholder",
+  "expenseForm.amountPlaceholder",
+  "expenseForm.payeeUpiPlaceholder",
+  "auth.phonePlaceholder",
+  "auth.otpPlaceholder",
 ]);
 
 const PLACEHOLDER = /\{\w+\}/g;

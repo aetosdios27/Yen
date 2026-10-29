@@ -1,6 +1,6 @@
 # ADR 0002: Job Queue and Outbox Runtime
 
-Status: Accepted for YEN-62  
+Status: Accepted for YEN-62
 Date: 2026-10-27
 
 ## Context
