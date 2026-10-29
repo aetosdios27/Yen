@@ -122,6 +122,7 @@ import {
   isPublicDonationRoute,
   isPublicFundReadRoute,
   isWaitlistRoute,
+  partnerWebhookAuth,
   rateLimit,
   requestContext,
   requestTimeout,
@@ -304,6 +305,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     return defaultBodyLimit(c, next);
   });
   app.use("/v1/*", idempotency(deps));
+  app.post(partnerWebhookRoute.path, partnerWebhookAuth(deps));
   app.use("/v1/me", requireAuth);
   app.use("/v1/funds/*", async (c, next) => {
     if (isPublicFundReadRoute(c.req.path) && c.get("principal")) {

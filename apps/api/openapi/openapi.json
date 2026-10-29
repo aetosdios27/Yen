@@ -10130,7 +10130,7 @@
         "tags": ["reconciliation"],
         "operationId": "partnerWebhook",
         "summary": "Payment partner webhook",
-        "description": "Idempotent webhook receiver for payment partner notifications (e.g. UPI virtual account credit).",
+        "description": "Idempotent webhook receiver for payment partner notifications (e.g. UPI virtual account credit). Requests must carry `X-Webhook-Timestamp` (Unix seconds, within five minutes of server time) and `X-Webhook-Signature`, the lowercase hex HMAC-SHA256 of `v1.<timestamp>.<raw body>` under the shared partner secret. Unsigned, stale, future-dated, or tampered requests are rejected with 401 before the body is parsed.",
         "requestBody": {
           "required": true,
           "content": {
@@ -10169,6 +10169,19 @@
               "x-trace-id": {
                 "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
                 "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
                 "required": true
               }
             },

@@ -8,6 +8,11 @@ import { idempotencyKey } from "./contract.js";
 import type { ApiEnv, AppDependencies } from "./dependencies.js";
 import { ApiError, errorBody, errorStatus, StoreError } from "./errors.js";
 import { logMethod } from "./logging.js";
+import {
+  PARTNER_SIGNATURE_HEADER,
+  PARTNER_TIMESTAMP_HEADER,
+  verifyPartnerWebhook,
+} from "./reconciliation/webhook-signature.js";
 import { recordRequest, runRequestSpan, startRequestSpan } from "./telemetry.js";
 
 export function isWaitlistRoute(path: string): boolean {
@@ -303,6 +308,21 @@ export function rateLimit(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
         throw new ApiError(result.overloaded ? "overloaded" : "rate_limited");
       }
     }
+    await next();
+  };
+}
+
+export function partnerWebhookAuth(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
+  return async (c, next) => {
+    const rawBody = new Uint8Array(await c.req.arrayBuffer());
+    const authentic = verifyPartnerWebhook({
+      secret: deps.partnerWebhookSecret,
+      signature: c.req.header(PARTNER_SIGNATURE_HEADER),
+      timestamp: c.req.header(PARTNER_TIMESTAMP_HEADER),
+      rawBody,
+      nowMs: deps.clock(),
+    });
+    if (!authentic) throw new ApiError("unauthenticated");
     await next();
   };
 }
