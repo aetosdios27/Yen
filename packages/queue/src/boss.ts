@@ -9,12 +9,22 @@ import type { WorkerRuntimeOptions } from "./types.js";
  */
 export function createPgBoss(options: WorkerRuntimeOptions): PgBoss {
   const schema = options.schema ?? DEFAULT_SCHEMA;
-  return new PgBoss({
-    connectionString: options.connectionString,
-    schema,
-    migrate: options.migrate ?? false,
-    supervise: true,
+  return observePgBossErrors(
+    new PgBoss({
+      connectionString: options.connectionString,
+      schema,
+      migrate: options.migrate ?? false,
+      supervise: true,
+    }),
+  );
+}
+
+/** pg-boss reports asynchronous database and worker failures through this event. */
+export function observePgBossErrors(boss: PgBoss): PgBoss {
+  boss.on("error", (error: Error) => {
+    process.stderr.write(`pg-boss error: ${error.message}\n`);
   });
+  return boss;
 }
 
 /**
@@ -26,13 +36,15 @@ export async function ensureQueueSchema(
   connectionString: string,
   schema: string = DEFAULT_SCHEMA,
 ): Promise<void> {
-  const boss = new PgBoss({
-    connectionString,
-    schema,
-    migrate: true,
-    supervise: false,
-    schedule: false,
-  });
+  const boss = observePgBossErrors(
+    new PgBoss({
+      connectionString,
+      schema,
+      migrate: true,
+      supervise: false,
+      schedule: false,
+    }),
+  );
   await boss.start();
   await boss.stop();
 }
