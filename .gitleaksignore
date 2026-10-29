@@ -4,3 +4,6 @@
 
 # Historical synthetic tracing-test PIN fixture; current tests generate it at runtime.
 1a4f675b58b067822b1c77a69211969b374c8a20:apps/api/src/expense-postgres.test.ts:generic-api-key:382
+# Synthetic notification idempotency fixtures from the initial YEN-76 commit; values were replaced in the current tree.
+740121005bd24b363837aa8afedb6222610a03b9:packages/notifications/src/store.test.ts:generic-api-key:53
+740121005bd24b363837aa8afedb6222610a03b9:packages/notifications/src/store.test.ts:generic-api-key:127
