@@ -11,6 +11,7 @@ import { DefaultInFlightTracker } from "./dependencies.js";
 import { PostgresDisplayNameStore } from "./display-name-store.js";
 import { PostgresDonationPledgeStore } from "./donation-store.js";
 import { PostgresExpenseStore } from "./expense-store.js";
+import { PostgresFundStore } from "./fund-store.js";
 import { createServerLifecycle, type ServerLifecycle, shutdownOnSignal } from "./lifecycle.js";
 import { PostgresPinStore } from "./pin/index.js";
 import { PostgresReconciliationStore } from "./reconciliation/postgres-store.js";
@@ -157,6 +158,7 @@ export async function startServer(
     ...(sql ? { reconciliationStore: new PostgresReconciliationStore(sql) } : {}),
     ...(sql ? { displayNameStore: new PostgresDisplayNameStore(sql) } : {}),
     ...(sql ? { expenseStore: new PostgresExpenseStore(sql) } : {}),
+    ...(sql ? { fundStore: new PostgresFundStore(sql) } : {}),
     ...(sql
       ? {
           actorForUser: (userId: string, fundId: string) =>
