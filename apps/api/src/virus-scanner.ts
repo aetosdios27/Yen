@@ -1,4 +1,5 @@
 import { createConnection, type Socket } from "node:net";
+import { ResilientCall } from "@yen/shared";
 
 export type VirusScanResult =
   | { readonly status: "clean"; readonly scannerName: string; readonly signatureVersion: string }
@@ -40,7 +41,17 @@ export interface ClamAvOptions {
 /** ClamAV daemon adapter using its length-framed INSTREAM TCP protocol. */
 export class ClamAvVirusScannerAdapter implements VirusScannerAdapter {
   readonly scannerName = "ClamAV";
-  constructor(private readonly options: ClamAvOptions) {}
+  private readonly resilient: ResilientCall;
+  constructor(private readonly options: ClamAvOptions) {
+    this.resilient = new ResilientCall({
+      timeoutMs: options.timeoutMs,
+      maxAttempts: 2,
+      baseDelayMs: 100,
+      maxDelayMs: 500,
+      failureThreshold: 3,
+      resetAfterMs: 5_000,
+    });
+  }
 
   async scan(input: { objectKey: string; data: Uint8Array }): Promise<VirusScanResult> {
     if (input.data.byteLength > this.options.maxSizeBytes)
@@ -50,10 +61,10 @@ export class ClamAvVirusScannerAdapter implements VirusScannerAdapter {
         scannerName: this.scannerName,
       };
     try {
-      const signatureVersion = await this.command("VERSION");
+      const signatureVersion = await this.resilient.run(() => this.command("VERSION"));
       if (!signatureVersion.startsWith("ClamAV "))
         throw new Error(`Unexpected clamd version reply: ${signatureVersion}`);
-      const reply = await this.stream(input.data);
+      const reply = await this.resilient.run(() => this.stream(input.data));
       if (reply.endsWith(" OK"))
         return { status: "clean", scannerName: this.scannerName, signatureVersion };
       const found = reply.match(/: (.+) FOUND$/);

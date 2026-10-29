@@ -17,6 +17,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:chaos": "vitest run src/chaos.test.ts",
+    "test:chaos:randomized": "YEN_RUN_1000_CHAOS=1 vitest run src/chaos.randomized.test.ts",
     "invariants:load": "pnpm --workspace-root exec turbo run build --filter=@yen/ledger... && node scripts/invariants-load.mjs",
     "backup:restore": "pnpm --filter @yen/ledger build && bash scripts/backup-restore.sh",
     "chaos:restart": "vitest run src/restart.test.ts"
@@ -32,6 +33,8 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "@yen/notifications": "workspace:*",
+    "@yen/queue": "workspace:*",
     "fast-check": "^4.10.2",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"

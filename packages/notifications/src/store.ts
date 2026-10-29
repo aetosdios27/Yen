@@ -293,7 +293,13 @@ export class PostgresNotificationStore implements NotificationStore {
       [leaseExpiresAt, now, batchSize],
     )) as NotificationOutboxRow[];
 
-    return rows;
+    return rows.map((row) => ({
+      ...row,
+      template_data:
+        typeof row.template_data === "string"
+          ? (JSON.parse(row.template_data) as NotificationOutboxRow["template_data"])
+          : row.template_data,
+    }));
   }
 
   async ownsClaim(id: string, claimToken: string, now: Date = new Date()): Promise<boolean> {

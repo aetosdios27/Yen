@@ -6,7 +6,15 @@ import {
   SignCommand,
 } from "@aws-sdk/client-kms";
 import { createSql, type Sql } from "@yen/db";
-import { buildIntervalTree, hash32, parseFundId, salt32, toHex } from "@yen/shared";
+import {
+  buildIntervalTree,
+  hash32,
+  parseFundId,
+  type ResilienceOptions,
+  ResilientCall,
+  salt32,
+  toHex,
+} from "@yen/shared";
 import type { PgBoss } from "pg-boss";
 import {
   type Account,
@@ -190,14 +198,56 @@ export type RootChain = {
   getBalance(address: `0x${string}`): Promise<bigint>;
   chainId: bigint;
 };
-export type AnchorAlertSink = {
-  emit(alert: {
-    type: "anchor.stale" | "anchor.root_mismatch" | "anchor.wallet_low";
-    fundId?: string;
-    sequence?: bigint;
-    details: string;
-  }): Promise<void>;
+export type AnchorAlert = {
+  type: "anchor.stale" | "anchor.root_mismatch" | "anchor.wallet_low" | "anchor.rpc_unavailable";
+  fundId?: string;
+  sequence?: bigint;
+  details: string;
 };
+export type AnchorAlertSink = { emit(alert: AnchorAlert): Promise<void> };
+
+export const ANCHOR_RPC_RESILIENCE_OPTIONS: ResilienceOptions = {
+  timeoutMs: 10_000,
+  maxAttempts: 3,
+  baseDelayMs: 250,
+  maxDelayMs: 2_000,
+  failureThreshold: 3,
+  resetAfterMs: 30_000,
+};
+
+export function createAnchorRpcResilience(): ResilientCall {
+  return new ResilientCall(ANCHOR_RPC_RESILIENCE_OPTIONS);
+}
+
+export const stderrAnchorAlertSink: AnchorAlertSink = {
+  async emit(alert) {
+    process.stderr.write(
+      `${JSON.stringify({ level: "alert", ...alert }, (_, value: unknown) =>
+        typeof value === "bigint" ? value.toString() : value,
+      )}\n`,
+    );
+  },
+};
+
+async function chainCall<T>(
+  resilience: ResilientCall,
+  alerts: AnchorAlertSink,
+  operation: string,
+  call: () => Promise<T>,
+  context: { fundId?: string; sequence?: bigint } = {},
+  maxAttempts = ANCHOR_RPC_RESILIENCE_OPTIONS.maxAttempts,
+): Promise<T> {
+  try {
+    return await resilience.run(call, { maxAttempts });
+  } catch (error) {
+    await alerts.emit({
+      type: "anchor.rpc_unavailable",
+      ...context,
+      details: `${operation}: ${error instanceof Error ? error.message : String(error)}`,
+    });
+    throw error;
+  }
+}
 
 export async function reconcileAnchors(
   sql: Sql,
@@ -205,8 +255,13 @@ export async function reconcileAnchors(
   alerts: AnchorAlertSink,
   now = new Date(),
   walletAddress?: `0x${string}`,
+  resilience = createAnchorRpcResilience(),
 ): Promise<void> {
-  if (walletAddress && (await chain.getBalance(walletAddress)) < 50_000_000_000_000_000n)
+  if (
+    walletAddress &&
+    (await chainCall(resilience, alerts, "getBalance", () => chain.getBalance(walletAddress))) <
+      50_000_000_000_000_000n
+  )
     await alerts.emit({
       type: "anchor.wallet_low",
       details: "Publisher balance is below 0.05 native token; fund it before anchoring is blocked",
@@ -270,7 +325,13 @@ export async function reconcileAnchors(
       ]);
       computedRoot = toHex(tree.root);
     }
-    const actual = await chain.getRoot(anchor.chain_sequence);
+    const actual = await chainCall(
+      resilience,
+      alerts,
+      "getRoot",
+      () => chain.getRoot(anchor.chain_sequence),
+      { fundId: anchor.fund_id, sequence: anchor.chain_sequence },
+    );
     if (
       computedRoot === null ||
       computedRoot.toLowerCase() !== actual.toLowerCase() ||
@@ -304,7 +365,18 @@ export class AnchoringWorker {
     private readonly sql: Sql,
     private readonly chain: RootChain,
     private readonly signer: RootSigner,
+    private readonly alerts: AnchorAlertSink = stderrAnchorAlertSink,
+    private readonly resilience: ResilientCall = createAnchorRpcResilience(),
   ) {}
+
+  private chainCall<T>(
+    operation: string,
+    call: () => Promise<T>,
+    context: { fundId?: string; sequence?: bigint } = {},
+    maxAttempts = ANCHOR_RPC_RESILIENCE_OPTIONS.maxAttempts,
+  ): Promise<T> {
+    return chainCall(this.resilience, this.alerts, operation, call, context, maxAttempts);
+  }
 
   async runFund(fundId: string): Promise<void> {
     const parsed = parseFundId(fundId);
@@ -350,7 +422,10 @@ export class AnchoringWorker {
         const databaseSequence = seqRows[0]?.next_sequence;
         if (databaseSequence === undefined)
           throw new Error("Could not allocate an anchor sequence");
-        const chainSequence = (await this.chain.getLatestSequence()) + 1n;
+        const chainSequence =
+          (await this.chainCall("getLatestSequence", () => this.chain.getLatestSequence(), {
+            fundId: fund,
+          })) + 1n;
         const nextSequence = databaseSequence > chainSequence ? databaseSequence : chainSequence;
         const inserted = await tx<
           AnchorRow[]
@@ -377,14 +452,29 @@ export class AnchoringWorker {
   }
 
   private async recoverPublishedAnchor(anchor: AnchorRow, sequence: bigint): Promise<boolean> {
-    const published = await this.chain.getRoot(sequence);
+    const published = await this.chainCall("getRoot", () => this.chain.getRoot(sequence), {
+      fundId: anchor.fund_id,
+      sequence,
+    });
     if (published.toLowerCase() !== `0x${anchor.root}`.toLowerCase()) return false;
-    const publication = await this.chain.getPublication(sequence);
+    const publication = await this.chainCall(
+      "getPublication",
+      () => this.chain.getPublication(sequence),
+      { fundId: anchor.fund_id, sequence },
+    );
     if (!publication)
       throw new Error("Root is present but its publication receipt is not yet available");
     await this
       .sql`UPDATE anchors SET status = 'submitted', tx_hash = ${publication.txHash} WHERE id = ${anchor.id}`;
-    if ((await this.chain.getBlockNumber()) - publication.blockNumber + 1n >= 12n)
+    if (
+      (await this.chainCall("getBlockNumber", () => this.chain.getBlockNumber(), {
+        fundId: anchor.fund_id,
+        sequence,
+      })) -
+        publication.blockNumber +
+        1n >=
+      12n
+    )
       await this
         .sql`UPDATE anchors SET status = 'confirmed', confirmed_at = CURRENT_TIMESTAMP WHERE id = ${anchor.id}`;
     return true;
@@ -394,20 +484,38 @@ export class AnchoringWorker {
     const sequence = BigInt(anchor.chain_sequence);
     if (anchor.status === "confirmed") return;
     if (anchor.status === "submitted" && anchor.tx_hash) {
-      const receipt = await this.chain.getReceipt(anchor.tx_hash);
+      const receipt = await this.chainCall(
+        "getReceipt",
+        () => this.chain.getReceipt(anchor.tx_hash as string),
+        { fundId: anchor.fund_id, sequence },
+      );
       if (receipt?.status === "success" && receipt.blockNumber !== undefined) {
-        if ((await this.chain.getBlockNumber()) - receipt.blockNumber + 1n >= 12n)
+        if (
+          (await this.chainCall("getBlockNumber", () => this.chain.getBlockNumber(), {
+            fundId: anchor.fund_id,
+            sequence,
+          })) -
+            receipt.blockNumber +
+            1n >=
+          12n
+        )
           await this
             .sql`UPDATE anchors SET status = 'confirmed', confirmed_at = CURRENT_TIMESTAMP WHERE id = ${anchor.id}`;
         return;
       }
       if (receipt?.status === "pending") {
         if (Date.now() - new Date(anchor.created_at).getTime() < 10 * 60 * 1000) return;
-        const replacement = await this.chain.replacePending(
-          anchor.tx_hash,
-          `0x${anchor.root}`,
-          sequence,
-          this.signer,
+        const replacement = await this.chainCall(
+          "replacePending",
+          () =>
+            this.chain.replacePending(
+              anchor.tx_hash as string,
+              `0x${anchor.root}`,
+              sequence,
+              this.signer,
+            ),
+          { fundId: anchor.fund_id, sequence },
+          1,
         );
         await this.sql`UPDATE anchors SET tx_hash = ${replacement} WHERE id = ${anchor.id}`;
         return;
@@ -422,11 +530,20 @@ export class AnchoringWorker {
       }
     }
     if (await this.recoverPublishedAnchor(anchor, sequence)) return;
-    const latestSequence = await this.chain.getLatestSequence();
+    const latestSequence = await this.chainCall(
+      "getLatestSequence",
+      () => this.chain.getLatestSequence(),
+      { fundId: anchor.fund_id, sequence },
+    );
     if (sequence <= latestSequence) {
       throw new Error("Anchor sequence is already occupied by a different on-chain root");
     }
-    const hash = await this.chain.publish(`0x${anchor.root}`, sequence, this.signer);
+    const hash = await this.chainCall(
+      "publish",
+      () => this.chain.publish(`0x${anchor.root}`, sequence, this.signer),
+      { fundId: anchor.fund_id, sequence },
+      1,
+    );
     await this
       .sql`UPDATE anchors SET status = 'submitted', tx_hash = ${hash} WHERE id = ${anchor.id}`;
   }
@@ -609,10 +726,11 @@ export async function registerAnchorReconciliation(
   chain: RootChain,
   alerts: AnchorAlertSink,
   walletAddress?: `0x${string}`,
+  resilience = createAnchorRpcResilience(),
 ): Promise<void> {
   await boss.createQueue("blockchain-anchoring-reconcile");
   await boss.work("blockchain-anchoring-reconcile", { batchSize: 1 }, async () => {
-    await reconcileAnchors(sql, chain, alerts, new Date(), walletAddress);
+    await reconcileAnchors(sql, chain, alerts, new Date(), walletAddress, resilience);
   });
   await boss.schedule("blockchain-anchoring-reconcile", "*/5 * * * *", {});
 }
@@ -621,6 +739,8 @@ export function createAnchoringWorker(
   connectionString: string,
   chain: RootChain,
   signer: RootSigner,
+  alerts: AnchorAlertSink = stderrAnchorAlertSink,
+  resilience = createAnchorRpcResilience(),
 ): AnchoringWorker {
-  return new AnchoringWorker(createSql(connectionString), chain, signer);
+  return new AnchoringWorker(createSql(connectionString), chain, signer, alerts, resilience);
 }
