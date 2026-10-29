@@ -19,10 +19,7 @@ describePostgres("Queue and Migration Runner Schema Coexistence", (adminUrl) => 
   afterAll(async () => {
     try {
       await sql.end({ timeout: 5 });
-      await new Promise((r) => setTimeout(r, 200));
-      await admin`DROP DATABASE IF EXISTS ${admin(testDbName)} WITH (FORCE)`;
-    } catch {
-      // Ignored
+      await admin`DROP DATABASE IF EXISTS ${admin(testDbName)}`;
     } finally {
       await admin.end({ timeout: 5 });
     }
