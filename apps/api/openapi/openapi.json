@@ -210,6 +210,7 @@
         "type": "object",
         "properties": {
           "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "purpose": { "type": "string", "minLength": 1, "maxLength": 500 },
           "targetPaise": {
             "type": "string",
             "pattern": "^(0|[1-9][0-9]*)$",
@@ -217,23 +218,34 @@
           },
           "upiVpa": { "type": "string", "pattern": "^[a-zA-Z0-9._-]{2,256}@[a-zA-Z]{2,64}$" },
           "upiPayeeName": { "type": "string", "minLength": 1, "maxLength": 80 },
+          "visibility": { "type": "string", "enum": ["public", "donors", "members", "private"] },
           "id": { "type": "string", "format": "uuid" },
           "createdAt": { "type": "string", "format": "date-time" }
         },
-        "required": ["name", "targetPaise", "upiVpa", "upiPayeeName", "id", "createdAt"],
+        "required": [
+          "name",
+          "targetPaise",
+          "upiVpa",
+          "upiPayeeName",
+          "visibility",
+          "id",
+          "createdAt"
+        ],
         "additionalProperties": false
       },
       "CreateFund": {
         "type": "object",
         "properties": {
           "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "purpose": { "type": "string", "minLength": 1, "maxLength": 500 },
           "targetPaise": {
             "type": "string",
             "pattern": "^(0|[1-9][0-9]*)$",
             "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
           },
           "upiVpa": { "type": "string", "pattern": "^[a-zA-Z0-9._-]{2,256}@[a-zA-Z]{2,64}$" },
-          "upiPayeeName": { "type": "string", "minLength": 1, "maxLength": 80 }
+          "upiPayeeName": { "type": "string", "minLength": 1, "maxLength": 80 },
+          "visibility": { "type": "string", "enum": ["public", "donors", "members", "private"] }
         },
         "required": ["name", "targetPaise", "upiVpa", "upiPayeeName"],
         "additionalProperties": false
@@ -1911,6 +1923,409 @@
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
                 "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/public/summary": {
+      "get": {
+        "tags": ["public funds"],
+        "operationId": "getPublicFundSummary",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Canonical FundId UUID; inaccessible funds return 404"
+            },
+            "required": true,
+            "description": "Canonical FundId UUID; inaccessible funds return 404",
+            "name": "fundId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Visibility-filtered fund summary",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "etag": {
+                "schema": { "type": "string" },
+                "description": "Representation validator for public-tier responses"
+              },
+              "cache-control": {
+                "schema": { "type": "string" },
+                "description": "Public short shared cache; authenticated tiers are private and no-store"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "fundId": { "type": "string", "format": "uuid" },
+                    "name": { "type": "string" },
+                    "purpose": { "type": ["string", "null"] },
+                    "raisedPaise": {
+                      "type": ["string", "null"],
+                      "pattern": "^(0|[1-9][0-9]*)$",
+                      "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
+                    },
+                    "spentPaise": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)$",
+                      "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
+                    },
+                    "verification": {
+                      "type": "string",
+                      "enum": ["bank-matched", "anchored", "unverified"]
+                    },
+                    "dataGaps": { "type": "array", "items": { "type": "string" } }
+                  },
+                  "required": [
+                    "fundId",
+                    "name",
+                    "purpose",
+                    "raisedPaise",
+                    "spentPaise",
+                    "verification",
+                    "dataGaps"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/public/breakdown": {
+      "get": {
+        "tags": ["public funds"],
+        "operationId": "getPublicFundBreakdown",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Canonical FundId UUID; inaccessible funds return 404"
+            },
+            "required": true,
+            "description": "Canonical FundId UUID; inaccessible funds return 404",
+            "name": "fundId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Visibility-filtered spend breakdown",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "etag": {
+                "schema": { "type": "string" },
+                "description": "Representation validator for public-tier responses"
+              },
+              "cache-control": {
+                "schema": { "type": "string" },
+                "description": "Public short shared cache; authenticated tiers are private and no-store"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "fundId": { "type": "string", "format": "uuid" },
+                    "categories": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "category": { "type": "string" },
+                          "spentPaise": {
+                            "type": "string",
+                            "pattern": "^(0|[1-9][0-9]*)$",
+                            "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
+                          }
+                        },
+                        "required": ["category", "spentPaise"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "dataGaps": { "type": "array", "items": { "type": "string" } }
+                  },
+                  "required": ["fundId", "categories", "dataGaps"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/public/timeline": {
+      "get": {
+        "tags": ["public funds"],
+        "operationId": "getPublicFundTimeline",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Canonical FundId UUID; inaccessible funds return 404"
+            },
+            "required": true,
+            "description": "Canonical FundId UUID; inaccessible funds return 404",
+            "name": "fundId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Visibility-filtered plain language timeline",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "etag": {
+                "schema": { "type": "string" },
+                "description": "Representation validator for public-tier responses"
+              },
+              "cache-control": {
+                "schema": { "type": "string" },
+                "description": "Public short shared cache; authenticated tiers are private and no-store"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "fundId": { "type": "string", "format": "uuid" },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": { "type": "string", "format": "uuid" },
+                          "occurredAt": { "type": "string", "format": "date-time" },
+                          "message": { "type": "string" },
+                          "amountPaise": {
+                            "type": "string",
+                            "pattern": "^(0|[1-9][0-9]*)$",
+                            "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
+                          },
+                          "verified": {
+                            "type": "string",
+                            "enum": ["bank-matched", "anchored", "unverified"]
+                          }
+                        },
+                        "required": ["id", "occurredAt", "message", "verified"]
+                      }
+                    },
+                    "dataGaps": { "type": "array", "items": { "type": "string" } }
+                  },
+                  "required": ["fundId", "items", "dataGaps"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
                 "required": true
               }
             },
