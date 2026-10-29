@@ -1,14 +1,18 @@
+import { randomInt, randomUUID } from "node:crypto";
+import { createSql, migrate, type Sql } from "@yen/db";
 import { InMemoryExpenseStore } from "@yen/ledger";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { databaseSuite } from "../../../../packages/db/src/test/database.js";
 import { createApp, devPolicy } from "../app.js";
 import { defaultDependencies } from "../dependencies.js";
+import { ApiError } from "../errors.js";
 import { type LogEntry, serializeRequestLog } from "../logging.js";
 import { computeActionHash } from "./crypto.js";
 import { MemoryPinNotificationService } from "./notifications.js";
 import type { PinOtpVerifier } from "./otp.js";
 import { MemoryPinOtpVerifier } from "./otp.test-helper.js";
 import { PinService } from "./service.js";
-import { MemoryActionTokenStore, MemoryPinStore } from "./store.js";
+import { MemoryActionTokenStore, MemoryPinStore, PostgresPinStore } from "./store.js";
 
 describe("Approval PIN (YEN-25)", () => {
   const userId = "00000000-0000-4000-8000-000000000001";
@@ -764,5 +768,221 @@ describe("Approval PIN (YEN-25)", () => {
         expect(serialized).not.toContain("test_pin_hmac_secret");
       }
     });
+  });
+});
+
+databaseSuite("Approval PIN failure accounting under concurrency (YEN-25)", (sql, url) => {
+  const pinSecret = "test_pin_hmac_secret_32_bytes_long_env_kms";
+  const rightPin = "482915";
+  const wrongPin = "937104";
+  const otherPin = "715304";
+  const actionHash = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+  const minute = 60_000;
+  const hour = 60 * minute;
+
+  let now = 0;
+  let connections: Sql[] = [];
+  let notifications = new MemoryPinNotificationService();
+  const clock = () => now;
+
+  beforeAll(async () => {
+    await migrate(sql);
+  });
+
+  beforeEach(() => {
+    now = 1_700_000_000_000;
+    notifications = new MemoryPinNotificationService();
+  });
+
+  afterEach(async () => {
+    await Promise.all(connections.map((connection) => connection.end({ timeout: 5 })));
+    connections = [];
+  });
+
+  // Every service owns its own pool and store, so requests only meet inside Postgres.
+  function independentService(): PinService {
+    const connection = createSql(url, { max: 1 });
+    connections.push(connection);
+    return new PinService({
+      pinStore: new PostgresPinStore(connection),
+      actionTokenStore: new MemoryActionTokenStore({ clock }),
+      notificationService: notifications,
+      pinSecret,
+      clock,
+    });
+  }
+
+  async function createUser(): Promise<string> {
+    const userId = randomUUID();
+    const phone = `+91${randomInt(1_000_000_000, 10_000_000_000)}`;
+    await sql`INSERT INTO users (id, phone, display_name) VALUES (${userId}, ${phone}, 'PIN User')`;
+    await independentService().setupPin(userId, rightPin);
+    return userId;
+  }
+
+  interface Attempt {
+    readonly ok: boolean;
+    readonly code?: string;
+    readonly message: string;
+    readonly retryAfterSeconds?: number | undefined;
+  }
+
+  async function attempt(service: PinService, userId: string, pin: string): Promise<Attempt> {
+    try {
+      await service.verifyPin(userId, pin, actionHash);
+      return { ok: true, message: "" };
+    } catch (error) {
+      if (!(error instanceof ApiError)) throw error;
+      return {
+        ok: false,
+        code: error.code,
+        message: error.details?.[0]?.message ?? "",
+        retryAfterSeconds: (error as { retryAfterSeconds?: number }).retryAfterSeconds,
+      };
+    }
+  }
+
+  function burst(userId: string, pin: string, size: number): Promise<Attempt[]> {
+    const services = Array.from({ length: size }, () => independentService());
+    return Promise.all(services.map((service) => attempt(service, userId, pin)));
+  }
+
+  const count = (results: readonly Attempt[], fragment: string) =>
+    results.filter((result) => result.message.includes(fragment)).length;
+
+  async function pinRow(userId: string) {
+    const rows = await sql<
+      {
+        failed_attempts: number;
+        total_failed_24h: number;
+        status: string;
+        locked_until: Date | null;
+        first_failed_at: Date | null;
+      }[]
+    >`SELECT failed_attempts, total_failed_24h, status, locked_until, first_failed_at
+      FROM user_approval_pins WHERE user_id = ${userId}`;
+    const row = rows[0];
+    if (!row) throw new Error("PIN row missing");
+    return row;
+  }
+
+  it("starts the cooldown at five failures and the daily lockout at ten across parallel requests", async () => {
+    const userId = await createUser();
+    const firstBurstAt = now;
+
+    const first = await burst(userId, wrongPin, 12);
+
+    expect(count(first, "Incorrect PIN")).toBe(4);
+    expect(count(first, "locked for 30 minutes after 5 failed attempts")).toBe(1);
+    expect(count(first, "temporarily locked")).toBe(7);
+    expect(first.filter((result) => result.ok)).toHaveLength(0);
+    expect(first.filter((result) => result.code === "rate_limited")).toHaveLength(8);
+    expect(first.every((result) => (result.retryAfterSeconds ?? 0) <= 1800)).toBe(true);
+
+    const afterFirst = await pinRow(userId);
+    expect(afterFirst.failed_attempts).toBe(5);
+    expect(afterFirst.total_failed_24h).toBe(5);
+    expect(afterFirst.status).toBe("active");
+    expect(afterFirst.locked_until?.getTime()).toBe(firstBurstAt + 30 * minute);
+    expect(notifications.getEvents()).toHaveLength(0);
+
+    now += 31 * minute;
+    const second = await burst(userId, wrongPin, 12);
+
+    expect(count(second, "Incorrect PIN")).toBe(4);
+    expect(count(second, "10 failed attempts in 24 hours")).toBe(1);
+    expect(count(second, "permanently locked out")).toBe(7);
+    expect(second.filter((result) => result.ok)).toHaveLength(0);
+
+    const afterSecond = await pinRow(userId);
+    expect(afterSecond.status).toBe("locked_out");
+    expect(afterSecond.total_failed_24h).toBe(10);
+    expect(afterSecond.failed_attempts).toBe(5);
+    expect(notifications.getEvents().filter((event) => event.kind === "pin_lockout")).toHaveLength(
+      1,
+    );
+
+    const afterLockout = await independentService()
+      .verifyPin(userId, rightPin, actionHash)
+      .then(
+        () => "accepted",
+        (error: unknown) => (error instanceof ApiError ? error.code : "unexpected"),
+      );
+    expect(afterLockout).toBe("forbidden");
+  });
+
+  it("accepts the correct PIN at the lock threshold and clears the consecutive counter", async () => {
+    const userId = await createUser();
+    const service = independentService();
+    for (let i = 0; i < 4; i++) {
+      expect((await attempt(service, userId, wrongPin)).ok).toBe(false);
+    }
+
+    expect((await attempt(service, userId, rightPin)).ok).toBe(true);
+
+    const row = await pinRow(userId);
+    expect(row.failed_attempts).toBe(0);
+    expect(row.total_failed_24h).toBe(4);
+    expect(row.locked_until).toBeNull();
+    expect(row.status).toBe("active");
+
+    const next = await attempt(service, userId, wrongPin);
+    expect(next.message).toContain("4 attempts remaining");
+  });
+
+  it("never loses a failure when a correct PIN races wrong PINs at the lock threshold", async () => {
+    const userId = await createUser();
+    const service = independentService();
+    for (let i = 0; i < 4; i++) await attempt(service, userId, wrongPin);
+
+    const racers = [rightPin, ...Array.from({ length: 7 }, () => wrongPin)];
+    const results = await Promise.all(
+      racers.map((pin) => attempt(independentService(), userId, pin)),
+    );
+
+    const recorded =
+      count(results, "Incorrect PIN") +
+      count(results, "locked for 30 minutes after 5 failed attempts") +
+      count(results, "10 failed attempts in 24 hours");
+    const row = await pinRow(userId);
+
+    expect(results.filter((result) => result.ok).length).toBeLessThanOrEqual(1);
+    expect(row.total_failed_24h).toBe(4 + recorded);
+    expect(row.total_failed_24h).toBeLessThan(10);
+    expect(row.failed_attempts).toBeLessThanOrEqual(5);
+  });
+
+  it("opens a new rolling window after 24 hours without clobbering parallel failures", async () => {
+    const userId = await createUser();
+    const service = independentService();
+    await attempt(service, userId, wrongPin);
+    await attempt(service, userId, wrongPin);
+
+    now += 25 * hour;
+    const results = await burst(userId, wrongPin, 6);
+
+    expect(count(results, "Incorrect PIN")).toBe(2);
+    expect(count(results, "locked for 30 minutes after 5 failed attempts")).toBe(1);
+    expect(count(results, "temporarily locked")).toBe(3);
+
+    const row = await pinRow(userId);
+    expect(row.total_failed_24h).toBe(3);
+    expect(row.failed_attempts).toBe(5);
+    expect(row.first_failed_at?.getTime()).toBe(now);
+    expect(row.status).toBe("active");
+  });
+
+  it("keeps a concurrently changed PIN hash when wrong attempts are recorded", async () => {
+    const userId = await createUser();
+    const changer = independentService();
+
+    const [, ...wrong] = await Promise.all([
+      changer.changePin(userId, rightPin, otherPin),
+      ...Array.from({ length: 3 }, () => attempt(independentService(), userId, wrongPin)),
+    ]);
+
+    expect(wrong).toHaveLength(3);
+    expect((await attempt(independentService(), userId, otherPin)).ok).toBe(true);
+    expect((await attempt(independentService(), userId, rightPin)).ok).toBe(false);
   });
 });
