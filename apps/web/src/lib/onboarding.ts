@@ -28,7 +28,10 @@ export const EMPTY_ONBOARDING_DRAFT: OnboardingDraft = {
   targetPaise: "",
   upiVpa: "",
   payeeName: "",
-  approvers: [{ name: "", contact: "" }, { name: "", contact: "" }],
+  approvers: [
+    { name: "", contact: "" },
+    { name: "", contact: "" },
+  ],
   visibility: "members",
 };
 

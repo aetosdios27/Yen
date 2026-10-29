@@ -15,5 +15,7 @@ it("validates UPI and trustee contacts", () => {
 });
 
 it("creates a bilingual WhatsApp share URL", () => {
-  expect(decodeURIComponent(whatsappInviteLink("https://yen.example/invites/a", "River Club"))).toContain("अपने क्लब");
+  expect(
+    decodeURIComponent(whatsappInviteLink("https://yen.example/invites/a", "River Club")),
+  ).toContain("अपने क्लब");
 });
