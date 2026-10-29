@@ -58,6 +58,14 @@ export {
 export { addPaise, formatInr, type Paise, paise, type paiseBrand, toPaise } from "./paise.js";
 export { paiseWire } from "./paise-wire.js";
 export { type PhoneE164, parsePhoneE164 } from "./phone.js";
+export {
+  type DonationReceiptStatus,
+  type DonorReceiptData,
+  generateReceiptPdf,
+  generateReceiptSvg,
+  RECEIPT_DISCLAIMER_EN,
+  RECEIPT_DISCLAIMER_HI,
+} from "./receipts/index.js";
 export { PRIVACY_NOTICE_VERSION } from "./privacy.js";
 export {
   type RootRegistryAddress,
