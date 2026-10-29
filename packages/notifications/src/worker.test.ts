@@ -182,6 +182,89 @@ describe("NotificationsWorker (Delivery, Fallback, Crash Resilience, Cost Guard,
     expect(store.outbox.get("notif-sms")?.channel_used).toBe("sms");
   });
 
+  it("skips queued messages when consent for the selected channel is withdrawn", async () => {
+    const { store, sms, worker } = setup();
+    store.setUserPreferences({
+      user_id: userId,
+      whatsapp_enabled: true,
+      sms_enabled: false,
+      email_enabled: true,
+      opted_out: false,
+      locale: "en",
+      quiet_hours_enabled: false,
+      quiet_hours_start: null,
+      quiet_hours_end: null,
+      timezone: "UTC",
+    });
+    store.outbox.set("notif-withdrawn-sms", {
+      id: "notif-withdrawn-sms",
+      fund_id: fundId,
+      user_id: userId,
+      event_id: "evt-withdrawn-sms",
+      idempotency_key: "idem-withdrawn-sms",
+      template_id: "donation_received",
+      template_data: { fund_title: "Village Fund", donation_id: "don-3", amount_paise: 1000 },
+      preferred_channel: "sms",
+      status: "pending",
+      attempts: 0,
+      max_attempts: 3,
+      next_attempt_at: new Date("2026-10-28T10:00:00.000Z"),
+      lease_expires_at: null,
+      delivered_at: null,
+      channel_used: null,
+      cost_paise: 0n,
+      last_error: null,
+      created_at: new Date("2026-10-28T10:00:00.000Z"),
+      updated_at: new Date("2026-10-28T10:00:00.000Z"),
+    });
+
+    const summary = await worker.processNextBatch();
+    expect(summary.skipped).toBe(1);
+    expect(sms.sentMessages).toHaveLength(0);
+    expect(store.outbox.get("notif-withdrawn-sms")?.status).toBe("skipped");
+  });
+
+  it("rechecks channel consent immediately before sending a claimed message", async () => {
+    const { store, sms, worker } = setup();
+    store.outbox.set("notif-withdrawn-after-claim", {
+      id: "notif-withdrawn-after-claim",
+      fund_id: fundId,
+      user_id: userId,
+      event_id: "evt-withdrawn-after-claim",
+      idempotency_key: "idem-withdrawn-after-claim",
+      template_id: "donation_received",
+      template_data: { fund_title: "Village Fund", donation_id: "don-4", amount_paise: 1000 },
+      preferred_channel: "sms",
+      status: "pending",
+      attempts: 0,
+      max_attempts: 3,
+      next_attempt_at: new Date("2026-10-28T10:00:00.000Z"),
+      lease_expires_at: null,
+      delivered_at: null,
+      channel_used: null,
+      cost_paise: 0n,
+      last_error: null,
+      created_at: new Date("2026-10-28T10:00:00.000Z"),
+      updated_at: new Date("2026-10-28T10:00:00.000Z"),
+    });
+    const getPreferences = store.getUserPreferences.bind(store);
+    let reads = 0;
+    store.getUserPreferences = async (id) => {
+      reads++;
+      const current = await getPreferences(id);
+      if (reads !== 2) return current;
+      const withdrawn = { ...current, sms_enabled: false };
+      await store.setUserPreferences(withdrawn);
+      return withdrawn;
+    };
+
+    const summary = await worker.processNextBatch();
+    expect(summary.skipped).toBe(1);
+    expect(reads).toBe(2);
+    expect(sms.sentMessages).toHaveLength(0);
+    expect(store.outbox.get("notif-withdrawn-after-claim")?.status).toBe("skipped");
+  });
+
   it("killing worker mid-send never double-sends or drops a notification (Acceptance Criterion 1)", async () => {
     const { store, whatsapp, worker, advanceMinutes } = setup();
 

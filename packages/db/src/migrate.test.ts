@@ -56,10 +56,12 @@ databaseSuite("migration runner", (sql, url) => {
       "auth_otp_attempt_limits",
       "auth_otps",
       "bank_transactions",
+      "consent_records",
       "debit_reconciliation_actions",
       "display_name_contact_salts",
       "display_names",
       "donation_pledges",
+      "erasure_requests",
       "evidence_records",
       "expense_approvals",
       "expenses",
@@ -76,6 +78,7 @@ databaseSuite("migration runner", (sql, url) => {
       "owner_invites",
       "pseudonyms",
       "rate_limits",
+      "retention_audit",
       "schema_migrations",
       "sessions",
       "trusted_devices",
@@ -111,6 +114,7 @@ databaseSuite("migration runner", (sql, url) => {
     const fundSettingsSource = await readFile(join(defaultDir, "0021_funds_settings.sql"));
     const expenseBankLinkSource = await readFile(join(defaultDir, "0022_expense_bank_link.sql"));
     const debitMatchingSource = await readFile(join(defaultDir, "0023_debit_matching.sql"));
+    const dpdpSource = await readFile(join(defaultDir, "0024_dpdp.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -251,6 +255,12 @@ databaseSuite("migration runner", (sql, url) => {
         checksum: createHash("sha256").update(debitMatchingSource).digest("hex"),
         applied_at: expect.any(Date),
       },
+      {
+        version: 24,
+        name: "0024_dpdp.sql",
+        checksum: createHash("sha256").update(dpdpSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
     ]);
   });
 
@@ -341,7 +351,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(23);
+    expect(before).toHaveLength(24);
   });
 
   it("rejects an edited applied file and names it", async () => {

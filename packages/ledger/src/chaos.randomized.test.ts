@@ -21,6 +21,7 @@ import {
 import {
   buildIntervalTree,
   hash32,
+  PRIVACY_NOTICE_VERSION,
   paise,
   parseFundId,
   parseUserId,
@@ -341,6 +342,8 @@ ledgerDatabaseSuite("YEN-61 real notification crash points and chain outage", (s
       quiet_hours_end: "08:00",
       timezone: "UTC",
     });
+    await sql`INSERT INTO consent_records (id, user_id, purpose, notice_version, granted_at)
+      VALUES (${uuidv7()}, ${user.value}, 'notification_whatsapp', ${PRIVACY_NOTICE_VERSION}, now())`;
     await sql`CREATE TABLE yen61_provider_calls (id bigserial PRIMARY KEY, idempotency_key text NOT NULL)`;
     await sql`CREATE TABLE yen61_provider_effects (idempotency_key text PRIMARY KEY)`;
     const killPoints = ["claimed", "sent-to-provider", "status-recorded"] as const;

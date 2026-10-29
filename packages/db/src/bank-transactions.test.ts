@@ -125,6 +125,32 @@ databaseSuite("bank_transactions table and immutability", (sql) => {
     `).rejects.toThrow("bank_transactions financial attributes are immutable");
   });
 
+  it("allows PII redaction while retaining the original raw-payload digest", async () => {
+    const txId = uuidv7();
+    await sql`
+      INSERT INTO bank_transactions (
+        id, fund_id, bank_reference, amount_paise, type, posted_at,
+        narration, counterparty_name, source, raw_payload
+      ) VALUES (
+        ${txId}, ${fundId}, 'TXN_REDACT_001', 15000, 'credit',
+        '2026-10-28T12:00:00Z', 'paid by +919876543210', 'Asha Rao',
+        'statement_upload', ${sql.json({ phone: "+919876543210", name: "Asha Rao" })}
+      )
+    `;
+    const [before] = await sql`SELECT raw_payload_sha256 FROM bank_transactions WHERE id = ${txId}`;
+    await sql`UPDATE bank_transactions SET narration = NULL, counterparty_name = NULL,
+      raw_payload = '{"redacted":true}'::jsonb WHERE id = ${txId}`;
+    const [after] = await sql`SELECT amount_paise, narration, counterparty_name, raw_payload,
+      raw_payload_sha256 FROM bank_transactions WHERE id = ${txId}`;
+    expect(after).toMatchObject({
+      amount_paise: 15000n,
+      narration: null,
+      counterparty_name: null,
+      raw_payload: { redacted: true },
+      raw_payload_sha256: before?.raw_payload_sha256,
+    });
+  });
+
   it("allows updating reconciliation fields upon match", async () => {
     const txId = uuidv7();
     await sql`

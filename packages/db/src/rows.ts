@@ -251,6 +251,7 @@ export const bankTransactionRowSchema = z.object({
   counterparty_name: z.string().nullable(),
   source: z.enum(["statement_upload", "webhook_partner"]),
   raw_payload: z.unknown(),
+  raw_payload_sha256: z.string().regex(/^[0-9a-f]{64}$/),
   reconciliation_status: z.enum([
     "unmatched",
     "matched",

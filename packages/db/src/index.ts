@@ -74,6 +74,12 @@ export {
   type SampleQueryContext,
 } from "./query-registry.js";
 export {
+  DEFAULT_RETENTION_PERIODS,
+  type RetentionPeriods,
+  type RetentionReport,
+  runRetentionJob,
+} from "./retention.js";
+export {
   type AuthOtpRow,
   authOtpRowSchema,
   type BankTransactionRow,

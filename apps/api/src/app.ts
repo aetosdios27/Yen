@@ -25,7 +25,7 @@ import {
   redactExpenseProofs,
   redactFundReadModel,
 } from "@yen/policy";
-import { paise, parseFundId, parseGstin } from "@yen/shared";
+import { PRIVACY_NOTICE_VERSION, paise, parseFundId, parseGstin } from "@yen/shared";
 import type { Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, setCookie } from "hono/cookie";
@@ -61,6 +61,7 @@ import {
   getExpenseRoute,
   getFundRoute,
   getPinStatusRoute,
+  getPrivacyConsentsRoute,
   getSessionsRoute,
   healthRoute,
   listExpensesRoute,
@@ -69,6 +70,7 @@ import {
   logoutRoute,
   MAX_EVIDENCE_FILE_SIZE_BYTES,
   manualMatchRoute,
+  markRetentionRequiredRoute,
   meRoute,
   openapiRoute,
   openapiSchema,
@@ -83,6 +85,7 @@ import {
   reconcileExpenseRoute,
   rejectExpenseRoute,
   removeMemberRoute,
+  requestErasureRoute,
   requestPinResetRoute,
   revokeSessionRoute,
   rotateSessionRoute,
@@ -93,6 +96,7 @@ import {
   unlockPinRoute,
   unlockTrustedDeviceRoute,
   unmatchedCreditsRoute,
+  updatePrivacyConsentRoute,
   uploadEvidenceRoute,
   verifyOtpRoute,
   verifyPinRoute,
@@ -138,6 +142,12 @@ import type {
   FundResource,
 } from "./policy.js";
 import { redactActionReceipt as redactReceipt } from "./policy.js";
+import {
+  type ErasureReport,
+  PrivacyForbiddenError,
+  PrivacyNotFoundError,
+  PrivacyUnavailableError,
+} from "./privacy-store.js";
 import { publicExpenseDetailRoute, publicExpenseProofsRoute } from "./public-expense-contract.js";
 import { parseBankStatementCsv } from "./reconciliation/csv-parser.js";
 import { registerDebitReviewRoutes } from "./reconciliation/debit-review-routes.js";
@@ -307,6 +317,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   app.use("/v1/*", idempotency(deps));
   app.post(partnerWebhookRoute.path, partnerWebhookAuth(deps));
   app.use("/v1/me", requireAuth);
+  app.use("/v1/privacy/*", requireAuth);
   app.use("/v1/funds/*", async (c, next) => {
     if (isPublicFundReadRoute(c.req.path) && c.get("principal")) {
       c.header("cache-control", "private, no-store");
@@ -400,6 +411,74 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       );
     }
     return c.json(principalSchema.parse({ id: principal.id }), 200);
+  });
+  app.openapi(getPrivacyConsentsRoute, async (c) => {
+    const principal = c.get("principal");
+    if (!principal) throw new ApiError("unauthenticated");
+    const consents = await deps.privacyStore.listConsents(principal.id);
+    return c.json(
+      {
+        consents: consents.map((row) => ({
+          purpose: row.purpose,
+          noticeVersion: row.notice_version,
+          grantedAt: row.granted_at.toISOString(),
+          withdrawnAt: row.withdrawn_at?.toISOString() ?? null,
+        })),
+      },
+      200,
+    );
+  });
+  app.openapi(updatePrivacyConsentRoute, async (c) => {
+    const principal = c.get("principal");
+    if (!principal) throw new ApiError("unauthenticated");
+    const input = c.req.valid("json");
+    if (input.action === "grant")
+      await deps.privacyStore.grantConsent(principal.id, input.purpose, deps.clock());
+    else await deps.privacyStore.withdrawConsent(principal.id, input.purpose, deps.clock());
+    return c.json({ status: "ok" as const, noticeVersion: PRIVACY_NOTICE_VERSION }, 200);
+  });
+  app.openapi(requestErasureRoute, async (c) => {
+    const principal = c.get("principal");
+    if (!principal) throw new ApiError("unauthenticated");
+    let report: ErasureReport;
+    try {
+      report = await deps.privacyStore.requestErasure(
+        principal.id,
+        deps.clock(),
+        c.req.valid("json").dryRun,
+      );
+    } catch (error) {
+      if (error instanceof PrivacyUnavailableError) throw new ApiError("overloaded");
+      throw error;
+    }
+    return c.json(
+      {
+        status: report.dryRun ? ("preview" as const) : ("completed" as const),
+        retained: report.retained,
+        wouldErase: report.wouldErase,
+        wouldRetain: report.wouldRetain,
+      },
+      200,
+    );
+  });
+  app.openapi(markRetentionRequiredRoute, async (c) => {
+    const principal = c.get("principal");
+    if (!principal) throw new ApiError("unauthenticated");
+    const { fundId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    try {
+      await deps.privacyStore.markRetentionRequired(
+        principal.id,
+        input.userId,
+        fundId,
+        input.reason,
+      );
+    } catch (error) {
+      if (error instanceof PrivacyForbiddenError) throw new ApiError("forbidden");
+      if (error instanceof PrivacyNotFoundError) throw new ApiError("not_found");
+      throw error;
+    }
+    return c.body(null, 204);
   });
   app.openapi(sendOtpRoute, async (c) => {
     const input = c.req.valid("json");

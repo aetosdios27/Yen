@@ -18,6 +18,7 @@ import { PostgresFundStore } from "./fund-store.js";
 import { createServerLifecycle, type ServerLifecycle, shutdownOnSignal } from "./lifecycle.js";
 import { startObservability } from "./observability.js";
 import { PostgresPinStore } from "./pin/index.js";
+import { PostgresPrivacyStore } from "./privacy-store.js";
 import { PostgresPublicFundReadStore } from "./public-fund-store.js";
 import { PostgresReconciliationStore } from "./reconciliation/postgres-store.js";
 import { useMemoryStore } from "./server-config.js";
@@ -207,6 +208,7 @@ export async function startServer(
       }),
     }),
     ...(sql ? { authStore: new PostgresAuthStore(sql) } : {}),
+    ...(sql ? { privacyStore: new PostgresPrivacyStore(sql) } : {}),
     ...(sql ? { pinStore: new PostgresPinStore(sql) } : {}),
     otpHashKey: resolvedConfig.OTP_HASH_KEY ?? "development-only-otp-hash-key-change-me",
     partnerWebhookSecret: resolvedConfig.PARTNER_WEBHOOK_SECRET ?? null,

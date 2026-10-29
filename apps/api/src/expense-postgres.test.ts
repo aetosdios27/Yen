@@ -16,6 +16,8 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { databaseSuite } from "../../../packages/db/src/test/database.js";
 import { initLedgerSchema } from "../../../packages/ledger/src/schema.js";
 import { createApp } from "./app.js";
+import { fundSchema } from "./contract.js";
+import { MemoryFundStore } from "./dependencies.js";
 import { PostgresDonationPledgeStore } from "./donation-store.js";
 import { PostgresExpenseStore } from "./expense-store.js";
 import {
@@ -178,28 +180,72 @@ databaseSuite("Postgres expense store", (sql, url) => {
     }
   });
 
-  it("keeps every journey actor fund-scoped and personal data out of both event chains and leaves", async () => {
+  it("keeps journey actors fund-scoped and personal data out of API logs, event chains, and Merkle leaves", async () => {
     spanExporter.reset();
     const userIds: [string, string, string] = [uuidv7(), uuidv7(), uuidv7()];
     const userFixtures = [
-      { id: userIds[0], phone: "+919111111111", name: "Journey Alice" },
-      { id: userIds[1], phone: "+919222222222", name: "Journey Bhavna" },
-      { id: userIds[2], phone: "+919333333333", name: "Journey Chandra" },
+      {
+        id: userIds[0],
+        phone: "+919111111111",
+        name: "Journey Alice",
+        email: "alice@example.test",
+      },
+      {
+        id: userIds[1],
+        phone: "+919222222222",
+        name: "Journey Bhavna",
+        email: "bhavna@example.test",
+      },
+      {
+        id: userIds[2],
+        phone: "+919333333333",
+        name: "Journey Chandra",
+        email: "chandra@example.test",
+      },
     ];
+    const donorFixture = userFixtures[1];
+    if (!donorFixture) throw new Error("Journey donor fixture was missing");
     for (const fixture of userFixtures) {
       await sql`INSERT INTO users (id, phone, display_name) VALUES (${fixture.id}, ${fixture.phone}, ${fixture.name})`;
     }
+    const logOutput: string[] = [];
+    const logger = { log: (entry: unknown) => logOutput.push(JSON.stringify(entry)) };
+    const fundStore = new MemoryFundStore();
+    const fundOwnerApi = createApp({
+      principal: { id: userIds[0] },
+      fundStore,
+      policy: devPolicy,
+      logger,
+    });
+    const donorApi = createApp({
+      principal: { id: userIds[1] },
+      fundStore,
+      policy: devPolicy,
+      donationPledgeStore: new PostgresDonationPledgeStore(sql),
+      logger,
+    });
     const fundIds: string[] = [];
     for (let index = 0; index < 2; index++) {
       const orgId = uuidv7();
-      const fundId = uuidv7();
+      const fundResponse = await fundOwnerApi.request("/v1/funds", {
+        method: "POST",
+        headers: { "content-type": "application/json", "Idempotency-Key": `journey-fund-${index}` },
+        body: JSON.stringify({
+          name: "Journey Fund",
+          targetPaise: "5000000",
+          upiVpa: "journey@yenbank",
+          upiPayeeName: "Journey Club",
+        }),
+      });
+      expect(fundResponse.status).toBe(201);
+      const fund = fundSchema.parse(await fundResponse.json());
+      const fundId = fund.id;
       await sql`INSERT INTO orgs (id, name, legal_form, owner_id) VALUES (${orgId}, 'Journey Org', 'society', ${userIds[0]})`;
-      await sql`INSERT INTO funds (id, org_id, title, policy_json) VALUES (${fundId}, ${orgId}, 'Journey Fund', '{}'::jsonb)`;
+      await sql`INSERT INTO funds (id, org_id, title, policy_json) VALUES (${fundId}, ${orgId}, ${fund.name}, '{}'::jsonb)`;
       fundIds.push(fundId);
     }
 
     const expenseStore = new PostgresExpenseStore(sql);
-    const donationStore = new PostgresDonationPledgeStore(sql);
     const everyActor: string[][] = [];
     for (const [fundIndex, fundId] of fundIds.entries()) {
       const [requester, approverOne, approverTwo] = await Promise.all(
@@ -222,16 +268,21 @@ databaseSuite("Postgres expense store", (sql, url) => {
           bankTransactionId: uuidv7(),
         });
       });
-      await donationStore.pledge({
-        fundId,
-        amountPaise: 1000,
-        utr: `1234567890${fundIndex}1`,
-        actorPseudonym: donationActor,
-        actorUserId: userIds[1],
-        donorName: "Journey Bhavna",
-        donorNameChoice: "full",
-        donorContact: "+919222222222",
+      const pledgeResponse = await donorApi.request(`/v1/funds/${fundId}/donations/pledge`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "Idempotency-Key": `journey-pledge-${fundIndex}`,
+        },
+        body: JSON.stringify({
+          amountPaise: "1000",
+          utr: `1234567890${fundIndex}1`,
+          donorName: donorFixture.name,
+          donorNameChoice: "full",
+          donorContact: donorFixture.email,
+        }),
       });
+      expect(pledgeResponse.status).toBe(201);
       expect(await getDisplayName(sql, { fundId, pseudonymId: donationActor })).toBe(
         "Journey Bhavna",
       );
@@ -311,8 +362,18 @@ databaseSuite("Postgres expense store", (sql, url) => {
         ...userIds,
         ...userFixtures.map((fixture) => fixture.phone),
         ...userFixtures.map((fixture) => fixture.name),
+        ...userFixtures.map((fixture) => fixture.email),
       ]) {
         expect(serialized).not.toContain(personalValue);
+      }
+      const serializedLogs = logOutput.join(" ");
+      for (const personalValue of [
+        ...userIds,
+        ...userFixtures.map((fixture) => fixture.phone),
+        ...userFixtures.map((fixture) => fixture.name),
+        ...userFixtures.map((fixture) => fixture.email),
+      ]) {
+        expect(serializedLogs).not.toContain(personalValue);
       }
       const leaves = await Promise.all(
         events.map(async (event) =>
@@ -324,6 +385,7 @@ databaseSuite("Postgres expense store", (sql, url) => {
         ...userIds,
         ...userFixtures.map((fixture) => fixture.phone),
         ...userFixtures.map((fixture) => fixture.name),
+        ...userFixtures.map((fixture) => fixture.email),
       ]) {
         expect(serializedLeaves).not.toContain(personalValue);
       }

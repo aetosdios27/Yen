@@ -66,7 +66,7 @@ We only claim what a skeptic can check.
 | Any change or deletion of a recorded event would be detected | That a bill is genuine. We verify it was not altered after upload, not that the vendor is real                                  |
 | Spending needs the approvals the club configured             | That a treasurer cannot misuse money. They cannot do so undetected, but in observer mode they can still pay from their bank app |
 | Bank debits are compared against approvals                   | Anything about cash. Cash is not in the bank feed                                                                               |
-| Personal data stays off the chain                            | That operators cannot inspect database records. Privacy tiers limit what others see                                             |
+| Names, phone numbers, and email addresses stay off the chain | That operators cannot inspect database records. Privacy tiers limit what others see                                             |
 
 <a id="tech"></a>
 ## Built with
