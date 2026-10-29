@@ -170,8 +170,8 @@ export class PinService {
     purpose: "action" | "device_unlock",
   ): Promise<number> {
     const pinSecret = this.ensureConfigured();
-    let record = await this.pinStore.get(userId);
-    if (!record) {
+    const existing = await this.pinStore.get(userId);
+    if (!existing) {
       throw new ApiError("forbidden", [
         {
           path: ["json", "pin"],
@@ -180,137 +180,111 @@ export class PinService {
       ]);
     }
 
-    const now = this.clock();
-
-    // 1. Check permanent 24h lockout
-    if (record.status === "locked_out") {
-      throw new ApiError("forbidden", [
-        {
-          path: ["json", "pin"],
-          message: "PIN is permanently locked out; reset is required via authorized recovery",
-        },
-      ]);
-    }
-
-    // 2. Check cooling off
-    if (record.status === "cooling_off") {
-      if (record.coolingOffUntil && now < record.coolingOffUntil) {
-        if (purpose !== "device_unlock") {
-          throw new ApiError("forbidden", [
+    const outcome = await this.pinStore.withLockedRecord(userId, async (initial, update) => {
+      let record = initial;
+      const now = this.clock();
+      if (record.status === "locked_out")
+        return {
+          error: new ApiError("forbidden", [
             {
               path: ["json", "pin"],
-              message: `PIN is in cooling-off period until ${new Date(record.coolingOffUntil).toISOString()}`,
+              message: "PIN is permanently locked out; reset is required via authorized recovery",
+            },
+          ]),
+        };
+
+      if (record.status === "cooling_off") {
+        if (record.coolingOffUntil && now < record.coolingOffUntil && purpose !== "device_unlock") {
+          return {
+            error: new ApiError("forbidden", [
+              {
+                path: ["json", "pin"],
+                message: `PIN is in cooling-off period until ${new Date(record.coolingOffUntil).toISOString()}`,
+              },
+            ]),
+          };
+        }
+        if (!record.coolingOffUntil || now >= record.coolingOffUntil) {
+          record = await update({ status: "active", coolingOffUntil: null });
+        }
+      }
+
+      if (record.lockedUntil) {
+        if (now < record.lockedUntil) {
+          const retryAfterSeconds = Math.max(1, Math.ceil((record.lockedUntil - now) / 1000));
+          const error = new ApiError("rate_limited", [
+            {
+              path: ["json", "pin"],
+              message: `PIN is temporarily locked. Try again in ${retryAfterSeconds} seconds.`,
             },
           ]);
+          return { error: Object.assign(error, { retryAfterSeconds }) };
         }
-      } else {
-        // Cooling off expired: transition status back to active
-        await this.pinStore.update(userId, {
-          status: "active",
-          coolingOffUntil: null,
-        });
-        record = { ...record, status: "active", coolingOffUntil: null };
+        record = await update({ lockedUntil: null, failedAttempts: 0 });
       }
-    }
 
-    // 3. Check temporary rate-limiting lockout
-    if (record.lockedUntil) {
-      if (now < record.lockedUntil) {
-        const retryAfterSeconds = Math.max(1, Math.ceil((record.lockedUntil - now) / 1000));
-        const err = new ApiError("rate_limited", [
-          {
-            path: ["json", "pin"],
-            message: `PIN is temporarily locked. Try again in ${retryAfterSeconds} seconds.`,
-          },
-        ]);
-        throw Object.assign(err, { retryAfterSeconds });
+      const isValid = await verifyPinHash(userId, record.salt, pin, record.pinHash, pinSecret);
+      if (!isValid) {
+        const isNewWindow =
+          record.firstFailedAt === null || now - record.firstFailedAt > 24 * 60 * 60 * 1000;
+        const totalFailed24h = isNewWindow ? 1 : record.totalFailed24h + 1;
+        const firstFailedAt = isNewWindow ? now : record.firstFailedAt;
+        const failedAttempts = record.failedAttempts + 1;
+        if (totalFailed24h >= 10) {
+          await update({ status: "locked_out", failedAttempts, totalFailed24h, firstFailedAt });
+          return {
+            error: new ApiError("forbidden", [
+              {
+                path: ["json", "pin"],
+                message:
+                  "PIN locked out after 10 failed attempts in 24 hours; support reset required",
+              },
+            ]),
+            notify: true,
+          };
+        }
+        if (failedAttempts >= 5) {
+          await update({
+            lockedUntil: now + this.lockoutDurationMs,
+            failedAttempts,
+            totalFailed24h,
+            firstFailedAt,
+          });
+          const retryAfterSeconds = Math.ceil(this.lockoutDurationMs / 1000);
+          const error = new ApiError("rate_limited", [
+            { path: ["json", "pin"], message: "PIN locked for 30 minutes after 5 failed attempts" },
+          ]);
+          return { error: Object.assign(error, { retryAfterSeconds }) };
+        }
+        await update({ failedAttempts, totalFailed24h, firstFailedAt });
+        const remaining = 5 - failedAttempts;
+        return {
+          error: new ApiError("forbidden", [
+            {
+              path: ["json", "pin"],
+              message: `Incorrect PIN (${remaining} attempt${remaining === 1 ? "" : "s"} remaining before lockout)`,
+            },
+          ]),
+        };
       }
-      // Lockout duration has elapsed: reset consecutive counter
-      await this.pinStore.update(userId, {
-        lockedUntil: null,
+
+      await update({
         failedAttempts: 0,
-      });
-      record = {
-        ...record,
         lockedUntil: null,
-        failedAttempts: 0,
-      };
-    }
-
-    // 4. Verify PIN hash
-    const isValid = await verifyPinHash(userId, record.salt, pin, record.pinHash, pinSecret);
-
-    if (!isValid) {
-      // Manage 24h rolling window
-      const isNewWindow =
-        record.firstFailedAt === null || now - record.firstFailedAt > 24 * 60 * 60 * 1000;
-      const totalFailed24h = isNewWindow ? 1 : record.totalFailed24h + 1;
-      const firstFailedAt = isNewWindow ? now : record.firstFailedAt;
-      const failedAttempts = record.failedAttempts + 1;
-
-      if (totalFailed24h >= 10) {
-        await this.pinStore.update(userId, {
-          status: "locked_out",
-          failedAttempts,
-          totalFailed24h,
-          firstFailedAt,
-        });
-
-        await this.notificationService.notify({
-          kind: "pin_lockout",
-          userId,
-          recipientRoles: ["approver", "owner"],
-          reason: "max_attempts_exceeded",
-        });
-
-        throw new ApiError("forbidden", [
-          {
-            path: ["json", "pin"],
-            message: "PIN locked out after 10 failed attempts in 24 hours; support reset required",
-          },
-        ]);
-      }
-
-      if (failedAttempts >= 5) {
-        const lockedUntil = now + this.lockoutDurationMs;
-        await this.pinStore.update(userId, {
-          lockedUntil,
-          failedAttempts,
-          totalFailed24h,
-          firstFailedAt,
-        });
-        const retryAfterSeconds = Math.ceil(this.lockoutDurationMs / 1000);
-        const err = new ApiError("rate_limited", [
-          {
-            path: ["json", "pin"],
-            message: "PIN locked for 30 minutes after 5 failed attempts",
-          },
-        ]);
-        throw Object.assign(err, { retryAfterSeconds });
-      }
-
-      await this.pinStore.update(userId, {
-        failedAttempts,
-        totalFailed24h,
-        firstFailedAt,
+        ...(record.status === "cooling_off" ? {} : { status: "active" }),
       });
-
-      const remaining = 5 - failedAttempts;
-      throw new ApiError("forbidden", [
-        {
-          path: ["json", "pin"],
-          message: `Incorrect PIN (${remaining} attempt${remaining === 1 ? "" : "s"} remaining before lockout)`,
-        },
-      ]);
-    }
-
-    // Success: reset consecutive failures, preserve totalFailed24h window
-    await this.pinStore.update(userId, {
-      failedAttempts: 0,
-      lockedUntil: null,
-      ...(record.status === "cooling_off" ? {} : { status: "active" }),
+      return { verifiedAt: now };
     });
-    return now;
+    if (outcome.notify) {
+      await this.notificationService.notify({
+        kind: "pin_lockout",
+        userId,
+        recipientRoles: ["approver", "owner"],
+        reason: "max_attempts_exceeded",
+      });
+    }
+    if (outcome.error) throw outcome.error;
+    return outcome.verifiedAt;
   }
 
   async changePin(
