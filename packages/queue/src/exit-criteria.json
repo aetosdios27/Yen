@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "currentEngine": "pg-boss",
+  "queues": {
+    "notifications": {
+      "shape": "short_idempotent",
+      "targetEngine": "BullMQ",
+      "thresholds": {
+        "maxQueueDepth": 10000,
+        "maxQueueDepthSustainedSeconds": 900,
+        "maxP99LatencyMs": 5000,
+        "maxWorkflowDurationSeconds": 300
+      }
+    },
+    "reconciliation": {
+      "shape": "scheduled_batches",
+      "targetEngine": "Temporal",
+      "thresholds": {
+        "maxQueueDepth": 500,
+        "maxQueueDepthSustainedSeconds": 1800,
+        "maxP99LatencyMs": 60000,
+        "maxWorkflowDurationSeconds": 3600
+      }
+    },
+    "blockchain-anchoring": {
+      "shape": "long_lived_anchoring",
+      "targetEngine": "Temporal",
+      "thresholds": {
+        "maxQueueDepth": 1000,
+        "maxQueueDepthSustainedSeconds": 3600,
+        "maxP99LatencyMs": 120000,
+        "maxWorkflowDurationSeconds": 86400,
+        "maxWorkflowSteps": 10
+      }
+    }
+  },
+  "global": {
+    "maxDatabaseCpuPercent": 25,
+    "maxDatabaseIopsPercent": 30
+  }
+}

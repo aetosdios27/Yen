@@ -28,6 +28,10 @@ visibility and redaction rules. Until then, production needs an explicit policy.
 All authenticated routes reject requests until a principal is explicitly injected.
 The bearer security scheme reserves the contract for YEN-22; it does not authenticate tokens today.
 
+## Evidence uploads
+
+No real malware scanner is integrated. The default scanner rejects every upload until a real scanner adapter is configured; the EICAR matching adapter exists only as a test double and does not provide malware protection.
+
 ## Wire money
 
 Every money field is a **canonical nonnegative decimal string of integer paise**.
@@ -69,13 +73,14 @@ Unknown exceptions return the fixed internal error message, with no stack or cau
 | `idempotency_conflict` | 409    |
 | `rate_limited`         | 429    |
 | `payload_too_large`    | 413    |
+| `overloaded`           | 503    |
 | `internal`             | 500    |
 
 `src/errors.ts` owns the closed error-code schema and status table.
 Every response carries `x-request-id`. A UUID-shaped inbound ID with a valid
 version and variant is accepted; otherwise the server generates one.
 Readiness defaults to success. Inject `readiness: async () => boolean` to check
-dependencies; false or a thrown exception returns `internal`.
+dependencies; false or a thrown exception returns `internal` (503 for readiness).
 
 ## Idempotency storage contract
 
@@ -107,14 +112,32 @@ insert or expired-lease takeover; completion and release must compare the token 
 hash. `createdAt` is epoch milliseconds. YEN-18/24 owns the Postgres adapter and
 schema; this contract does not change that migration.
 
-The in-memory store expires completed responses after 24 hours by default and sweeps
-expired entries lazily on access. It caps entries at 10,000, evicting the oldest
-completed responses first. When all slots hold active leases, it rejects a new
-reservation until a lease expires; it never evicts an active lease to make room.
-These defaults are injectable as `inProgressTtlMs`, `replayRetentionMs`, and
-`maxEntries`. Production needs a shared store for consistent idempotency across
-processes. A released or expired key can execute again, so operations with durable
-side effects still need transactional coordination in that store.
+Completed idempotency responses are retained for 24 hours by default (`replayRetentionMs = 86_400_000`),
+after which the key expires and can be reused. In-progress reservations have a 30-second lease
+(`inProgressTtlMs = 30_000`), after which an abandoned lease can be taken over atomically by another
+request with a new fencing token. Both in-memory (`MemoryIdempotencyStore`) and PostgreSQL
+(`PostgresIdempotencyStore`) stores implement this retention policy.
+
+In PostgreSQL, `PostgresIdempotencyStore` operates on the `idempotency_keys` table. `begin`
+atomically inserts absent keys or takes over expired leases using `INSERT ... ON CONFLICT (key) DO UPDATE`
+returning whether the token was newly acquired. `complete` and `release` check the fencing token and
+request hash so stale or replaced workers cannot overwrite or release an active lease. `sweep()`
+purges expired completed entries and abandoned leases without lock contention using `FOR UPDATE SKIP LOCKED`.
+Migration `0004` backfills `replay_expires_at` as `created_at + 24 hours` for existing completed rows, so they expire like new ones.
+In PostgreSQL mode the process calls `sweep()` and the rate-limit `prune()` on the schedule described under "Retention" below.
+
+## Phone OTP and sessions
+
+`POST /v1/auth/otp/send` requires a selected `channel` (`whatsapp` or `sms`). Delivery
+must use that channel exactly; failures do not fall back to the other provider. Only
+one active code is kept for a phone number. Verification attempts are counted per
+phone across channel changes in a five-minute window (or the configured OTP expiry).
+OTP hashes use the server-side `OTP_HASH_KEY`, which must be at least 32 characters
+in production. Losing or rotating the key invalidates outstanding codes. Session
+tokens are random opaque values; storage keeps only their SHA-256 hashes, and rotation
+preserves the original absolute expiry. The production entrypoint fails closed while
+no concrete WhatsApp/SMS adapter is configured; the in-memory delivery stub is limited
+to development and tests.
 
 ## Rate limits and logs
 
@@ -124,12 +147,25 @@ Configure positive integer `RATE_LIMIT_IP_CAPACITY`, `RATE_LIMIT_PRINCIPAL_CAPAC
 and `RATE_LIMIT_REFILL_MS` at startup. A rejected request returns `429` with integer
 seconds in `retry-after`. Liveness and readiness bypass rate limits.
 
-The Node entrypoint resolves the socket peer address. Forwarded headers are ignored.
-Configure a trusted resolver explicitly when deploying behind a proxy.
-Store instances are injectable and in-memory limits apply to one process. The
-in-memory rate-limit store lazily removes buckets once they would be full and caps
-entries at 10,000, evicting the oldest bucket when full. It has no background timer.
-Production needs a shared rate-limit store for consistent limits across processes.
+The Node entrypoint resolves the socket peer address and ignores forwarded headers
+unless `TRUSTED_PROXY_HOPS` is set (see the proxy paragraph below).
+Store instances are injectable. When `DATABASE_URL` is provided, production uses `PostgresRateLimitStore`
+on the `rate_limits` table so limits hold across multiple API instances and processes. Each key takes a
+transaction-level advisory lock, `pg_advisory_xact_lock(0x59454e01, hashtext(key))`. A key that is new or
+whose window has expired also takes one global admission lock, `pg_advisory_xact_lock(0x59454e02, 0)`,
+and rechecks the `RATE_LIMIT_MAX_KEYS` capacity under it, so concurrent first-time keys cannot exceed the cap.
+Both locks use the two-`int4` form, which PostgreSQL keeps separate from the one-`bigint` form used by fund
+events (`yen_fund_lock_key`). Atomic upserts coordinate continuous token refill and fixed-window expiry.
+A delayed request never moves a bucket's timestamp backwards, so it cannot refill tokens twice.
+In-memory mode (`MemoryRateLimitStore`) is used when `YEN_ALLOW_MEMORY_STORES=true` or in local mock mode.
+
+### Retention
+
+`CLEANUP_INTERVAL_MS` (default `60000`, range `1000`–`3600000`) sets how often PostgreSQL mode runs
+`sweep()` on `idempotency_keys` and `prune()` on `rate_limits`. Each call removes at most 1000 expired rows.
+Ticks never overlap. A failed call writes one stderr line, `{"event":"cleanup_failed","task":"...","errorName":"..."}`,
+with no message or stack, and the next tick retries. On `SIGINT` or `SIGTERM` the process stops the scheduler,
+closes the HTTP server, and ends the database pool.
 
 Request logs contain only event, UUID requestId, method, route template, status, and
 durationMs. Failure logs contain only event, requestId, method, route template,
@@ -176,7 +212,8 @@ the public route does not require an idempotency key.
 
 The waitlist response floor (`WAITLIST_MIN_RESPONSE_MS`, default 75 ms) hides differences below the floor. The per-IP limit of five requests per hour makes statistical timing attacks impractical; a slow database could still exceed the floor.
 
-`TRUSTED_PROXY_HOPS` defaults to 0 and ignores forwarded headers. Set it to the number of trusted proxy hops (1–5) only when the server is reachable exclusively through those proxies; the address is selected from the right of `X-Forwarded-For`. Malformed headers fall back to the socket address. Rate limits are process-local; the shared store is tracked by YEN-55.
+`TRUSTED_PROXY_HOPS` defaults to 0 and ignores all forwarded headers (safe by default). Set it to the number of trusted proxy hops (1–5) only when the server is reachable exclusively through those proxies.
+`TRUSTED_PROXY_HEADER` names the one header that is read when hops are configured: `x-forwarded-for` (the default) or `forwarded` (RFC 7239, `for=` parameter). Choose the header your edge proxy overwrites. The other header is never read, so a client cannot pick its rate-limit address by sending the unused one. The address is selected from the right of that header by hop count. Quoted strings are parsed per RFC 7230, so commas and semicolons inside quotes do not split elements. `unknown`, obfuscated `_name` identifiers, and non-IP values fall back to the socket address. Spoofed headers cannot evade or poison limits when no trusted proxy is configured. Shared rate limiting across processes is implemented via `PostgresRateLimitStore` (YEN-55).
 
 The `RATE_LIMIT_MAX_KEYS` setting (1,000–1,000,000, default 100,000) is a deliberate
 global admission limit that protects process memory. When active fixed windows fill
@@ -189,6 +226,57 @@ Readiness uses a dedicated database connection, a two-second deadline and a
 server-side statement timeout. `READINESS_CACHE_MS` controls result caching
 (default 1,000 ms, range 0–60,000; 0 disables caching). Concurrent probes share
 one check.
+
+## API Runtime Hardening (YEN-56)
+
+### Stateless Process Audit and Known Exceptions
+
+The API server process is strictly stateless; nothing required to survive a restart or maintain correctness across instances lives in process memory. The following are known exceptions:
+1. **Idempotency store (`MemoryIdempotencyStore`)**: Process-memory store by default; being migrated to Postgres in YEN-55.
+2. **Rate limit store (`MemoryRateLimitStore`)**: Process-memory store by default; being migrated to Postgres in YEN-55.
+3. **Funds resource (`funds` Map)**: In-memory foundation stub from YEN-15; domain persistence in Postgres in YEN-26/31.
+4. **Waitlist memory store (`MemoryWaitlistStore`)**: Permitted only in development when `YEN_ALLOW_MEMORY_STORES=true` is explicitly set; forbidden in production.
+
+### Postgres Connection Pool and PgBouncer Settings
+
+Database connection pool parameters are validated in `env.ts` with explicit defaults:
+- `DATABASE_POOL_MAX`: Maximum active connections (default `10`, range `1–1000`).
+- `DATABASE_POOL_IDLE_TIMEOUT_SECONDS`: Idle connection reap timeout (default `20`, range `0–86400`).
+- `DATABASE_POOL_ACQUIRE_TIMEOUT_SECONDS`: Connection acquisition timeout (default `10`, range `1–300`).
+
+PgBouncer transaction-mode considerations:
+- Startup parameters enforce UTC sessions without runtime `SET` leaks.
+- Named prepared statements are disabled by passing `prepare: false` to `createSql` when connecting through PgBouncer without `max_prepared_statements` enabled.
+- Locks: Transaction-scoped advisory locks (`pg_advisory_xact_lock`) are safe in transaction pooling mode; session-scoped advisory locks are not.
+
+### HTTP Limits, Timeouts, and Slow-Client Protection
+
+Node HTTP server settings tuned to mitigate slow-client attacks (Slowloris):
+- `SERVER_HEADERS_TIMEOUT_MS`: Time allowed to receive complete request headers (default `20000` ms, range `1000–300000`, must exceed `SERVER_KEEP_ALIVE_TIMEOUT_MS`).
+- `SERVER_REQUEST_TIMEOUT_MS`: Maximum duration for entire HTTP request receipt (default `15000` ms, range `1000–600000`).
+- `SERVER_KEEP_ALIVE_TIMEOUT_MS`: Inactivity timeout before closing idle keep-alive sockets (default `5000` ms, range `0–60000`).
+- `SERVER_MAX_HEADER_SIZE_BYTES`: Maximum HTTP request header size (default `16384` bytes / 16 KiB, range `1024–1048576`).
+- Request body limits: 64 KiB default body limit on `/v1/*` routes; configurable `WAITLIST_BODY_LIMIT_BYTES` (default 8,192 bytes) for waitlist.
+- Per-request execution timeout: `REQUEST_TIMEOUT_MS` (default `15000` ms, range `100–300000`). A request that runs longer receives `504 Gateway Timeout` with error code `gateway_timeout`. A timed-out handler is not cancelled: it keeps running until it settles, and it keeps its in-flight slot until then, so graceful shutdown waits for it instead of closing the database pool underneath it. Because the handler can still commit after the client received `504`, handlers that write must be idempotent; clients retry writes with the same `Idempotency-Key`.
+
+### Backpressure and Load Shedding
+
+- `CONCURRENCY_LIMIT`: Maximum concurrent in-flight requests (default `100`, range `1–10000`).
+- When the limit is reached, incoming requests immediately receive HTTP `503 Service Unavailable` with `Retry-After: 1` header before memory or event loop saturation occurs. Rejected requests never take an in-flight slot, so a burst of rejections does not keep the service rejecting once admitted work completes. Each rejection is logged as a warning with reason `overloaded` and the in-flight count.
+- `/health` and `/ready` are neither counted nor limited, so probes stay responsive during overload and never take capacity from ordinary requests.
+- `503` and `504` responses carry the same CORS headers as other responses, and `Retry-After` is exposed to browsers.
+
+### Graceful Shutdown Lifecycle
+
+Lifecycle management is handled by `createServerLifecycle` in `lifecycle.ts`:
+- Listens for `SIGTERM` and `SIGINT`.
+- Sets the shutdown flag immediately: `/ready` returns `503` from that moment, while `/health` stays `200`.
+- Closes the HTTP server (`server.close()`) to refuse new incoming connections.
+- Closes existing idle sockets (`server.closeIdleConnections()`).
+- Drains active in-flight requests with polling, bounded by `SHUTDOWN_TIMEOUT_MS` (default `10000` ms).
+- Force-closes remaining sockets (`server.closeAllConnections()`) if the shutdown deadline expires.
+- Closes the Postgres pool (`sql.end({ timeout })`) with bounded timeout.
+- Exits with code 0 when cleanup succeeded. If closing the pool fails, writes one line to stderr (`Error during <signal> shutdown: Database pool failed to close`) and exits with code 1. The error details are not printed.
 
 ## Prior art
 
