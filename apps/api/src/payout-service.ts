@@ -30,3 +30,10 @@ export class ReferencePayoutAdapter implements PartnerPayoutAdapter {
     return { providerPayoutId: request.idempotencyKey, status: "accepted" as const };
   }
 }
+
+/** Default adapter when banking integration is not enabled; fails closed. */
+export class UnconfiguredPayoutAdapter implements PartnerPayoutAdapter {
+  async initiate(): Promise<never> {
+    throw new Error("No payment partner adapter is configured. Payout initiation rejected.");
+  }
+}

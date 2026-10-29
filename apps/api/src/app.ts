@@ -1502,11 +1502,11 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const fundPolicy = await fundPolicyFor(fundIdResult.value);
     let updated: ExpenseRequest;
     try {
-      await withSpan("partner.payout.initiate", () =>
-        deps.payoutService.initiate(expense, actorId),
-      );
       updated = await withSpan("ledger.pay", async () =>
         payExpense(expense, input.bankTransactionId, now),
+      );
+      await withSpan("partner.payout.initiate", () =>
+        deps.payoutService.initiate(expense, actorId),
       );
     } catch (err) {
       if (err instanceof MakerCheckerViolationError || err instanceof PayoutsDisabledError) {

@@ -6,13 +6,19 @@ import {
 } from "@yen/ledger";
 import { paise } from "@yen/shared";
 import { describe, expect, it } from "vitest";
-import { PayoutService } from "./payout-service";
+import { PayoutService } from "./payout-service.js";
 
 describe("Expense Payout Security Routes (YEN-43)", () => {
   const FUND_ID = "00000000-0000-4000-8000-000000000001";
   const APPROVER_1 = "00000000-0000-4000-8000-000000000010" as PseudonymId;
   const APPROVER_2 = "00000000-0000-4000-8000-000000000011" as PseudonymId;
   const TREASURER = "00000000-0000-4000-8000-000000000020" as PseudonymId;
+  const MOCK_PASSKEY_SIG = {
+    credentialId: "cred1",
+    signatureHex: "00",
+    clientDataJson: "{}",
+    authenticatorDataHex: "00",
+  };
 
   function mockApprovedExpense(id: string): ExpenseRequest {
     return {
@@ -20,15 +26,36 @@ describe("Expense Payout Security Routes (YEN-43)", () => {
       fundId: FUND_ID,
       requesterId: "00000000-0000-4000-8000-000000000030" as PseudonymId,
       amountPaise: paise(50000),
-      purpose: "Equipment purchase",
-      category: "equipment",
+      description: "Equipment purchase",
       recipientRef: "vendor@bank",
       status: "approved",
+      holdId: "hold-1",
       approvals: [
-        { approverId: APPROVER_1, approvedAt: new Date().toISOString(), signature: "sig1" },
-        { approverId: APPROVER_2, approvedAt: new Date().toISOString(), signature: "sig2" },
+        {
+          approverId: APPROVER_1,
+          approvedAt: new Date().toISOString(),
+          passkeySignature: MOCK_PASSKEY_SIG,
+        },
+        {
+          approverId: APPROVER_2,
+          approvedAt: new Date().toISOString(),
+          passkeySignature: MOCK_PASSKEY_SIG,
+        },
       ],
+      evidence: [],
+      supersedesId: null,
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      submittedAt: new Date().toISOString(),
+      objectionEndsAt: null,
+      approvedAt: new Date().toISOString(),
+      rejectedAt: null,
+      rejectionReason: null,
+      expiredAt: null,
+      paidAt: null,
+      reconciledAt: null,
+      bankTransactionId: null,
+      expiresAt: null,
     };
   }
 

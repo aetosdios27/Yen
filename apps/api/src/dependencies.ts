@@ -22,7 +22,11 @@ import { PostgresEvidenceStore } from "./evidence-store-postgres.js";
 import type { PostgresExpenseObjectionStore } from "./expense-objections.js";
 import { jsonLogger, type Logger } from "./logging.js";
 import { MemoryPayeeProfileStore, type PayeeProfileStore } from "./payee-rules/profile-store.js";
-import { PayoutService, ReferencePayoutAdapter } from "./payout-service.js";
+import {
+  PayoutService,
+  ReferencePayoutAdapter,
+  UnconfiguredPayoutAdapter,
+} from "./payout-service.js";
 import {
   type ActionTokenStore,
   MemoryActionTokenStore,
@@ -551,7 +555,11 @@ export function defaultDependencies(
     concurrencyLimit: 100,
     requestTimeoutMs: 15000,
     inFlightTracker: new DefaultInFlightTracker(),
-    payoutService: new PayoutService(new ReferencePayoutAdapter()),
+    payoutService: new PayoutService(
+      process.env.ENABLE_MOCK_PAYOUTS === "true" || process.env.NODE_ENV === "test"
+        ? new ReferencePayoutAdapter()
+        : new UnconfiguredPayoutAdapter(),
+    ),
     isShuttingDown: () => false,
   };
 }
