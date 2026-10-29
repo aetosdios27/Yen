@@ -31,7 +31,9 @@ The bearer security scheme reserves the contract for YEN-22; it does not authent
 
 ## Evidence uploads
 
-No real malware scanner is integrated. The default scanner rejects every upload until a real scanner adapter is configured; the EICAR matching adapter exists only as a test double and does not provide malware protection.
+Uploads are scanned with ClamAV using the daemon's TCP INSTREAM protocol when `CLAMAV_HOST` is configured. Production startup requires this setting; local development keeps the fail-closed unconfigured scanner unless explicitly configured. Files ClamAV identifies as infected, files above its configured limit, and scans that fail or time out are rejected before bytes are stored or an evidence event is appended. Accepted evidence records include the scanner name and ClamAV signature database version. These fields stay out of the canonical event payload.
+
+For local testing, start a daemon with `podman run --rm --name yen-clamd -p 3310:3310 clamav/clamav:stable` and set `CLAMAV_HOST=127.0.0.1` (defaults: port `3310`, timeout `10000` ms, maximum scan size `10485760` bytes). Staging should run ClamAV as a private service reachable only by the API and set `CLAMAV_HOST` to its internal hostname. Do not expose clamd publicly. The `CLAMAV_PORT`, `CLAMAV_TIMEOUT_MS`, and `CLAMAV_MAX_SIZE_BYTES` variables are validated at startup.
 
 ## Wire money
 

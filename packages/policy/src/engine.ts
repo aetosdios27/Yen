@@ -383,10 +383,10 @@ function canViewFundByVisibility(viewerRoles: readonly FundRole[], tier: Visibil
       return true;
 
     case "donors":
-      return viewerRoles.some((role) => role === "donor" || isStaffRole(role));
+      return viewerRoles.some((role) => role === "donor" || role === "member" || isStaffRole(role));
 
     case "members":
-      return viewerRoles.some((role) => isStaffRole(role));
+      return viewerRoles.some((role) => role === "member" || isStaffRole(role));
 
     case "private":
       return viewerRoles.some((role) => isStaffRole(role));

@@ -13,7 +13,7 @@ describe("Role x Action Matrix completeness", () => {
   });
 
   it("covers every declared role in FUND_ROLES for every action", () => {
-    expect(FUND_ROLES.length).toBe(6);
+    expect(FUND_ROLES.length).toBe(7);
     for (const action of ACTIONS) {
       for (const role of FUND_ROLES) {
         const allowed = ROLE_ACTION_MATRIX[action][role];
@@ -32,7 +32,7 @@ describe("Role x Action Matrix completeness", () => {
 });
 
 describe("Table-driven role x action permission tests", () => {
-  // Generate all 22 actions * 6 roles = 132 test matrix pairs
+  // Generate all 22 actions * 7 roles = 154 test matrix pairs
   const matrixEntries: Array<{ action: Action; role: FundRole; expected: boolean }> = [];
   for (const action of ACTIONS) {
     for (const role of FUND_ROLES) {
@@ -44,8 +44,8 @@ describe("Table-driven role x action permission tests", () => {
     }
   }
 
-  it("generates exactly 132 test cases (22 actions x 6 roles)", () => {
-    expect(matrixEntries.length).toBe(132);
+  it("generates exactly 154 test cases (22 actions x 7 roles)", () => {
+    expect(matrixEntries.length).toBe(154);
   });
 
   it.each(matrixEntries)(

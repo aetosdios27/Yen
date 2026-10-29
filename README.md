@@ -151,7 +151,7 @@ If production breaks, use the
 <a id="security"></a>
 ## Contributing and security
 
-Direct pushes to `main` are blocked. Every change needs passing CI checks and a perfect Greptile review. <!-- claim: CLAIM-23 --> See [CONTRIBUTING.md](CONTRIBUTING.md) for pull request guidelines and [`.github/rulesets/`](.github/rulesets) for branch protection policies.
+Direct pushes to `main` are blocked. Every change needs passing CI checks. <!-- claim: CLAIM-23 --> See [CONTRIBUTING.md](CONTRIBUTING.md) for pull request guidelines and [`.github/rulesets/`](.github/rulesets) for branch protection policies.
 
 To report security vulnerabilities privately, follow [SECURITY.md](SECURITY.md). Any path that permits editing recorded events, bypassing configured approvals, or holding user funds is treated as critical.
 

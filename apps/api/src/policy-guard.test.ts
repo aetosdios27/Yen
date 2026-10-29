@@ -79,6 +79,23 @@ function scanRouteHandlersForRedaction(sourceText: string): string[] {
       handlerBody.includes("funds.set");
 
     if (isFundRoute) {
+      const redactedVariables = new Set<string>();
+      const redactedAssignment =
+        /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*[^;]*\b(?:redactFundReadModel|redactExpense|redactReceipt|redact)\s*\(/g;
+      let assignmentMatch: RegExpExecArray | null = null;
+      while (true) {
+        assignmentMatch = redactedAssignment.exec(handlerBody);
+        if (assignmentMatch === null) break;
+        redactedVariables.add(assignmentMatch[1] ?? "");
+      }
+      const isRedacted = (argument: string) =>
+        argument.includes(".redact(") ||
+        argument.includes("redact(") ||
+        argument.includes(".redactReceipt(") ||
+        argument.includes("redactReceipt(") ||
+        argument.includes("redactExpense(") ||
+        argument.includes("redactFundReadModel(") ||
+        [...redactedVariables].some((name) => new RegExp(`\\b${name}\\b`).test(argument.trim()));
       if (!isBlock) {
         // Expression-bodied handler: e.g. (c) => c.json(entry.fund, 200)
         const cJsonMatch = /c\.json\s*\(([\s\S]*?)\)/.exec(handlerBody);
@@ -88,13 +105,7 @@ function scanRouteHandlersForRedaction(sourceText: string): string[] {
           );
         } else {
           const arg = cJsonMatch[1] ?? "";
-          if (
-            !arg.includes(".redact(") &&
-            !arg.includes("redact(") &&
-            !arg.includes(".redactReceipt(") &&
-            !arg.includes("redactReceipt(") &&
-            !arg.includes("redactExpense(")
-          ) {
+          if (!isRedacted(arg)) {
             violations.push(
               `Route ${routeName} returns fund data without passing through policy.redact()`,
             );
@@ -112,13 +123,7 @@ function scanRouteHandlersForRedaction(sourceText: string): string[] {
           if (returnMatch === null) break;
           totalReturns++;
           const returnArg = returnMatch[1] ?? "";
-          if (
-            !returnArg.includes(".redact(") &&
-            !returnArg.includes("redact(") &&
-            !returnArg.includes(".redactReceipt(") &&
-            !returnArg.includes("redactReceipt(") &&
-            !returnArg.includes("redactExpense(")
-          ) {
+          if (!isRedacted(returnArg)) {
             unredactedReturns++;
           }
         }
@@ -198,6 +203,17 @@ describe("API route redaction guard (tripwire)", () => {
 
     const violations = scanRouteHandlersForRedaction(exprRedactedSource);
     expect(violations).toEqual([]);
+  });
+
+  it("accepts fund read handlers that bind a policy-redacted projection before returning it", () => {
+    const source = `
+      app.openapi(publicFundSummaryRoute, async (c) => {
+        const body = redactFundReadModel(actor, source);
+        setFundReadCache(c, publicTier, body);
+        return c.json(body, 200);
+      });
+    `;
+    expect(scanRouteHandlersForRedaction(source)).toEqual([]);
   });
 
   it("detects and flags violations when an action route handler returns raw fund data directly", () => {
@@ -400,6 +416,7 @@ describe("API route redaction guard (tripwire)", () => {
           upiVpa: "owner@yenbank",
           upiPayeeName: "Owner Fund",
           createdAt: "2026-10-28T00:00:00.000Z",
+          visibility: "private" as const,
         },
       },
     };
@@ -431,6 +448,7 @@ describe("API route redaction guard (tripwire)", () => {
       upiVpa: "test@yenbank",
       upiPayeeName: "Test Payee",
       createdAt: "2026-10-27T00:00:00.000Z",
+      visibility: "private",
     };
 
     const redacted = unsafeMarkRedactedForDevPolicy(unredacted);

@@ -4,7 +4,7 @@ The full handbook lives in Linear (**06 · Engineering Handbook**). This file is
 
 ## The rule
 
-**Nobody pushes to `main`. Not us, not admins, not bots.** Every change is a pull request with CI green and a perfect Greptile review. GitHub rulesets enforce it and there are no bypass actors (`.github/rulesets/`).
+**Nobody pushes to `main`. Not us, not admins, not bots.** Every change is a pull request with CI green. GitHub rulesets enforce it and there are no bypass actors (`.github/rulesets/`).
 
 ## Flow
 
@@ -13,9 +13,9 @@ The full handbook lives in Linear (**06 · Engineering Handbook**). This file is
 3. Open a PR early; draft is fine.
 4. PR title uses Conventional Commits and becomes the squashed commit message: `feat(ledger): post donation and event in one transaction`. Types: `feat fix perf refactor docs test build ci chore revert`.
 5. Reference the issue (`YEN-<n>`) in the branch, title or description. CI fails otherwise.
-6. Greptile reviews automatically. Fix or reply to every comment.
-7. A teammate review is welcome but not required; the merge gate is CI and Greptile.
-8. Resolve all conversations, keep the branch up to date, and wait for **CI Gate** and **Greptile 5/5**.
+6. Greptile reviews automatically when it is available. Fix or reply to its comments; it is advisory, not a merge gate.
+7. A teammate review is welcome but not required; the merge gate is CI.
+8. Resolve all conversations, keep the branch up to date, and wait for **CI Gate** and CodeQL.
 9. Squash and merge. The branch is deleted automatically.
 
 Every pull request gets a Vercel preview from the bot comment. Open it on a
@@ -26,29 +26,14 @@ rules, and the [rollback runbook](docs/runbooks/web-rollback.md) for incidents.
 
 ## What `main` enforces
 
-| Rule                               | Effect                                 |
-| ---------------------------------- | -------------------------------------- |
-| Pull request required              | no direct push, force-push or deletion |
-| No human approval required         | the merge gate is CI plus Greptile 5/5 |
-| Stale approvals dismissed          | new commits void earlier approvals     |
-| Review threads resolved            | includes Greptile's                    |
-| `CI Gate` and `Greptile 5/5` green | required checks aggregate everything   |
-| Squash merge only, linear history  | one PR is one commit on `main`         |
-
-## Greptile review gate
-
-The **Greptile 5/5** check requires exactly one Greptile review block in the
-current PR description, a matching confidence heading and score marker of 5/5,
-and a reviewed commit that matches the PR's current head. Greptile's later PR
-description edit reruns the check. To request another review, comment
-`@greptileai review` on the PR.
-
-The PR author can edit the description text, so this gate complements the
-required **Greptile Review** app check and required resolution of review
-threads; it does not replace either requirement. The gate runs separately from
-**CI Gate** so docs-only changes do not wait for a Greptile review through that
-aggregator. Both **Greptile 5/5** and the **Greptile Review** app check are
-required by the `main` ruleset.
+| Rule                              | Effect                                 |
+| --------------------------------- | -------------------------------------- |
+| Pull request required             | no direct push, force-push or deletion |
+| No human approval required        | the merge gate is CI and CodeQL        |
+| Stale approvals dismissed         | new commits void earlier approvals     |
+| Review threads resolved           | includes any bot's                     |
+| `CI Gate` and CodeQL green        | required checks aggregate everything   |
+| Squash merge only, linear history | one PR is one commit on `main`         |
 
 ## How to cite
 

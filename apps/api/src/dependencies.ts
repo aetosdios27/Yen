@@ -165,7 +165,14 @@ export interface AppDependencies {
   readonly isShuttingDown: () => boolean;
 }
 
-export function defaultDependencies(clock: () => number = Date.now): AppDependencies {
+export function defaultDependencies(
+  clock: () => number = Date.now,
+  expenseStore?: ExpenseStore,
+): AppDependencies {
+  if (!expenseStore && process.env.NODE_ENV === "production") {
+    throw new Error("Production API requires a PostgreSQL expense store");
+  }
+  const resolvedExpenseStore = expenseStore ?? new InMemoryExpenseStore();
   const pinStore = new MemoryPinStore({ clock });
   const actionTokenStore = new MemoryActionTokenStore({ clock });
   const pinNotificationService = new MemoryPinNotificationService();
@@ -182,7 +189,7 @@ export function defaultDependencies(clock: () => number = Date.now): AppDependen
 
   return {
     waitlistStore: new MemoryWaitlistStore(),
-    expenseStore: new InMemoryExpenseStore(),
+    expenseStore: resolvedExpenseStore,
     approvalProofVerifier: (signature) => signature.credentialId === "pin-proof",
     donationPledgeStore: new MemoryDonationPledgeStore(),
     pledgeLimit: { capacity: 10, refillMs: 3600000 },

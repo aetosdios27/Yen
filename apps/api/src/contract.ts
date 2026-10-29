@@ -21,6 +21,17 @@ const retryHeader = {
     description: "Seconds until retry",
   },
 };
+const fundReadHeaders = {
+  ...responseHeaders,
+  etag: {
+    schema: { type: "string" as const },
+    description: "Representation validator for public-tier responses",
+  },
+  "cache-control": {
+    schema: { type: "string" as const },
+    description: "Public short shared cache; authenticated tiers are private and no-store",
+  },
+};
 
 const cookieHeader = {
   "set-cookie": {
@@ -92,13 +103,23 @@ const upiVpa = z
   .regex(/^[a-zA-Z0-9._-]{2,256}@[a-zA-Z]{2,64}$/, "Expected a UPI ID such as club@bank");
 const fundFields = {
   name: z.string().trim().min(1).max(120),
+  purpose: z.string().trim().min(1).max(500).optional(),
   targetPaise: paiseWire,
   upiVpa,
   upiPayeeName: payeeName,
 };
-export const fundInput = z.object(fundFields).strict().openapi("CreateFund");
+const fundVisibility = z.enum(["public", "donors", "members", "private"]);
+export const fundInput = z
+  .object({ ...fundFields, visibility: fundVisibility.optional() })
+  .strict()
+  .openapi("CreateFund");
 export const fundSchema = z
-  .object({ ...fundFields, id: z.string().uuid(), createdAt: z.iso.datetime() })
+  .object({
+    ...fundFields,
+    visibility: fundVisibility,
+    id: z.string().uuid(),
+    createdAt: z.iso.datetime(),
+  })
   .strict()
   .openapi("Fund");
 
@@ -196,6 +217,97 @@ export const getFundRoute = createRoute({
     }),
   },
   responses: { 200: jsonResponse(fundSchema, "Fake fund"), ...protectedErrors },
+});
+
+const publicFundIdParams = z.object({
+  fundId: z
+    .string()
+    .uuid()
+    .openapi({
+      description: "Canonical FundId UUID; inaccessible funds return 404",
+      param: { name: "fundId", in: "path" },
+    }),
+});
+const verificationState = z.enum(["bank-matched", "anchored", "unverified"]);
+const publicTimelineItem = z.object({
+  id: z.string().uuid(),
+  occurredAt: z.iso.datetime(),
+  message: z.string(),
+  amountPaise: paiseWire.optional(),
+  verified: verificationState,
+});
+export const publicFundSummarySchema = z
+  .object({
+    fundId: z.string().uuid(),
+    name: z.string(),
+    purpose: z.string().nullable(),
+    raisedPaise: paiseWire.nullable(),
+    spentPaise: paiseWire,
+    verification: verificationState,
+    dataGaps: z.array(z.string()),
+  })
+  .strict();
+export const publicFundBreakdownSchema = z
+  .object({
+    fundId: z.string().uuid(),
+    categories: z.array(z.object({ category: z.string(), spentPaise: paiseWire }).strict()),
+    dataGaps: z.array(z.string()),
+  })
+  .strict();
+export const publicFundTimelineSchema = z
+  .object({
+    fundId: z.string().uuid(),
+    items: z.array(publicTimelineItem),
+    dataGaps: z.array(z.string()),
+  })
+  .strict();
+const publicFundErrors = {
+  404: protectedErrors[404],
+  429: protectedErrors[429],
+  500: protectedErrors[500],
+  503: protectedErrors[503],
+};
+export const publicFundSummaryRoute = createRoute({
+  method: "get",
+  path: "/v1/funds/{fundId}/public/summary",
+  tags: ["public funds"],
+  operationId: "getPublicFundSummary",
+  request: { params: publicFundIdParams },
+  responses: {
+    200: {
+      ...jsonResponse(publicFundSummarySchema, "Visibility-filtered fund summary"),
+      headers: fundReadHeaders,
+    },
+    ...publicFundErrors,
+  },
+});
+export const publicFundBreakdownRoute = createRoute({
+  method: "get",
+  path: "/v1/funds/{fundId}/public/breakdown",
+  tags: ["public funds"],
+  operationId: "getPublicFundBreakdown",
+  request: { params: publicFundIdParams },
+  responses: {
+    200: {
+      ...jsonResponse(publicFundBreakdownSchema, "Visibility-filtered spend breakdown"),
+      headers: fundReadHeaders,
+    },
+    ...publicFundErrors,
+  },
+});
+export const publicFundTimelineRoute = createRoute({
+  method: "get",
+  path: "/v1/funds/{fundId}/public/timeline",
+  tags: ["public funds"],
+  operationId: "getPublicFundTimeline",
+  request: { params: publicFundIdParams },
+  responses: {
+    200: {
+      ...jsonResponse(publicFundTimelineSchema, "Visibility-filtered plain language timeline"),
+      headers: fundReadHeaders,
+    },
+    ...publicFundErrors,
+  },
 });
 export const openapiSchema = z.record(z.string(), z.unknown());
 
@@ -1461,6 +1573,9 @@ const evidenceSchema = z
     gstin: z.string().optional(),
     invoiceNumber: z.string().optional(),
     invoiceDate: z.string().optional(),
+    scan: z
+      .object({ scannerName: z.string(), signatureVersion: z.string(), result: z.literal("clean") })
+      .strict(),
     createdAt: z.iso.datetime(),
   })
   .strict();
@@ -1514,7 +1629,7 @@ export const uploadEvidenceRoute = createRoute({
   tags: ["expenses", "evidence"],
   operationId: "uploadEvidence",
   description:
-    "Uploads bill or receipt evidence. Computes SHA-256 server-side, validates GSTIN and MIME type, enforces the 10MB limit, and detects duplicates within the fund.",
+    "Uploads bill or receipt evidence after malware scanning. Computes SHA-256 server-side, validates GSTIN and MIME type, enforces the 10MB limit, and detects duplicates within the fund. Scanner errors and infected files fail closed.",
   security,
   request: {
     params: evidenceParams,

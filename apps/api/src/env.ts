@@ -1,6 +1,6 @@
 import { parseDatabaseUrl } from "@yen/db";
 import * as z from "zod";
-import { poolEnv, rateLimitEnv, runtimeEnv } from "./config.js";
+import { clamAvEnv, poolEnv, rateLimitEnv, runtimeEnv } from "./config.js";
 
 const schema = z
   .object({
@@ -8,6 +8,7 @@ const schema = z
     ...rateLimitEnv.shape,
     ...poolEnv.shape,
     ...runtimeEnv.shape,
+    ...clamAvEnv.shape,
     DATABASE_URL: z.string().optional(),
     OTP_HASH_KEY: z.string().min(32).optional(),
     YEN_ALLOW_MEMORY_STORES: z.enum(["true", "false"]).optional(),
@@ -18,6 +19,13 @@ const schema = z
     PORT: z.coerce.number().int().min(1).max(65535),
   })
   .superRefine((value, ctx) => {
+    if (value.NODE_ENV === "production" && value.CLAMAV_HOST === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["CLAMAV_HOST"],
+        message: "Required in production; evidence scanning must be configured",
+      });
+    }
     if (value.NODE_ENV === "production" && value.OTP_HASH_KEY === undefined) {
       ctx.addIssue({
         code: "custom",

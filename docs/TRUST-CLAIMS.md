@@ -238,12 +238,12 @@ Each README claim that has a row carries a `<!-- claim: CLAIM-ID -->` marker. Th
 ### CLAIM-23 Direct pushes to main are blocked and changes need CI and an automated review
 
 - **Status:** partial
-- **Wording:** "Direct pushes to `main` are blocked. Every change needs passing CI checks and a perfect Greptile review."
+- **Wording:** "Direct pushes to `main` are blocked. Every change needs passing CI checks."
 - **Where:** README.md:143
 - **Mechanism:** `.github/rulesets/main.json`
-- **Test:** `.github/scripts/governance.test.mjs` "main merges on CI and Greptile, with stale approvals dismissed and threads resolved"; `.github/scripts/governance.test.mjs` "nobody can bypass the main ruleset"
+- **Test:** `.github/scripts/governance.test.mjs` "main merges on CI, with stale approvals dismissed and threads resolved"; `.github/scripts/governance.test.mjs` "nobody can bypass the main ruleset"
 - **Reference:** none yet (gap)
-- **Missing:** No human approval is required to merge; the gate is CI plus the Greptile 5/5 check. The tests read the JSON file in this repository. They do not query GitHub, so CI cannot show that the ruleset is live. An admin applies it with `.github/scripts/apply-repo-settings.sh`, which runs outside CI.
+- **Missing:** No human approval is required to merge; the gate is CI and CodeQL. The tests read the JSON file in this repository. They do not query GitHub, so CI cannot show that the ruleset is live. An admin applies it with `.github/scripts/apply-repo-settings.sh`, which runs outside CI.
 
 ### CLAIM-24 Applied migrations are immutable
 

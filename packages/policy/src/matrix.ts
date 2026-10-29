@@ -19,6 +19,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: false,
     auditor: false,
     donor: false,
+    member: false,
     public: false,
   },
   "fund:read": {
@@ -27,6 +28,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: true,
     auditor: true,
     donor: true,
+    member: true,
     public: true,
   },
   "fund:update_policy": {
@@ -35,6 +37,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: false,
     auditor: false,
     donor: false,
+    member: false,
     public: false,
   },
   "fund:update_visibility": {
@@ -43,6 +46,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: false,
     auditor: false,
     donor: false,
+    member: false,
     public: false,
   },
   "fund:close": {
@@ -51,6 +55,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: false,
     auditor: false,
     donor: false,
+    member: false,
     public: false,
   },
   "fund:add_member": {
@@ -59,6 +64,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: false,
     auditor: false,
     donor: false,
+    member: false,
     public: false,
   },
   "fund:remove_member": {
@@ -67,6 +73,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: false,
     auditor: false,
     donor: false,
+    member: false,
     public: false,
   },
   "expense:submit": {
@@ -75,6 +82,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: false,
     auditor: false,
     donor: false,
+    member: false,
     public: false,
   },
   "expense:approve": {
@@ -83,6 +91,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: true,
     auditor: false,
     donor: false,
+    member: false,
     public: false,
   },
   "expense:reject": {
@@ -91,6 +100,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: true,
     auditor: false,
     donor: false,
+    member: false,
     public: false,
   },
   "expense:flag": {
@@ -99,6 +109,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: true,
     auditor: true,
     donor: true,
+    member: false,
     public: false,
   },
   "expense:raise_objection": {
@@ -107,6 +118,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: false,
     auditor: true,
     donor: true,
+    member: false,
     public: false,
   },
   "expense:resolve_objection": {
@@ -115,6 +127,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: false,
     auditor: true,
     donor: false,
+    member: false,
     public: false,
   },
   "expense:payout": {
@@ -123,6 +136,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: false,
     auditor: false,
     donor: false,
+    member: false,
     public: false,
   },
   "expense:add_evidence": {
@@ -131,6 +145,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: false,
     auditor: false,
     donor: false,
+    member: false,
     public: false,
   },
   "expense:read": {
@@ -139,6 +154,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: true,
     auditor: true,
     donor: true,
+    member: true,
     public: true,
   },
   "donation:pledge": {
@@ -147,6 +163,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: true,
     auditor: true,
     donor: true,
+    member: false,
     public: true,
   },
   "donation:verify": {
@@ -155,6 +172,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: false,
     auditor: false,
     donor: false,
+    member: false,
     public: false,
   },
   "donation:reject": {
@@ -163,6 +181,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: false,
     auditor: false,
     donor: false,
+    member: false,
     public: false,
   },
   "donation:read": {
@@ -171,6 +190,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: true,
     auditor: true,
     donor: true,
+    member: true,
     public: true,
   },
   "audit:read_log": {
@@ -179,6 +199,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: true,
     auditor: true,
     donor: true,
+    member: true,
     public: true,
   },
   "bank:reconcile": {
@@ -187,6 +208,7 @@ export const ROLE_ACTION_MATRIX: RoleActionMatrix = {
     approver: false,
     auditor: false,
     donor: false,
+    member: false,
     public: false,
   },
 } as const;

@@ -20,6 +20,10 @@ export function isPublicDonationRoute(path: string): boolean {
   return /^\/v1\/funds\/[0-9a-f-]{36}\/(?:donations\/pledge|donation-details)\/?$/.test(path);
 }
 
+export function isPublicFundReadRoute(path: string): boolean {
+  return /^\/v1\/funds\/[0-9a-f-]{36}\/public\/(?:summary|breakdown|timeline)\/?$/.test(path);
+}
+
 export function isAuthRoute(path: string): boolean {
   return path.replace(/\/$/, "").startsWith("/v1/auth");
 }

@@ -12,32 +12,32 @@ Authorization is the primary source of real-world leaks and privilege escalation
 
 ## Verified Role x Action Matrix
 
-The matrix below is verified by compile-time exhaustiveness types (`RoleActionMatrix`) and table-driven tests (`packages/policy/src/matrix.test.ts`) covering all 132 role $\times$ action pairs (22 actions $\times$ 6 roles):
+The matrix below is verified by compile-time exhaustiveness types (`RoleActionMatrix`) and table-driven tests (`packages/policy/src/matrix.test.ts`) covering all 154 role $\times$ action pairs (22 actions $\times$ 7 roles):
 
-| Action                      |  owner  | treasurer | approver | auditor | donor | public |
-| :-------------------------- | :-----: | :-------: | :------: | :-----: | :---: | :----: |
-| `fund:create`               |  ALLOW  |   DENY    |   DENY   |  DENY   | DENY  |  DENY  |
-| `fund:read`                 |  ALLOW  |   ALLOW   |  ALLOW   |  ALLOW  | ALLOW | ALLOW* |
-| `fund:update_policy`        |  ALLOW  |   DENY    |   DENY   |  DENY   | DENY  |  DENY  |
-| `fund:update_visibility`    |  ALLOW  |   DENY    |   DENY   |  DENY   | DENY  |  DENY  |
-| `fund:close`                |  ALLOW  |   DENY    |   DENY   |  DENY   | DENY  |  DENY  |
-| `fund:add_member`           |  ALLOW  |   DENY    |   DENY   |  DENY   | DENY  |  DENY  |
-| `fund:remove_member`        |  ALLOW  |   DENY    |   DENY   |  DENY   | DENY  |  DENY  |
-| `expense:submit`            |  ALLOW  |   ALLOW   |   DENY   |  DENY   | DENY  |  DENY  |
-| `expense:approve`           | ALLOW** |   DENY    | ALLOW**  |  DENY   | DENY  |  DENY  |
-| `expense:reject`            |  ALLOW  |   DENY    |  ALLOW   |  DENY   | DENY  |  DENY  |
-| `expense:flag`              |  ALLOW  |   ALLOW   |  ALLOW   |  ALLOW  | ALLOW |  DENY  |
-| `expense:raise_objection`   |  DENY   |   DENY    |   DENY   |  ALLOW  | ALLOW |  DENY  |
-| `expense:resolve_objection` |  ALLOW  |   DENY    |   DENY   |  ALLOW  | DENY  |  DENY  |
-| `expense:payout`            |  ALLOW  |   ALLOW   |   DENY   |  DENY   | DENY  |  DENY  |
-| `expense:add_evidence`      |  ALLOW  |   ALLOW   |   DENY   |  DENY   | DENY  |  DENY  |
-| `expense:read`              |  ALLOW  |   ALLOW   |  ALLOW   |  ALLOW  | ALLOW | ALLOW* |
-| `donation:pledge`           |  ALLOW  |   ALLOW   |  ALLOW   |  ALLOW  | ALLOW | ALLOW  |
-| `donation:verify`           |  ALLOW  |   ALLOW   |   DENY   |  DENY   | DENY  |  DENY  |
-| `donation:reject`           |  ALLOW  |   ALLOW   |   DENY   |  DENY   | DENY  |  DENY  |
-| `donation:read`             |  ALLOW  |   ALLOW   |  ALLOW   |  ALLOW  | ALLOW | ALLOW* |
-| `audit:read_log`            |  ALLOW  |   ALLOW   |  ALLOW   |  ALLOW  | ALLOW | ALLOW* |
-| `bank:reconcile`            |  ALLOW  |   ALLOW   |   DENY   |  DENY   | DENY  |  DENY  |
+| Action                      |  owner  | treasurer | approver | auditor | donor | member | public |
+| :-------------------------- | :-----: | :-------: | :------: | :-----: | :---: | :----: | :----: |
+| `fund:create`               |  ALLOW  |   DENY    |   DENY   |  DENY   | DENY  |  DENY  |  DENY  |
+| `fund:read`                 |  ALLOW  |   ALLOW   |  ALLOW   |  ALLOW  | ALLOW | ALLOW  | ALLOW* |
+| `fund:update_policy`        |  ALLOW  |   DENY    |   DENY   |  DENY   | DENY  |  DENY  |  DENY  |
+| `fund:update_visibility`    |  ALLOW  |   DENY    |   DENY   |  DENY   | DENY  |  DENY  |  DENY  |
+| `fund:close`                |  ALLOW  |   DENY    |   DENY   |  DENY   | DENY  |  DENY  |  DENY  |
+| `fund:add_member`           |  ALLOW  |   DENY    |   DENY   |  DENY   | DENY  |  DENY  |  DENY  |
+| `fund:remove_member`        |  ALLOW  |   DENY    |   DENY   |  DENY   | DENY  |  DENY  |  DENY  |
+| `expense:submit`            |  ALLOW  |   ALLOW   |   DENY   |  DENY   | DENY  |  DENY  |  DENY  |
+| `expense:approve`           | ALLOW** |   DENY    | ALLOW**  |  DENY   | DENY  |  DENY  |  DENY  |
+| `expense:reject`            |  ALLOW  |   DENY    |  ALLOW   |  DENY   | DENY  |  DENY  |  DENY  |
+| `expense:flag`              |  ALLOW  |   ALLOW   |  ALLOW   |  ALLOW  | ALLOW |  DENY  |  DENY  |
+| `expense:raise_objection`   |  DENY   |   DENY    |   DENY   |  ALLOW  | ALLOW |  DENY  |  DENY  |
+| `expense:resolve_objection` |  ALLOW  |   DENY    |   DENY   |  ALLOW  | DENY  |  DENY  |  DENY  |
+| `expense:payout`            |  ALLOW  |   ALLOW   |   DENY   |  DENY   | DENY  |  DENY  |  DENY  |
+| `expense:add_evidence`      |  ALLOW  |   ALLOW   |   DENY   |  DENY   | DENY  |  DENY  |  DENY  |
+| `expense:read`              |  ALLOW  |   ALLOW   |  ALLOW   |  ALLOW  | ALLOW | ALLOW  | ALLOW* |
+| `donation:pledge`           |  ALLOW  |   ALLOW   |  ALLOW   |  ALLOW  | ALLOW |  DENY  | ALLOW  |
+| `donation:verify`           |  ALLOW  |   ALLOW   |   DENY   |  DENY   | DENY  |  DENY  |  DENY  |
+| `donation:reject`           |  ALLOW  |   ALLOW   |   DENY   |  DENY   | DENY  |  DENY  |  DENY  |
+| `donation:read`             |  ALLOW  |   ALLOW   |  ALLOW   |  ALLOW  | ALLOW | ALLOW  | ALLOW* |
+| `audit:read_log`            |  ALLOW  |   ALLOW   |  ALLOW   |  ALLOW  | ALLOW | ALLOW  | ALLOW* |
+| `bank:reconcile`            |  ALLOW  |   ALLOW   |   DENY   |  DENY   | DENY  |  DENY  |  DENY  |
 
 \* Read actions evaluate fund visibility tiers (`public`, `donors`, `members`, `private`). Public access is denied unless visibility is explicitly `public`.
 \*\* Approval actions enforce separation of duties.
@@ -72,7 +72,7 @@ Calls to `redact(viewer, record)` return a branded `Redacted<T>` view:
   - **Donors**: Completely pseudonymous. Real names, phone numbers, email addresses, and bank transaction IDs are stripped. Only `donorPseudonymId` (`psn_<uuid>`) is retained.
   - **Evidence/Bills**: Hash-only. File URLs, filenames, and MIME types are stripped; only cryptographic SHA-256 content hashes (`contentSha256`) are exposed.
   - **Notes**: Internal administrative notes are removed for unauthenticated/public viewers.
-- **Donors**: Receive the same masked names, pseudonymous donations, and hash-only evidence as public viewers. Notes are omitted.
+- **Donors and members**: Receive masked names, pseudonymous donations, and hash-only evidence. Notes are omitted.
 - **Staff**: Internal administrative roles (`owner`, `treasurer`, `approver`, `auditor`) receive allowlisted operational fields. Unknown fields are dropped for every viewer; unsupported shapes throw `RedactionError`. Expense and donation amounts use `Paise`.
 
 Primary references:

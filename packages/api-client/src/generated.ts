@@ -236,6 +236,54 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/funds/{fundId}/public/summary": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getPublicFundSummary"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/funds/{fundId}/public/breakdown": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getPublicFundBreakdown"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/funds/{fundId}/public/timeline": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getPublicFundTimeline"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/funds/{fundId}/expenses": {
     parameters: {
       query?: never;
@@ -587,7 +635,7 @@ export interface paths {
     /** @description Retrieves evidence attached to an expense after verifying stored bytes against their pinned SHA-256 hashes. */
     get: operations["getEvidence"];
     put?: never;
-    /** @description Uploads bill or receipt evidence. Computes SHA-256 server-side, validates GSTIN and MIME type, enforces the 10MB limit, and detects duplicates within the fund. */
+    /** @description Uploads bill or receipt evidence after malware scanning. Computes SHA-256 server-side, validates GSTIN and MIME type, enforces the 10MB limit, and detects duplicates within the fund. Scanner errors and infected files fail closed. */
     post: operations["uploadEvidence"];
     delete?: never;
     options?: never;
@@ -736,10 +784,13 @@ export interface components {
     };
     Fund: {
       name: string;
+      purpose?: string;
       /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
       targetPaise: string;
       upiVpa: string;
       upiPayeeName: string;
+      /** @enum {string} */
+      visibility: "public" | "donors" | "members" | "private";
       /** Format: uuid */
       id: string;
       /** Format: date-time */
@@ -747,10 +798,13 @@ export interface components {
     };
     CreateFund: {
       name: string;
+      purpose?: string;
       /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
       targetPaise: string;
       upiVpa: string;
       upiPayeeName: string;
+      /** @enum {string} */
+      visibility?: "public" | "donors" | "members" | "private";
     };
     Expense: {
       /** Format: uuid */
@@ -2060,6 +2114,273 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  getPublicFundSummary: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Canonical FundId UUID; inaccessible funds return 404 */
+        fundId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Visibility-filtered fund summary */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Representation validator for public-tier responses */
+          etag?: string;
+          /** @description Public short shared cache; authenticated tiers are private and no-store */
+          "cache-control"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** Format: uuid */
+            fundId: string;
+            name: string;
+            purpose: string | null;
+            /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
+            raisedPaise: string | null;
+            /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
+            spentPaise: string;
+            /** @enum {string} */
+            verification: "bank-matched" | "anchored" | "unverified";
+            dataGaps: string[];
+          };
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  getPublicFundBreakdown: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Canonical FundId UUID; inaccessible funds return 404 */
+        fundId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Visibility-filtered spend breakdown */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Representation validator for public-tier responses */
+          etag?: string;
+          /** @description Public short shared cache; authenticated tiers are private and no-store */
+          "cache-control"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** Format: uuid */
+            fundId: string;
+            categories: {
+              category: string;
+              /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
+              spentPaise: string;
+            }[];
+            dataGaps: string[];
+          };
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  getPublicFundTimeline: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Canonical FundId UUID; inaccessible funds return 404 */
+        fundId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Visibility-filtered plain language timeline */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Representation validator for public-tier responses */
+          etag?: string;
+          /** @description Public short shared cache; authenticated tiers are private and no-store */
+          "cache-control"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** Format: uuid */
+            fundId: string;
+            items: {
+              /** Format: uuid */
+              id: string;
+              /** Format: date-time */
+              occurredAt: string;
+              message: string;
+              /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
+              amountPaise?: string;
+              /** @enum {string} */
+              verified: "bank-matched" | "anchored" | "unverified";
+            }[];
+            dataGaps: string[];
+          };
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
           [name: string]: unknown;
         };
         content: {
@@ -4845,6 +5166,12 @@ export interface operations {
               gstin?: string;
               invoiceNumber?: string;
               invoiceDate?: string;
+              scan: {
+                scannerName: string;
+                signatureVersion: string;
+                /** @enum {string} */
+                result: "clean";
+              };
               /** Format: date-time */
               createdAt: string;
             }[];
@@ -5014,6 +5341,12 @@ export interface operations {
             gstin?: string;
             invoiceNumber?: string;
             invoiceDate?: string;
+            scan: {
+              scannerName: string;
+              signatureVersion: string;
+              /** @enum {string} */
+              result: "clean";
+            };
             /** Format: date-time */
             createdAt: string;
           };
