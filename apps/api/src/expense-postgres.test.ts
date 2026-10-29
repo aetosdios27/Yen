@@ -686,6 +686,8 @@ databaseSuite("Postgres expense store", (sql, url) => {
       notificationService: pinNotificationService,
       pinSecret: randomBytes(32).toString("hex"),
     });
+    // The default fund objection window is 24h; approvals only reach quorum after it closes.
+    let nowMs = Date.now();
     const makeApp = (principal: { id: string; role: "owner" | "approver" }) =>
       createApp({
         principal,
@@ -695,6 +697,7 @@ databaseSuite("Postgres expense store", (sql, url) => {
         actionTokenStore,
         pinNotificationService,
         pinService,
+        clock: () => nowMs,
         logger: { log: () => undefined },
       });
     const ownerApp = makeApp({ id: ownerId, role: "owner" });
@@ -720,6 +723,7 @@ databaseSuite("Postgres expense store", (sql, url) => {
       { method: "POST", headers: { "idempotency-key": "trace-submit" } },
     );
     expect(submitResponse.status).toBe(200);
+    nowMs += 25 * 3_600_000;
 
     for (const approverId of approverIds) {
       await pinService.setupPin(approverId, "482915", { userId: approverId });
