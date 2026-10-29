@@ -1,4 +1,5 @@
 import type { KontoTransactionExecutor } from "@konto-ledger/types";
+import { context, SpanStatusCode, trace } from "@opentelemetry/api";
 import * as db from "@yen/db";
 import {
   canonicalize,
@@ -109,6 +110,24 @@ export async function getLatestFundEvent(
 }
 
 export async function appendFundEventInTx(
+  tx: KontoTransactionExecutor,
+  fundId: string,
+  input: EventInput,
+): Promise<Event> {
+  const span = trace.getTracer("yen-ledger").startSpan("event.append");
+  return context.with(trace.setSpan(context.active(), span), async () => {
+    try {
+      return await appendFundEventInTxInner(tx, fundId, input);
+    } catch (error) {
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+}
+
+async function appendFundEventInTxInner(
   tx: KontoTransactionExecutor,
   fundId: string,
   input: EventInput,

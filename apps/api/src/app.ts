@@ -143,6 +143,7 @@ import { parseBankStatementCsv } from "./reconciliation/csv-parser.js";
 import { normalizePartnerWebhook } from "./reconciliation/partner-schema.js";
 import { buildOpaqueEvidenceKey, sanitizeEvidenceFilename } from "./storage.js";
 import type { AllowedEvidenceMimeType, StoredEvidence } from "./stores.js";
+import { withMoneyOperation, withSpan } from "./telemetry.js";
 import type { VirusScanResult } from "./virus-scanner.js";
 
 export { devPolicy } from "./policy.js";
@@ -214,8 +215,14 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       cors({
         origin: deps.corsOrigins,
         allowMethods: ["GET", "HEAD", "POST", "PUT", "OPTIONS"],
-        allowHeaders: ["Content-Type", "Idempotency-Key", "X-Request-Id"],
-        exposeHeaders: ["X-Request-Id", "Retry-After", "Idempotent-Replayed"],
+        allowHeaders: [
+          "Content-Type",
+          "Idempotency-Key",
+          "X-Request-Id",
+          "Traceparent",
+          "Tracestate",
+        ],
+        exposeHeaders: ["X-Request-Id", "X-Trace-Id", "Retry-After", "Idempotent-Replayed"],
       }),
     );
   }
@@ -362,7 +369,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       consentText: input.consent.text,
       consentVersion: input.consent.version,
     });
-    return c.json({ status: "received" }, 201);
+    return c.json({ status: "received" as const }, 201);
   });
   app.openapi(healthRoute, (c) => c.json({ status: "ok" as const }, 200));
   app.openapi(versionRoute, (c) => c.json(buildInfo, 200));
@@ -735,7 +742,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const fundContext = await publicFundContext(fundId, principal);
     const parsedFundId = parseFundId(fundId);
     if (!parsedFundId.ok) throw new ApiError("not_found");
-    const expense = await deps.expenseStore.get(expenseId);
+    const expense = await withSpan("db.expense.get", () => deps.expenseStore.get(expenseId));
     if (
       !expense ||
       expense.fundId !== parsedFundId.value ||
@@ -1001,7 +1008,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const { fundId, expenseId } = c.req.valid("param");
     const fundIdResult = parseFundId(fundId);
     if (!fundIdResult.ok) throw new ApiError("not_found");
-    const expense = await deps.expenseStore.get(expenseId);
+    const expense = await withSpan("db.expense.get", () => deps.expenseStore.get(expenseId));
     if (!expense || expense.fundId !== fundIdResult.value) {
       throw new ApiError("not_found");
     }
@@ -1035,7 +1042,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const { fundId, expenseId } = c.req.valid("param");
     const fundIdResult = parseFundId(fundId);
     if (!fundIdResult.ok) throw new ApiError("not_found");
-    const expense = await deps.expenseStore.get(expenseId);
+    const expense = await withSpan("db.expense.get", () => deps.expenseStore.get(expenseId));
     if (!expense || expense.fundId !== fundIdResult.value) {
       throw new ApiError("not_found");
     }
@@ -1077,7 +1084,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const { fundId, expenseId } = c.req.valid("param");
     const fundIdResult = parseFundId(fundId);
     if (!fundIdResult.ok) throw new ApiError("not_found");
-    const expense = await deps.expenseStore.get(expenseId);
+    const expense = await withSpan("db.expense.get", () => deps.expenseStore.get(expenseId));
     if (!expense || expense.fundId !== fundIdResult.value) {
       throw new ApiError("not_found");
     }
@@ -1101,10 +1108,12 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       fundId: fundIdResult.value,
       targetId: expenseId,
     };
-    await deps.pinService.verifyAction(principal.id, actionDetails, {
-      pin: c.req.header("x-approval-pin") ?? input.pin,
-      approvalToken: c.req.header("x-approval-token") ?? input.approvalToken,
-    });
+    await withSpan("pin.verify", () =>
+      deps.pinService.verifyAction(principal.id, actionDetails, {
+        pin: c.req.header("x-approval-pin") ?? input.pin,
+        approvalToken: c.req.header("x-approval-token") ?? input.approvalToken,
+      }),
+    );
     const approval: SignedApproval = {
       approverId,
       passkeySignature: {
@@ -1117,21 +1126,27 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     };
     const fundPolicy = await fundPolicyFor(fundIdResult.value);
     try {
-      const res = await deps.expenseStore.atomicApprove(
-        expenseId,
-        approval,
-        fundPolicy,
-        deps.approvalProofVerifier,
-        now,
-        principal.id,
+      const res = await withMoneyOperation("approve", () =>
+        withSpan("db.expense.atomic_approve", () =>
+          deps.expenseStore.atomicApprove(
+            expenseId,
+            approval,
+            fundPolicy,
+            deps.approvalProofVerifier,
+            now,
+            principal.id,
+          ),
+        ),
       );
-      await deps.pinNotificationService.notify({
-        kind: "approval_executed",
-        approverUserId: principal.id,
-        actionHash: computeActionHash(actionDetails),
-        recipientRoles: ["approver", "owner"],
-        actionSummary: actionDetails,
-      });
+      await withSpan("notification.enqueue", () =>
+        deps.pinNotificationService.notify({
+          kind: "approval_executed",
+          approverUserId: principal.id,
+          actionHash: computeActionHash(actionDetails),
+          recipientRoles: ["approver", "owner"],
+          actionSummary: actionDetails,
+        }),
+      );
       const updatedView = toExpenseView(res.expense);
       return c.json(
         redactReceipt("fund:expense:approve", {
@@ -1156,7 +1171,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const { fundId, expenseId } = c.req.valid("param");
     const fundIdResult = parseFundId(fundId);
     if (!fundIdResult.ok) throw new ApiError("not_found");
-    const expense = await deps.expenseStore.get(expenseId);
+    const expense = await withSpan("db.expense.get", () => deps.expenseStore.get(expenseId));
     if (!expense || expense.fundId !== fundIdResult.value) {
       throw new ApiError("not_found");
     }
@@ -1183,11 +1198,13 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     });
     const updated = rejectExpense(expense, input.reason, now);
     const fundPolicy = await fundPolicyFor(fundIdResult.value);
-    const persisted = await deps.expenseStore.save(updated, {
-      actorId,
-      actorUserId: principal.id,
-      policy: fundPolicy,
-    });
+    const persisted = await withMoneyOperation("pay", () =>
+      deps.expenseStore.save(updated, {
+        actorId,
+        actorUserId: principal.id,
+        policy: fundPolicy,
+      }),
+    );
     const finalExpense = persisted ?? updated;
     await deps.pinNotificationService.notify({
       kind: "approval_executed",
@@ -1212,7 +1229,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const { fundId, expenseId } = c.req.valid("param");
     const fundIdResult = parseFundId(fundId);
     if (!fundIdResult.ok) throw new ApiError("not_found");
-    const expense = await deps.expenseStore.get(expenseId);
+    const expense = await withSpan("db.expense.get", () => deps.expenseStore.get(expenseId));
     if (!expense || expense.fundId !== fundIdResult.value) {
       throw new ApiError("not_found");
     }
@@ -1229,12 +1246,18 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const now = new Date(deps.clock()).toISOString();
     const actorId = await actorFor(principal, fundIdResult.value);
     const fundPolicy = await fundPolicyFor(fundIdResult.value);
-    const updated = payExpense(expense, input.bankTransactionId, now);
-    const persisted = await deps.expenseStore.save(updated, {
-      actorId,
-      actorUserId: principal.id,
-      policy: fundPolicy,
-    });
+    const updated = await withSpan("ledger.pay", async () =>
+      payExpense(expense, input.bankTransactionId, now),
+    );
+    const persisted = await withMoneyOperation("pay", () =>
+      withSpan("db.expense.save", () =>
+        deps.expenseStore.save(updated, {
+          actorId,
+          actorUserId: principal.id,
+          policy: fundPolicy,
+        }),
+      ),
+    );
     const finalExpense = persisted ?? updated;
     const updatedView = toExpenseView(finalExpense);
     return c.json(
@@ -1250,7 +1273,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const { fundId, expenseId } = c.req.valid("param");
     const fundIdResult = parseFundId(fundId);
     if (!fundIdResult.ok) throw new ApiError("not_found");
-    const expense = await deps.expenseStore.get(expenseId);
+    const expense = await withSpan("db.expense.get", () => deps.expenseStore.get(expenseId));
     if (!expense || expense.fundId !== fundIdResult.value) {
       throw new ApiError("not_found");
     }
@@ -1268,17 +1291,23 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const actorId = await actorFor(principal, fundIdResult.value);
     let updated: ExpenseRequest;
     try {
-      updated = reconcileExpense(expense, input.bankTransactionId, now);
+      updated = await withSpan("ledger.reconcile", async () =>
+        reconcileExpense(expense, input.bankTransactionId, now),
+      );
     } catch (err) {
       if (err instanceof BankTransactionMismatchError) throw new ApiError("conflict");
       throw err;
     }
     const fundPolicy = await fundPolicyFor(fundIdResult.value);
-    await deps.expenseStore.save(updated, {
-      actorId,
-      actorUserId: principal.id,
-      policy: fundPolicy,
-    });
+    await withMoneyOperation("reconcile", () =>
+      withSpan("db.expense.save", () =>
+        deps.expenseStore.save(updated, {
+          actorId,
+          actorUserId: principal.id,
+          policy: fundPolicy,
+        }),
+      ),
+    );
     const updatedView = toExpenseView(updated);
     return c.json(
       redactExpense(principal, {
@@ -1318,16 +1347,20 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         },
       ]);
     }
-    const outcome = await deps.donationPledgeStore.pledge({
-      fundId: id.value,
-      amountPaise: Number(input.amountPaise),
-      utr: input.utr,
-      ...(input.donorName === undefined ? {} : { donorName: input.donorName }),
-      ...(donorContact === undefined ? {} : { donorContact }),
-      donorNameChoice: input.donorNameChoice,
-      ...(donorPseudonym ? { actorPseudonym: donorPseudonym } : {}),
-      ...(donorPrincipal ? { actorUserId: donorPrincipal.id } : {}),
-    });
+    const outcome = await withMoneyOperation("donate", () =>
+      withSpan("db.donation.pledge", () =>
+        deps.donationPledgeStore.pledge({
+          fundId: id.value,
+          amountPaise: Number(input.amountPaise),
+          utr: input.utr,
+          ...(input.donorName === undefined ? {} : { donorName: input.donorName }),
+          ...(donorContact === undefined ? {} : { donorContact }),
+          donorNameChoice: input.donorNameChoice,
+          ...(donorPseudonym ? { actorPseudonym: donorPseudonym } : {}),
+          ...(donorPrincipal ? { actorUserId: donorPrincipal.id } : {}),
+        }),
+      ),
+    );
     if (outcome.kind === "duplicate_utr") throw new ApiError("donation_utr_claimed");
     deps.reconciliationStore.addPledge({
       id: outcome.donationId,
@@ -1665,7 +1698,9 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
     let scanResult: VirusScanResult;
     try {
-      scanResult = await deps.virusScanner.scan({ objectKey, data: bytes, mimeType: file.type });
+      scanResult = await withSpan("evidence.scan", () =>
+        deps.virusScanner.scan({ objectKey, data: bytes, mimeType: file.type }),
+      );
     } catch {
       throw new ApiError("overloaded", [
         {

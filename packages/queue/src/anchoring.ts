@@ -207,6 +207,8 @@ export type AnchorAlert = {
 export type AnchorAlertSink = { emit(alert: AnchorAlert): Promise<void> };
 
 export const ANCHOR_RPC_RESILIENCE_OPTIONS: ResilienceOptions = {
+  spanName: "chain.rpc",
+  metricOperation: "anchor",
   timeoutMs: 10_000,
   maxAttempts: 3,
   baseDelayMs: 250,

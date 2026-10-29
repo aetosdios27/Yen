@@ -159,7 +159,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Source:** Brandur Leach; Stripe, 2017.
 - **URL:** https://stripe.com/blog/idempotency
 - **What we use it for:** Keys allow a client to retry an ambiguous operation and retrieve a cached result. Yen uses principal-scoped keys, exact request bytes and leases; its current in-memory store does not guarantee durable side-effect coordination.
-- **Where in this repo:** apps/api/README.md
+- **Where in this repo:** docs/slo.md
 
 <a id="aws-retries"></a>
 ### Timeouts, retries, and backoff with jitter
@@ -167,7 +167,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Source:** Amazon Web Services; AWS Builders’ Library, undated (accessed 2026).
 - **URL:** https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/
 - **What we use it for:** Timeouts, bounded retries and jitter limit retry amplification and synchronized bursts. This is guidance for clients and future integrations, not a claim that the API implements retry logic.
-- **Where in this repo:** apps/api/README.md
+- **Where in this repo:** docs/slo.md
 
 <a id="ietf-idempotency"></a>
 ### The Idempotency-Key HTTP Header Field
@@ -326,8 +326,8 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 
 - **Source:** Chris Jones, John Wilkes, Niall Murphy and Cody Smith; Google, Site Reliability Engineering, 2016.
 - **URL:** https://sre.google/sre-book/service-level-objectives/
-- **What we use it for:** Define user-relevant indicators and objectives before managing reliability. Yen has readiness and request logs but no SLO defined here.
-- **Where in this repo:** apps/api/README.md
+- **What we use it for:** Define user-relevant indicators and objectives before managing reliability. Yen's money-path targets are pilot proposals, not measured service commitments.
+- **Where in this repo:** docs/slo.md
 
 <a id="sre-burn"></a>
 ### Alerting on SLOs
@@ -335,15 +335,15 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Source:** Google; Site Reliability Workbook, 2018.
 - **URL:** https://sre.google/workbook/alerting-on-slos/
 - **What we use it for:** Burn-rate alerts connect error-budget consumption to actionable alerting. This is guidance, not an implemented alert.
-- **Where in this repo:** apps/api/README.md
+- **Where in this repo:** docs/slo.md
 
 <a id="otel-overview"></a>
 ### Overview
 
 - **Source:** OpenTelemetry; OpenTelemetry Specification, undated (accessed 2026).
 - **URL:** https://opentelemetry.io/docs/specs/otel/overview/
-- **What we use it for:** The specification describes telemetry APIs, SDKs and collectors. Yen’s structured request logs are not an OpenTelemetry implementation.
-- **Where in this repo:** apps/api/src/logging.ts
+- **What we use it for:** The specification describes vendor-neutral telemetry APIs, SDKs and collectors. Yen uses API and SDK instrumentation with optional OTLP export.
+- **Where in this repo:** apps/api/src/telemetry.ts; packages/shared/src/observability.ts
 
 <a id="sre-monitoring"></a>
 ### Monitoring Distributed Systems

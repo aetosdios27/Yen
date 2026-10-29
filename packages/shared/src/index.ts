@@ -57,3 +57,13 @@ export {
   rootRegistryAddress,
 } from "./registry/abi.js";
 export { type ResilienceOptions, ResilientCall } from "./resilience.js";
+export {
+  BURN_ALERT_THRESHOLDS,
+  type BurnRate,
+  calculateBurnRate,
+  emitBurnRateAlert,
+  SLOS,
+  type SloAlertSink,
+  type SloBurnAlert,
+  type SloDefinition,
+} from "./slo.js";

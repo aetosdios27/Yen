@@ -292,6 +292,7 @@ it("conceals an existing fund when read policy denies it", async () => {
   const created = fundSchema.parse(await (await app.request("/v1/funds", post())).json());
   const response = await app.request(`/v1/funds/${created.id}`);
   expect(response.status).toBe(404);
+  expect(response.headers.get("x-trace-id")).toMatch(/^[0-9a-f]{32}$/);
   expect(errorEnvelope.parse(await response.json()).error.code).toBe("not_found");
 });
 
@@ -498,6 +499,7 @@ it("logs only allowed metadata, using a route template and no raw inputs", async
     "event",
     "requestId",
     "method",
+    "traceId",
     "route",
     "status",
     "durationMs",

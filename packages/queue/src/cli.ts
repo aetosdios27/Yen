@@ -1,3 +1,4 @@
+import { startObservability } from "@yen/shared/observability";
 import {
   AnchoringWorker,
   createAnchorRpcResilience,
@@ -18,6 +19,8 @@ function fail(message: string): never {
 }
 
 let env: ReturnType<typeof parseWorkerEnv>;
+const telemetrySdk = startObservability();
+
 try {
   env = parseWorkerEnv(process.env);
 } catch (error) {
@@ -73,6 +76,7 @@ for (const queueName of Object.keys(DEFAULT_QUEUES)) {
 try {
   await worker.start();
 } catch (error) {
+  await telemetrySdk?.shutdown();
   fail(`Worker failed to start: ${error instanceof Error ? error.message : String(error)}`);
 }
 
@@ -86,7 +90,8 @@ let stoppedReported = false;
 const handleShutdownSignal = () => {
   void worker
     .stop()
-    .then(() => {
+    .then(async () => {
+      await telemetrySdk?.shutdown();
       if (!stoppedReported) {
         stoppedReported = true;
         process.stdout.write("Worker runtime stopped.\n");

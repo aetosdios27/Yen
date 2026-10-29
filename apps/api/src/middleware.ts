@@ -1,4 +1,5 @@
 import { z } from "@hono/zod-openapi";
+import { propagation, ROOT_CONTEXT, SpanStatusCode } from "@opentelemetry/api";
 import type { MiddlewareHandler } from "hono";
 import { getCookie } from "hono/cookie";
 import { routePath } from "hono/route";
@@ -7,6 +8,7 @@ import { idempotencyKey } from "./contract.js";
 import type { ApiEnv, AppDependencies } from "./dependencies.js";
 import { ApiError, errorBody, errorStatus, StoreError } from "./errors.js";
 import { logMethod } from "./logging.js";
+import { recordRequest, runRequestSpan, startRequestSpan } from "./telemetry.js";
 
 export function isWaitlistRoute(path: string): boolean {
   return path.replace(/\/$/, "") === "/v1/waitlist";
@@ -140,18 +142,45 @@ export function requestContext(deps: AppDependencies): MiddlewareHandler<ApiEnv>
 
     c.header("x-request-id", c.get("requestId"));
     const started = deps.clock();
-    await next();
+    const carrier: Record<string, string> = {};
+    const traceparent = c.req.header("traceparent");
+    const tracestate = c.req.header("tracestate");
+    if (traceparent !== undefined) carrier.traceparent = traceparent;
+    if (tracestate !== undefined) carrier.tracestate = tracestate;
+    const parentContext = propagation.extract(ROOT_CONTEXT, carrier);
+    const span = startRequestSpan("http.server.request", parentContext);
+    await runRequestSpan(span, next);
     if (isWaitlistRoute(c.req.path)) {
       const remaining = deps.waitlistMinResponseMs - (deps.clock() - started);
       if (remaining > 0) await deps.sleep(remaining);
     }
     c.header("x-request-id", c.get("requestId"));
     const parsedMethod = method.safeParse(c.req.method);
+    const route = routePath(c, -1) || "unmatched";
+    span.updateName(`${parsedMethod.success ? parsedMethod.data : "OTHER"} ${route}`);
+    span.setAttribute("http.request.method", parsedMethod.success ? parsedMethod.data : "OTHER");
+    span.setAttribute("http.route", route);
+    span.setAttribute("http.response.status_code", c.res.status);
+    if (c.res.status >= 500) span.setStatus({ code: SpanStatusCode.ERROR });
+    const spanContext = span.spanContext();
+    const traceId =
+      spanContext.traceId === "00000000000000000000000000000000"
+        ? c.get("requestId").replaceAll("-", "")
+        : spanContext.traceId;
+    c.header("x-trace-id", traceId);
+    recordRequest(
+      parsedMethod.success ? parsedMethod.data : "OTHER",
+      route,
+      c.res.status,
+      Math.max(0, deps.clock() - started),
+    );
+    span.end();
     deps.logger.log({
       event: "http_request",
       requestId: c.get("requestId"),
       method: parsedMethod.success ? parsedMethod.data : "OTHER",
-      route: routePath(c, -1) || "unmatched",
+      traceId,
+      route,
       status: c.res.status,
       durationMs: Math.max(0, deps.clock() - started),
     });

@@ -3,6 +3,10 @@ import { z } from "zod";
 const requestLog = z.object({
   event: z.literal("http_request"),
   requestId: z.string().uuid(),
+  traceId: z
+    .string()
+    .regex(/^[0-9a-f]{32}$/)
+    .optional(),
   method: z.enum(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "OTHER"]),
   route: z.string(),
   status: z.number().int(),
