@@ -1,4 +1,10 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createPublicKey, randomBytes, randomUUID } from "node:crypto";
+import {
+  GetPublicKeyCommand,
+  KMSClient,
+  type KMSClientConfig,
+  SignCommand,
+} from "@aws-sdk/client-kms";
 import { createSql, type Sql } from "@yen/db";
 import { buildIntervalTree, hash32, parseFundId, salt32, toHex } from "@yen/shared";
 import type { PgBoss } from "pg-boss";
@@ -8,10 +14,17 @@ import {
   createPublicClient,
   createWalletClient,
   type Hex,
+  hashMessage,
+  hashTypedData,
   http,
+  keccak256,
+  recoverAddress,
+  serializeTransaction,
+  toHex as viemToHex,
 } from "viem";
-import { type PrivateKeyAccount, privateKeyToAccount } from "viem/accounts";
+import { type PrivateKeyAccount, privateKeyToAccount, toAccount } from "viem/accounts";
 import { polygonAmoy } from "viem/chains";
+import { publicKeyToAddress } from "viem/utils";
 
 export type RootSigner = { getAccount(): Promise<Account> };
 export class LocalDevRootSigner implements RootSigner {
@@ -31,10 +44,131 @@ export class LocalDevRootSigner implements RootSigner {
   }
 }
 
-/** KMS adapter stub. It deliberately cannot sign until a provider implementation is configured. */
+const SECP256K1_ORDER = BigInt(
+  "0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141",
+);
+const HALF_SECP256K1_ORDER = SECP256K1_ORDER / 2n;
+const MAX_FEE_PER_GAS = 100_000_000_000n;
+const INITIAL_MAX_FEE_PER_GAS = 50_000_000_000n;
+const PRIORITY_FEE_PER_GAS = 1_000_000_000n;
+const MAX_PRIORITY_FEE_PER_GAS = 2_000_000_000n;
+export function parseDerEcdsaSignature(der: Uint8Array): { r: bigint; s: bigint } {
+  let i = 0;
+  const byte = () => {
+    const value = der[i++];
+    if (value === undefined) throw new Error("Malformed KMS DER signature");
+    return value;
+  };
+  if (byte() !== 0x30) throw new Error("Malformed KMS DER signature");
+  const sequenceLength = byte();
+  if (sequenceLength & 0x80) throw new Error("Unsupported KMS DER signature length");
+  const integer = () => {
+    if (byte() !== 0x02) throw new Error("Malformed KMS DER signature");
+    const length = byte();
+    if (!length || length > 33) throw new Error("Malformed KMS DER integer");
+    const value = der.slice(i, i + length);
+    i += length;
+    if (value.length !== length || value[0] === undefined || value[0] & 0x80)
+      throw new Error("Malformed KMS DER integer");
+    return BigInt(`0x${Buffer.from(value).toString("hex")}`);
+  };
+  const r = integer();
+  let s = integer();
+  if (
+    i !== der.length ||
+    i !== sequenceLength + 2 ||
+    r <= 0n ||
+    r >= SECP256K1_ORDER ||
+    s <= 0n ||
+    s >= SECP256K1_ORDER
+  )
+    throw new Error("Invalid KMS secp256k1 signature");
+  if (s > HALF_SECP256K1_ORDER) s = SECP256K1_ORDER - s;
+  return { r, s };
+}
+
 export class KmsRootSigner implements RootSigner {
+  private readonly client: KMSClient;
+  private account?: Account;
+  constructor(
+    private readonly keyId = process.env.ANCHOR_KMS_KEY_ID,
+    config: KMSClientConfig = {},
+    client?: KMSClient,
+  ) {
+    this.client = client ?? new KMSClient(config);
+  }
   async getAccount(): Promise<Account> {
-    throw new Error("KMS signer is not configured; refusing to sign");
+    if (!this.keyId) throw new Error("ANCHOR_KMS_KEY_ID is required for KMS signing");
+    if (this.account) return this.account;
+    const publicKeyResponse = await this.client.send(
+      new GetPublicKeyCommand({ KeyId: this.keyId }),
+    );
+    if (
+      publicKeyResponse.SigningAlgorithms?.includes("ECDSA_SHA_256") !== true ||
+      !publicKeyResponse.PublicKey
+    )
+      throw new Error("KMS key must be an ECC_SECG_P256K1 signing key");
+    const publicKey = createPublicKey({
+      key: Buffer.from(publicKeyResponse.PublicKey),
+      format: "der",
+      type: "spki",
+    }).export({ format: "jwk" });
+    if (!publicKey.x || !publicKey.y || publicKey.crv !== "secp256k1")
+      throw new Error("KMS public key is not secp256k1");
+    const address = publicKeyToAddress(
+      `0x04${Buffer.from(publicKey.x, "base64url").toString("hex")}${Buffer.from(publicKey.y, "base64url").toString("hex")}` as Hex,
+    );
+    const signDigest = async (hash: Hex) => {
+      const response = await this.client.send(
+        new SignCommand({
+          KeyId: this.keyId,
+          Message: Buffer.from(hash.slice(2), "hex"),
+          MessageType: "DIGEST",
+          SigningAlgorithm: "ECDSA_SHA_256",
+        }),
+      );
+      if (!response.Signature) throw new Error("KMS returned no signature");
+      const { r, s } = parseDerEcdsaSignature(response.Signature);
+      const signature = `${viemToHex(r, { size: 32 }).slice(2)}${viemToHex(s, { size: 32 }).slice(2)}`;
+      let yParity: 0 | 1 | undefined;
+      for (const parity of [0, 1] as const) {
+        try {
+          if (
+            (
+              await recoverAddress({
+                hash,
+                signature: `0x${signature}${(27 + parity).toString(16)}`,
+              })
+            ).toLowerCase() === address.toLowerCase()
+          )
+            yParity = parity;
+        } catch {}
+      }
+      if (yParity === undefined)
+        throw new Error("KMS signature does not recover to configured key");
+      return { r: viemToHex(r, { size: 32 }), s: viemToHex(s, { size: 32 }), yParity };
+    };
+    const sign = async ({ hash }: { hash: Hex }) => {
+      const sig = await signDigest(hash);
+      return `0x${sig.r.slice(2)}${sig.s.slice(2)}${(27 + sig.yParity).toString(16)}` as Hex;
+    };
+    this.account = toAccount({
+      address,
+      sign,
+      async signMessage({ message }) {
+        return sign({ hash: hashMessage(message) });
+      },
+      async signTypedData(data) {
+        return sign({ hash: hashTypedData(data) });
+      },
+      async signTransaction(transaction, { serializer } = {}) {
+        const serializerFn = serializer ?? serializeTransaction;
+        const digest = keccak256(await serializerFn(transaction));
+        const sig = await signDigest(digest);
+        return serializerFn(transaction, sig) as Promise<Hex>;
+      },
+    });
+    return this.account;
   }
 }
 
@@ -46,9 +180,64 @@ export type RootChain = {
   getPublication(sequence: bigint): Promise<Publication | null>;
   getBlockNumber(): Promise<bigint>;
   publish(root: `0x${string}`, sequence: bigint, signer: RootSigner): Promise<string>;
+  replacePending(
+    hash: string,
+    root: `0x${string}`,
+    sequence: bigint,
+    signer: RootSigner,
+  ): Promise<string>;
   getLatestSequence(): Promise<bigint>;
+  getBalance(address: `0x${string}`): Promise<bigint>;
   chainId: bigint;
 };
+export type AnchorAlertSink = {
+  emit(alert: {
+    type: "anchor.stale" | "anchor.root_mismatch" | "anchor.wallet_low";
+    fundId?: string;
+    sequence?: bigint;
+    details: string;
+  }): Promise<void>;
+};
+
+export async function reconcileAnchors(
+  sql: Sql,
+  chain: RootChain,
+  alerts: AnchorAlertSink,
+  now = new Date(),
+  walletAddress?: `0x${string}`,
+): Promise<void> {
+  if (walletAddress && (await chain.getBalance(walletAddress)) < 50_000_000_000_000_000n)
+    await alerts.emit({
+      type: "anchor.wallet_low",
+      details: "Publisher balance is below 0.05 native token; fund it before anchoring is blocked",
+    });
+  const stale = await sql<{ fund_id: string; last_landed: Date | null }[]>`
+    SELECT e.fund_id, MAX(a.confirmed_at) AS last_landed
+    FROM (SELECT DISTINCT fund_id FROM fund_events) e
+    LEFT JOIN anchors a ON a.fund_id = e.fund_id AND a.status = 'confirmed'
+    WHERE EXISTS (SELECT 1 FROM fund_events f WHERE f.fund_id = e.fund_id AND f.seq > COALESCE((SELECT MAX(x.to_seq) FROM anchors x WHERE x.fund_id = e.fund_id AND x.status = 'confirmed'), 0))
+    GROUP BY e.fund_id`;
+  for (const row of stale)
+    if (!row.last_landed || now.getTime() - new Date(row.last_landed).getTime() >= 60 * 60 * 1000)
+      await alerts.emit({
+        type: "anchor.stale",
+        fundId: row.fund_id,
+        details: "Events remain unanchored and no anchor has landed for at least one hour",
+      });
+  const anchors = await sql<
+    { fund_id: string; root: string; chain_sequence: bigint }[]
+  >`SELECT fund_id, root, chain_sequence FROM anchors WHERE status IN ('submitted', 'confirmed')`;
+  for (const anchor of anchors) {
+    const actual = await chain.getRoot(anchor.chain_sequence);
+    if (actual.toLowerCase() !== `0x${anchor.root}`.toLowerCase())
+      await alerts.emit({
+        type: "anchor.root_mismatch",
+        fundId: anchor.fund_id,
+        sequence: anchor.chain_sequence,
+        details: `On-chain root does not match local anchor ${anchor.chain_sequence}`,
+      });
+  }
+}
 
 type AnchorRow = {
   id: string;
@@ -60,6 +249,7 @@ type AnchorRow = {
   tx_hash: string | null;
   chain_id: bigint;
   chain_sequence: bigint;
+  created_at: Date;
 };
 type EventRow = { seq: bigint; hash: string };
 
@@ -147,10 +337,22 @@ export class AnchoringWorker {
       const receipt = await this.chain.getReceipt(anchor.tx_hash);
       if (receipt?.status === "success" && receipt.blockNumber !== undefined) {
         if ((await this.chain.getBlockNumber()) - receipt.blockNumber + 1n >= 12n)
-          await this.sql`UPDATE anchors SET status = 'confirmed' WHERE id = ${anchor.id}`;
+          await this
+            .sql`UPDATE anchors SET status = 'confirmed', confirmed_at = CURRENT_TIMESTAMP WHERE id = ${anchor.id}`;
         return;
       }
-      if (receipt?.status === "pending" || receipt === null) return;
+      if (receipt?.status === "pending") {
+        if (Date.now() - new Date(anchor.created_at).getTime() < 10 * 60 * 1000) return;
+        const replacement = await this.chain.replacePending(
+          anchor.tx_hash,
+          `0x${anchor.root}`,
+          sequence,
+          this.signer,
+        );
+        await this.sql`UPDATE anchors SET tx_hash = ${replacement} WHERE id = ${anchor.id}`;
+        return;
+      }
+      if (receipt === null) return;
       if (receipt.status === "failed") {
         await this.sql`UPDATE anchors SET status = 'failed' WHERE id = ${anchor.id}`;
         throw new Error("Anchor transaction failed; pg-boss will retry with exponential backoff");
@@ -164,7 +366,8 @@ export class AnchoringWorker {
       await this
         .sql`UPDATE anchors SET status = 'submitted', tx_hash = ${publication.txHash} WHERE id = ${anchor.id}`;
       if ((await this.chain.getBlockNumber()) - publication.blockNumber + 1n >= 12n)
-        await this.sql`UPDATE anchors SET status = 'confirmed' WHERE id = ${anchor.id}`;
+        await this
+          .sql`UPDATE anchors SET status = 'confirmed', confirmed_at = CURRENT_TIMESTAMP WHERE id = ${anchor.id}`;
       return;
     }
     const latestSequence = await this.chain.getLatestSequence();
@@ -234,6 +437,9 @@ export class ViemRootChain implements RootChain {
       functionName: "latestSequence",
     });
   }
+  async getBalance(address: `0x${string}`): Promise<bigint> {
+    return this.publicClient.getBalance({ address });
+  }
   async getBlockNumber(): Promise<bigint> {
     return this.publicClient.getBlockNumber();
   }
@@ -283,6 +489,44 @@ export class ViemRootChain implements RootChain {
       abi: publishRootAbi,
       functionName: "publishRoot",
       args: [root, sequence],
+      maxFeePerGas: INITIAL_MAX_FEE_PER_GAS,
+      maxPriorityFeePerGas: PRIORITY_FEE_PER_GAS,
+    });
+  }
+  async replacePending(
+    hash: string,
+    root: `0x${string}`,
+    sequence: bigint,
+    signer: RootSigner,
+  ): Promise<string> {
+    const previous = await this.publicClient.getTransaction({ hash: hash as Hex });
+    if (
+      previous.nonce === undefined ||
+      previous.maxFeePerGas === null ||
+      previous.maxFeePerGas === undefined ||
+      previous.maxPriorityFeePerGas === null ||
+      previous.maxPriorityFeePerGas === undefined
+    )
+      throw new Error("Cannot replace a non-EIP-1559 pending anchor transaction");
+    const bump = (fee: bigint) => (fee * 9n + 7n) / 8n;
+    const maxFeePerGas = bump(previous.maxFeePerGas);
+    const maxPriorityFeePerGas = bump(previous.maxPriorityFeePerGas);
+    if (maxFeePerGas > MAX_FEE_PER_GAS || maxPriorityFeePerGas > MAX_PRIORITY_FEE_PER_GAS)
+      throw new Error("Stuck anchor reached the configured fee ceiling; operator action required");
+    const account = await signer.getAccount();
+    const wallet = createWalletClient({
+      account,
+      chain: this.publicClient.chain,
+      transport: http(this.rpcUrl),
+    });
+    return wallet.writeContract({
+      address: this.address,
+      abi: publishRootAbi,
+      functionName: "publishRoot",
+      args: [root, sequence],
+      nonce: previous.nonce,
+      maxFeePerGas,
+      maxPriorityFeePerGas,
     });
   }
 }
@@ -305,6 +549,20 @@ export async function registerAnchoringDiscovery(boss: PgBoss, sql: Sql): Promis
     },
   );
   await boss.schedule("blockchain-anchoring-discovery", "*/5 * * * *", {});
+}
+
+export async function registerAnchorReconciliation(
+  boss: PgBoss,
+  sql: Sql,
+  chain: RootChain,
+  alerts: AnchorAlertSink,
+  walletAddress?: `0x${string}`,
+): Promise<void> {
+  await boss.createQueue("blockchain-anchoring-reconcile");
+  await boss.work("blockchain-anchoring-reconcile", { batchSize: 1 }, async () => {
+    await reconcileAnchors(sql, chain, alerts, new Date(), walletAddress);
+  });
+  await boss.schedule("blockchain-anchoring-reconcile", "*/5 * * * *", {});
 }
 
 export function createAnchoringWorker(

@@ -11,13 +11,33 @@ sequence; fund IDs, event hashes, and salts stay in Postgres. A unique `(fund_id
 constraint and a durable chain sequence make retries reuse the same anchor. The scheduled discovery
 queue sends at most one active job per fund using pg-boss singleton keys.
 
-`RootSigner` exposes the transaction account to the chain adapter. `LocalDevRootSigner` reads
-`ANCHOR_PRIVATE_KEY`; it is intended for local development and disposable test keys. `KmsRootSigner`
-is an intentionally unconfigured adapter that throws until an approved KMS integration is supplied.
-Neither signer stores keys in Postgres or includes them in error messages. The worker starts anchoring
-when `ANCHOR_RPC_URL` and `ROOT_REGISTRY_ADDRESS` are set, and then requires `ANCHOR_PRIVATE_KEY`.
+`RootSigner` exposes the transaction account to the chain adapter. `KmsRootSigner` uses AWS KMS
+`ECC_SECG_P256K1` keys with `ECDSA_SHA_256`; it fetches only the public key and asks KMS to sign
+transaction digests. The DER signature is parsed, normalized to low-s, and assigned the recovery
+parity that recovers the configured KMS address. The private key never enters the worker. Configure
+`ANCHOR_KMS_KEY_ID` and standard AWS SDK credentials/region. The worker fails closed when KMS is
+selected but not configured. `LocalDevRootSigner` reads `ANCHOR_PRIVATE_KEY` only as a local fallback.
+The worker starts anchoring when `ANCHOR_RPC_URL` and `ROOT_REGISTRY_ADDRESS` are set.
 `ViemRootChain` defaults to Polygon Amoy (chain 80002) and requires an explicit registry address and
 RPC URL.
+
+Anvil integration tests deploy the actual `RootRegistry` artifact and publish a root to a local
+Anvil node. CI installs Anvil alongside Forge and runs this test without a skip condition.
+
+The scheduled reconciliation worker checks every five minutes for funds with unanchored events whose
+last anchor was created at least one hour ago, compares submitted/confirmed local roots with
+`rootAt(sequence)`, and alerts when publisher balance falls below 0.05 native token. It emits
+`anchor.stale`, `anchor.root_mismatch`, and `anchor.wallet_low` through the injected
+`AnchorAlertSink` (the CLI implementation writes structured alerts to stderr). The `anchor.published`
+event schema is immutable and only accepts `{ anchor_id, global_root }`; it has no receipt fields.
+Consequently tx hash, block, and sequence remain in the anchors table/chain receipt and cannot yet be
+appended to each fund log without a separately approved canonical event schema change.
+
+Operational fee policy caps initial max fee at 50 gwei and priority fee at 1 gwei. After ten minutes,
+a pending transaction is replaced with the same nonce and both fees are increased by 12.5%, up to
+100 gwei max fee and 2 gwei priority fee. Once a cap prevents another replacement, the worker fails
+closed for operator action. Migration `0015_anchor_replacements` permits the durable tx hash to change
+only during a submitted-to-submitted replacement; anchor identity and root remain immutable.
 
 The current confirmation policy requires 12 blocks after the publication block. A reorg can remove
 a transaction or its receipt after an apparent success; therefore `confirmed` is an observed
