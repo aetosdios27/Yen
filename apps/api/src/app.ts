@@ -1966,10 +1966,10 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   });
   registerDebitReviewRoutes(app, {
     store: deps.reconciliationStore,
-    authorizeFund(context, rawFundId, ownerOnly) {
+    async authorizeFund(context, rawFundId, ownerOnly) {
       const parsedFundId = parseFundId(rawFundId);
       if (!parsedFundId.ok) throw new ApiError("not_found");
-      const fund = funds.get(parsedFundId.value);
+      const fund = await funds.get(parsedFundId.value);
       if (!fund) throw new ApiError("not_found");
       const resource = { kind: "fund", fund } as const;
       const principal = authorizedFund(context, "fund:reconcile", resource);

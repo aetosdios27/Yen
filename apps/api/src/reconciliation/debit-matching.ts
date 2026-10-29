@@ -60,6 +60,7 @@ export async function matchDebitInTx(
   >`
     SELECT id, hold_id, expense_data FROM expenses
     WHERE fund_id = ${debit.fundId} AND status = 'approved'
+      AND NOT EXISTS (SELECT 1 FROM bank_transactions linked WHERE linked.matched_expense_id = expenses.id)
       AND (expense_data->>'amountPaise') = ${String(debit.amountPaise)}
       AND (expense_data->>'recipientRef') IN (${debit.counterpartyVpa ?? ""}, ${debit.counterpartyAccountFingerprint ?? ""})
       AND abs(extract(epoch FROM (${debit.postedAt}::timestamptz - (expense_data->>'approvedAt')::timestamptz)) / 86400) <= 7

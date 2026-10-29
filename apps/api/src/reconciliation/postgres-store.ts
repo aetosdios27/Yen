@@ -308,7 +308,7 @@ export class PostgresReconciliationStore implements ReconciliationStore {
       SELECT 'unapproved'::text AS kind, bt.id, bt.bank_reference, bt.amount_paise::text,
         bt.posted_at, bt.counterparty_vpa, bt.counterparty_account_fingerprint
       FROM unapproved_debits ud JOIN bank_transactions bt ON bt.id = ud.bank_transaction_id
-      WHERE ud.fund_id = ${fundId} AND ud.resolved_at IS NULL
+      WHERE ud.fund_id = ${fundId} AND ud.resolved_at IS NULL AND bt.matched_expense_id IS NULL
       UNION ALL
       SELECT 'ambiguous'::text AS kind, id, bank_reference, amount_paise::text,
         posted_at, counterparty_vpa, counterparty_account_fingerprint

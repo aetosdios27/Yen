@@ -1,12 +1,9 @@
 ALTER TABLE bank_transactions
   DROP CONSTRAINT bank_transactions_reconciliation_status_check;
 ALTER TABLE bank_transactions
-  ADD COLUMN matched_expense_id uuid REFERENCES expenses(id),
   ADD COLUMN counterparty_account_fingerprint text,
   ADD CONSTRAINT bank_transactions_reconciliation_status_check
     CHECK (reconciliation_status IN ('unmatched', 'matched', 'manually_matched', 'ignored', 'ambiguous'));
-
-CREATE INDEX bank_transactions_matched_expense_id_idx ON bank_transactions(matched_expense_id);
 
 CREATE OR REPLACE FUNCTION yen_bank_transactions_protect()
 RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
@@ -115,3 +112,6 @@ $$;
 CREATE TRIGGER unapproved_debits_no_truncate BEFORE TRUNCATE ON unapproved_debits
   FOR EACH STATEMENT EXECUTE FUNCTION yen_unapproved_debits_no_truncate();
 REVOKE UPDATE, DELETE, TRUNCATE ON unapproved_debits FROM PUBLIC;
+
+-- expense_data was written as a JSON string scalar (double-encoded); the debit matcher reads its fields.
+UPDATE expenses SET expense_data = (expense_data #>> '{}')::jsonb WHERE jsonb_typeof(expense_data) = 'string';

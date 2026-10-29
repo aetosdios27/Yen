@@ -7,6 +7,7 @@ import {
   createTestFund,
   ledgerDatabaseSuite,
 } from "../../../../packages/ledger/src/test/database.js";
+import { PostgresExpenseStore } from "../expense-store.js";
 import { checkBankBalance } from "./debit-matching.js";
 import { PostgresReconciliationStore } from "./postgres-store.js";
 
@@ -254,5 +255,71 @@ ledgerDatabaseSuite("Postgres debit matching", (sql) => {
       SELECT action, reason FROM debit_reconciliation_actions WHERE bank_transaction_id = ${bankTransactionId}
     `;
     expect(actions).toEqual([{ action: "manual_match", reason }]);
+  });
+
+  it("does not match a second same-amount debit to an expense already paid through the pay route", async () => {
+    const fundId = await createTestFund(sql);
+    await sql.begin((tx) => recordDonation(tx, { fundId, amount: paise(10_000) }));
+    const expense = await createApprovedExpense(sql, fundId, 1_000, "club.vendor@upi");
+    const store = new PostgresReconciliationStore(sql, { emit: async () => {} });
+    const expenses = new PostgresExpenseStore(sql);
+    const first = await store.ingest([
+      {
+        fundId,
+        bankReference: `paid-first-${uuidv7()}`,
+        amountPaise: paise(1_000),
+        type: "debit",
+        postedAt: new Date().toISOString(),
+        counterpartyVpa: "other.payee@upi",
+        source: "statement_upload",
+        rawPayload: {},
+      },
+    ]);
+    const firstDebitId = first.transactions[0]?.id ?? "";
+    expect(first.transactions[0]?.reconciliationStatus).toBe("unmatched");
+
+    const current = await expenses.get(expense.expenseId);
+    if (!current) throw new Error("approved expense was not persisted");
+    await expenses.save({
+      ...current,
+      status: "paid",
+      paidAt: new Date().toISOString(),
+      bankTransactionId: firstDebitId,
+    });
+    const linked = await sql<{ matched_expense_id: string; reconciliation_status: string }[]>`
+      SELECT matched_expense_id, reconciliation_status FROM bank_transactions WHERE id = ${firstDebitId}
+    `;
+    expect(linked[0]).toEqual({
+      matched_expense_id: expense.expenseId,
+      reconciliation_status: "matched",
+    });
+
+    const second = await store.ingest([
+      {
+        fundId,
+        bankReference: `paid-second-${uuidv7()}`,
+        amountPaise: paise(1_000),
+        type: "debit",
+        postedAt: new Date().toISOString(),
+        counterpartyVpa: "club.vendor@upi",
+        source: "statement_upload",
+        rawPayload: {},
+      },
+    ]);
+    const secondDebitId = second.transactions[0]?.id ?? "";
+    expect(second.matchedCount).toBe(0);
+    expect(second.transactions[0]?.reconciliationStatus).toBe("unmatched");
+    const review = await store.listDebitReview(fundId);
+    expect(review).toEqual([
+      expect.objectContaining({ kind: "unapproved", bankTransactionId: secondDebitId }),
+    ]);
+    const secondRows = await sql<{ matched_expense_id: string | null }[]>`
+      SELECT matched_expense_id FROM bank_transactions WHERE id = ${secondDebitId}
+    `;
+    expect(secondRows[0]?.matched_expense_id).toBeNull();
+    const paidEvents = (await getFundEvents(sql, fundId)).filter(
+      (event) => event.type === "expense.paid",
+    );
+    expect(paidEvents).toHaveLength(1);
   });
 });

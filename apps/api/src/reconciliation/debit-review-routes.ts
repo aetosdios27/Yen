@@ -121,7 +121,7 @@ export function registerDebitReviewRoutes(
       context: Context<ApiEnv>,
       fundId: string,
       ownerOnly: boolean,
-    ) => { readonly principal: Principal; readonly resource: ExistingFundResource };
+    ) => Promise<{ readonly principal: Principal; readonly resource: ExistingFundResource }>;
     readonly actorForUser: (userId: string, fundId: string) => Promise<string>;
     readonly redact: <T>(principal: Principal, resource: ExistingFundResource, value: T) => T;
     readonly clock: () => number;
@@ -129,14 +129,14 @@ export function registerDebitReviewRoutes(
 ) {
   app.openapi(listDebitReviewRoute, async (context) => {
     const params = context.req.valid("param");
-    const { principal, resource } = options.authorizeFund(context, params.fundId, false);
+    const { principal, resource } = await options.authorizeFund(context, params.fundId, false);
     const items = await options.store.listDebitReview(params.fundId);
     return context.json(options.redact(principal, resource, { items }), 200);
   });
 
   app.openapi(resolveDebitRoute, async (context) => {
     const params = context.req.valid("param");
-    const { principal, resource } = options.authorizeFund(context, params.fundId, true);
+    const { principal, resource } = await options.authorizeFund(context, params.fundId, true);
     const { reason } = context.req.valid("json");
     const resolved = await options.store.resolveUnapprovedDebit({
       fundId: params.fundId,
@@ -151,7 +151,7 @@ export function registerDebitReviewRoutes(
 
   app.openapi(manualDebitMatchRoute, async (context) => {
     const params = context.req.valid("param");
-    const { principal, resource } = options.authorizeFund(context, params.fundId, true);
+    const { principal, resource } = await options.authorizeFund(context, params.fundId, true);
     const { reason, expenseId } = context.req.valid("json");
     const result = await options.store.manualMatchDebit({
       fundId: params.fundId,
@@ -173,7 +173,7 @@ export function registerDebitReviewRoutes(
 
   app.openapi(manualDebitUnmatchRoute, async (context) => {
     const params = context.req.valid("param");
-    const { principal, resource } = options.authorizeFund(context, params.fundId, true);
+    const { principal, resource } = await options.authorizeFund(context, params.fundId, true);
     const { reason } = context.req.valid("json");
     const result = await options.store.manualUnmatchDebit({
       fundId: params.fundId,
