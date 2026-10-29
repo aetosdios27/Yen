@@ -11,9 +11,7 @@ import tamperedPayloadFixture from "../../../verifier/vectors/v1/tampered-event-
 import tamperedProofFixture from "../../../verifier/vectors/v1/tampered-inclusion-path.json" with {
   type: "json",
 };
-import validFixture from "../../../verifier/vectors/v1/valid-two-events.json" with {
-  type: "json",
-};
+import validFixture from "../../../verifier/vectors/v1/valid-two-events.json" with { type: "json" };
 import {
   type AuditBundle,
   AuditReasonCode,

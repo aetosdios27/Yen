@@ -1,14 +1,5 @@
-import { type FundId, parseFundId } from "../ids.js";
-import {
-  equalBytes,
-  fromHex,
-  type Hash32,
-  hash32,
-  type Salt32,
-  salt32,
-  sha256,
-  toHex,
-} from "./hash.js";
+import { parseFundId } from "../ids.js";
+import { fromHex, hash32, salt32, sha256, toHex } from "./hash.js";
 import { fingerprint, fundLeaf, globalRoot } from "./interval.js";
 import { type InclusionProof, leafHash, rootFromInclusion } from "./tree.js";
 
@@ -130,9 +121,7 @@ export function canonicalizeJson(value: unknown): string {
   for (const key of keys) {
     if (!validUnicode(key)) throw new TypeError("JCS rejects lone surrogates in keys");
   }
-  return `{${keys
-    .map((key) => `${JSON.stringify(key)}:${canonicalizeJson(obj[key])}`)
-    .join(",")}}`;
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalizeJson(obj[key])}`).join(",")}}`;
 }
 
 export async function computeCanonicalEventHash(event: Record<string, unknown>): Promise<string> {
@@ -338,11 +327,7 @@ export async function verifyAuditBundle(input: unknown): Promise<AuditCheck[]> {
         fundIdParsed.value,
         hash32(fromHex(entry.latest_event_hash)),
       );
-      const fundLeafH = await fundLeaf(
-        entry.eventProof.size,
-        computedEventRoot,
-        fundFingerprint,
-      );
+      const fundLeafH = await fundLeaf(entry.eventProof.size, computedEventRoot, fundFingerprint);
 
       const fundProofObj = toInclusionProof(entry.fundProof);
       const globalTreeRoot = await rootFromInclusion(fundProofObj, fundLeafH);

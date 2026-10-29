@@ -1,13 +1,7 @@
 import crypto from "node:crypto";
 import { OpenAPIHono, type z } from "@hono/zod-openapi";
 import { type AlertRow, exportAuditBundle, normalizeWaitlistContact } from "@yen/db";
-import {
-  type Event,
-  makeNextEvent,
-  parsePseudonymId,
-  type PseudonymId,
-  payloadSchemas,
-} from "@yen/eventlog";
+import { type Event, parsePseudonymId, payloadSchemas } from "@yen/eventlog";
 import {
   BankTransactionMismatchError,
   createDraftRequest,
@@ -37,11 +31,11 @@ import {
   redactFundReadModel,
 } from "@yen/policy";
 import {
+  buildIntervalTree,
   type DonorReceiptData,
+  fromHex,
   generateReceiptPdf,
   generateReceiptSvg,
-  buildIntervalTree,
-  fromHex,
   hash32,
   PRIVACY_NOTICE_VERSION,
   paise,
@@ -112,10 +106,12 @@ import {
   pledgeDonationRoute,
   principalSchema,
   publicAuditBundleRoute,
+  type publicAuditBundleSchema,
   publicFundBreakdownRoute,
   publicFundSummaryRoute,
   publicFundTimelineRoute,
   publicRecordProofRoute,
+  type publicRecordProofSchema,
   readyRoute,
   reconcileExpenseRoute,
   rejectExpenseRoute,
@@ -1090,104 +1086,23 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
             contractAddress,
           );
           setFundReadCache(c, publicTier, bundle);
-          return c.json(bundle, 200);
+          return c.json(bundle as unknown as z.infer<typeof publicAuditBundleSchema>, 200);
         } catch {
-          // If audit bundle cannot be built from incomplete interval, fall through
+          throw new ApiError("not_found");
         }
       }
-    }
-
-    const expenses = await listFundExpenses(fundId);
-    if (expenses.length === 0) {
       throw new ApiError("not_found");
     }
 
-    const actor = parsePseudonymId("psn_00000000-0000-4000-8000-000000000002");
-    let prior: Event | null = null;
-    const events: Event[] = [];
-    for (let seq = 1; seq <= expenses.length; seq++) {
-      const expense = expenses[seq - 1];
-      if (!expense) break;
-      const expenseUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        expense.id,
-      )
-        ? expense.id
-        : "00000000-0000-4000-8000-000000000001";
-      prior = await makeNextEvent(prior, {
-        fund_id: fundId,
-        type: "expense.submitted",
-        version: 1,
-        actor,
-        occurred_at: expense.submittedAt ?? expense.createdAt ?? "2026-01-01T00:00:01.000Z",
-        payload: {
-          expense_id: expenseUuid,
-          amount_paise: Number(expense.amountPaise),
-        },
-      } as Parameters<typeof makeNextEvent>[1]);
-      events.push(prior);
+    if (deps.auditBundleProvider) {
+      const bundle = await deps.auditBundleProvider.getAuditBundle(fundId);
+      if (bundle) {
+        setFundReadCache(c, publicTier, bundle);
+        return c.json(bundle as unknown as z.infer<typeof publicAuditBundleSchema>, 200);
+      }
     }
-    const saltBySeq = events.map((ev) =>
-      crypto.createHash("sha256").update(`${fundId}:${ev.seq}:${ev.hash}`).digest("hex"),
-    );
-    const lastEvent = events[events.length - 1];
-    if (!lastEvent) throw new ApiError("not_found");
-    const tree = await buildIntervalTree([
-      {
-        fundId: parsed.value,
-        latestEventHash: hash32(fromHex(lastEvent.hash)),
-        events: events.map((event, i) => ({
-          seq: event.seq,
-          eventHash: hash32(fromHex(event.hash)),
-          salt: salt32(fromHex(saltBySeq[i] ?? "00".repeat(32))),
-        })),
-      },
-    ]);
-    const proofs = await Promise.all(events.map((event) => tree.prove(parsed.value, event.seq)));
-    const txHash = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-    const body = {
-      format: "yen/audit-bundle/v1" as const,
-      fund_id: fundId,
-      chain: { start_seq: 0, start_hash: "0".repeat(64) },
-      events: events.map((event, i) => {
-        const proof = proofs[i];
-        if (!proof) throw new ApiError("internal");
-        return {
-          event: {
-            fund_id: event.fund_id,
-            seq: event.seq,
-            type: event.type,
-            version: event.version,
-            actor: event.actor,
-            occurred_at: event.occurred_at,
-            payload: event.payload,
-            prev_hash: event.prev_hash,
-            hash: event.hash,
-          },
-          salt: saltBySeq[i] ?? "00".repeat(32),
-          latest_event_hash: toHex(proof.latestEventHash),
-          eventProof: { ...proof.eventProof, path: proof.eventProof.path.map(toHex) },
-          fundProof: { ...proof.fundProof, path: proof.fundProof.path.map(toHex) },
-        };
-      }),
-      roots: [
-        {
-          start_seq: 1,
-          end_seq: events.length,
-          event_root: toHex(tree.fundRoots[0] ?? hash32(new Uint8Array(32))),
-          fund_count: 1,
-          global_root: toHex(tree.root),
-        },
-      ],
-      anchor: {
-        chain_id: 80002,
-        contract_address: contractAddress,
-        tx_hash: txHash,
-        root: toHex(tree.root),
-        sequence: 1,
-      },
-    };
-    setFundReadCache(c, publicTier, body);
-    return c.json(body, 200);
+
+    throw new ApiError("not_found");
   });
 
   app.openapi(publicRecordProofRoute, async (c) => {
@@ -1240,7 +1155,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
           seq: eventSeq,
           type: eventRow.type,
           version: eventRow.version,
-          actor: eventRow.actor as PseudonymId,
+          actor: parsePseudonymId(eventRow.actor),
           occurred_at: occurredAt,
           payload: eventRow.payload,
           prev_hash: eventRow.prev_hash,
@@ -1342,102 +1257,18 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         setFundReadCache(c, publicTier, body);
         return c.json(body, 200);
       }
-    }
-
-    // Fallback for tests/non-Postgres mode: look up in expense store
-    const expenses = await listFundExpenses(fundId);
-    const expense = expenses.find((e) => e.id === recordId);
-    if (!expense) {
       throw new ApiError("not_found");
     }
 
-    const isPending = expense.status === "draft" || expense.status === "submitted";
-    const expenseAmount = Number(expense.amountPaise);
-    let actor: PseudonymId;
-    try {
-      actor = parsePseudonymId(expense.requesterId ?? "psn_00000000-0000-4000-8000-000000000002");
-    } catch {
-      actor = parsePseudonymId("psn_00000000-0000-4000-8000-000000000002");
+    if (deps.auditBundleProvider) {
+      const proof = await deps.auditBundleProvider.getRecordProof(fundId, recordId);
+      if (proof) {
+        setFundReadCache(c, publicTier, proof);
+        return c.json(proof as unknown as z.infer<typeof publicRecordProofSchema>, 200);
+      }
     }
 
-    const event = await makeNextEvent(null, {
-      fund_id: fundId,
-      type: "expense.submitted",
-      version: 1,
-      actor,
-      occurred_at: expense.submittedAt ?? expense.createdAt ?? "2026-10-18T14:15:00.000Z",
-      payload: {
-        expense_id: expense.id,
-        amount_paise: expenseAmount,
-      },
-    } as Parameters<typeof makeNextEvent>[1]);
-
-    if (isPending) {
-      const body = {
-        recordId,
-        fundId,
-        status: "pending" as const,
-        event: {
-          fund_id: event.fund_id,
-          seq: event.seq,
-          type: event.type,
-          version: event.version,
-          actor: event.actor,
-          occurred_at: event.occurred_at,
-          payload: event.payload,
-          prev_hash: event.prev_hash,
-          hash: event.hash,
-        },
-        pendingWindow: {
-          message: "Sealed in tamper-evident event log; awaiting next scheduled batch anchor",
-          estimatedAnchorMinutes: 10,
-        },
-      };
-      setFundReadCache(c, publicTier, body);
-      return c.json(body, 200);
-    }
-
-    const salt = crypto
-      .createHash("sha256")
-      .update(`${fundId}:${event.seq}:${event.hash}`)
-      .digest("hex");
-    const tree = await buildIntervalTree([
-      {
-        fundId: parsed.value,
-        latestEventHash: hash32(fromHex(event.hash)),
-        events: [{ seq: 1, eventHash: hash32(fromHex(event.hash)), salt: salt32(fromHex(salt)) }],
-      },
-    ]);
-    const proof = await tree.prove(parsed.value, 1);
-    const body = {
-      recordId,
-      fundId,
-      status: "anchored" as const,
-      event: {
-        fund_id: event.fund_id,
-        seq: event.seq,
-        type: event.type,
-        version: event.version,
-        actor: event.actor,
-        occurred_at: event.occurred_at,
-        payload: event.payload,
-        prev_hash: event.prev_hash,
-        hash: event.hash,
-      },
-      salt,
-      latestEventHash: toHex(proof.latestEventHash),
-      eventProof: { ...proof.eventProof, path: proof.eventProof.path.map(toHex) },
-      fundProof: { ...proof.fundProof, path: proof.fundProof.path.map(toHex) },
-      anchor: {
-        chainId: 80002,
-        contractAddress,
-        txHash: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        root: toHex(tree.root),
-        sequence: 1,
-      },
-    };
-    setFundReadCache(c, publicTier, body);
-    return c.json(body, 200);
+    throw new ApiError("not_found");
   });
 
   app.openapi(publicExpenseDetailRoute, async (c) => {
