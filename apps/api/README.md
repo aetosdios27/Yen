@@ -38,6 +38,14 @@ a generic unauthenticated error and do not reveal whether a phone number has
 an account. The PIN verifier uses an HMAC key held outside Postgres; PIN values
 must not appear in logs, URLs, or analytics.
 
+PIN verification holds the user's PIN row lock from checking the current lock
+state through recording a failed attempt or resetting consecutive failures on
+success. Concurrent requests are serialized per user: only the first five
+eligible wrong guesses are counted before the 30-minute lock rejects later
+requests, so there is no uncounted in-flight allowance. The tenth failure in
+the rolling 24-hour window moves the row to permanent `locked_out` once and
+dispatches one lockout notification.
+
 An OTP-authenticated session becomes a trusted device only after successful
 PIN setup or verification. Trusted-device state is bound to its session, shown
 in the authenticated session/device list, and revoked by sign-out or
