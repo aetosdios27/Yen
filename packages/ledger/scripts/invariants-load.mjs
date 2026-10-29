@@ -67,11 +67,16 @@ try {
     await sql.begin(async (tx) => {
       for (let offset = 0; offset < count; offset += 1) {
         const index = completed + offset;
-        if (nextAmount() % 5 === 0) {
-          const amount = (nextAmount() % 1000) + 1;
-          await reserveForExpense(tx, { fundId, amount: paise(amount) });
+        // A hold is only attempted when the fund can cover it. The ledger refuses to
+        // overdraw (KontoInsufficientFundsError), which is correct behavior, so a seed
+        // that starts with a hold on an empty fund must fall back to a donation instead
+        // of crashing the run.
+        const wantsHold = nextAmount() % 5 === 0;
+        const holdAmount = wantsHold ? (nextAmount() % 1000) + 1 : 0;
+        if (wantsHold && expectedBank - expectedPending >= BigInt(holdAmount)) {
+          await reserveForExpense(tx, { fundId, amount: paise(holdAmount) });
           totalHolds += 1;
-          expectedPending += BigInt(amount);
+          expectedPending += BigInt(holdAmount);
         } else {
           const amount = nextAmount();
           donationCount += 1;
