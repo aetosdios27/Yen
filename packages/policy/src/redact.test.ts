@@ -111,6 +111,25 @@ describe("Field-level redaction (redact)", () => {
       expect(result.donorEmail).toBeUndefined();
       expect(result.bankTransactionId).toBeUndefined();
     });
+
+    it.each([
+      ["full", "Sunil Kumar"],
+      ["initials", "S. K."],
+      ["anonymous", "A donor"],
+    ] as const)("uses the stored per-donation %s name choice", (donorNameChoice, expected) => {
+      const result = redact(publicViewer, { ...donationRecord, donorNameChoice });
+      expect(result.donorDisplayName).toBe(expected);
+      expect(JSON.stringify(result)).not.toContain("+919876543210");
+      expect(JSON.stringify(result)).not.toContain("sunil@example.com");
+    });
+
+    it.each(["public", "donor", "member"] as const)(
+      "resolves a stored label through redaction for the %s tier",
+      (role) => {
+        const result = redact({ role }, { ...donationRecord, donorNameChoice: "initials" });
+        expect(result.donorDisplayName).toBe("S. K.");
+      },
+    );
   });
 
   describe("Donor viewer", () => {

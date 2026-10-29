@@ -105,7 +105,9 @@ it("records a self-reported pledge from a donor with no session", async () => {
     })
     .parse(await response.json());
   expect(body).toMatchObject({ fundId, status: "pledged", amountPaise: "50000" });
-  expect(store.calls).toEqual([{ fundId, amountPaise: 50000, utr: "123456789012" }]);
+  expect(store.calls).toEqual([
+    { fundId, amountPaise: 50000, utr: "123456789012", donorNameChoice: "initials" },
+  ]);
 });
 
 it("normalizes the donor's phone before storing it", async () => {
@@ -131,8 +133,26 @@ it("normalizes the donor's phone before storing it", async () => {
       utr: "999888777666",
       donorName: "Asha Rao",
       donorContact: "+919876543210",
+      donorNameChoice: "initials",
     },
   ]);
+});
+
+it("records a donor's explicit per-donation full-name choice", async () => {
+  const store = new RecordingStore();
+  const { app } = setup({ donationPledgeStore: store });
+  const fundId = await createFund(app);
+  const response = await app.request(
+    `/v1/funds/${fundId}/donations/pledge`,
+    pledgeRequest({
+      amountPaise: "10000",
+      utr: "989898989898",
+      donorName: "Asha Rao",
+      donorNameChoice: "full",
+    }),
+  );
+  expect(response.status).toBe(201);
+  expect(store.calls[0]?.donorNameChoice).toBe("full");
 });
 
 it("rejects a contact that is neither an email nor a phone number", async () => {

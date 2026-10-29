@@ -350,6 +350,51 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     expect(res4.status).toBe(200);
   });
 
+  it("lets the user explicitly switch channel immediately and invalidates the previous code", async () => {
+    const { app, otpDeliveryProvider } = createTestSetup();
+    const first = await app.request("/v1/auth/otp/send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", channel: "whatsapp" }),
+    });
+    expect(first.status).toBe(200);
+    const whatsappCode = getDelivery(otpDeliveryProvider).code;
+
+    // This request represents the visible "try SMS instead" action.
+    const switched = await app.request("/v1/auth/otp/send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", channel: "sms" }),
+    });
+    expect(switched.status).toBe(200);
+    expect(getDelivery(otpDeliveryProvider).channel).toBe("sms");
+
+    const rejectedOldCode = await app.request("/v1/auth/otp/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", code: whatsappCode }),
+    });
+    expect(rejectedOldCode.status).toBe(400);
+  });
+
+  it("shares the send limit across WhatsApp and SMS for the same number", async () => {
+    const { app } = createTestSetup();
+    for (const channel of ["whatsapp", "sms", "whatsapp"] as const) {
+      const response = await app.request("/v1/auth/otp/send", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ phone: "+919876543210", channel }),
+      });
+      expect(response.status).toBe(200);
+    }
+    const overLimit = await app.request("/v1/auth/otp/send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", channel: "sms" }),
+    });
+    expect(overLimit.status).toBe(429);
+  });
+
   it("keeps one live code and limits attempts per phone across channels", async () => {
     const { app, otpDeliveryProvider, advanceClock } = createTestSetup();
     await app.request("/v1/auth/otp/send", {

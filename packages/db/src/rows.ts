@@ -39,6 +39,7 @@ export const fundRowSchema = z.object({
   title: z.string(),
   target_paise: z.bigint().nonnegative().nullable(),
   visibility_tier: z.enum(["public", "donors", "members", "private"]),
+  show_officeholder_names: z.boolean().optional(),
   policy_json: z.json(),
   status: z.enum(["draft", "active", "closed"]),
   created_at: z.date(),

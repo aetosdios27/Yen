@@ -14,6 +14,18 @@ PII belongs only in application tables. `fund_pseudonyms` provides an erasable m
 
 `ensureFundPseudonym(sql, { userId, fundId })` idempotently and safely generates or retrieves the `PseudonymId` for a user in a fund. It executes `INSERT ... ON CONFLICT (user_id, fund_id) DO NOTHING` followed by select, guaranteeing race-safety and convergence under concurrent calls.
 
+### Display names
+
+`display_names` stores a correctable label under `(fund_id, pseudonym_id)`, outside
+`fund_events`. `setDisplayName` upserts the label, `getDisplayName` reads it, and
+`deleteDisplayName` removes it without changing event bytes or hashes. Guest labels
+use `guest_display_names`, keyed by a SHA-256 hash of the contact and a random
+fund-specific salt held in `display_name_contact_salts`; raw guest contacts are not
+written to either display-name table. Each donation carries its own
+`donor_name_choice` (`full`, `initials`, or `anonymous`, defaulting to `initials`),
+so changing one donation's choice does not change another. The fund owner can
+control whether officeholder names may be shown with `setOfficeholderNamesShown`.
+
 The five fund roles are `owner`, `treasurer`, `approver`, `auditor`, and `member`. Multiple roles per user and fund are valid. Membership status is explicit on insert. Idempotency keys are globally unique and store a required request hash and completed JSON response; the API owns request hashing, concurrency, replay, and retention.
 
 ## Use typed rows
