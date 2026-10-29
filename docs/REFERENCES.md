@@ -644,3 +644,19 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **URL:** https://cheatsheetseries.owasp.org/cheatsheets/Threat_Modeling_Cheat_Sheet.html
 - **What we use it for:** Uses STRIDE categories as prompts against a system model and lists four responses to a threat (mitigate, eliminate, transfer, accept). It asks teams to document remaining risk and who owns it, but gives no method for measuring residual risk. Yen records residual risk and out-of-scope conditions per threat.
 - **Where in this repo:** docs/THREAT-MODEL.md
+
+<a id="pg-dump"></a>
+### pg_dump and pg_restore
+
+- **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
+- **URL:** https://www.postgresql.org/docs/16/app-pgdump.html
+- **What we use it for:** The custom archive format is restored with `pg_restore` and supports selective/reordered restoration. The restore drill uses this logical format and verifies application-level invariants afterward.
+- **Where in this repo:** docs/runbooks/backup-restore.md
+
+<a id="pg-pitr"></a>
+### Continuous Archiving and Point-in-Time Recovery
+
+- **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
+- **URL:** https://www.postgresql.org/docs/16/continuous-archiving.html
+- **What we use it for:** PITR requires a base backup and a continuous sequence of archived WAL; logical `pg_dump` archives are not a WAL-replay base. The runbook records this operational distinction and does not claim PITR coverage.
+- **Where in this repo:** docs/runbooks/backup-restore.md
