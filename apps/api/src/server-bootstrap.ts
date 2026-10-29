@@ -9,6 +9,7 @@ import { rateLimits } from "./config.js";
 import { createDatabaseReady } from "./database-ready.js";
 import { DefaultInFlightTracker } from "./dependencies.js";
 import { PostgresDonationPledgeStore } from "./donation-store.js";
+import { PostgresExpenseStore } from "./expense-store.js";
 import { createServerLifecycle, type ServerLifecycle, shutdownOnSignal } from "./lifecycle.js";
 import { PostgresPinStore } from "./pin/index.js";
 import { useMemoryStore } from "./server-config.js";
@@ -136,6 +137,7 @@ export async function startServer(
   const app = createApp({
     isShuttingDown: () => lifecycleInstance?.isShuttingDown ?? false,
     ...(sql ? { donationPledgeStore: new PostgresDonationPledgeStore(sql) } : {}),
+    ...(sql ? { expenseStore: new PostgresExpenseStore(sql) } : {}),
     pledgeLimit: {
       capacity: resolvedConfig.PLEDGE_RATE_LIMIT_CAPACITY ?? 10,
       refillMs: resolvedConfig.PLEDGE_RATE_LIMIT_REFILL_MS ?? 3_600_000,

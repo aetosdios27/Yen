@@ -107,6 +107,12 @@ export async function seedRealisticDataset(sql: Sql): Promise<{
       'Consent to terms v1',
       'v1'
     FROM generate_series(1, 120000) g;
+
+    -- 120,000 expenses for the fund-scoped expense list plan budget.
+    INSERT INTO expenses (id, fund_id, status, expense_data, created_at, updated_at)
+    SELECT gen_random_uuid(), f.id, 'draft', '{}'::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+    FROM (SELECT id FROM funds LIMIT 2000) f
+    CROSS JOIN generate_series(1, 60) g;
   `);
 
   // Run ANALYZE so PostgreSQL planner statistics (reltuples, relpages, MCV lists) are real.
