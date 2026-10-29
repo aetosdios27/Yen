@@ -32,6 +32,16 @@ export const runtimeEnv = z.object({
   SERVER_MAX_HEADER_SIZE_BYTES: z.coerce.number().int().min(1024).max(1048576).default(16384),
 });
 
+export const clamAvEnv = z.object({
+  CLAMAV_HOST: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.string().trim().min(1).optional(),
+  ),
+  CLAMAV_PORT: z.coerce.number().int().min(1).max(65535).default(3310),
+  CLAMAV_TIMEOUT_MS: z.coerce.number().int().min(100).max(120000).default(10000),
+  CLAMAV_MAX_SIZE_BYTES: z.coerce.number().int().min(1).max(104857600).default(10485760),
+});
+
 export function rateLimits(config: z.infer<typeof rateLimitEnv>) {
   return {
     ip: { capacity: config.RATE_LIMIT_IP_CAPACITY, refillMs: config.RATE_LIMIT_REFILL_MS },
