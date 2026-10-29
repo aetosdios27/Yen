@@ -1061,6 +1061,8 @@ export interface components {
       requesterId: string;
       /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
       amountPaise: string;
+      /** @enum {string} */
+      category: "Equipment" | "Travel" | "Catering" | "Logistics" | "Facilities" | "Other";
       description: string;
       recipientRef: string;
       status: components["schemas"]["ExpenseStatus"];
@@ -1101,6 +1103,8 @@ export interface components {
     CreateExpenseInput: {
       /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
       amountPaise: string;
+      /** @enum {string} */
+      category?: "Equipment" | "Travel" | "Catering" | "Logistics" | "Facilities" | "Other";
       description: string;
       recipientRef: string;
       evidence?: components["schemas"]["ExpenseEvidence"][];
@@ -2943,6 +2947,7 @@ export interface operations {
               category: string;
               /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
               spentPaise: string;
+              transactionCount: number;
             }[];
             dataGaps: string[];
           };

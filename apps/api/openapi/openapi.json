@@ -331,6 +331,10 @@
             "pattern": "^(0|[1-9][0-9]*)$",
             "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
           },
+          "category": {
+            "type": "string",
+            "enum": ["Equipment", "Travel", "Catering", "Logistics", "Facilities", "Other"]
+          },
           "description": { "type": "string" },
           "recipientRef": { "type": "string" },
           "status": { "$ref": "#/components/schemas/ExpenseStatus" },
@@ -356,6 +360,7 @@
           "fundId",
           "requesterId",
           "amountPaise",
+          "category",
           "description",
           "recipientRef",
           "status",
@@ -386,6 +391,10 @@
             "type": "string",
             "pattern": "^(0|[1-9][0-9]*)$",
             "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
+          },
+          "category": {
+            "type": "string",
+            "enum": ["Equipment", "Travel", "Catering", "Logistics", "Facilities", "Other"]
           },
           "description": { "type": "string", "minLength": 1, "maxLength": 500 },
           "recipientRef": { "type": "string", "minLength": 1, "maxLength": 128 },
@@ -3075,9 +3084,10 @@
                             "type": "string",
                             "pattern": "^(0|[1-9][0-9]*)$",
                             "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
-                          }
+                          },
+                          "transactionCount": { "type": "integer", "minimum": 0 }
                         },
-                        "required": ["category", "spentPaise"],
+                        "required": ["category", "spentPaise", "transactionCount"],
                         "additionalProperties": false
                       }
                     },
