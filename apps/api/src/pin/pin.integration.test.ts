@@ -603,6 +603,7 @@ describe("Approval PIN (YEN-25)", () => {
         amountPaise: "25000",
         description: "Community supplies",
         recipientRef: "vendor-1",
+        payee: { identity: { kind: "upi", vpa: "community@yenbank" }, name: "Community Supplier" },
       });
       expect(createdRes.status).toBe(201);
       const created = await jsonOf(createdRes);

@@ -29,6 +29,7 @@
     "@opentelemetry/api": "^1.10.0",
     "@yen/db": "workspace:*",
     "@yen/eventlog": "workspace:*",
+    "@yen/policy": "workspace:*",
     "@yen/shared": "workspace:*",
     "zod": "^4.6.7"
   },

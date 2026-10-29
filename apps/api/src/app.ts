@@ -16,9 +16,11 @@ import {
   SeparationOfDutiesError,
   type SignedApproval,
   submitExpense,
+  UnacknowledgedFraudFlagsError,
 } from "@yen/ledger";
 import {
   DEFAULT_FUND_POLICY,
+  isStaffRole,
   isValidRole,
   can as policyCan,
   redactExpenseDetails,
@@ -132,6 +134,9 @@ import {
   requireAuth,
 } from "./middleware.js";
 import { verifyMimeSignature } from "./mime-signature.js";
+import { registerPayeeRuleRoutes } from "./payee-rules/routes.js";
+import { normalizedPayee } from "./payee-rules/schema.js";
+import { evaluateExpensePayeeRules, fingerprintPayee } from "./payee-rules/service.js";
 import { computeActionHash, PinService } from "./pin/index.js";
 import type {
   ExistingExpenseResource,
@@ -1055,6 +1060,9 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     category: exp.category ?? "Other",
     description: exp.description,
     recipientRef: exp.recipientRef,
+    payee: exp.payee ?? null,
+    fraudFlags: [...(exp.fraudFlags ?? [])],
+    fraudAcknowledgements: [...(exp.fraudAcknowledgements ?? [])],
     status: exp.status,
     holdId: exp.holdId,
     approvalsCount: exp.approvals.length,
@@ -1089,7 +1097,17 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
   const redactExpense = (principal: Principal, resource: ExistingExpenseResource): ExpenseView => {
     if (!deps.policy.redactExpense) throw new ApiError("internal");
-    return deps.policy.redactExpense(principal, resource);
+    const redacted = deps.policy.redactExpense(principal, resource);
+    const roles = [principal.role, ...(principal.roles ?? [])].filter(isValidRole);
+    const maySeeMemberFlags = roles.some((role) => role === "member" || isStaffRole(role));
+    if (maySeeMemberFlags) return redacted;
+    const {
+      fraudFlags: _flags,
+      fraudAcknowledgements: _acks,
+      payee: _payee,
+      ...memberOnly
+    } = redacted;
+    return memberOnly as ExpenseView;
   };
 
   app.openapi(createExpenseRoute, async (c) => {
@@ -1100,6 +1118,10 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const requesterId = await actorFor(principal, fundIdResult.value);
     const amount = paise(Number(input.amountPaise));
     const now = new Date(deps.clock()).toISOString();
+    const unverifiedPayee = input.payee ? normalizedPayee(input.payee) : null;
+    const payee = unverifiedPayee
+      ? { ...unverifiedPayee, verification: await deps.payeeVerifier.verify(unverifiedPayee) }
+      : null;
     const draft = createDraftRequest({
       id: deps.idGenerator(),
       fundId: fundIdResult.value,
@@ -1108,12 +1130,24 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       category: input.category,
       description: input.description,
       recipientRef: input.recipientRef,
+      ...(payee ? { payee } : {}),
+      ...(input.invoiceNumber ? { invoiceNumber: input.invoiceNumber } : {}),
       evidence: input.evidence,
       supersedesId: input.supersedesId,
       createdAt: now,
     });
-    await deps.expenseStore.save(draft);
-    const view = toExpenseView(draft);
+    const draftWithFingerprint = payee
+      ? {
+          ...draft,
+          payeeFingerprint: fingerprintPayee(
+            fundIdResult.value,
+            payee.identity,
+            deps.payeeFingerprintSalt,
+          ),
+        }
+      : draft;
+    await deps.expenseStore.save(draftWithFingerprint);
+    const view = toExpenseView(draftWithFingerprint);
     const resource = { kind: "expense", expense: { owner: principal.id, expense: view } } as const;
     return c.json(redactExpense(principal, resource), 201);
   });
@@ -1170,10 +1204,20 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       throw new ApiError("conflict");
     }
     const now = new Date(deps.clock()).toISOString();
+    if (!expense.payee || !expense.payeeFingerprint) throw new ApiError("conflict");
+    const evaluated = await evaluateExpensePayeeRules({
+      expense,
+      priorExpenses: await deps.expenseStore.list(fundIdResult.value),
+      profileStore: deps.payeeProfileStore,
+      evidenceStore: deps.evidenceStore,
+      now,
+      policy: await deps.payeeProfileStore.getPolicy(fundIdResult.value),
+    });
+    const assessedExpense = { ...expense, ...evaluated };
     const actorId = await actorFor(principal, fundIdResult.value);
     const fundPolicy = await fundPolicyFor(fundIdResult.value);
     const holdId = deps.idGenerator();
-    const updated = submitExpense(expense, {
+    const updated = submitExpense(assessedExpense, {
       holdId,
       policy: fundPolicy,
       nowUtc: now,
@@ -1240,6 +1284,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     };
     const fundPolicy = await fundPolicyFor(fundIdResult.value);
     try {
+      const fraudPolicy = await deps.payeeProfileStore.getPolicy(fundIdResult.value);
       const res = await withMoneyOperation("approve", () =>
         withSpan("db.expense.atomic_approve", () =>
           deps.expenseStore.atomicApprove(
@@ -1249,6 +1294,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
             deps.approvalProofVerifier,
             now,
             principal.id,
+            fraudPolicy,
           ),
         ),
       );
@@ -1273,6 +1319,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       );
     } catch (err) {
       if (err instanceof SeparationOfDutiesError) throw new ApiError("forbidden");
+      if (err instanceof UnacknowledgedFraudFlagsError) throw new ApiError("conflict");
       if (err instanceof DuplicateApprovalError || err instanceof InvalidStateTransitionError) {
         throw new ApiError("conflict");
       }
@@ -1497,6 +1544,13 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     );
   });
 
+  registerPayeeRuleRoutes(app, deps, {
+    getFund: getFundOrNotFound,
+    authorizeFund: authorizedFund,
+    authorizeExpense: authorizedExpense,
+    actorFor,
+    expenseView: toExpenseView,
+  });
   registerOwnerInviteRoutes(app, deps, getFundOrNotFound, authorizedFund);
 
   app.openapi(setupPinRoute, async (c) => {

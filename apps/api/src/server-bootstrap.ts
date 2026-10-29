@@ -17,6 +17,7 @@ import { FileSystemStorageAdapter } from "./filesystem-storage.js";
 import { PostgresFundStore } from "./fund-store.js";
 import { createServerLifecycle, type ServerLifecycle, shutdownOnSignal } from "./lifecycle.js";
 import { startObservability } from "./observability.js";
+import { PostgresPayeeProfileStore } from "./payee-rules/profile-store.js";
 import { PostgresPinStore } from "./pin/index.js";
 import { PostgresPrivacyStore } from "./privacy-store.js";
 import { PostgresPublicFundReadStore } from "./public-fund-store.js";
@@ -41,6 +42,7 @@ export interface ServerConfig {
   readonly EVIDENCE_STORAGE_DIR?: string | undefined;
   readonly OTP_HASH_KEY?: string | undefined;
   readonly PARTNER_WEBHOOK_SECRET?: string | undefined;
+  readonly PAYEE_FINGERPRINT_SALT?: string | undefined;
   readonly YEN_ALLOW_MEMORY_STORES?: "true" | "false" | undefined;
   readonly READINESS_CACHE_MS: number;
   readonly TRUSTED_PROXY_HOPS: number;
@@ -95,6 +97,15 @@ export async function startServer(
         connectTimeout: resolvedConfig.DATABASE_POOL_ACQUIRE_TIMEOUT_SECONDS,
       })
     : undefined;
+  const payeeFingerprintSalt = resolvedConfig.PAYEE_FINGERPRINT_SALT;
+  if (payeeFingerprintSalt !== undefined && payeeFingerprintSalt.length < 32) {
+    await sql?.end({ timeout: 1 });
+    throw new Error("PAYEE_FINGERPRINT_SALT must contain at least 32 characters");
+  }
+  if (sql && !payeeFingerprintSalt) {
+    await sql.end({ timeout: 1 });
+    throw new Error("PAYEE_FINGERPRINT_SALT is required when payee profiles use PostgreSQL");
+  }
 
   const evidenceStorageDirectory =
     resolvedConfig.EVIDENCE_STORAGE_DIR ??
@@ -189,6 +200,12 @@ export async function startServer(
       ? {
           evidenceStore: new PostgresEvidenceStore(sql),
           storageAdapter: evidenceStorage,
+        }
+      : {}),
+    ...(sql && payeeFingerprintSalt
+      ? {
+          payeeProfileStore: new PostgresPayeeProfileStore(sql),
+          payeeFingerprintSalt,
         }
       : {}),
     ...(sql

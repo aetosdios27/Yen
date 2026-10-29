@@ -6,7 +6,7 @@ import { FUND_ROLES, type FundRole } from "./roles.js";
 
 describe("Role x Action Matrix completeness", () => {
   it("covers every declared action in ACTIONS", () => {
-    expect(ACTIONS.length).toBe(22);
+    expect(ACTIONS.length).toBe(26);
     for (const action of ACTIONS) {
       expect(ROLE_ACTION_MATRIX).toHaveProperty(action);
     }
@@ -32,7 +32,7 @@ describe("Role x Action Matrix completeness", () => {
 });
 
 describe("Table-driven role x action permission tests", () => {
-  // Generate all 22 actions * 7 roles = 154 test matrix pairs
+  // Generate all 26 actions * 7 roles = 182 test matrix pairs
   const matrixEntries: Array<{ action: Action; role: FundRole; expected: boolean }> = [];
   for (const action of ACTIONS) {
     for (const role of FUND_ROLES) {
@@ -44,8 +44,8 @@ describe("Table-driven role x action permission tests", () => {
     }
   }
 
-  it("generates exactly 154 test cases (22 actions x 7 roles)", () => {
-    expect(matrixEntries.length).toBe(154);
+  it("generates exactly 182 test cases (26 actions x 7 roles)", () => {
+    expect(matrixEntries.length).toBe(182);
   });
 
   it.each(matrixEntries)(

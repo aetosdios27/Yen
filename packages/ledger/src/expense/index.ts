@@ -47,6 +47,7 @@ export {
   submitExpense,
 } from "./state-machine.js";
 export {
+  assertAcknowledgementsUnchanged,
   type ExpenseStore,
   InMemoryExpenseStore,
 } from "./store.js";
@@ -62,6 +63,7 @@ export {
   type ExpenseRequest,
   type ExpenseStatus,
   expenseCategories,
+  FraudAcknowledgementConflictError,
   type FundPolicy,
   InvalidPasskeySignatureError,
   InvalidStateTransitionError,
@@ -71,4 +73,5 @@ export {
   rejectUnverifiedApprovalProof,
   SeparationOfDutiesError,
   type SignedApproval,
+  UnacknowledgedFraudFlagsError,
 } from "./types.js";

@@ -139,6 +139,14 @@ export function can(actor: Actor, action: Action, resource: Resource): boolean {
         return canViewFundByVisibility(roles, policy.visibilityTier);
       }
 
+      if (action === "expense:fraud:acknowledge") {
+        return expense.status === "submitted" && hasRole(actor, "owner");
+      }
+
+      if (action === "expense:payee:change") {
+        return expense.status === "draft" || expense.status === "submitted";
+      }
+
       if (action === "expense:approve") {
         // Only an open (submitted) expense with a recorded approval list can be approved.
         if (expense.status !== "submitted" || !Array.isArray(expense.approvals)) {
@@ -220,6 +228,29 @@ export function can(actor: Actor, action: Action, resource: Resource): boolean {
       return true;
     }
 
+    case "member": {
+      const member = resource.member;
+      if (
+        !member ||
+        typeof member !== "object" ||
+        !isValidRole(member.targetRole) ||
+        normalizeId(member.memberId) === ""
+      ) {
+        return false;
+      }
+      if (member.policy !== undefined && !isValidFundPolicy(member.policy)) return false;
+      if (action === "fund:add_member" || action === "fund:remove_member") {
+        if (!hasRole(actor, "owner")) return false;
+        const actorId = normalizeId(actor.id);
+        const memberId = normalizeId(member.memberId);
+        return Boolean(actorId && memberId && actorId !== memberId);
+      }
+      if (action === "member:payee_profile:set" || action === "member:payee_profile:clear") {
+        return hasRole(actor, "owner") || normalizeId(actor.id) === normalizeId(member.memberId);
+      }
+      return false;
+    }
+
     case "donation": {
       const donation = resource.donation;
       if (!donation || typeof donation !== "object" || !isValidFundPolicy(donation.policy)) {
@@ -230,27 +261,6 @@ export function can(actor: Actor, action: Action, resource: Resource): boolean {
       }
       if (action === "donation:read") {
         return canViewFundByVisibility(roles, donation.policy.visibilityTier);
-      }
-      return true;
-    }
-
-    case "member": {
-      const member = resource.member;
-      if (!member || typeof member !== "object") {
-        return false;
-      }
-      // Threat X4: Member grants self a role
-      // Only owner can add or remove members, and cannot modify their own membership
-      if (action === "fund:add_member" || action === "fund:remove_member") {
-        if (!isValidRole(member.targetRole) || !hasRole(actor, "owner")) {
-          return false;
-        }
-        const actorId = normalizeId(actor.id);
-        const memberId = normalizeId(member.memberId);
-        if (!actorId || !memberId || actorId === memberId) {
-          return false; // Cannot modify own membership to prevent privilege confusion
-        }
-        return true;
       }
       return true;
     }

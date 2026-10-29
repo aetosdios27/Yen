@@ -64,13 +64,18 @@ databaseSuite("migration runner", (sql, url) => {
       "erasure_requests",
       "evidence_records",
       "expense_approvals",
+      "expense_payee_acknowledgements",
+      "expense_payee_evaluations",
+      "expense_payee_flags",
       "expenses",
       "fund_events",
       "fund_notification_daily_usage",
+      "fund_payee_rule_policies",
       "fund_pseudonyms",
       "funds",
       "guest_display_names",
       "idempotency_keys",
+      "member_payee_profiles",
       "memberships",
       "notification_dead_letter",
       "notification_outbox",
@@ -115,6 +120,7 @@ databaseSuite("migration runner", (sql, url) => {
     const expenseBankLinkSource = await readFile(join(defaultDir, "0022_expense_bank_link.sql"));
     const debitMatchingSource = await readFile(join(defaultDir, "0023_debit_matching.sql"));
     const dpdpSource = await readFile(join(defaultDir, "0024_dpdp.sql"));
+    const payeeRulesSource = await readFile(join(defaultDir, "0025_payee_rules.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -261,6 +267,12 @@ databaseSuite("migration runner", (sql, url) => {
         checksum: createHash("sha256").update(dpdpSource).digest("hex"),
         applied_at: expect.any(Date),
       },
+      {
+        version: 25,
+        name: "0025_payee_rules.sql",
+        checksum: createHash("sha256").update(payeeRulesSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
     ]);
   });
 
@@ -351,7 +363,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(24);
+    expect(before).toHaveLength(25);
   });
 
   it("rejects an edited applied file and names it", async () => {

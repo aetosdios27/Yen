@@ -1,7 +1,10 @@
 import type { z } from "@hono/zod-openapi";
+import type { PseudonymId } from "@yen/eventlog";
+import type { FundRole } from "@yen/policy";
 import {
   DEFAULT_FUND_POLICY,
   type Action as DomainAction,
+  isStaffRole,
   isValidRole,
   can as policyCan,
   type Redacted,
@@ -43,9 +46,18 @@ export type FundAction =
   | "fund:member:add"
   | "fund:member:remove"
   | "fund:member:unlock"
+  | "member:payee_profile:set"
+  | "member:payee_profile:clear"
   | "fund:reconcile";
 export type FundResource = { readonly kind: "fund"; readonly fund?: FundRecord | undefined };
 export type ExistingFundResource = { readonly kind: "fund"; readonly fund: FundRecord };
+export type MemberResource = {
+  readonly kind: "member";
+  readonly fund: FundRecord;
+  readonly memberId: string;
+  readonly actorPseudonym: PseudonymId;
+  readonly targetRole: FundRole;
+};
 export type EvidenceResource =
   | { readonly kind: "evidence"; readonly evidence: StoredEvidence }
   | { readonly kind: "evidence_list"; readonly evidence: readonly StoredEvidence[] };
@@ -157,12 +169,14 @@ export type ExpenseAction =
   | "expense:create"
   | "expense:read"
   | "expense:submit"
+  | "expense:payee:change"
   | "expense:approve"
   | "expense:reject"
   | "expense:pay"
   | "expense:reconcile"
   | "expense:add_evidence"
-  | "expense:read_evidence";
+  | "expense:read_evidence"
+  | "expense:fraud:acknowledge";
 export type ExpenseResource =
   | { readonly kind: "expense"; readonly expense?: ExpenseRecord | undefined }
   | { readonly kind: "expense"; readonly fund: FundRecord; readonly expenseId: string };
@@ -172,7 +186,7 @@ export type ExistingExpenseResource = {
 };
 
 export type PolicyAction = FundAction | ExpenseAction;
-export type PolicyResource = FundResource | ExpenseResource;
+export type PolicyResource = FundResource | ExpenseResource | MemberResource;
 
 export interface Policy {
   can(principal: Principal, action: PolicyAction, resource: PolicyResource): boolean;
@@ -256,7 +270,11 @@ export const devPolicy: Policy = {
     const roles = (principal.roles ?? []).filter(isValidRole);
     const role = principal.role ?? roles[0];
     if (!role) return false;
-    const actor = { id: principal.id, role, roles };
+    const actor = {
+      id: resource.kind === "member" ? resource.actorPseudonym : principal.id,
+      role,
+      roles,
+    };
     if (resource.kind === "fund") {
       if (action === "fund:create") return policyCan(actor, action, { kind: "fund" });
       if (action !== "fund:read" || resource.fund === undefined) return false;
@@ -269,12 +287,31 @@ export const devPolicy: Policy = {
         },
       });
     }
+    if (resource.kind === "member") {
+      if (action !== "member:payee_profile:set" && action !== "member:payee_profile:clear") {
+        return false;
+      }
+      const fundId = parseFundId(resource.fund.fund.id);
+      if (!fundId.ok) return false;
+      return policyCan(actor, action, {
+        kind: "member",
+        member: {
+          fundId: fundId.value,
+          policy: DEFAULT_FUND_POLICY,
+          memberId: resource.memberId,
+          targetRole: resource.targetRole,
+        },
+      });
+    }
     if (resource.kind === "expense") {
       let domainAction: DomainAction;
       switch (action) {
         case "expense:create":
         case "expense:submit":
           domainAction = "expense:submit";
+          break;
+        case "expense:payee:change":
+          domainAction = "expense:payee:change";
           break;
         case "expense:read":
           domainAction = "expense:read";
@@ -290,6 +327,9 @@ export const devPolicy: Policy = {
           break;
         case "expense:reconcile":
           domainAction = "bank:reconcile";
+          break;
+        case "expense:fraud:acknowledge":
+          domainAction = "expense:fraud:acknowledge";
           break;
         default:
           return false;
@@ -307,10 +347,10 @@ export const devPolicy: Policy = {
 
       const amountPaise = Number(view?.amountPaise ?? 0) as Paise;
       const approvalCount = view?.approvalsCount ?? 0;
-      const supportedStatus = ["submitted", "approved", "rejected", "paid"].includes(
+      const supportedStatus = ["draft", "submitted", "approved", "rejected", "paid"].includes(
         view?.status ?? "",
       )
-        ? (view?.status as "submitted" | "approved" | "rejected" | "paid")
+        ? (view?.status as "draft" | "submitted" | "approved" | "rejected" | "paid")
         : undefined;
       return policyCan(actor, domainAction, {
         kind: "expense",
@@ -345,7 +385,20 @@ export const devPolicy: Policy = {
       evidence: resource.evidence.map(({ objectKey: _discard, ...evidence }) => evidence),
     }) as RedactedResource<R>;
   },
-  redactExpense: (_viewer, resource) => resource.expense.expense,
+  redactExpense: (viewer, resource) => {
+    const expense = resource.expense.expense;
+    const roles = [viewer.role, ...(viewer.roles ?? [])].filter(isValidRole);
+    if (!roles.some((role) => role === "member" || isStaffRole(role))) {
+      const {
+        fraudFlags: _flags,
+        fraudAcknowledgements: _acks,
+        payee: _payee,
+        ...publicExpense
+      } = expense;
+      return publicExpense as ExpenseView;
+    }
+    return expense;
+  },
   canDonate: (resource) => {
     const fundId = parseFundId(resource.fund.fund.id);
     if (!fundId.ok) return false;

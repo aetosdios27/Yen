@@ -54,7 +54,7 @@ export class DeterministicFakePayeeVerifier implements PayeeVerifier {
       ? {
           status: "verified" as const,
           provider: "yen-test-fake-v1",
-          reference: `fake:${normalizePayeeKey(payee.identity)}`,
+          reference: "fake:verified",
           verifiedAt: "2000-01-01T00:00:00.000Z",
         }
       : {
@@ -125,7 +125,7 @@ export function hasUnacknowledgedBlockingFlags(
 ): boolean {
   return flags.some(
     (flag) =>
-      policy.blockedFlagCodes.includes(flag.code) &&
+      (flag.code === "self_payment" || policy.blockedFlagCodes.includes(flag.code)) &&
       !acknowledgements.some((ack) => ack.code === flag.code && ack.reason.trim().length > 0),
   );
 }
@@ -142,8 +142,12 @@ export interface FraudEvaluationInput {
   readonly priorExpenses: readonly FraudExpense[];
   readonly isFirstPaymentToPayee: boolean;
   readonly changedPayeeAt?: string;
-  readonly memberAndRequesterPayeeKeys: readonly string[];
+  readonly profileFingerprints: readonly string[];
+  readonly requesterHasProfile: boolean;
+  readonly requesterDisplayName?: string;
   readonly declaredGstin?: string;
+  readonly payeeGstin?: string;
+  readonly invoiceVendorName?: string;
   readonly payeeName?: string;
   readonly gstinRegisteredName?: string;
   readonly existingEvidence?: ExistingFraudEvidence;
@@ -165,11 +169,25 @@ export function evaluatePayeeFraud(input: FraudEvaluationInput): readonly FraudF
   if (
     input.changedPayeeAt &&
     e.amountPaise >= p.largeExpensePaise &&
+    Date.parse(e.at) - Date.parse(input.changedPayeeAt) >= 0 &&
     Date.parse(e.at) - Date.parse(input.changedPayeeAt) < p.coolingOffHours * 3_600_000
   )
     add("payee_changed_cooling_off", "Payee changed too soon before a large expense.");
-  if (input.memberAndRequesterPayeeKeys.includes(e.payeeKey))
-    add("self_payment", "Payee matches a fund member or the requester.");
+  const profileMatches = input.profileFingerprints.includes(e.payeeKey);
+  const requesterNameMatches =
+    !input.requesterHasProfile &&
+    input.requesterDisplayName !== undefined &&
+    input.payeeName !== undefined &&
+    normalizeName(input.requesterDisplayName) === normalizeName(input.payeeName);
+  if (profileMatches || requesterNameMatches)
+    add(
+      "self_payment",
+      requesterNameMatches
+        ? "Payee name matches the requester's stored fund display name. The requester has no payee profile, so this requester-only comparison was used."
+        : input.requesterHasProfile
+          ? "Payee fingerprint matches the requester or an active member profile."
+          : "Payee fingerprint matches an active member profile. The requester has no payee profile, so only a requester display-name check can be made from existing data.",
+    );
   const split = [...history, e]
     .filter((x) => Math.abs(Date.parse(e.at) - Date.parse(x.at)) <= p.splitWindowHours * 3_600_000)
     .reduce((n, x) => n + x.amountPaise, 0);
@@ -182,6 +200,14 @@ export function evaluatePayeeFraud(input: FraudEvaluationInput): readonly FraudF
     const gstin = input.declaredGstin.trim().toUpperCase();
     if (!isValidGstinFormat(gstin) || !validateGstinChecksum(gstin)) {
       add("gstin_name_mismatch", "Declared GSTIN is invalid.");
+    } else if (input.payeeGstin && input.payeeGstin.trim().toUpperCase() !== gstin) {
+      add("gstin_name_mismatch", "Invoice GSTIN does not match the saved payee GSTIN.");
+    } else if (
+      input.payeeName &&
+      input.invoiceVendorName &&
+      normalizeName(input.payeeName) !== normalizeName(input.invoiceVendorName)
+    ) {
+      add("gstin_name_mismatch", "Invoice vendor name does not match the saved payee name.");
     } else if (
       input.payeeName &&
       input.gstinRegisteredName &&
