@@ -25,6 +25,7 @@ export {
   type EventInput,
   eventSubjectId,
   hashHexSchema,
+  isKnownEventVersion,
   isUtcEventTime,
   occurredAtSchema,
   type PseudonymId,
