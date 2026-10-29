@@ -2709,6 +2709,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -2722,6 +2724,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -2735,6 +2739,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -2748,6 +2754,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -2761,6 +2769,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -2774,6 +2784,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -2787,6 +2799,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;

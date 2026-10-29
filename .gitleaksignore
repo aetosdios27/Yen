@@ -1,3 +1,6 @@
 
 # Dummy PIN configuration fixture in a historical test commit; never a deployed credential.
 4658bcc6f8d8eb363db6bac7d1715ac639c7f73f:apps/api/src/dependencies.test.ts:generic-api-key:30
+
+# Historical synthetic tracing-test PIN fixture; current tests generate it at runtime.
+1a4f675b58b067822b1c77a69211969b374c8a20:apps/api/src/expense-postgres.test.ts:generic-api-key:382

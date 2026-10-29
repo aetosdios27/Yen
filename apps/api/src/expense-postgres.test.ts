@@ -1,4 +1,4 @@
-import { randomInt } from "node:crypto";
+import { randomBytes, randomInt } from "node:crypto";
 import { trace } from "@opentelemetry/api";
 import { InMemorySpanExporter, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
@@ -379,7 +379,7 @@ databaseSuite("Postgres expense store", (sql, url) => {
       pinStore,
       actionTokenStore,
       notificationService: pinNotificationService,
-      pinSecret: "trace_test_pin_secret_32_bytes_long",
+      pinSecret: randomBytes(32).toString("hex"),
     });
     const makeApp = (principal: { id: string; role: "owner" | "approver" }) =>
       createApp({

@@ -2709,6 +2709,11 @@
                 "description": "Request correlation ID",
                 "required": true
               },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              },
               "idempotent-replayed": {
                 "schema": { "type": "string", "enum": ["true"] },
                 "description": "Present on replay"
@@ -2722,6 +2727,11 @@
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
                 "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
                 "required": true
               },
               "idempotent-replayed": {
@@ -2741,6 +2751,11 @@
                 "description": "Request correlation ID",
                 "required": true
               },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              },
               "idempotent-replayed": {
                 "schema": { "type": "string", "enum": ["true"] },
                 "description": "Present on replay"
@@ -2756,6 +2771,11 @@
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
                 "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
                 "required": true
               },
               "idempotent-replayed": {
@@ -2775,6 +2795,11 @@
                 "description": "Request correlation ID",
                 "required": true
               },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              },
               "idempotent-replayed": {
                 "schema": { "type": "string", "enum": ["true"] },
                 "description": "Present on replay"
@@ -2792,6 +2817,11 @@
                 "description": "Request correlation ID",
                 "required": true
               },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              },
               "idempotent-replayed": {
                 "schema": { "type": "string", "enum": ["true"] },
                 "description": "Present on replay"
@@ -2807,6 +2837,11 @@
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
                 "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
                 "required": true
               },
               "idempotent-replayed": {
