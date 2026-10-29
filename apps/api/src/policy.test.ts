@@ -12,6 +12,7 @@ const fund = (id: string) => ({
       upiVpa: "test@yenbank",
       upiPayeeName: "Test Fund",
       createdAt: "2026-01-01T00:00:00.000Z",
+      visibility: "private" as const,
     },
   },
 });
@@ -33,6 +34,7 @@ const evidenceFund = {
     upiVpa: "festival@yenbank",
     upiPayeeName: "Festival Committee",
     createdAt: "2026-10-28T00:00:00.000Z",
+    visibility: "private" as const,
   },
 } as const;
 

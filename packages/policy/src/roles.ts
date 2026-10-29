@@ -1,15 +1,24 @@
 import type { PseudonymId, UserId } from "@yen/shared";
 
 /**
- * The six fund roles recognized by the Yen policy engine:
+ * The seven fund roles recognized by the Yen policy engine:
  * - owner: fund creator/administrator with full governance privileges
  * - treasurer: manages spending proposals, evidence, payouts, and bank reconciliation
  * - approver: verifies and votes on expense requests
  * - auditor: inspects tamper-evident logs, flags concerns, resolves objections
  * - donor: contributes funds, monitors spending, raises objections during window
+ * - member: fund participant with read access to member-visible information
  * - public: unauthenticated or general public viewer
  */
-export const FUND_ROLES = ["owner", "treasurer", "approver", "auditor", "donor", "public"] as const;
+export const FUND_ROLES = [
+  "owner",
+  "treasurer",
+  "approver",
+  "auditor",
+  "donor",
+  "member",
+  "public",
+] as const;
 
 export type FundRole = (typeof FUND_ROLES)[number];
 
@@ -43,5 +52,5 @@ export function isStaffRole(role: FundRole): boolean {
 }
 
 export function isMemberRole(role: FundRole): boolean {
-  return isStaffRole(role);
+  return role === "member" || isStaffRole(role);
 }

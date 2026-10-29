@@ -18,6 +18,12 @@ import {
   type SignedApproval,
   submitExpense,
 } from "@yen/ledger";
+import {
+  DEFAULT_FUND_POLICY,
+  isValidRole,
+  can as policyCan,
+  redactFundReadModel,
+} from "@yen/policy";
 import { paise, parseFundId, parseGstin } from "@yen/shared";
 import type { Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -64,6 +70,9 @@ import {
   payExpenseRoute,
   pledgeDonationRoute,
   principalSchema,
+  publicFundBreakdownRoute,
+  publicFundSummaryRoute,
+  publicFundTimelineRoute,
   readyRoute,
   reconcileExpenseRoute,
   rejectExpenseRoute,
@@ -97,6 +106,7 @@ import {
   isPledgeRoute,
   isPublicAuthRoute,
   isPublicDonationRoute,
+  isPublicFundReadRoute,
   isWaitlistRoute,
   rateLimit,
   requestContext,
@@ -231,9 +241,17 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   });
   app.use("/v1/*", idempotency(deps));
   app.use("/v1/me", requireAuth);
+  app.use("/v1/funds/*", async (c, next) => {
+    if (isPublicFundReadRoute(c.req.path) && c.get("principal")) {
+      c.header("cache-control", "private, no-store");
+    }
+    await next();
+  });
   // Anyone may pay into a fund; donors sign in later (YEN-22).
   app.use("/v1/funds/*", (c, next) =>
-    isPublicDonationRoute(c.req.path) ? next() : requireAuth(c, next),
+    isPublicDonationRoute(c.req.path) || isPublicFundReadRoute(c.req.path)
+      ? next()
+      : requireAuth(c, next),
   );
   app.use("/v1/auth/*", (c, next) =>
     isPublicAuthRoute(c.req.path) ? next() : requireAuth(c, next),
@@ -560,6 +578,139 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const resource = { kind: "fund", fund: entry } as const;
     const principal = authorizedFund(c, "fund:read", resource);
     return c.json(deps.policy.redact(principal, resource), 200);
+  });
+
+  const publicFundContext = (fundId: string, principal: Principal | null) => {
+    const entry = funds.get(fundId);
+    if (!entry) throw new ApiError("not_found");
+    const parsedFundId = parseFundId(fundId);
+    if (!parsedFundId.ok) throw new ApiError("not_found");
+    const visibilityTier = entry.fund.visibility;
+    const requestedRole: string | undefined =
+      principal?.role ?? principal?.roles?.find(isValidRole);
+    const role =
+      principal?.id === entry.owner
+        ? "owner"
+        : requestedRole && isValidRole(requestedRole)
+          ? requestedRole
+          : "public";
+    const actor = principal ? { id: principal.id, role } : { role: "public" as const };
+    const allowed = policyCan(actor, "fund:read", {
+      kind: "fund",
+      fund: {
+        fundId: parsedFundId.value,
+        ownerId: entry.owner,
+        policy: { ...DEFAULT_FUND_POLICY, visibilityTier },
+      },
+    });
+    if (!allowed) throw new ApiError("not_found");
+    return { entry, actor, publicTier: principal === null && visibilityTier === "public" };
+  };
+  const setFundReadCache = (c: Context<ApiEnv>, publicTier: boolean, body: unknown) => {
+    if (!publicTier) {
+      c.header("cache-control", "private, no-store");
+      return;
+    }
+    const serialized = JSON.stringify(body);
+    const etag = `"${crypto.createHash("sha256").update(serialized).digest("hex")}"`;
+    c.header("etag", etag);
+    c.header("cache-control", "public, s-maxage=30, max-age=0, must-revalidate");
+  };
+  const publicDataGaps = [
+    "Donation records are not queryable; raised amount is unknown.",
+    "Expense categories are not stored; spending is grouped as Uncategorized.",
+    "The event log and anchoring query are not connected; timeline entries are derived from expense records.",
+    "Donor display-name preferences are not stored; donor names and labels are omitted.",
+    "Authenticated member assignments are not loaded into sessions; donor and member access requires a role-bearing principal.",
+  ];
+  const listFundExpenses = async (fundId: string) => deps.expenseStore.list(fundId);
+  const safePaiseSum = (values: number[]) => {
+    const total = values.reduce((sum, value) => sum + value, 0);
+    if (!Number.isSafeInteger(total) || total < 0) throw new ApiError("internal");
+    return total;
+  };
+  app.openapi(publicFundSummaryRoute, async (c) => {
+    const fundId = c.req.valid("param").fundId;
+    const { entry, actor, publicTier } = publicFundContext(fundId, c.get("principal"));
+    const expenses = await listFundExpenses(fundId);
+    const spentPaise = safePaiseSum(
+      expenses
+        .filter((expense) => expense.status === "paid" || expense.status === "reconciled")
+        .map((expense) => expense.amountPaise),
+    );
+    const body = redactFundReadModel(actor, {
+      kind: "fund_summary",
+      fundId,
+      name: entry.fund.name,
+      purpose: entry.fund.purpose ?? null,
+      raisedPaise: null,
+      spentPaise: String(spentPaise),
+      verification: "unverified",
+      dataGaps: publicDataGaps,
+    });
+    setFundReadCache(c, publicTier, body);
+    return c.json(body, 200);
+  });
+  app.openapi(publicFundBreakdownRoute, async (c) => {
+    const fundId = c.req.valid("param").fundId;
+    const { actor, publicTier } = publicFundContext(fundId, c.get("principal"));
+    const expenses = await listFundExpenses(fundId);
+    const spentPaise = safePaiseSum(
+      expenses
+        .filter((expense) => expense.status === "paid" || expense.status === "reconciled")
+        .map((expense) => expense.amountPaise),
+    );
+    const body = redactFundReadModel(actor, {
+      kind: "fund_breakdown",
+      fundId,
+      categories:
+        spentPaise === 0 ? [] : [{ category: "Uncategorized", spentPaise: String(spentPaise) }],
+      dataGaps: publicDataGaps,
+    });
+    setFundReadCache(c, publicTier, body);
+    return c.json(body, 200);
+  });
+  app.openapi(publicFundTimelineRoute, async (c) => {
+    const fundId = c.req.valid("param").fundId;
+    const { actor, publicTier } = publicFundContext(fundId, c.get("principal"));
+    const expenses = await listFundExpenses(fundId);
+    const items = expenses
+      .filter((expense) => expense.status !== "draft")
+      .map((expense) => {
+        const occurredAt =
+          expense.reconciledAt ??
+          expense.paidAt ??
+          expense.rejectedAt ??
+          expense.approvedAt ??
+          expense.submittedAt ??
+          expense.createdAt;
+        const statusWords: Record<string, string> = {
+          submitted: "A spending request was submitted.",
+          approved: "A spending request was approved.",
+          rejected: "A spending request was rejected.",
+          expired: "A spending request expired.",
+          paid: "An approved expense was marked paid.",
+          reconciled: "An expense was marked reconciled.",
+        };
+        return {
+          id: expense.id,
+          occurredAt,
+          message: statusWords[expense.status] ?? "A fund activity was recorded.",
+          ...(expense.status === "paid" || expense.status === "reconciled"
+            ? { amountPaise: String(expense.amountPaise) }
+            : {}),
+          verified: "unverified" as const,
+        };
+      })
+      .sort((left, right) => left.occurredAt.localeCompare(right.occurredAt));
+    const body = redactFundReadModel(actor, {
+      kind: "fund_timeline",
+      fundId,
+      items,
+      dataGaps: publicDataGaps,
+    });
+    setFundReadCache(c, publicTier, body);
+    return c.json(body, 200);
   });
 
   const defaultFundPolicy: FundPolicy = {

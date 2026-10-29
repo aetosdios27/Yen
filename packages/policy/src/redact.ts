@@ -93,9 +93,42 @@ export interface DonationRecord {
   readonly createdAt: string;
 }
 
+export type FundVerificationState = "bank-matched" | "anchored" | "unverified";
+export interface FundSummaryRecord {
+  readonly kind: "fund_summary";
+  readonly fundId: string;
+  readonly name: string;
+  readonly purpose: string | null;
+  readonly raisedPaise: string | null;
+  readonly spentPaise: string;
+  readonly verification: FundVerificationState;
+  readonly dataGaps: readonly string[];
+}
+export interface FundBreakdownRecord {
+  readonly kind: "fund_breakdown";
+  readonly fundId: string;
+  readonly categories: readonly { readonly category: string; readonly spentPaise: string }[];
+  readonly dataGaps: readonly string[];
+}
+export interface FundTimelineRecord {
+  readonly kind: "fund_timeline";
+  readonly fundId: string;
+  readonly items: readonly {
+    readonly id: string;
+    readonly occurredAt: string;
+    readonly message: string;
+    readonly amountPaise?: string | undefined;
+    readonly verified: FundVerificationState;
+  }[];
+  readonly dataGaps: readonly string[];
+}
+export type FundReadRecord = FundSummaryRecord | FundBreakdownRecord | FundTimelineRecord;
+
 interface FundViewShape {
   readonly id: string;
   readonly name: string;
+  readonly purpose?: string | undefined;
+  readonly visibility?: string | undefined;
   readonly targetPaise?: string | undefined;
   readonly createdAt?: string | undefined;
 }
@@ -108,10 +141,19 @@ function isFundView(value: unknown): value is FundViewShape {
 
 /** Fund view allowlist: id, name, target and creation time. Everything else is dropped. */
 function redactFundView(fund: FundViewShape): FundViewShape {
-  const result: { id: string; name: string; targetPaise?: string; createdAt?: string } = {
+  const result: {
+    id: string;
+    name: string;
+    purpose?: string;
+    visibility?: string;
+    targetPaise?: string;
+    createdAt?: string;
+  } = {
     id: fund.id,
     name: fund.name,
   };
+  if (fund.purpose !== undefined) result.purpose = str(fund.purpose);
+  if (fund.visibility !== undefined) result.visibility = str(fund.visibility);
   if (fund.targetPaise !== undefined) {
     if (!paiseWire.safeParse(fund.targetPaise).success) {
       throw new RedactionError(
@@ -246,7 +288,7 @@ export function redact(
   const viewerRole: FundRole =
     viewer && typeof viewer === "object" && isValidRole(viewer.role) ? viewer.role : "public";
   const isPublic = viewerRole === "public";
-  const isDonor = viewerRole === "donor";
+  const isDonor = viewerRole === "donor" || viewerRole === "member";
   const isStaff = isStaffRole(viewerRole);
 
   if (typeof record !== "object" || record === null) {
@@ -371,4 +413,78 @@ export function redact(
 
   // 5. Unsupported record shape: fail closed
   throw new RedactionError("Unsupported record shape for redaction");
+}
+
+/** Allowlist redaction for the public fund read API's aggregate projections. */
+export function redactFundReadModel<T extends FundReadRecord>(
+  _viewer: Actor | ViewerContext,
+  record: T,
+): Redacted<Omit<T, "kind">> {
+  if (!record || typeof record !== "object" || typeof record.fundId !== "string") {
+    throw new RedactionError("Unsupported fund read model");
+  }
+  const dataGaps = Array.isArray(record.dataGaps) ? record.dataGaps.map((gap) => str(gap)) : [];
+  let result: FundReadRecord;
+  if (record.kind === "fund_summary") {
+    result = {
+      kind: "fund_summary",
+      fundId: str(record.fundId),
+      name: publicText(record.name),
+      purpose: record.purpose === null ? null : publicText(record.purpose),
+      raisedPaise: record.raisedPaise === null ? null : paiseString(record.raisedPaise),
+      spentPaise: paiseString(record.spentPaise),
+      verification: verificationState(record.verification),
+      dataGaps,
+    };
+  } else if (record.kind === "fund_breakdown") {
+    result = {
+      kind: "fund_breakdown",
+      fundId: str(record.fundId),
+      categories: record.categories.map((item) => ({
+        category: publicText(item.category),
+        spentPaise: paiseString(item.spentPaise),
+      })),
+      dataGaps,
+    };
+  } else if (record.kind === "fund_timeline") {
+    result = {
+      kind: "fund_timeline",
+      fundId: str(record.fundId),
+      items: record.items.map((item) => ({
+        id: str(item.id),
+        occurredAt: str(item.occurredAt),
+        message: publicText(item.message),
+        ...(item.amountPaise === undefined ? {} : { amountPaise: paiseString(item.amountPaise) }),
+        verified: verificationState(item.verified),
+      })),
+      dataGaps,
+    };
+  } else {
+    throw new RedactionError("Unsupported fund read model");
+  }
+  const { kind: _kind, ...safe } = result;
+  return markRedacted(safe as unknown as Omit<T, "kind">);
+}
+
+function verificationState(value: unknown): FundVerificationState {
+  if (value === "bank-matched" || value === "anchored" || value === "unverified") return value;
+  throw new RedactionError("Invalid verification state");
+}
+
+function paiseString(value: unknown): string {
+  const parsed = paiseWire.safeParse(value);
+  if (!parsed.success) {
+    throw new RedactionError("Expected canonical paise string", "INVALID_AMOUNT");
+  }
+  return parsed.data;
+}
+
+function publicText(value: unknown): string {
+  return str(value)
+    .replace(/\bhttps?:\/\/\S+/gi, "[redacted]")
+    .replace(
+      /\b(?:utr|transaction\s*(?:id|reference)|account\s*(?:number|no\.?))\s*[:#-]?\s*[a-z0-9-]{6,}\b/gi,
+      "[redacted]",
+    )
+    .replace(/\+?\d[\d\s().-]{8,}\d/g, "[redacted]");
 }
