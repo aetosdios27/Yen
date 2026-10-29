@@ -278,10 +278,25 @@ databaseSuite("Postgres expense store", (sql, url) => {
       }
       const approved = await expenseStore.get(draftExpense.id);
       if (!approved) throw new Error("Expense disappeared during journey");
+      await expect(
+        expenseStore.save(payExpense(approved, uuidv7(), new Date(Date.now() + 9).toISOString()), {
+          actorUserId: userIds[0],
+          policy: QUORUM_TWO,
+        }),
+      ).rejects.toThrow("unmatched ingested debit");
+      const bankTransactionId = uuidv7();
+      await sql`
+        INSERT INTO bank_transactions (
+          id, fund_id, bank_reference, amount_paise, type, posted_at, source, raw_payload
+        ) VALUES (
+          ${bankTransactionId}, ${fundId}, ${`journey-${fundIndex}`}, '5000', 'debit',
+          ${now}, 'statement_upload', '{}'::jsonb
+        )
+      `;
       await withMoneyOperation("pay", () =>
         withSpan("db.expense.save", () =>
           expenseStore.save(
-            payExpense(approved, uuidv7(), new Date(Date.now() + 10).toISOString()),
+            payExpense(approved, bankTransactionId, new Date(Date.now() + 10).toISOString()),
             { actorUserId: userIds[0], policy: QUORUM_TWO },
           ),
         ),
@@ -428,10 +443,19 @@ databaseSuite("Postgres expense store", (sql, url) => {
       expect(response.status).toBe(200);
     }
 
+    const traceBankTransactionId = uuidv7();
+    await sql`
+      INSERT INTO bank_transactions (
+        id, fund_id, bank_reference, amount_paise, type, posted_at, source, raw_payload
+      ) VALUES (
+        ${traceBankTransactionId}, ${fundId}, ${`trace-${traceBankTransactionId}`}, '5000', 'debit',
+        ${new Date().toISOString()}, 'statement_upload', '{}'::jsonb
+      )
+    `;
     const payResponse = await ownerApp.request(`/v1/funds/${fundId}/expenses/${created.id}/pay`, {
       method: "POST",
       headers: { "content-type": "application/json", "idempotency-key": "trace-pay" },
-      body: JSON.stringify({ bankTransactionId: uuidv7() }),
+      body: JSON.stringify({ bankTransactionId: traceBankTransactionId }),
     });
     expect(payResponse.status).toBe(200);
     expect((await expenseStore.get(created.id))?.status).toBe("paid");

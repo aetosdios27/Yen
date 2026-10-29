@@ -115,6 +115,15 @@ export class PostgresExpenseStore implements ExpenseStore {
       } else if (current.status === "approved" && expense.status === "paid") {
         const transactionId = expense.bankTransactionId;
         if (!transactionId) throw new Error("Paid expense is missing its bank transaction ID");
+        const linked = await tx<{ id: string }[]>`
+          UPDATE bank_transactions SET matched_expense_id = ${expense.id}, reconciliation_status = 'matched'
+          WHERE id = ${transactionId} AND fund_id = ${expense.fundId} AND type = 'debit'
+            AND amount_paise = ${expense.amountPaise} AND reconciliation_status = 'unmatched'
+            AND matched_expense_id IS NULL
+          RETURNING id
+        `;
+        if (!linked[0])
+          throw new Error("Bank transaction is not an unmatched ingested debit for this expense");
         const result = await payExpenseInTx({
           tx,
           expense: current,
@@ -127,6 +136,12 @@ export class PostgresExpenseStore implements ExpenseStore {
         const transactionId = expense.bankTransactionId;
         if (!transactionId)
           throw new Error("Reconciled expense is missing its bank transaction ID");
+        const linked = await tx<{ id: string }[]>`
+          SELECT id FROM bank_transactions
+          WHERE id = ${transactionId} AND fund_id = ${expense.fundId} AND type = 'debit'
+            AND amount_paise = ${expense.amountPaise} AND matched_expense_id = ${expense.id}
+        `;
+        if (!linked[0]) throw new Error("Bank transaction is not linked to this expense");
         const result = await reconcileExpenseInTx({
           tx,
           expense: current,
