@@ -2,6 +2,29 @@
 
 Background job worker runtime, outbox transactional enqueue helper, and exit-criteria evaluator for Yen.
 
+## Blockchain anchoring
+
+`AnchoringWorker` reads each active fund's new `fund_events` range under a fund advisory lock,
+builds the existing one-fund interval commitment, persists an `anchors` row and event salts, and
+then submits the root. The contract receives only a `bytes32` root and its global publication
+sequence; fund IDs, event hashes, and salts stay in Postgres. A unique `(fund_id, from_seq, to_seq)`
+constraint and a durable chain sequence make retries reuse the same anchor. The scheduled discovery
+queue sends at most one active job per fund using pg-boss singleton keys.
+
+`RootSigner` exposes the transaction account to the chain adapter. `LocalDevRootSigner` reads
+`ANCHOR_PRIVATE_KEY`; it is intended for local development and disposable test keys. `KmsRootSigner`
+is an intentionally unconfigured adapter that throws until an approved KMS integration is supplied.
+Neither signer stores keys in Postgres or includes them in error messages. The worker starts anchoring
+when `ANCHOR_RPC_URL` and `ROOT_REGISTRY_ADDRESS` are set, and then requires `ANCHOR_PRIVATE_KEY`.
+`ViemRootChain` defaults to Polygon Amoy (chain 80002) and requires an explicit registry address and
+RPC URL.
+
+The current confirmation policy requires 12 blocks after the publication block. A reorg can remove
+a transaction or its receipt after an apparent success; therefore `confirmed` is an observed
+depth, not irreversible finality. A later reorg must be reconciled by an operator or a future
+canonical-chain monitor before Yen describes that anchor as confirmed. The chain registry alone
+does not prove event completeness or off-chain data availability.
+
 ## ADR: job queue and outbox runtime (start with pg-boss, define the exit criteria)
 
 Status: accepted for YEN-62.

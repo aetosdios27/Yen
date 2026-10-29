@@ -45,6 +45,10 @@ export class WorkerRuntime {
     return this.boss;
   }
 
+  public getSql(): Sql {
+    return this.sql;
+  }
+
   public registerHandler<T = unknown>(
     queueName: string,
     handler: JobHandler<T>,

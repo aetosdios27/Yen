@@ -1,3 +1,9 @@
+import {
+  AnchoringWorker,
+  LocalDevRootSigner,
+  registerAnchoringDiscovery,
+  ViemRootChain,
+} from "./anchoring.js";
 import { DEFAULT_QUEUES } from "./config.js";
 import { parseWorkerEnv } from "./env.js";
 import { WorkerRuntime } from "./worker.js";
@@ -21,10 +27,27 @@ const worker = new WorkerRuntime({
   queues: DEFAULT_QUEUES,
 });
 
+const anchorRpc = process.env.ANCHOR_RPC_URL;
+const anchorAddress = process.env.ROOT_REGISTRY_ADDRESS;
+const anchorConfigured = Boolean(anchorRpc && anchorAddress);
+if (anchorRpc && anchorAddress) {
+  const anchoring = new AnchoringWorker(
+    worker.getSql(),
+    new ViemRootChain(anchorRpc, anchorAddress as `0x${string}`),
+    LocalDevRootSigner.fromEnvironment(),
+  );
+  worker.registerHandler("blockchain-anchoring", async (job) => {
+    const data = job.data as { fundId?: unknown };
+    if (typeof data.fundId !== "string") throw new Error("Anchoring job requires a fundId");
+    await anchoring.runFund(data.fundId);
+  });
+}
+
 // This process has no domain handlers yet. Every configured queue gets a handler that fails, so
 // a job is never acknowledged as completed without work being done. The job retries and then
 // moves to its dead-letter queue, where it can be inspected and replayed once a real handler exists.
 for (const queueName of Object.keys(DEFAULT_QUEUES)) {
+  if (queueName === "blockchain-anchoring" && anchorConfigured) continue;
   worker.registerHandler(queueName, async (): Promise<void> => {
     throw new Error(
       `No job handler is implemented for queue '${queueName}'. The job is retried, then dead-lettered.`,
@@ -66,3 +89,11 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
 }
 
 process.stdout.write("Worker runtime started and listening for jobs.\n");
+if (anchorConfigured) {
+  void registerAnchoringDiscovery(worker.getBoss(), worker.getSql()).catch((error) => {
+    process.stderr.write(
+      `Anchoring discovery failed to start: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    process.exitCode = 1;
+  });
+}
