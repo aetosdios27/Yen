@@ -24,6 +24,16 @@ function approvedExpense(): ExpenseRequest {
     amountPaise: paise(12500),
     description: "Venue deposit",
     recipientRef: "vendor@upi",
+    payee: {
+      identity: { kind: "upi", vpa: "vendor@upi" },
+      name: "Vendor",
+      verification: { status: "unverified" },
+    },
+    payeeFingerprint: "fp_vendor_upi",
+    lastPayeeChangedAt: "2026-01-01T00:00:00.000Z",
+    fraudEvaluationId: null,
+    fraudFlags: [],
+    fraudAcknowledgements: [],
     status: "approved",
     holdId: "hold-1",
     approvals: [

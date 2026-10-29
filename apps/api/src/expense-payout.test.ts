@@ -28,6 +28,16 @@ describe("Expense Payout Security Routes (YEN-43)", () => {
       amountPaise: paise(50000),
       description: "Equipment purchase",
       recipientRef: "vendor@bank",
+      payee: {
+        identity: { kind: "upi", vpa: "vendor@bank" },
+        name: "Vendor",
+        verification: { status: "unverified" },
+      },
+      payeeFingerprint: "fp_vendor_bank",
+      lastPayeeChangedAt: new Date().toISOString(),
+      fraudEvaluationId: null,
+      fraudFlags: [],
+      fraudAcknowledgements: [],
       status: "approved",
       holdId: "hold-1",
       approvals: [
