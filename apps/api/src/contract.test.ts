@@ -234,6 +234,49 @@ it("validates every documented status and sent header against the committed Open
   });
   const resolve = (path: string) => path.replace("{fundId}", id);
 
+  const statementPost = {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      fundId: id,
+      csvContent:
+        "Date,Narration,Chq/Ref No,Value Dt,Withdrawal Amt,Deposit Amt,Closing Balance\n28/10/2026,UPI/CR/123456789012/DONATION,123456789012,28/10/2026,,500.00,10500.00",
+    }),
+  };
+  await check(
+    "/v1/reconciliation/statements",
+    "post",
+    await app.request("/v1/reconciliation/statements", statementPost),
+  );
+
+  const webhookPost = {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      event: "virtual_account.credited",
+      timestamp: "2026-10-28T14:30:00.000Z",
+      data: {
+        fund_id: id,
+        bank_reference: "REF123",
+        amount_paise: 50000,
+        type: "credit",
+        posted_at: "2026-10-28T14:30:00.000Z",
+        utr: "123456789012",
+      },
+    }),
+  };
+  await check(
+    "/v1/reconciliation/webhooks/partner",
+    "post",
+    await app.request("/v1/reconciliation/webhooks/partner", webhookPost),
+  );
+
+  await check(
+    "/v1/funds/{fundId}/reconciliation/unmatched",
+    "get",
+    await app.request(resolve("/v1/funds/{fundId}/reconciliation/unmatched")),
+  );
+
   const parsedTestPhone = normalizePhone("+919876543210");
   if (!parsedTestPhone) throw new Error("Invalid test phone");
   const testPhone = parsedTestPhone;
@@ -480,7 +523,8 @@ it("validates every documented status and sent header against the committed Open
       path.endsWith("/policy") ||
       path.endsWith("/members") ||
       path.includes("/invites") ||
-      path.endsWith("/remove")
+      path.endsWith("/remove") ||
+      path.includes("/reconciliation")
     )
       continue;
     for (const [method, operation] of Object.entries(methods)) {

@@ -812,6 +812,193 @@
             "description": "Optional invoice issue date (YYYY-MM-DD)"
           }
         }
+      },
+      "StatementUploadResult": {
+        "type": "object",
+        "properties": {
+          "totalProcessed": { "type": "integer", "minimum": 0 },
+          "ingestedCount": { "type": "integer", "minimum": 0 },
+          "matchedCount": { "type": "integer", "minimum": 0 },
+          "unmatchedCount": { "type": "integer", "minimum": 0 },
+          "duplicateCount": { "type": "integer", "minimum": 0 },
+          "transactions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/StatementTransactionSummary" }
+          }
+        },
+        "required": [
+          "totalProcessed",
+          "ingestedCount",
+          "matchedCount",
+          "unmatchedCount",
+          "duplicateCount",
+          "transactions"
+        ],
+        "additionalProperties": false
+      },
+      "StatementTransactionSummary": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "bankReference": { "type": "string" },
+          "utr": { "type": "string" },
+          "amountPaise": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$",
+            "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
+          },
+          "type": { "type": "string", "enum": ["credit", "debit"] },
+          "reconciliationStatus": {
+            "type": "string",
+            "enum": ["unmatched", "matched", "manually_matched", "ignored"]
+          },
+          "matchedPledgeId": { "type": "string" },
+          "duplicate": { "type": "boolean" }
+        },
+        "required": ["id", "bankReference", "amountPaise", "type", "reconciliationStatus"],
+        "additionalProperties": false
+      },
+      "StatementUploadInput": {
+        "type": "object",
+        "properties": {
+          "fundId": { "type": "string", "format": "uuid" },
+          "csvContent": { "type": "string", "minLength": 1 }
+        },
+        "required": ["fundId", "csvContent"],
+        "additionalProperties": false
+      },
+      "PartnerWebhookResult": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["processed"] },
+          "duplicate": { "type": "boolean" },
+          "transactionId": { "type": "string" },
+          "reconciliationStatus": {
+            "type": "string",
+            "enum": ["unmatched", "matched", "manually_matched", "ignored"]
+          },
+          "matchedPledgeId": { "type": "string" }
+        },
+        "required": ["status", "transactionId", "reconciliationStatus"],
+        "additionalProperties": false
+      },
+      "PartnerWebhookInput": {
+        "type": "object",
+        "properties": {
+          "event": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "data": {
+            "type": "object",
+            "properties": {
+              "fund_id": { "type": "string", "format": "uuid" },
+              "bank_reference": { "type": "string", "minLength": 1, "maxLength": 128 },
+              "amount_paise": {
+                "anyOf": [
+                  { "type": "integer", "exclusiveMinimum": 0 },
+                  { "type": "string", "pattern": "^[1-9][0-9]*$" }
+                ]
+              },
+              "type": { "type": "string", "enum": ["credit", "debit"], "default": "credit" },
+              "posted_at": { "type": "string", "format": "date-time" },
+              "utr": { "type": "string", "pattern": "^[0-9]{12}$" },
+              "narration": { "type": "string", "maxLength": 500 },
+              "counterparty": {
+                "type": "object",
+                "properties": {
+                  "vpa": { "type": "string", "maxLength": 256 },
+                  "name": { "type": "string", "maxLength": 120 }
+                }
+              }
+            },
+            "required": ["fund_id", "bank_reference", "amount_paise", "posted_at"],
+            "additionalProperties": {}
+          }
+        },
+        "required": ["event", "timestamp", "data"],
+        "additionalProperties": false
+      },
+      "UnmatchedCreditsResponse": {
+        "type": "array",
+        "items": { "$ref": "#/components/schemas/UnmatchedCredit" }
+      },
+      "UnmatchedCredit": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "fundId": { "type": "string", "format": "uuid" },
+          "bankReference": { "type": "string" },
+          "utr": { "type": "string" },
+          "amountPaise": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$",
+            "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
+          },
+          "postedAt": { "type": "string", "format": "date-time" },
+          "narration": { "type": "string" },
+          "counterpartyVpa": { "type": "string" },
+          "candidates": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/CandidatePledge" }
+          }
+        },
+        "required": ["id", "fundId", "bankReference", "amountPaise", "postedAt", "candidates"],
+        "additionalProperties": false
+      },
+      "CandidatePledge": {
+        "type": "object",
+        "properties": {
+          "pledgeId": { "type": "string" },
+          "amountPaise": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$",
+            "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
+          },
+          "utr": { "type": "string" },
+          "donorName": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "timeDifferenceHours": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["pledgeId", "amountPaise", "utr", "createdAt", "timeDifferenceHours"],
+        "additionalProperties": false
+      },
+      "ManualMatchResult": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["matched"] },
+          "bankTransactionId": { "type": "string" },
+          "pledgeId": { "type": "string" },
+          "amountPaise": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$",
+            "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
+          },
+          "matchedAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["status", "bankTransactionId", "pledgeId", "amountPaise", "matchedAt"],
+        "additionalProperties": false
+      },
+      "ManualMatchInput": {
+        "type": "object",
+        "properties": {
+          "bankTransactionId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "ID of the unmatched bank transaction"
+          },
+          "pledgeId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "ID of the pledge to match"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500,
+            "description": "Audit reason for manual match by treasurer"
+          }
+        },
+        "required": ["bankTransactionId", "pledgeId", "reason"],
+        "additionalProperties": false
       }
     },
     "parameters": {}
@@ -7786,6 +7973,609 @@
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
                 "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reconciliation/statements": {
+      "post": {
+        "tags": ["reconciliation"],
+        "operationId": "uploadStatement",
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Upload bank statement CSV",
+        "description": "Uploads and ingests a bank statement CSV for reconciliation against pending donation pledges.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/StatementUploadInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Statement parsed and ingested",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StatementUploadResult" }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; details contain field paths",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "409": {
+            "description": "Resource conflict, changed idempotency input, or request in progress",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "504": {
+            "description": "Gateway timeout",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reconciliation/webhooks/partner": {
+      "post": {
+        "tags": ["reconciliation"],
+        "operationId": "partnerWebhook",
+        "summary": "Payment partner webhook",
+        "description": "Idempotent webhook receiver for payment partner notifications (e.g. UPI virtual account credit).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/PartnerWebhookInput" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook processed",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PartnerWebhookResult" }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; details contain field paths",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/reconciliation/unmatched": {
+      "get": {
+        "tags": ["reconciliation"],
+        "operationId": "getUnmatchedCredits",
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Treasurer review queue for unmatched credits",
+        "description": "Lists unmatched bank credits for a fund with potential matching candidate pledges for treasurer review.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Canonical lowercase FundId UUID; invalid IDs return 404"
+            },
+            "required": true,
+            "description": "Canonical lowercase FundId UUID; invalid IDs return 404",
+            "name": "fundId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Queue of unmatched credits",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UnmatchedCreditsResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; details contain field paths",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "409": {
+            "description": "Resource conflict, changed idempotency input, or request in progress",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "504": {
+            "description": "Gateway timeout",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/reconciliation/manual-match": {
+      "post": {
+        "tags": ["reconciliation"],
+        "operationId": "manualMatch",
+        "security": [{ "bearerAuth": [] }],
+        "summary": "Treasurer manual reconciliation match",
+        "description": "Manually matches an unmatched bank transaction with a donation pledge with mandatory audit reason.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Canonical lowercase FundId UUID; invalid IDs return 404"
+            },
+            "required": true,
+            "description": "Canonical lowercase FundId UUID; invalid IDs return 404",
+            "name": "fundId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._:-]+$"
+            },
+            "required": true,
+            "name": "Idempotency-Key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/ManualMatchInput" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Manual match successful",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "idempotent-replayed": {
+                "schema": { "type": "string", "enum": ["true"] },
+                "description": "Present on replay"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ManualMatchResult" } }
+            }
+          },
+          "400": {
+            "description": "Validation failed; details contain field paths",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "409": {
+            "description": "Transaction or pledge already matched",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
                 "required": true
               }
             },

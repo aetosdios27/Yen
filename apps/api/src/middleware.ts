@@ -20,6 +20,14 @@ export function isPublicDonationRoute(path: string): boolean {
   return /^\/v1\/funds\/[0-9a-f-]{36}\/(?:donations\/pledge|donation-details)\/?$/.test(path);
 }
 
+export function isPartnerWebhookRoute(path: string): boolean {
+  return path.replace(/\/$/, "") === "/v1/reconciliation/webhooks/partner";
+}
+
+export function isStatementUploadRoute(path: string): boolean {
+  return path.replace(/\/$/, "") === "/v1/reconciliation/statements";
+}
+
 export function isPublicFundReadRoute(path: string): boolean {
   return /^\/v1\/funds\/[0-9a-f-]{36}\/public\/(?:summary|breakdown|timeline|expenses\/[0-9a-f-]{36}(?:\/proofs)?)\/?$/.test(
     path,
@@ -276,7 +284,9 @@ export function idempotency(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
       ["GET", "HEAD", "OPTIONS"].includes(c.req.method) ||
       isWaitlistRoute(c.req.path) ||
       isAuthRoute(c.req.path) ||
-      (c.req.method === "POST" && isOwnerInviteIssueRoute(c.req.path))
+      (c.req.method === "POST" && isOwnerInviteIssueRoute(c.req.path)) ||
+      isPartnerWebhookRoute(c.req.path) ||
+      isStatementUploadRoute(c.req.path)
     )
       return next();
     // Anonymous donors still get replay protection; their key is scoped to the caller's IP.

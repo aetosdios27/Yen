@@ -55,6 +55,7 @@ databaseSuite("migration runner", (sql, url) => {
       "anchors",
       "auth_otp_attempt_limits",
       "auth_otps",
+      "bank_transactions",
       "display_name_contact_salts",
       "display_names",
       "donation_pledges",
@@ -102,6 +103,7 @@ databaseSuite("migration runner", (sql, url) => {
     const anchorReplacementsSource = await readFile(
       join(defaultDir, "0018_anchor_replacements.sql"),
     );
+    const bankTransactionsSource = await readFile(join(defaultDir, "0019_bank_transactions.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -212,6 +214,12 @@ databaseSuite("migration runner", (sql, url) => {
         checksum: createHash("sha256").update(anchorReplacementsSource).digest("hex"),
         applied_at: expect.any(Date),
       },
+      {
+        version: 19,
+        name: "0019_bank_transactions.sql",
+        checksum: createHash("sha256").update(bankTransactionsSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
     ]);
   });
 
@@ -245,7 +253,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(18);
+    expect(before).toHaveLength(19);
   });
 
   it("rejects an edited applied file and names it", async () => {

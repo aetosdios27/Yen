@@ -42,7 +42,8 @@ export type FundAction =
   | "fund:policy:change"
   | "fund:member:add"
   | "fund:member:remove"
-  | "fund:member:unlock";
+  | "fund:member:unlock"
+  | "fund:reconcile";
 export type FundResource = { readonly kind: "fund"; readonly fund?: FundRecord | undefined };
 export type ExistingFundResource = { readonly kind: "fund"; readonly fund: FundRecord };
 export type EvidenceResource =
@@ -182,6 +183,9 @@ export interface Policy {
   redactExpense?(viewer: Principal, resource: ExistingExpenseResource): ExpenseView;
   canDonate(resource: ExistingFundResource): boolean;
   redactDonationDetails(resource: ExistingFundResource): DonationDetailsView;
+  redactUnmatchedCredits<T>(viewer: Principal, resource: ExistingFundResource, credits: T): T;
+  redactManualMatch<T>(viewer: Principal, resource: ExistingFundResource, result: T): T;
+  redactStatementResult<T>(viewer: Principal, resource: ExistingFundResource, result: T): T;
   redactReceipt<A extends ActionReceiptAction>(
     viewer: Principal,
     action: A,
@@ -201,6 +205,15 @@ export const denyAllPolicy: Policy = {
   canDonate: () => false,
   redactDonationDetails: () => {
     throw new Error("Donation details redaction is unavailable");
+  },
+  redactUnmatchedCredits: () => {
+    throw new Error("Unmatched credits redaction is unavailable");
+  },
+  redactManualMatch: () => {
+    throw new Error("Manual match redaction is unavailable");
+  },
+  redactStatementResult: () => {
+    throw new Error("Statement redaction is unavailable");
   },
   redactReceipt: () => {
     throw new Error("Receipt redaction is unavailable");
@@ -347,6 +360,9 @@ export const devPolicy: Policy = {
     upiVpa: resource.fund.fund.upiVpa,
     upiPayeeName: resource.fund.fund.upiPayeeName,
   }),
+  redactUnmatchedCredits: (_viewer, _resource, credits) => credits,
+  redactManualMatch: (_viewer, _resource, result) => result,
+  redactStatementResult: (_viewer, _resource, result) => result,
   redactReceipt: (viewer, action, receipt, resource) => {
     if (!devPolicy.can(viewer, action, resource ?? { kind: "fund" })) {
       throw new Error("Forbidden: principal cannot perform action");

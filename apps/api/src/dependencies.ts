@@ -25,6 +25,10 @@ import {
 } from "./pin/index.js";
 import type { FundRecord } from "./policy.js";
 import { denyAllPolicy, type Policy } from "./policy.js";
+import {
+  MemoryReconciliationStore,
+  type ReconciliationStore,
+} from "./reconciliation/memory-store.js";
 import { MemoryStorageAdapter, type StorageAdapter } from "./storage.js";
 import {
   type EvidenceStore,
@@ -176,6 +180,7 @@ export interface AppDependencies {
   readonly fundStore?: FundStore | undefined;
   readonly approvalProofVerifier: ApprovalProofVerifier;
   readonly donationPledgeStore: DonationPledgeStore;
+  readonly reconciliationStore: ReconciliationStore;
   readonly displayNameStore: DisplayNameStore;
   readonly pledgeLimit: RateLimit;
   readonly pledgeBodyLimit: number;
@@ -258,6 +263,7 @@ export function defaultDependencies(
     },
     approvalProofVerifier: (signature) => signature.credentialId === "pin-proof",
     donationPledgeStore: new MemoryDonationPledgeStore(),
+    reconciliationStore: new MemoryReconciliationStore(),
     displayNameStore: new MemoryDisplayNameStore(),
     pledgeLimit: { capacity: 10, refillMs: 3600000 },
     pledgeBodyLimit: 4096,
