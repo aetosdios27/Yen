@@ -214,6 +214,9 @@ jobs:
 
       - run: forge fmt --check
       - run: forge build
+      - name: Build queue and workspace dependencies
+        run: pnpm --filter @yen/queue... build
+        working-directory: .
       - name: Run the real Anvil anchoring integration test
         run: pnpm --filter @yen/queue test -- src/anchoring.test.ts -t "deploys RootRegistry and publishes a root on a real local Anvil chain"
         working-directory: .

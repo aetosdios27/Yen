@@ -24,9 +24,11 @@ RPC URL.
 Anvil integration tests deploy the actual `RootRegistry` artifact and publish a root to a local
 Anvil node. CI installs Anvil alongside Forge and runs this test without a skip condition.
 
-The scheduled reconciliation worker checks every five minutes for funds with unanchored events whose
-last anchor was created at least one hour ago, compares submitted/confirmed local roots with
-`rootAt(sequence)`, and alerts when publisher balance falls below 0.05 native token. It emits
+The scheduled reconciliation worker checks every five minutes for funds with unanchored events and
+no landing for at least one hour (for a fund's first anchor, the pending event must itself be at least
+one hour old). It recomputes each submitted/confirmed root from immutable events and stored salts,
+compares it with both the persisted commitment and `rootAt(sequence)`, and alerts when publisher
+balance falls below 0.05 native token. It emits
 `anchor.stale`, `anchor.root_mismatch`, and `anchor.wallet_low` through the injected
 `AnchorAlertSink` (the CLI implementation writes structured alerts to stderr). The `anchor.published`
 event schema is immutable and only accepts `{ anchor_id, global_root }`; it has no receipt fields.

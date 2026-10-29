@@ -11,6 +11,7 @@ import { generatePrivateKey, mnemonicToAccount, privateKeyToAccount } from "viem
 import { foundry } from "viem/chains";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  type AnchorAlertSink,
   AnchoringWorker,
   type ChainReceipt,
   KmsRootSigner,
@@ -19,6 +20,7 @@ import {
   parseDerEcdsaSignature,
   type RootChain,
   type RootSigner,
+  reconcileAnchors,
   ViemRootChain,
 } from "./anchoring.js";
 import { DEFAULT_QUEUES } from "./config.js";
@@ -29,6 +31,13 @@ describe("anchoring signers", () => {
     expect(
       parseDerEcdsaSignature(Uint8Array.from([0x30, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x02])),
     ).toEqual({ r: 1n, s: 2n });
+  });
+
+  it("normalizes the known high-s secp256k1 vector", () => {
+    const highS = BigInt("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140");
+    const highSBytes = Buffer.from(highS.toString(16).padStart(64, "0"), "hex");
+    const der = Uint8Array.from([0x30, 0x26, 0x02, 0x01, 0x01, 0x02, 0x21, 0x00, ...highSBytes]);
+    expect(parseDerEcdsaSignature(der)).toEqual({ r: 1n, s: 1n });
   });
 
   it("signs through a fake KMS client and returns a recoverable EVM signature", async () => {
@@ -55,9 +64,17 @@ describe("anchoring signers", () => {
         const r = signature.slice(2, 66);
         const s = signature.slice(66, 130);
         const encodeInteger = (value: string) => {
-          const bytes = Buffer.from(value.replace(/^0+/, "") || "00", "hex");
-          const hasSignBit = ((bytes[0] ?? 0) & 0x80) !== 0;
-          return [0x02, bytes.length + (hasSignBit ? 1 : 0), ...(hasSignBit ? [0] : []), ...bytes];
+          const bytes = Buffer.from(value, "hex");
+          let first = 0;
+          while (first < bytes.length - 1 && bytes[first] === 0) first += 1;
+          const magnitude = bytes.subarray(first);
+          const hasSignBit = ((magnitude[0] ?? 0) & 0x80) !== 0;
+          return [
+            0x02,
+            magnitude.length + (hasSignBit ? 1 : 0),
+            ...(hasSignBit ? [0] : []),
+            ...magnitude,
+          ];
         };
         const rDer = encodeInteger(r);
         const sDer = encodeInteger(s);
@@ -77,8 +94,8 @@ describe("anchoring signers", () => {
   });
   it("loads the local development key only from its environment and exposes its account", async () => {
     const signer = LocalDevRootSigner.fromEnvironment({
-      ANCHOR_PRIVATE_KEY: `0x${"01".padStart(64, "0")}`,
-    } as NodeJS.ProcessEnv);
+      ANCHOR_PRIVATE_KEY: generatePrivateKey(),
+    });
     const account = await signer.getAccount();
     expect(account.address).toMatch(/^0x[0-9a-fA-F]{40}$/);
   });
@@ -102,6 +119,7 @@ class FakeChain implements RootChain {
   publishCount = 0;
   crashAfterFirstBroadcast = false;
   failNext = false;
+  balance = 1_000_000_000_000_000_000n;
   async getRoot(sequence: bigint): Promise<string> {
     return this.roots.get(sequence) ?? `0x${"0".repeat(64)}`;
   }
@@ -121,7 +139,7 @@ class FakeChain implements RootChain {
     );
   }
   async getBalance(): Promise<bigint> {
-    return 1_000_000_000_000_000_000n;
+    return this.balance;
   }
   async publish(root: `0x${string}`, sequence: bigint): Promise<string> {
     this.publishCount += 1;
@@ -150,7 +168,7 @@ describePostgres("anchoring worker", (adminUrl) => {
   beforeAll(async () => migrate(sql));
   afterAll(async () => sql.end({ timeout: 5 }));
 
-  async function seedFund(): Promise<string> {
+  async function seedFund(occurredAt = "2026-01-01T00:00:00.000Z"): Promise<string> {
     const fundId = randomUUID();
     const userId = randomUUID();
     const orgId = randomUUID();
@@ -165,7 +183,7 @@ describePostgres("anchoring worker", (adminUrl) => {
       type: "fund.created",
       version: 1,
       actor: `psn_${randomUUID()}` as never,
-      occurredAt: "2026-01-01T00:00:00.000Z",
+      occurredAt,
       payload: { org_id: orgId as never, visibility: "private" },
     });
     return fundId;
@@ -189,6 +207,36 @@ describePostgres("anchoring worker", (adminUrl) => {
     expect(chain.publishCount).toBe(1);
     expect(anchors).toHaveLength(1);
     expect(anchors[0]).toMatchObject({ status: "submitted", tx_hash: expect.any(String) });
+  });
+
+  it("recovers a mined fee replacement after the original transaction hash disappears", async () => {
+    const fundId = await seedFund();
+    const chain = new FakeChain();
+    const signer = {
+      getAccount: async () => {
+        throw new Error("not used by fake chain");
+      },
+    } satisfies RootSigner;
+    const worker = new AnchoringWorker(sql, chain, signer);
+    await worker.runFund(fundId);
+    const replacementHash = `0x${"2".repeat(64)}`;
+    const anchors = await sql<{ root: string; tx_hash: string; chain_sequence: bigint }[]>`
+      SELECT root, tx_hash, chain_sequence FROM anchors WHERE fund_id = ${fundId}`;
+    const anchor = anchors[0];
+    if (!anchor) throw new Error("Expected persisted anchor");
+    const root = `0x${anchor.root}`;
+    const oldHash = anchor.tx_hash;
+    const sequence = BigInt(anchor.chain_sequence);
+    chain.receipts.delete(oldHash);
+    chain.publications.set(sequence, { txHash: replacementHash, blockNumber: 100n });
+
+    await worker.runFund(fundId);
+
+    const recovered = await sql<{ tx_hash: string }[]>`
+      SELECT tx_hash FROM anchors WHERE fund_id = ${fundId}`;
+    expect(recovered[0]?.tx_hash).toBe(replacementHash);
+    expect(await chain.getRoot(sequence)).toBe(root);
+    expect(chain.publishCount).toBe(1);
   });
 
   it("retries a failed chain transaction using the same durable anchor and retry backoff policy", async () => {
@@ -234,11 +282,43 @@ describePostgres("anchoring worker", (adminUrl) => {
     expect(await sql`SELECT id FROM anchors WHERE fund_id = ${fundId}`).toHaveLength(0);
     expect(chain.publishCount).toBe(0);
   });
+
+  it("alerts after an hour of pending events and reconciles against a recomputed root", async () => {
+    const fundId = await seedFund("2026-10-28T23:30:00.000Z");
+    const chain = new FakeChain();
+    chain.balance = 1n;
+    const alerts: Parameters<AnchorAlertSink["emit"]>[0][] = [];
+    const sink: AnchorAlertSink = { emit: async (alert) => void alerts.push(alert) };
+    const now = new Date("2026-10-29T00:00:00.000Z");
+
+    await reconcileAnchors(sql, chain, sink, now, "0x0000000000000000000000000000000000000001");
+    expect(alerts.some((alert) => alert.type === "anchor.wallet_low")).toBe(true);
+    expect(alerts.some((alert) => alert.type === "anchor.stale" && alert.fundId === fundId)).toBe(
+      false,
+    );
+
+    const signer = { getAccount: async () => privateKeyToAccount(generatePrivateKey()) };
+    await new AnchoringWorker(sql, chain, signer).runFund(fundId);
+    const anchored = await sql<{ chain_sequence: bigint }[]>`
+      SELECT chain_sequence FROM anchors WHERE fund_id = ${fundId}`;
+    const sequence = anchored[0]?.chain_sequence;
+    if (sequence === undefined) throw new Error("Expected durable anchor sequence");
+    chain.roots.set(sequence, `0x${"0".repeat(64)}`);
+    await reconcileAnchors(sql, chain, sink, new Date("2026-10-29T01:00:00.000Z"));
+
+    expect(alerts.some((alert) => alert.type === "anchor.stale" && alert.fundId === fundId)).toBe(
+      true,
+    );
+    expect(
+      alerts.some((alert) => alert.type === "anchor.root_mismatch" && alert.fundId === fundId),
+    ).toBe(true);
+  });
 });
 
 it.skipIf(
-  spawnSync("anvil", ["--version"], { stdio: "ignore" }).status !== 0 ||
-    !process.env.YEN_ANVIL_TEST_DATABASE_URL,
+  !process.env.CI &&
+    (spawnSync("anvil", ["--version"], { stdio: "ignore" }).status !== 0 ||
+      !process.env.YEN_ANVIL_TEST_DATABASE_URL),
 )(
   "deploys RootRegistry and publishes a root on a real local Anvil chain",
   async () => {
@@ -303,29 +383,47 @@ it.skipIf(
         occurredAt: "2026-01-01T00:00:00.000Z",
         payload: { org_id: orgId as never, visibility: "private" },
       });
-      let broadcastCount = 0;
-      const crashAfterBroadcast: RootChain = {
-        chainId: chain.chainId,
-        getRoot: (sequence) => chain.getRoot(sequence),
-        getReceipt: (hash) => chain.getReceipt(hash),
-        getPublication: (sequence) => chain.getPublication(sequence),
-        getBlockNumber: () => chain.getBlockNumber(),
-        getLatestSequence: () => chain.getLatestSequence(),
-        getBalance: (address) => chain.getBalance(address),
-        async publish(root, sequence, signer) {
-          broadcastCount += 1;
-          const txHash = await chain.publish(root, sequence, signer);
-          await publicClient.waitForTransactionReceipt({ hash: txHash as `0x${string}` });
-          throw new Error("simulated worker termination after broadcast");
-        },
-        async replacePending(hash) {
-          return hash;
-        },
-      };
       const signer = { getAccount: async () => account } satisfies RootSigner;
-      await expect(
-        new AnchoringWorker(database, crashAfterBroadcast, signer).runFund(fundId),
-      ).rejects.toThrow("simulated worker termination");
+      const workerChild = spawn(process.execPath, [resolve("src/anvil-crash-child.mjs")], {
+        env: {
+          ...process.env,
+          YEN_ANVIL_TEST_DATABASE_URL: anvilDatabaseUrl,
+          ANVIL_RPC_URL: rpc,
+          ANVIL_REGISTRY_ADDRESS: deployment.contractAddress as `0x${string}`,
+          ANVIL_FUND_ID: fundId,
+        },
+        stdio: ["ignore", "pipe", "inherit"],
+      });
+      const workerExited = new Promise<void>((resolveExit) =>
+        workerChild.once("exit", () => resolveExit()),
+      );
+      try {
+        await new Promise<void>((resolveBroadcast, rejectBroadcast) => {
+          const timeout = setTimeout(
+            () => rejectBroadcast(new Error("Worker did not broadcast within 15 seconds")),
+            15_000,
+          );
+          workerChild.stdout.on("data", (chunk: Buffer) => {
+            if (chunk.toString().includes("broadcasted")) {
+              clearTimeout(timeout);
+              resolveBroadcast();
+            }
+          });
+          workerChild.once("error", (error) => {
+            clearTimeout(timeout);
+            rejectBroadcast(error);
+          });
+          workerChild.once("exit", (code, signal) => {
+            clearTimeout(timeout);
+            rejectBroadcast(
+              new Error(`Worker exited before broadcast (code ${code}, signal ${signal})`),
+            );
+          });
+        });
+      } finally {
+        workerChild.kill("SIGKILL");
+        await workerExited;
+      }
       const persistedRoot = await database<
         { root: string }[]
       >`SELECT root FROM anchors WHERE fund_id = ${fundId}`;
@@ -339,7 +437,6 @@ it.skipIf(
       expect(local[0]?.status).toBe("submitted");
       expect(await chain.getRoot(1n)).toBe(root);
       expect(await chain.getLatestSequence()).toBe(1n);
-      expect(broadcastCount).toBe(1);
       const publications = await publicClient.getLogs({
         address: deployment.contractAddress as `0x${string}`,
         event: {

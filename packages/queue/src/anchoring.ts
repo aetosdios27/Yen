@@ -211,30 +211,76 @@ export async function reconcileAnchors(
       type: "anchor.wallet_low",
       details: "Publisher balance is below 0.05 native token; fund it before anchoring is blocked",
     });
-  const stale = await sql<{ fund_id: string; last_landed: Date | null }[]>`
-    SELECT e.fund_id, MAX(a.confirmed_at) AS last_landed
-    FROM (SELECT DISTINCT fund_id FROM fund_events) e
-    LEFT JOIN anchors a ON a.fund_id = e.fund_id AND a.status = 'confirmed'
-    WHERE EXISTS (SELECT 1 FROM fund_events f WHERE f.fund_id = e.fund_id AND f.seq > COALESCE((SELECT MAX(x.to_seq) FROM anchors x WHERE x.fund_id = e.fund_id AND x.status = 'confirmed'), 0))
-    GROUP BY e.fund_id`;
-  for (const row of stale)
-    if (!row.last_landed || now.getTime() - new Date(row.last_landed).getTime() >= 60 * 60 * 1000)
+  const stale = await sql<{ fund_id: string; last_landed: Date | null; pending_since: Date }[]>`
+    WITH last_confirmed AS (
+      SELECT fund_id, MAX(to_seq) AS to_seq, MAX(confirmed_at) AS last_landed
+      FROM anchors WHERE status = 'confirmed' GROUP BY fund_id
+    )
+    SELECT e.fund_id, c.last_landed, MIN(e.occurred_at::timestamptz) AS pending_since
+    FROM fund_events e
+    LEFT JOIN last_confirmed c ON c.fund_id = e.fund_id
+    WHERE e.seq > COALESCE(c.to_seq, 0)
+    GROUP BY e.fund_id, c.last_landed`;
+  for (const row of stale) {
+    const lastLanding = row.last_landed ? new Date(row.last_landed).getTime() : null;
+    const staleSince = lastLanding ?? new Date(row.pending_since).getTime();
+    if (now.getTime() - staleSince >= 60 * 60 * 1000)
       await alerts.emit({
         type: "anchor.stale",
         fundId: row.fund_id,
         details: "Events remain unanchored and no anchor has landed for at least one hour",
       });
+  }
   const anchors = await sql<
-    { fund_id: string; root: string; chain_sequence: bigint }[]
-  >`SELECT fund_id, root, chain_sequence FROM anchors WHERE status IN ('submitted', 'confirmed')`;
+    {
+      id: string;
+      fund_id: string;
+      from_seq: bigint;
+      to_seq: bigint;
+      root: string;
+      chain_sequence: bigint;
+    }[]
+  >`SELECT id, fund_id, from_seq, to_seq, root, chain_sequence FROM anchors WHERE status IN ('submitted', 'confirmed')`;
   for (const anchor of anchors) {
+    const parsedFundId = parseFundId(anchor.fund_id);
+    const events = await sql<{ seq: bigint; hash: string; salt: string }[]>`
+      SELECT e.seq, e.hash, s.salt
+      FROM fund_events e
+      JOIN anchor_event_salts s ON s.fund_id = e.fund_id AND s.seq = e.seq
+      WHERE s.anchor_id = ${anchor.id} AND e.fund_id = ${anchor.fund_id}
+        AND e.seq BETWEEN ${anchor.from_seq} AND ${anchor.to_seq}
+      ORDER BY e.seq`;
+    const latestEvent = events.at(-1);
+    let computedRoot: string | null = null;
+    if (
+      parsedFundId.ok &&
+      latestEvent &&
+      BigInt(events.length) === anchor.to_seq - anchor.from_seq + 1n
+    ) {
+      const tree = await buildIntervalTree([
+        {
+          fundId: parsedFundId.value,
+          latestEventHash: hash32(Uint8Array.from(Buffer.from(latestEvent.hash, "hex"))),
+          events: events.map((event) => ({
+            seq: Number(event.seq),
+            eventHash: hash32(Uint8Array.from(Buffer.from(event.hash, "hex"))),
+            salt: salt32(Uint8Array.from(Buffer.from(event.salt, "hex"))),
+          })),
+        },
+      ]);
+      computedRoot = toHex(tree.root);
+    }
     const actual = await chain.getRoot(anchor.chain_sequence);
-    if (actual.toLowerCase() !== `0x${anchor.root}`.toLowerCase())
+    if (
+      computedRoot === null ||
+      computedRoot.toLowerCase() !== actual.toLowerCase() ||
+      computedRoot.toLowerCase() !== `0x${anchor.root}`.toLowerCase()
+    )
       await alerts.emit({
         type: "anchor.root_mismatch",
         fundId: anchor.fund_id,
         sequence: anchor.chain_sequence,
-        details: `On-chain root does not match local anchor ${anchor.chain_sequence}`,
+        details: `On-chain, persisted, and recomputed roots differ for anchor ${anchor.chain_sequence}`,
       });
   }
 }
@@ -330,6 +376,20 @@ export class AnchoringWorker {
     if (anchor) await this.submit(anchor);
   }
 
+  private async recoverPublishedAnchor(anchor: AnchorRow, sequence: bigint): Promise<boolean> {
+    const published = await this.chain.getRoot(sequence);
+    if (published.toLowerCase() !== `0x${anchor.root}`.toLowerCase()) return false;
+    const publication = await this.chain.getPublication(sequence);
+    if (!publication)
+      throw new Error("Root is present but its publication receipt is not yet available");
+    await this
+      .sql`UPDATE anchors SET status = 'submitted', tx_hash = ${publication.txHash} WHERE id = ${anchor.id}`;
+    if ((await this.chain.getBlockNumber()) - publication.blockNumber + 1n >= 12n)
+      await this
+        .sql`UPDATE anchors SET status = 'confirmed', confirmed_at = CURRENT_TIMESTAMP WHERE id = ${anchor.id}`;
+    return true;
+  }
+
   async submit(anchor: AnchorRow): Promise<void> {
     const sequence = BigInt(anchor.chain_sequence);
     if (anchor.status === "confirmed") return;
@@ -352,24 +412,16 @@ export class AnchoringWorker {
         await this.sql`UPDATE anchors SET tx_hash = ${replacement} WHERE id = ${anchor.id}`;
         return;
       }
-      if (receipt === null) return;
+      if (receipt === null) {
+        await this.recoverPublishedAnchor(anchor, sequence);
+        return;
+      }
       if (receipt.status === "failed") {
         await this.sql`UPDATE anchors SET status = 'failed' WHERE id = ${anchor.id}`;
         throw new Error("Anchor transaction failed; pg-boss will retry with exponential backoff");
       }
     }
-    const published = await this.chain.getRoot(sequence);
-    if (published.toLowerCase() === `0x${anchor.root}`.toLowerCase()) {
-      const publication = await this.chain.getPublication(sequence);
-      if (!publication)
-        throw new Error("Root is present but its publication receipt is not yet available");
-      await this
-        .sql`UPDATE anchors SET status = 'submitted', tx_hash = ${publication.txHash} WHERE id = ${anchor.id}`;
-      if ((await this.chain.getBlockNumber()) - publication.blockNumber + 1n >= 12n)
-        await this
-          .sql`UPDATE anchors SET status = 'confirmed', confirmed_at = CURRENT_TIMESTAMP WHERE id = ${anchor.id}`;
-      return;
-    }
+    if (await this.recoverPublishedAnchor(anchor, sequence)) return;
     const latestSequence = await this.chain.getLatestSequence();
     if (sequence <= latestSequence) {
       throw new Error("Anchor sequence is already occupied by a different on-chain root");
