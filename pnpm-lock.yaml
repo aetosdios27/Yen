@@ -266,6 +266,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@yen/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
       '@yen/shared':
         specifier: workspace:*
         version: link:../../packages/shared
