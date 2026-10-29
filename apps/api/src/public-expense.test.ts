@@ -3,7 +3,7 @@ import { type ExpenseRequest, InMemoryExpenseStore } from "@yen/ledger";
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
 import type { AppDependencies, Principal } from "./dependencies.js";
-import { MemoryFundStore } from "./dependencies.js";
+import { MemoryFundStore } from "./fund-store.js";
 import { devPolicy } from "./policy.js";
 import { MemoryStorageAdapter } from "./storage.js";
 import { MemoryEvidenceStore, type StoredEvidence } from "./stores.js";

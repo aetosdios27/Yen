@@ -12,6 +12,7 @@ import {
   TRUSTED_DEVICE_IDLE_TIMEOUT_MS,
 } from "./auth/index.js";
 import { rateLimitEnv, rateLimits } from "./config.js";
+import type { FundStore } from "./fund-store.js";
 import { jsonLogger, type Logger } from "./logging.js";
 import {
   type ActionTokenStore,
@@ -23,7 +24,6 @@ import {
   PinService,
   type PinStore,
 } from "./pin/index.js";
-import type { FundRecord } from "./policy.js";
 import { denyAllPolicy, type Policy } from "./policy.js";
 import {
   MemoryReconciliationStore,
@@ -152,24 +152,6 @@ export class DefaultInFlightTracker implements InFlightTracker {
   }
   dec() {
     this.inFlight = Math.max(0, this.inFlight - 1);
-  }
-}
-
-export interface FundStore {
-  get(fundId: string): FundRecord | undefined;
-  set(fundId: string, fund: FundRecord): void;
-}
-
-/** Process-local test/development fund store. Fund persistence is tracked separately. */
-export class MemoryFundStore implements FundStore {
-  private readonly funds = new Map<string, FundRecord>();
-
-  get(fundId: string) {
-    return this.funds.get(fundId);
-  }
-
-  set(fundId: string, fund: FundRecord) {
-    this.funds.set(fundId, fund);
   }
 }
 

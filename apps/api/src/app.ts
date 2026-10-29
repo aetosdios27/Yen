@@ -103,11 +103,11 @@ import {
   type ApiEnv,
   type AppDependencies,
   defaultDependencies,
-  MemoryFundStore,
   type Principal,
 } from "./dependencies.js";
 import { ApiError, errorBody, errorStatus, ReadinessError, StoreError } from "./errors.js";
 import { stripExifMetadata } from "./exif-strip.js";
+import { MemoryFundStore } from "./fund-store.js";
 import { getVerifiedEvidenceObject } from "./integrity-job.js";
 import { logMethod } from "./logging.js";
 import {
@@ -307,19 +307,41 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   );
 
   const funds = deps.fundStore ?? new MemoryFundStore();
-  const authorizedFund = (c: Context<ApiEnv>, action: FundAction, resource: FundResource) => {
+  const resolvePrincipalForFund = async (
+    principal: Principal,
+    fundId: string,
+    ownerId?: string,
+  ): Promise<Principal> => {
+    const membershipRole = await funds.getMemberRole(fundId, principal.id);
+    const resolvedRole =
+      principal.id === ownerId
+        ? "owner"
+        : (membershipRole ?? principal.role ?? principal.roles?.find(isValidRole));
+    if (!resolvedRole) return principal;
+    return {
+      ...principal,
+      role: resolvedRole,
+      roles: principal.roles ?? [resolvedRole],
+    };
+  };
+  const authorizedFund = async (c: Context<ApiEnv>, action: FundAction, resource: FundResource) => {
     const principal = c.get("principal");
     if (!principal) throw new ApiError("unauthenticated");
+    const fundId = resource.kind === "fund" && resource.fund ? resource.fund.fund.id : undefined;
+    const effectivePrincipal =
+      fundId === undefined
+        ? principal
+        : await resolvePrincipalForFund(principal, fundId, resource.fund?.owner);
     let allowed = false;
     try {
-      allowed = deps.policy.can(principal, action, resource) === true;
+      allowed = deps.policy.can(effectivePrincipal, action, resource) === true;
     } catch {
       allowed = false;
     }
     if (!allowed) {
       throw new ApiError(action === "fund:read" ? "not_found" : "forbidden");
     }
-    return principal;
+    return effectivePrincipal;
   };
   app.openapi(waitlistRoute, async (c) => {
     const input = c.req.valid("json");
@@ -621,8 +643,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     }
     return c.json({ status: "revoked" as const }, 200);
   });
-  app.openapi(createFundRoute, (c) => {
-    const principal = authorizedFund(c, "fund:create", { kind: "fund" });
+  app.openapi(createFundRoute, async (c) => {
+    const principal = await authorizedFund(c, "fund:create", { kind: "fund" });
     const id = parseFundId(deps.idGenerator());
     if (!id.ok) throw new ApiError("internal");
     const input = c.req.valid("json");
@@ -632,27 +654,29 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       id: id.value,
       createdAt: new Date(deps.clock()).toISOString(),
     };
+    await funds.create(id.value, principal.id, fund);
     const resource = { kind: "fund", fund: { owner: principal.id, fund } } as const;
-    funds.set(id.value, resource.fund);
     return c.json(deps.policy.redact(principal, resource), 201);
   });
-  app.openapi(getFundRoute, (c) => {
+  app.openapi(getFundRoute, async (c) => {
     const id = parseFundId(c.req.valid("param").fundId);
     if (!id.ok) throw new ApiError("not_found");
-    const entry = funds.get(id.value);
+    const entry = await funds.get(id.value);
     if (!entry) throw new ApiError("not_found");
     const resource = { kind: "fund", fund: entry } as const;
-    const principal = authorizedFund(c, "fund:read", resource);
+    const principal = await authorizedFund(c, "fund:read", resource);
     return c.json(deps.policy.redact(principal, resource), 200);
   });
   const publicFundContext = async (fundId: string, principal: Principal | null) => {
     const startedAt = performance.now();
-    const entry = funds.get(fundId);
+    const entry = await funds.get(fundId);
     const parsedFundId = parseFundId(fundId);
     if (!parsedFundId.ok) throw new ApiError("not_found");
     const visibilityTier = entry?.fund.visibility ?? "private";
+    const membershipRole =
+      principal && entry ? await funds.getMemberRole(fundId, principal.id) : undefined;
     const requestedRole: string | undefined =
-      principal?.role ?? principal?.roles?.find(isValidRole);
+      membershipRole ?? principal?.role ?? principal?.roles?.find(isValidRole);
     const role =
       principal?.id === entry?.owner
         ? "owner"
@@ -897,20 +921,28 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     updatedAt: exp.updatedAt,
   });
 
-  const authorizedExpense = (
+  const authorizedExpense = async (
     c: Context<ApiEnv>,
     action: ExpenseAction,
     resource: ExpenseResource,
   ) => {
     const principal = c.get("principal");
     if (!principal) throw new ApiError("unauthenticated");
-    if (principal.assurance === "owner_vouched" && action === "expense:approve") {
+    const fundId =
+      resource.kind === "expense"
+        ? "fund" in resource
+          ? resource.fund.fund.id
+          : resource.expense?.expense.fundId
+        : undefined;
+    const effectivePrincipal =
+      fundId === undefined ? principal : await resolvePrincipalForFund(principal, fundId);
+    if (effectivePrincipal.assurance === "owner_vouched" && action === "expense:approve") {
       throw new ApiError("forbidden");
     }
-    if (!deps.policy.can(principal, action, resource)) {
+    if (!deps.policy.can(effectivePrincipal, action, resource)) {
       throw new ApiError(action === "expense:read" ? "not_found" : "forbidden");
     }
-    return principal;
+    return effectivePrincipal;
   };
 
   const redactExpense = (principal: Principal, resource: ExistingExpenseResource): ExpenseView => {
@@ -919,7 +951,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   };
 
   app.openapi(createExpenseRoute, async (c) => {
-    const principal = authorizedExpense(c, "expense:create", { kind: "expense" });
+    const principal = await authorizedExpense(c, "expense:create", { kind: "expense" });
     const fundIdResult = parseFundId(c.req.valid("param").fundId);
     if (!fundIdResult.ok) throw new ApiError("not_found");
     const input = c.req.valid("json");
@@ -956,7 +988,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       kind: "expense",
       expense: { owner: expense.requesterId, expense: view },
     } as const;
-    const principal = authorizedExpense(c, "expense:read", resource);
+    const principal = await authorizedExpense(c, "expense:read", resource);
     return c.json(redactExpense(principal, resource), 200);
   });
 
@@ -964,7 +996,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const { fundId } = c.req.valid("param");
     const fundIdResult = parseFundId(fundId);
     if (!fundIdResult.ok) throw new ApiError("not_found");
-    const principal = authorizedExpense(c, "expense:read", { kind: "expense" });
+    const principal = await authorizedExpense(c, "expense:read", { kind: "expense" });
     const expenses = await deps.expenseStore.list(fundIdResult.value);
     return c.json(
       expenses.map((exp) =>
@@ -990,7 +1022,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       kind: "expense",
       expense: { owner: expense.requesterId, expense: view },
     } as const;
-    const principal = authorizedExpense(c, "expense:submit", resource);
+    const principal = await authorizedExpense(c, "expense:submit", resource);
     if (expense.status !== "draft") {
       throw new ApiError("conflict");
     }
@@ -1031,7 +1063,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       kind: "expense",
       expense: { owner: expense.requesterId, expense: view },
     } as const;
-    const principal = authorizedExpense(c, "expense:approve", resource);
+    const principal = await authorizedExpense(c, "expense:approve", resource);
     const approverId = await actorFor(principal, fundIdResult.value);
     if (expense.requesterId === approverId) {
       throw new ApiError("forbidden");
@@ -1109,7 +1141,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       kind: "expense",
       expense: { owner: expense.requesterId, expense: view },
     } as const;
-    const principal = authorizedExpense(c, "expense:reject", resource);
+    const principal = await authorizedExpense(c, "expense:reject", resource);
     if (expense.status !== "submitted") {
       throw new ApiError("conflict");
     }
@@ -1164,7 +1196,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       kind: "expense",
       expense: { owner: expense.requesterId, expense: view },
     } as const;
-    const principal = authorizedExpense(c, "expense:pay", resource);
+    const principal = await authorizedExpense(c, "expense:pay", resource);
     if (expense.status !== "approved") {
       throw new ApiError("conflict");
     }
@@ -1201,7 +1233,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       kind: "expense",
       expense: { owner: expense.requesterId, expense: view },
     } as const;
-    const principal = authorizedExpense(c, "expense:reconcile", resource);
+    const principal = await authorizedExpense(c, "expense:reconcile", resource);
     if (expense.status !== "paid") {
       throw new ApiError("conflict");
     }
@@ -1229,22 +1261,22 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       200,
     );
   });
-  const donationResource = (id: string) => {
-    const fund = funds.get(id);
+  const donationResource = async (id: string) => {
+    const fund = await funds.get(id);
     if (!fund) throw new ApiError("not_found");
     return { kind: "fund", fund } as const;
   };
-  app.openapi(donationDetailsRoute, (c) => {
+  app.openapi(donationDetailsRoute, async (c) => {
     const id = parseFundId(c.req.valid("param").fundId);
     if (!id.ok) throw new ApiError("not_found");
-    const resource = donationResource(id.value);
+    const resource = await donationResource(id.value);
     if (!deps.policy.canDonate(resource)) throw new ApiError("not_found");
     return c.json(deps.policy.redactDonationDetails(resource), 200);
   });
   app.openapi(pledgeDonationRoute, async (c) => {
     const id = parseFundId(c.req.valid("param").fundId);
     if (!id.ok) throw new ApiError("not_found");
-    const resource = donationResource(id.value);
+    const resource = await donationResource(id.value);
     if (!deps.policy.canDonate(resource)) throw new ApiError("not_found");
     const input = c.req.valid("json");
     const donorPrincipal = c.get("principal");
@@ -1291,10 +1323,10 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     );
   });
 
-  const getFundOrNotFound = (fundIdString: string) => {
+  const getFundOrNotFound = async (fundIdString: string) => {
     const id = parseFundId(fundIdString);
     if (!id.ok) throw new ApiError("not_found");
-    const entry = funds.get(id.value);
+    const entry = await funds.get(id.value);
     if (!entry) throw new ApiError("not_found");
     return { id: id.value, resource: { kind: "fund", fund: entry } as const };
   };
@@ -1407,8 +1439,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
   app.openapi(changePayeeRoute, async (c) => {
     const { fundId } = c.req.valid("param");
-    const { id, resource } = getFundOrNotFound(fundId);
-    const principal = authorizedFund(c, "fund:payee:change", resource);
+    const { id, resource } = await getFundOrNotFound(fundId);
+    const principal = await authorizedFund(c, "fund:payee:change", resource);
 
     const body = c.req.valid("json");
     const approvalToken = c.req.header("x-approval-token") ?? body.approvalToken;
@@ -1416,6 +1448,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
     const actionDetails = { action: "payee:change", fundId: id, vpa: body.vpa };
     await deps.pinService.verifyAction(principal.id, actionDetails, { pin, approvalToken });
+    const updated = await funds.setPayee(id, body.vpa);
+    if (!updated) throw new ApiError("not_found");
 
     return c.json(
       deps.policy.redactReceipt(
@@ -1430,8 +1464,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
   app.openapi(changePolicyRoute, async (c) => {
     const { fundId } = c.req.valid("param");
-    const { id, resource } = getFundOrNotFound(fundId);
-    const principal = authorizedFund(c, "fund:policy:change", resource);
+    const { id, resource } = await getFundOrNotFound(fundId);
+    const principal = await authorizedFund(c, "fund:policy:change", resource);
 
     const body = c.req.valid("json");
     const approvalToken = c.req.header("x-approval-token") ?? body.approvalToken;
@@ -1439,6 +1473,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
     const actionDetails = { action: "policy:change", fundId: id, policy: body.policyJson };
     await deps.pinService.verifyAction(principal.id, actionDetails, { pin, approvalToken });
+    const updated = await funds.setPolicy(id, body.policyJson);
+    if (!updated) throw new ApiError("not_found");
 
     return c.json(
       deps.policy.redactReceipt(
@@ -1453,8 +1489,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
   app.openapi(addMemberRoute, async (c) => {
     const { fundId } = c.req.valid("param");
-    const { id, resource } = getFundOrNotFound(fundId);
-    const principal = authorizedFund(c, "fund:member:add", resource);
+    const { id, resource } = await getFundOrNotFound(fundId);
+    const principal = await authorizedFund(c, "fund:member:add", resource);
 
     const body = c.req.valid("json");
     const approvalToken = c.req.header("x-approval-token") ?? body.approvalToken;
@@ -1467,6 +1503,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       role: body.role,
     };
     await deps.pinService.verifyAction(principal.id, actionDetails, { pin, approvalToken });
+    const added = await funds.addMember(id, body.userId, body.role);
+    if (!added) throw new ApiError("not_found");
 
     return c.json(
       deps.policy.redactReceipt(
@@ -1481,8 +1519,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
   app.openapi(removeMemberRoute, async (c) => {
     const { fundId, memberId } = c.req.valid("param");
-    const { id, resource } = getFundOrNotFound(fundId);
-    const principal = authorizedFund(c, "fund:member:remove", resource);
+    const { id, resource } = await getFundOrNotFound(fundId);
+    const principal = await authorizedFund(c, "fund:member:remove", resource);
 
     const body = c.req.valid("json");
     const approvalToken = c.req.header("x-approval-token") ?? body?.approvalToken;
@@ -1490,6 +1528,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
     const actionDetails = { action: "member:remove", fundId: id, targetId: memberId };
     await deps.pinService.verifyAction(principal.id, actionDetails, { pin, approvalToken });
+    const removed = await funds.removeMember(id, memberId);
+    if (!removed) throw new ApiError("not_found");
 
     return c.json(
       deps.policy.redactReceipt(
@@ -1505,7 +1545,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   app.openapi(uploadEvidenceRoute, async (c) => {
     const fundParam = parseFundId(c.req.valid("param").fundId);
     if (!fundParam.ok) throw new ApiError("not_found");
-    const fundEntry = funds.get(fundParam.value);
+    const fundEntry = await funds.get(fundParam.value);
     if (!fundEntry) throw new ApiError("not_found");
 
     const expenseId = c.req.valid("param").expenseId;
@@ -1513,7 +1553,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       throw new ApiError("not_found");
     }
 
-    const principal = authorizedExpense(c, "expense:add_evidence", {
+    const principal = await authorizedExpense(c, "expense:add_evidence", {
       kind: "expense",
       fund: fundEntry,
       expenseId,
@@ -1667,7 +1707,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   app.openapi(getEvidenceRoute, async (c) => {
     const fundParam = parseFundId(c.req.valid("param").fundId);
     if (!fundParam.ok) throw new ApiError("not_found");
-    const fundEntry = funds.get(fundParam.value);
+    const fundEntry = await funds.get(fundParam.value);
     if (!fundEntry) throw new ApiError("not_found");
 
     const expenseId = c.req.valid("param").expenseId;
@@ -1675,7 +1715,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       throw new ApiError("not_found");
     }
 
-    const principal = authorizedExpense(c, "expense:read_evidence", {
+    const principal = await authorizedExpense(c, "expense:read_evidence", {
       kind: "expense",
       fund: fundEntry,
       expenseId,
@@ -1689,10 +1729,10 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const input = c.req.valid("json");
     const id = parseFundId(input.fundId);
     if (!id.ok) throw new ApiError("not_found");
-    const entry = funds.get(id.value);
+    const entry = await funds.get(id.value);
     if (!entry) throw new ApiError("not_found");
     const resource = { kind: "fund", fund: entry } as const;
-    const principal = authorizedFund(c, "fund:reconcile", resource);
+    const principal = await authorizedFund(c, "fund:reconcile", resource);
 
     let transactions: ReturnType<typeof parseBankStatementCsv>;
     try {
@@ -1746,10 +1786,10 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   app.openapi(unmatchedCreditsRoute, async (c) => {
     const id = parseFundId(c.req.valid("param").fundId);
     if (!id.ok) throw new ApiError("not_found");
-    const entry = funds.get(id.value);
+    const entry = await funds.get(id.value);
     if (!entry) throw new ApiError("not_found");
     const resource = { kind: "fund", fund: entry } as const;
-    const principal = authorizedFund(c, "fund:reconcile", resource);
+    const principal = await authorizedFund(c, "fund:reconcile", resource);
 
     const credits = await deps.reconciliationStore.getUnmatchedCredits(id.value);
     const wireCredits = credits.map((cr) => ({
@@ -1770,10 +1810,10 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   app.openapi(manualMatchRoute, async (c) => {
     const id = parseFundId(c.req.valid("param").fundId);
     if (!id.ok) throw new ApiError("not_found");
-    const entry = funds.get(id.value);
+    const entry = await funds.get(id.value);
     if (!entry) throw new ApiError("not_found");
     const resource = { kind: "fund", fund: entry } as const;
-    const principal = authorizedFund(c, "fund:reconcile", resource);
+    const principal = await authorizedFund(c, "fund:reconcile", resource);
     const input = c.req.valid("json");
 
     const matchOutcome = await deps.reconciliationStore.manualMatch({
