@@ -120,7 +120,7 @@ export function DonationForm({ fundTitle, upiVpa, upiPayeeName, onSubmit }: Dona
 
   if (status === "pledged") {
     return (
-      <section className="mx-auto flex w-full max-w-xl flex-col gap-3 py-6">
+      <section className="mx-auto flex w-full max-w-xl flex-col gap-4 py-6">
         <h1 className="text-heading font-bold tracking-tight text-ink">
           {t("donate.pendingTitle")}
         </h1>
@@ -130,6 +130,14 @@ export function DonationForm({ fundTitle, upiVpa, upiPayeeName, onSubmit }: Dona
         >
           {t("donate.pendingBody")}
         </p>
+        <div className="flex flex-col gap-2 pt-2">
+          <a
+            href={`/receipts/${encodeURIComponent(utr)}`}
+            className="tap-target inline-flex items-center justify-center rounded-control border-2 border-primary bg-primary px-5 py-3 text-body font-semibold text-on-solid hover:bg-primary-hover"
+          >
+            {t("donate.viewReceipt")}
+          </a>
+        </div>
       </section>
     );
   }
