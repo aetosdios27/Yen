@@ -221,7 +221,11 @@ export function createAnchorRpcResilience(): ResilientCall {
 
 export const stderrAnchorAlertSink: AnchorAlertSink = {
   async emit(alert) {
-    process.stderr.write(`${JSON.stringify({ level: "alert", ...alert })}\n`);
+    process.stderr.write(
+      `${JSON.stringify({ level: "alert", ...alert }, (_, value: unknown) =>
+        typeof value === "bigint" ? value.toString() : value,
+      )}\n`,
+    );
   },
 };
 

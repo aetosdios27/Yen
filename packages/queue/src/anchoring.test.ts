@@ -21,6 +21,7 @@ import {
   type RootChain,
   type RootSigner,
   reconcileAnchors,
+  stderrAnchorAlertSink,
   ViemRootChain,
 } from "./anchoring.js";
 import { DEFAULT_QUEUES } from "./config.js";
@@ -108,6 +109,29 @@ describe("anchoring signers", () => {
     await expect(new KmsRootSigner(undefined).getAccount()).rejects.toThrow(
       "ANCHOR_KMS_KEY_ID is required",
     );
+  });
+});
+
+describe("anchoring alert sink", () => {
+  it("serializes bigint sequence values in structured alerts", async () => {
+    const output: string[] = [];
+    const originalWrite = process.stderr.write;
+    process.stderr.write = ((chunk: unknown) => {
+      output.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      await stderrAnchorAlertSink.emit({
+        type: "anchor.rpc_unavailable",
+        sequence: 1n,
+        details: "RPC unavailable",
+      });
+    } finally {
+      process.stderr.write = originalWrite;
+    }
+    expect(output).toEqual([
+      '{"level":"alert","type":"anchor.rpc_unavailable","sequence":"1","details":"RPC unavailable"}\n',
+    ]);
   });
 });
 
