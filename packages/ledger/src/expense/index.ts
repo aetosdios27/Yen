@@ -56,6 +56,8 @@ export {
   BankTransactionMismatchError,
   DuplicateApprovalError,
   type ExpenseEvidence,
+  type ExpenseCategory,
+  expenseCategories,
   ExpenseNotEditableError,
   ExpenseNotFoundError,
   type ExpenseRequest,

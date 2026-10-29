@@ -13,6 +13,17 @@ export type ExpenseStatus =
   | "paid"
   | "reconciled";
 
+export const expenseCategories = [
+  "Equipment",
+  "Travel",
+  "Catering",
+  "Logistics",
+  "Facilities",
+  "Other",
+] as const;
+
+export type ExpenseCategory = (typeof expenseCategories)[number];
+
 export interface PasskeySignatureData {
   readonly credentialId: string;
   readonly signatureHex: string;
@@ -43,6 +54,7 @@ export interface ExpenseRequest {
   readonly fundId: string;
   readonly requesterId: PseudonymId;
   readonly amountPaise: Paise;
+  readonly category?: ExpenseCategory | undefined;
   readonly description: string;
   readonly recipientRef: string;
   readonly status: ExpenseStatus;
