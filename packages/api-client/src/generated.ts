@@ -3219,6 +3219,12 @@ export interface operations {
           etag?: string;
           /** @description Visibility-tier cache policy */
           "cache-control"?: string;
+          /** @description Forces evidence response to download as an attachment */
+          "content-disposition"?: string;
+          /** @description Disables MIME sniffing */
+          "x-content-type-options"?: "nosniff";
+          /** @description Sandboxes the evidence response */
+          "content-security-policy"?: string;
           [name: string]: unknown;
         };
         content: {

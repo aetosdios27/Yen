@@ -108,7 +108,6 @@ import {
   type Principal,
 } from "./dependencies.js";
 import { ApiError, errorBody, errorStatus, ReadinessError, StoreError } from "./errors.js";
-import { stripExifMetadata } from "./exif-strip.js";
 import { registerFundVisibilityRoute } from "./fund-routes.js";
 import { getVerifiedEvidenceObject } from "./integrity-job.js";
 import { logMethod } from "./logging.js";
@@ -954,6 +953,9 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       proofs: proofRecords,
     });
     setFundReadCache(c, publicTier, body);
+    c.header("Content-Disposition", 'attachment; filename="expense-proofs.json"');
+    c.header("X-Content-Type-Options", "nosniff");
+    c.header("Content-Security-Policy", "sandbox; default-src 'none'");
     return c.json(body, 200);
   });
 
@@ -1758,11 +1760,9 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     // Server-computed SHA-256 over original trusted bytes (never client claim)
     const fileSha256 = crypto.createHash("sha256").update(bytes).digest("hex");
 
-    // Store raw bytes in durable storage
+    // The event hash commits to the exact original bytes stored here. Sanitizing these
+    // bytes would change the evidence identity, so originals remain the integrity artifact.
     await deps.storageAdapter.putObject(objectKey, bytes, file.type);
-
-    // Strip EXIF metadata for served image preview (privacy & safety)
-    const _sanitizedPreviewBytes = stripExifMetadata(bytes, file.type);
 
     const record: StoredEvidence = {
       evidenceId,

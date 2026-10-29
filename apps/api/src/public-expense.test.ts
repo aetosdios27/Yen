@@ -153,6 +153,9 @@ describe("public expense details and proofs", () => {
     const proofs = await app.request(`/v1/funds/${fundId}/public/expenses/${expenseId}/proofs`);
     expect(proofs.status).toBe(200);
     expect(proofs.headers.get("cache-control")).toContain("public");
+    expect(proofs.headers.get("content-disposition")).toContain("attachment");
+    expect(proofs.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(proofs.headers.get("content-security-policy")).toContain("sandbox");
     expect(getObject).not.toHaveBeenCalled();
     const proofBytes = new TextDecoder().decode(await proofs.arrayBuffer());
     expect(proofBytes).toContain(fixture.evidence.fileSha256);

@@ -3485,6 +3485,18 @@
               "cache-control": {
                 "schema": { "type": "string" },
                 "description": "Visibility-tier cache policy"
+              },
+              "content-disposition": {
+                "schema": { "type": "string" },
+                "description": "Forces evidence response to download as an attachment"
+              },
+              "x-content-type-options": {
+                "schema": { "type": "string", "enum": ["nosniff"] },
+                "description": "Disables MIME sniffing"
+              },
+              "content-security-policy": {
+                "schema": { "type": "string" },
+                "description": "Sandboxes the evidence response"
               }
             },
             "content": {
