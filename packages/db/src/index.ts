@@ -13,6 +13,18 @@ export {
   type SqlOptions,
   type TransactionSql,
 } from "./client.js";
+export {
+  type DonationNameChoice,
+  deleteDisplayName,
+  deleteGuestDisplayName,
+  displayLabel,
+  getDisplayName,
+  getGuestDisplayName,
+  getOfficeholderNamesShown,
+  setDisplayName,
+  setGuestDisplayName,
+  setOfficeholderNamesShown,
+} from "./display-names.js";
 export { parseDatabaseUrl } from "./env.js";
 export {
   type AppendEventInput,

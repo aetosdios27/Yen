@@ -233,6 +233,7 @@ const publicTimelineItem = z.object({
   id: z.string().uuid(),
   occurredAt: z.iso.datetime(),
   message: z.string(),
+  actorDisplayName: z.string().optional(),
   amountPaise: paiseWire.optional(),
   verified: verificationState,
 });
@@ -1267,6 +1268,7 @@ export const donationPledgeInput = z
       .openapi({ description: "The 12-digit reference shown in the donor's UPI app" }),
     donorName: z.string().trim().min(1).max(60).optional(),
     donorContact: contact.optional(),
+    donorNameChoice: z.enum(["full", "initials", "anonymous"]).default("initials"),
   })
   .strict()
   .openapi("DonationPledge");

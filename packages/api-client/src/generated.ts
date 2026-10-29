@@ -977,6 +977,11 @@ export interface components {
       donorName?: string;
       /** @description Email address, international phone in + digits form, or Indian 10-digit mobile number with optional spaces or hyphens. */
       donorContact?: string;
+      /**
+       * @default initials
+       * @enum {string}
+       */
+      donorNameChoice: "full" | "initials" | "anonymous";
     };
     PinSetupResponse: {
       /** @enum {string} */
@@ -2425,6 +2430,7 @@ export interface operations {
               /** Format: date-time */
               occurredAt: string;
               message: string;
+              actorDisplayName?: string;
               /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
               amountPaise?: string;
               /** @enum {string} */

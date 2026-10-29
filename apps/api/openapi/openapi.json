@@ -458,6 +458,11 @@
             "maxLength": 254,
             "pattern": "(?:^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$)|(?:^\\+[1-9][0-9]{7,14}$)|(?:^(?=.{10,19}$)[6-9](?:[ -]*[0-9]){9}[ -]*$)",
             "description": "Email address, international phone in + digits form, or Indian 10-digit mobile number with optional spaces or hyphens."
+          },
+          "donorNameChoice": {
+            "type": "string",
+            "enum": ["full", "initials", "anonymous"],
+            "default": "initials"
           }
         },
         "required": ["amountPaise", "utr"],
@@ -2357,6 +2362,7 @@
                           "id": { "type": "string", "format": "uuid" },
                           "occurredAt": { "type": "string", "format": "date-time" },
                           "message": { "type": "string" },
+                          "actorDisplayName": { "type": "string" },
                           "amountPaise": {
                             "type": "string",
                             "pattern": "^(0|[1-9][0-9]*)$",
