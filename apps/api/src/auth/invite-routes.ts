@@ -18,7 +18,11 @@ import {
   parseDeviceInfo,
 } from "./index.js";
 
-type GetFund = (fundId: string) => { id: string; resource: ExistingFundResource };
+type GetFund = (
+  fundId: string,
+) =>
+  | Promise<{ id: string; resource: ExistingFundResource }>
+  | { id: string; resource: ExistingFundResource };
 type AuthorizeFund = (
   context: Context<ApiEnv>,
   action: FundAction,
@@ -33,7 +37,7 @@ export function registerOwnerInviteRoutes(
 ): void {
   app.openapi(createOwnerInviteRoute, async (c) => {
     const { fundId } = c.req.valid("param");
-    const { id, resource } = getFund(fundId);
+    const { id, resource } = await getFund(fundId);
     const owner = authorizeFund(c, "fund:member:add", resource);
     const phone = normalizePhone(c.req.valid("json").phone);
     if (!phone) throw new ApiError("validation_failed");
@@ -58,7 +62,7 @@ export function registerOwnerInviteRoutes(
 
   app.openapi(listOwnerInvitesRoute, async (c) => {
     const { fundId } = c.req.valid("param");
-    const { id, resource } = getFund(fundId);
+    const { id, resource } = await getFund(fundId);
     const owner = authorizeFund(c, "fund:member:add", resource);
     const invites = await deps.authStore.listOwnerInvites(id, owner.id);
     return c.json(
@@ -78,7 +82,7 @@ export function registerOwnerInviteRoutes(
 
   app.openapi(confirmOwnerInviteRoute, async (c) => {
     const { fundId, inviteId } = c.req.valid("param");
-    const { id, resource } = getFund(fundId);
+    const { id, resource } = await getFund(fundId);
     const owner = authorizeFund(c, "fund:member:add", resource);
     const invite = await deps.authStore.confirmOwnerInvite(inviteId, id, owner.id, deps.clock());
     if (!invite) throw new ApiError("not_found");
