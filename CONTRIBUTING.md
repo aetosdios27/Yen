@@ -62,7 +62,8 @@ pnpm verify        # biome ci + typecheck + test + build
 pnpm format        # auto-fix formatting and safe lint issues
 ```
 
-Requires Node 24 (`.nvmrc`) and pnpm (`packageManager` in `package.json`).
+Requires Node 24.21.0 (`.nvmrc`) and pnpm 12.6.0 (`packageManager` in
+`package.json`).
 
 ## Conventions
 

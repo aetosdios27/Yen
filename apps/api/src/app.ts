@@ -35,6 +35,7 @@ import {
   parseDeviceInfo,
   verifyOtp,
 } from "./auth/index.js";
+import { buildInfo } from "./build-info.js";
 import {
   ALLOWED_EVIDENCE_MIME_TYPES,
   addMemberRoute,
@@ -78,6 +79,7 @@ import {
   uploadEvidenceRoute,
   verifyOtpRoute,
   verifyPinRoute,
+  versionRoute,
   waitlistRoute,
 } from "./contract.js";
 import {
@@ -271,6 +273,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     return c.json({ status: "received" }, 201);
   });
   app.openapi(healthRoute, (c) => c.json({ status: "ok" as const }, 200));
+  app.openapi(versionRoute, (c) => c.json(buildInfo, 200));
   app.openapi(readyRoute, async (c) => {
     if (deps.isShuttingDown()) throw new ReadinessError();
     try {

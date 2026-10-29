@@ -4,7 +4,7 @@
   "type": "module",
   "packageManager": "pnpm@12.6.0",
   "engines": {
-    "node": ">=24"
+    "node": "24.21.0"
   },
   "scripts": {
     "check": "biome ci .",
@@ -12,6 +12,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "build": "turbo run build",
+    "repro:build": "bash scripts/repro-build.sh",
     "verify": "pnpm check && turbo run typecheck test build"
   },
   "devDependencies": {

@@ -31,7 +31,7 @@ export function isPublicAuthRoute(path: string): boolean {
 
 export function isHealthRoute(path: string): boolean {
   const normalized = path.replace(/\/$/, "");
-  return normalized === "/health" || normalized === "/ready";
+  return normalized === "/health" || normalized === "/ready" || normalized === "/version";
 }
 
 export function isEvidenceRoute(path: string): boolean {

@@ -32,6 +32,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/version": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Build version */
+    get: operations["version"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/ready": {
     parameters: {
       query?: never;
@@ -637,6 +654,10 @@ export interface components {
         version: string;
       };
     };
+    Version: {
+      gitSha: string;
+      buildId: string;
+    };
     Principal: {
       /** Format: uuid */
       id: string;
@@ -1175,6 +1196,28 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  version: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Source commit and deterministic build identifier */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Version"];
         };
       };
     };

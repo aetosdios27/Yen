@@ -10,6 +10,7 @@ Route definitions in `src/contract.ts` own request and response schemas.
 | ------ | -------------------- | ------------------------------------------------- |
 | GET    | `/health`            | Public liveness                                   |
 | GET    | `/ready`             | Public readiness, through an injected async check |
+| GET    | `/version`           | Public source commit and deterministic build ID   |
 | GET    | `/v1/openapi.json`   | Public OpenAPI document                           |
 | GET    | `/v1/me`             | Current principal                                 |
 | POST   | `/v1/funds`          | Stub: create an in-memory fake fund               |
@@ -263,7 +264,7 @@ Node HTTP server settings tuned to mitigate slow-client attacks (Slowloris):
 
 - `CONCURRENCY_LIMIT`: Maximum concurrent in-flight requests (default `100`, range `1–10000`).
 - When the limit is reached, incoming requests immediately receive HTTP `503 Service Unavailable` with `Retry-After: 1` header before memory or event loop saturation occurs. Rejected requests never take an in-flight slot, so a burst of rejections does not keep the service rejecting once admitted work completes. Each rejection is logged as a warning with reason `overloaded` and the in-flight count.
-- `/health` and `/ready` are neither counted nor limited, so probes stay responsive during overload and never take capacity from ordinary requests.
+- `/health`, `/ready`, and `/version` are neither counted nor timed out, so probes and build identity stay responsive during overload and never take capacity from ordinary requests.
 - `503` and `504` responses carry the same CORS headers as other responses, and `Retry-After` is exposed to browsers.
 
 ### Graceful Shutdown Lifecycle

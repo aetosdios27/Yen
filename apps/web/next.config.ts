@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import type { NextConfig } from "next";
 import { PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_SERVER } from "next/constants.js";
 
@@ -7,5 +8,10 @@ export default async function nextConfig(phase: string): Promise<NextConfig> {
   if (phase === PHASE_DEVELOPMENT_SERVER || phase === PHASE_PRODUCTION_SERVER) {
     await import("./src/env.ts");
   }
-  return {};
+  const buildId =
+    process.env.YEN_BUILD_ID ??
+    execFileSync("git", ["rev-parse", "HEAD^{tree}"], {
+      encoding: "utf8",
+    }).trim();
+  return { generateBuildId: async () => buildId };
 }
