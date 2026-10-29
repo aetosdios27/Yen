@@ -1944,7 +1944,16 @@ export const partnerWebhookInput = z
       .object({
         fund_id: z.string().uuid(),
         bank_reference: z.string().trim().min(1).max(128),
-        amount_paise: z.union([z.number().int().positive(), z.string().regex(/^[1-9][0-9]*$/)]),
+        amount_paise: z.union([
+          z.number().int().positive(),
+          z
+            .string()
+            .regex(/^[1-9][0-9]*$/)
+            .refine(
+              (v) => Number.isSafeInteger(Number(v)),
+              "Amount exceeds the safe integer range",
+            ),
+        ]),
         type: z.enum(["credit", "debit"]).default("credit"),
         posted_at: z.string().datetime(),
         utr: z
@@ -1971,13 +1980,14 @@ export const partnerWebhookRoute = createRoute({
   operationId: "partnerWebhook",
   summary: "Payment partner webhook",
   description:
-    "Idempotent webhook receiver for payment partner notifications (e.g. UPI virtual account credit).",
+    "Idempotent webhook receiver for payment partner notifications (e.g. UPI virtual account credit). Requests must carry `X-Webhook-Timestamp` (Unix seconds, within five minutes of server time) and `X-Webhook-Signature`, the lowercase hex HMAC-SHA256 of `v1.<timestamp>.<raw body>` under the shared partner secret. Unsigned, stale, future-dated, or tampered requests are rejected with 401 before the body is parsed.",
   request: {
     body: { required: true, content: { "application/json": { schema: partnerWebhookInput } } },
   },
   responses: {
     200: jsonResponse(partnerWebhookResultSchema, "Webhook processed"),
     400: protectedErrors[400],
+    401: protectedErrors[401],
     404: protectedErrors[404],
     429: limitedResponse,
     500: internalResponse,

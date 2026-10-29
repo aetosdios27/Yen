@@ -52,4 +52,22 @@ describe("Payment Partner Webhook Schema", () => {
       }),
     ).toThrow();
   });
+
+  it("accepts string amounts and rejects amounts beyond the safe integer range", () => {
+    const payload = (amount: unknown) => ({
+      event: "test",
+      timestamp: "2026-10-28T14:30:00.000Z",
+      data: {
+        fund_id: "e3fb2fc4-03f9-45b1-bcef-464ab0d87ddd",
+        bank_reference: "TXN_002",
+        amount_paise: amount,
+        posted_at: "2026-10-28T14:30:00.000Z",
+      },
+    });
+    expect(normalizePartnerWebhook(payload("75000")).amountPaise).toBe(paise(75000));
+    expect(partnerWebhookSchema.safeParse(payload("9007199254740993")).success).toBe(false);
+    expect(partnerWebhookSchema.safeParse(payload("99999999999999999999")).success).toBe(false);
+    expect(partnerWebhookSchema.safeParse(payload(1e300)).success).toBe(false);
+    expect(partnerWebhookSchema.safeParse(payload(500.5)).success).toBe(false);
+  });
 });

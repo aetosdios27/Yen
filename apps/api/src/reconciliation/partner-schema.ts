@@ -15,8 +15,17 @@ export const partnerWebhookSchema = z
         fund_id: z.string().uuid(),
         bank_reference: z.string().trim().min(1).max(128),
         amount_paise: z
-          .union([z.number().int().positive(), z.string().regex(/^[1-9][0-9]*$/)])
-          .transform((v) => (typeof v === "number" ? paise(v) : paise(Number(v)))),
+          .union([
+            z.number().int().positive(),
+            z
+              .string()
+              .regex(/^[1-9][0-9]*$/)
+              .refine(
+                (v) => Number.isSafeInteger(Number(v)),
+                "Amount exceeds the safe integer range",
+              ),
+          ])
+          .transform((v) => paise(Number(v))),
         type: z.enum(["credit", "debit"]).default("credit"),
         posted_at: z.string().datetime(),
         utr: z
