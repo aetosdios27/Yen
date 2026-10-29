@@ -878,10 +878,11 @@ databaseSuite("Postgres expense store", (sql, url) => {
         ${new Date().toISOString()}, 'statement_upload', '{}'::jsonb
       )
     `;
+    await pinService.setupPin(ownerId, "482915", { userId: ownerId });
     const payResponse = await ownerApp.request(`/v1/funds/${fundId}/expenses/${created.id}/pay`, {
       method: "POST",
       headers: { "content-type": "application/json", "idempotency-key": "trace-pay" },
-      body: JSON.stringify({ bankTransactionId: traceBankTransactionId }),
+      body: JSON.stringify({ pin: "482915", bankTransactionId: traceBankTransactionId }),
     });
     expect(payResponse.status).toBe(200);
     expect((await expenseStore.get(created.id))?.status).toBe("paid");
