@@ -13,6 +13,7 @@ import { PostgresDisplayNameStore } from "./display-name-store.js";
 import { PostgresDonationPledgeStore } from "./donation-store.js";
 import { PostgresEvidenceStore } from "./evidence-store-postgres.js";
 import { PostgresExpenseStore } from "./expense-store.js";
+import { PostgresPublicFundReadStore } from "./public-fund-store.js";
 import { FileSystemStorageAdapter } from "./filesystem-storage.js";
 import { PostgresFundStore } from "./fund-store.js";
 import { createServerLifecycle, type ServerLifecycle, shutdownOnSignal } from "./lifecycle.js";
@@ -178,6 +179,7 @@ export async function startServer(
       : {}),
     isShuttingDown: () => lifecycleInstance?.isShuttingDown ?? false,
     ...(sql ? { donationPledgeStore: new PostgresDonationPledgeStore(sql) } : {}),
+    ...(sql ? { publicFundReadStore: new PostgresPublicFundReadStore(sql) } : {}),
     ...(sql ? { reconciliationStore: new PostgresReconciliationStore(sql) } : {}),
     ...(sql ? { displayNameStore: new PostgresDisplayNameStore(sql) } : {}),
     ...(sql ? { expenseStore: new PostgresExpenseStore(sql) } : {}),
