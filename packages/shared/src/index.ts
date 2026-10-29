@@ -31,6 +31,20 @@ export {
 } from "./ids.js";
 export { fromHex, type Hash32, hash32, type Salt32, salt32, sha256, toHex } from "./merkle/hash.js";
 export {
+  type AuditAnchor,
+  type AuditBundle,
+  type AuditCheck,
+  type AuditEvent,
+  type AuditEventEntry,
+  type AuditProof,
+  AuditReasonCode,
+  type AuditRootRange,
+  canonicalizeJson,
+  computeCanonicalEventHash,
+  exportAuditBundleCsv,
+  verifyAuditBundle,
+} from "./merkle/bundle.js";
+export {
   buildIntervalTree,
   type IntervalEvent,
   type IntervalFund,
