@@ -120,7 +120,10 @@ import type { AllowedEvidenceMimeType, StoredEvidence } from "./stores.js";
 export { devPolicy } from "./policy.js";
 
 export function createApp(overrides: Partial<AppDependencies> = {}) {
-  const deps = { ...defaultDependencies(overrides.clock), ...overrides };
+  const deps = {
+    ...defaultDependencies(overrides.clock, overrides.expenseStore),
+    ...overrides,
+  };
   const app = new OpenAPIHono<ApiEnv>({
     strict: false,
     defaultHook: (result) => {
@@ -691,12 +694,16 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       policy: defaultFundPolicy,
       nowUtc: now,
     });
-    await deps.expenseStore.save(updated);
-    const updatedView = toExpenseView(updated);
+    const persisted = await deps.expenseStore.save(updated, {
+      actorId: principal.id,
+      policy: defaultFundPolicy,
+    });
+    const finalExpense = persisted ?? updated;
+    const updatedView = toExpenseView(finalExpense);
     return c.json(
       redactExpense(principal, {
         kind: "expense",
-        expense: { owner: updated.requesterId, expense: updatedView },
+        expense: { owner: finalExpense.requesterId, expense: updatedView },
       }),
       200,
     );
@@ -807,7 +814,11 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       approvalToken: c.req.header("x-approval-token") ?? input.approvalToken,
     });
     const updated = rejectExpense(expense, input.reason, now);
-    await deps.expenseStore.save(updated);
+    const persisted = await deps.expenseStore.save(updated, {
+      actorId: principal.id,
+      policy: defaultFundPolicy,
+    });
+    const finalExpense = persisted ?? updated;
     await deps.pinNotificationService.notify({
       kind: "approval_executed",
       approverUserId: principal.id,
@@ -815,7 +826,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       recipientRoles: ["approver", "owner"],
       actionSummary: actionDetails,
     });
-    const updatedView = toExpenseView(updated);
+    const updatedView = toExpenseView(finalExpense);
     return c.json(
       redactReceipt("fund:expense:reject", {
         status: "rejected" as const,
@@ -847,12 +858,16 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const input = c.req.valid("json");
     const now = new Date(deps.clock()).toISOString();
     const updated = payExpense(expense, input.bankTransactionId, now);
-    await deps.expenseStore.save(updated);
-    const updatedView = toExpenseView(updated);
+    const persisted = await deps.expenseStore.save(updated, {
+      actorId: principal.id,
+      policy: defaultFundPolicy,
+    });
+    const finalExpense = persisted ?? updated;
+    const updatedView = toExpenseView(finalExpense);
     return c.json(
       redactExpense(principal, {
         kind: "expense",
-        expense: { owner: updated.requesterId, expense: updatedView },
+        expense: { owner: finalExpense.requesterId, expense: updatedView },
       }),
       200,
     );
