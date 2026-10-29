@@ -1,8 +1,9 @@
 import type { NotificationOutboxRow } from "@yen/db";
 import type { Event } from "@yen/eventlog";
 import { transactionalEnqueue, type WorkerRuntime } from "@yen/queue";
-import type { FundId, UserId } from "@yen/shared";
+import type { DeliveryProvider, FundId, UserId } from "@yen/shared";
 import { EmailChannelProvider } from "./channels/email.js";
+import { InMemoryDeliveryProvider } from "./channels/in-memory.js";
 import { SmsChannelProvider } from "./channels/sms.js";
 import type { ChannelProvider } from "./channels/types.js";
 import { WhatsAppChannelProvider } from "./channels/whatsapp.js";
@@ -20,6 +21,8 @@ import { NotificationsWorker as WorkerClass } from "./worker.js";
 
 export interface NotificationsServiceOptions {
   store: NotificationStore;
+  environment?: "development" | "test" | "production" | undefined;
+  deliveryProviders?: Readonly<Record<"whatsapp" | "sms", DeliveryProvider>> | undefined;
   whatsappProvider?: ChannelProvider | undefined;
   smsProvider?: ChannelProvider | undefined;
   emailProvider?: ChannelProvider | undefined;
@@ -42,20 +45,39 @@ export class NotificationsService {
   constructor(options: NotificationsServiceOptions) {
     this.store = options.store;
     this.queueRuntime = options.queueRuntime;
-    const whatsappProvider = options.whatsappProvider ?? new WhatsAppChannelProvider();
-    const smsProvider = options.smsProvider ?? new SmsChannelProvider();
-    const emailProvider = options.emailProvider ?? new EmailChannelProvider();
+    const environment = options.environment ?? process.env.NODE_ENV ?? "development";
+    if (environment === "production" && !options.deliveryProviders) {
+      throw new Error("Production notification delivery providers are required");
+    }
+    if (options.deliveryProviders || (!options.whatsappProvider && !options.smsProvider)) {
+      this.worker = new WorkerClass({
+        store: this.store,
+        deliveryProviders: options.deliveryProviders ?? {
+          whatsapp: new InMemoryDeliveryProvider(),
+          sms: new InMemoryDeliveryProvider(),
+        },
+        emailProvider: options.emailProvider,
+        batchSize: options.workerOptions?.batchSize,
+        leaseDurationMs: options.workerOptions?.leaseDurationMs,
+        backoffBaseSeconds: options.workerOptions?.backoffBaseSeconds,
+        clock: options.workerOptions?.clock,
+      });
+    } else {
+      const whatsappProvider = options.whatsappProvider ?? new WhatsAppChannelProvider();
+      const smsProvider = options.smsProvider ?? new SmsChannelProvider();
+      const emailProvider = options.emailProvider ?? new EmailChannelProvider();
 
-    this.worker = new WorkerClass({
-      store: this.store,
-      whatsappProvider,
-      smsProvider,
-      emailProvider,
-      batchSize: options.workerOptions?.batchSize,
-      leaseDurationMs: options.workerOptions?.leaseDurationMs,
-      backoffBaseSeconds: options.workerOptions?.backoffBaseSeconds,
-      clock: options.workerOptions?.clock,
-    });
+      this.worker = new WorkerClass({
+        store: this.store,
+        whatsappProvider,
+        smsProvider,
+        emailProvider,
+        batchSize: options.workerOptions?.batchSize,
+        leaseDurationMs: options.workerOptions?.leaseDurationMs,
+        backoffBaseSeconds: options.workerOptions?.backoffBaseSeconds,
+        clock: options.workerOptions?.clock,
+      });
+    }
 
     this.queueRuntime?.registerHandler(
       "notifications",

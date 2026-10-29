@@ -1,6 +1,61 @@
-import { ResilientCall, type Paise, paise, parsePhoneE164 } from "@yen/shared";
-import type { DeliveryResult } from "../types.js";
-import type { ChannelProvider, ChannelSendMessageInput } from "./types.js";
+import {
+  type DeliveryProvider,
+  type DeliveryRequest,
+  type DeliveryResponse,
+  ResilientCall,
+} from "@yen/shared";
+import * as z from "zod";
+
+class SmsGatewayServerFailure extends Error {}
+
+const localizedTextSchema = z.object({ en: z.string().min(1), hi: z.string().min(1) });
+const exotelSmsTemplateSchema = z.object({
+  templateId: z.union([z.string().min(1), localizedTextSchema]),
+  otpBody: localizedTextSchema.optional(),
+});
+
+export const exotelSmsTemplatesSchema = z
+  .record(z.string().min(1), exotelSmsTemplateSchema)
+  .superRefine((templates, context) => {
+    for (const required of [
+      "otp",
+      "approval_needed",
+      "approved_rejected",
+      "donation_received",
+      "objection_raised",
+      "weekly_summary",
+    ]) {
+      if (!(required in templates)) {
+        context.addIssue({
+          code: "custom",
+          path: [required],
+          message: "Required Exotel DLT template is missing",
+        });
+      }
+    }
+    const otpBody = templates.otp?.otpBody;
+    if (!otpBody?.en.includes("{{code}}") || !otpBody?.hi.includes("{{code}}")) {
+      context.addIssue({
+        code: "custom",
+        path: ["otp", "otpBody"],
+        message: "Both OTP SMS bodies must contain the code placeholder",
+      });
+    }
+  });
+
+export type ExotelSmsTemplates = z.infer<typeof exotelSmsTemplatesSchema>;
+
+export function parseExotelSmsTemplates(input: string): ExotelSmsTemplates {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(input);
+  } catch {
+    throw new Error("Exotel SMS template configuration is invalid");
+  }
+  const result = exotelSmsTemplatesSchema.safeParse(parsed);
+  if (!result.success) throw new Error("Exotel SMS template configuration is invalid");
+  return result.data;
+}
 
 export interface ExotelSmsConfig {
   endpoint: string;
@@ -8,13 +63,25 @@ export interface ExotelSmsConfig {
   apiToken: string;
   senderId: string;
   entityId: string;
-  templateId: string;
+  statusCallbackUrl: string;
+  templates: ExotelSmsTemplates;
   timeoutMs?: number;
 }
 
-export class ExotelSmsProvider implements ChannelProvider {
-  readonly channel = "sms" as const;
-  readonly costPerMessagePaise: Paise = paise(0);
+export interface SmsGatewayRequest {
+  to: string;
+  message: string;
+  idempotencyKey: string;
+  templateId: string;
+}
+
+/** Generic HTTP gateway used by the channel-neutral SMS provider. */
+export interface SmsHttpGateway {
+  send(request: SmsGatewayRequest): Promise<{ messageId: string }>;
+}
+
+/** Concrete Exotel form-encoded HTTP gateway. */
+export class ExotelSmsHttpGateway implements SmsHttpGateway {
   private readonly resilient = new ResilientCall({
     timeoutMs: 10_000,
     maxAttempts: 1,
@@ -29,29 +96,37 @@ export class ExotelSmsProvider implements ChannelProvider {
     private readonly fetcher: typeof fetch = fetch,
   ) {
     const endpoint = new URL(config.endpoint);
-    if (endpoint.protocol !== "https:" && endpoint.hostname !== "127.0.0.1" && endpoint.hostname !== "localhost") {
+    const callback = new URL(config.statusCallbackUrl);
+    const localHttpHosts = ["127.0.0.1", "localhost", "::1"];
+    const localHttp = endpoint.protocol === "http:" && localHttpHosts.includes(endpoint.hostname);
+    const localCallbackHttp =
+      callback.protocol === "http:" && localHttpHosts.includes(callback.hostname);
+    if (endpoint.protocol !== "https:" && !localHttp) {
       throw new Error("SMS gateway endpoint must use HTTPS");
     }
-    if (!config.apiKey || !config.apiToken || !config.senderId || !config.entityId || !config.templateId) {
+    if (callback.protocol !== "https:" && !localCallbackHttp) {
+      throw new Error("SMS status callback must use HTTPS");
+    }
+    if (!config.apiKey || !config.apiToken || !config.senderId || !config.entityId) {
       throw new Error("SMS gateway configuration is incomplete");
     }
   }
 
-  async send(input: ChannelSendMessageInput): Promise<DeliveryResult> {
-    const phone = parsePhoneE164(input.recipientContact);
-    if (!phone.ok) return { success: false, channel: "sms", cost_paise: paise(0), error: "Invalid recipient", retryable: false };
+  async send(request: SmsGatewayRequest): Promise<{ messageId: string }> {
     const body = new URLSearchParams({
       From: this.config.senderId,
-      To: phone.value,
-      Body: input.rendered.body,
+      To: request.to,
+      Body: request.message,
       DltEntityId: this.config.entityId,
-      DltTemplateId: this.config.templateId,
-      CustomField: input.idempotencyKey,
+      DltTemplateId: request.templateId,
+      StatusCallback: this.config.statusCallbackUrl,
+      CustomField: request.idempotencyKey,
     });
+    let response: Response;
     try {
-      const response = await this.resilient.run(
-        () =>
-          this.fetcher(this.config.endpoint, {
+      response = await this.resilient.run(
+        async () => {
+          const result = await this.fetcher(this.config.endpoint, {
             method: "POST",
             headers: {
               authorization: `Basic ${Buffer.from(`${this.config.apiKey}:${this.config.apiToken}`).toString("base64")}`,
@@ -59,23 +134,73 @@ export class ExotelSmsProvider implements ChannelProvider {
             },
             body,
             signal: AbortSignal.timeout(this.config.timeoutMs ?? 10_000),
-          }),
-        // Exotel does not document idempotency for sends, so ambiguous failure is one attempt.
+          });
+          if (result.status >= 500) throw new SmsGatewayServerFailure();
+          return result;
+        },
+        // Exotel does not document request idempotency, so never retry an ambiguous send.
         { maxAttempts: 1 },
       );
-      if (!response.ok) return { success: false, channel: "sms", cost_paise: paise(0), error: "SMS gateway rejected request", retryable: false };
-      const payload: unknown = await response.json();
-      if (!payload || typeof payload !== "object" || !("SMSMessage" in payload)) {
-        return { success: false, channel: "sms", cost_paise: paise(0), error: "Malformed SMS gateway response", retryable: false };
-      }
-      const message = (payload as { SMSMessage?: { Sid?: unknown } }).SMSMessage;
-      if (typeof message?.Sid !== "string" || message.Sid.length === 0) {
-        return { success: false, channel: "sms", cost_paise: paise(0), error: "Malformed SMS gateway response", retryable: false };
-      }
-      return { success: true, channel: "sms", cost_paise: this.costPerMessagePaise, provider_message_id: message.Sid };
-    } catch {
-      // The gateway does not document request idempotency. Treat transport errors as ambiguous.
-      return { success: false, channel: "sms", cost_paise: paise(0), error: "Ambiguous SMS gateway failure", retryable: false };
+    } catch (error) {
+      if (error instanceof SmsGatewayServerFailure) throw new Error("SMS gateway rejected request");
+      throw new Error("SMS gateway request failed");
     }
+    if (!response.ok) throw new Error("SMS gateway rejected request");
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      throw new Error("SMS gateway returned a malformed response");
+    }
+    const parsed = z
+      .object({ SMSMessage: z.object({ Sid: z.string().min(1) }) })
+      .safeParse(payload);
+    if (!parsed.success) throw new Error("SMS gateway returned a malformed response");
+    return { messageId: parsed.data.SMSMessage.Sid };
   }
+}
+
+export class ExotelSmsProvider implements DeliveryProvider {
+  private readonly gateway: SmsHttpGateway;
+
+  constructor(
+    private readonly config: ExotelSmsConfig,
+    fetcher: typeof fetch = fetch,
+    gateway?: SmsHttpGateway,
+  ) {
+    const templates = exotelSmsTemplatesSchema.safeParse(config.templates);
+    if (!templates.success) throw new Error("Exotel SMS template configuration is invalid");
+    this.gateway = gateway ?? new ExotelSmsHttpGateway(config, fetcher);
+  }
+
+  async send(request: DeliveryRequest): Promise<DeliveryResponse> {
+    if (request.channel !== "sms") throw new Error("Wrong channel for SMS provider");
+    const template = this.config.templates[request.template];
+    if (!template) throw new Error("SMS template is not configured");
+    const locale = request.params.locale === "hi" ? "hi" : "en";
+    const message =
+      request.params.body ?? renderOtpBody(template.otpBody?.[locale], request.params);
+    if (!message) throw new Error("SMS message body is missing");
+    const templateId =
+      typeof template.templateId === "string" ? template.templateId : template.templateId[locale];
+    const result = await this.gateway.send({
+      to: request.to,
+      message,
+      idempotencyKey: request.idempotencyKey,
+      templateId,
+    });
+    return { messageId: result.messageId, status: "accepted", idempotencyGuaranteed: false };
+  }
+}
+
+function renderOtpBody(
+  template: string | undefined,
+  params: Readonly<Record<string, string>>,
+): string | undefined {
+  if (!template) return undefined;
+  return template.replace(/\{\{([a-zA-Z0-9_]+)\}\}/g, (_placeholder, key: string) => {
+    const value = params[key];
+    if (value === undefined) throw new Error("SMS template parameter is missing");
+    return value;
+  });
 }

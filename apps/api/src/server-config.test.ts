@@ -7,6 +7,16 @@ it("requires a database in production even if memory is requested", () => {
   );
 });
 
+it("fails closed when production delivery providers are missing", async () => {
+  const { validateProductionDeliveryConfig } = await import("./server-bootstrap.js");
+  expect(() =>
+    validateProductionDeliveryConfig({ NODE_ENV: "production", DELIVERY_PROVIDER: "stub" }),
+  ).toThrow("Production requires explicitly configured external delivery providers");
+  expect(() =>
+    validateProductionDeliveryConfig({ NODE_ENV: "production", DELIVERY_PROVIDER: "external" }),
+  ).toThrow("WHATSAPP_API_BASE_URL");
+});
+
 it("permits memory stores outside production when explicitly enabled", () => {
   expect(useMemoryStore({ NODE_ENV: "development", YEN_ALLOW_MEMORY_STORES: "true" })).toBe(true);
 });

@@ -3,7 +3,7 @@ import { type Event, hashHexSchema, pseudonymIdSchema } from "@yen/eventlog";
 import type { WorkerRuntime } from "@yen/queue";
 import { type FundId, paise, parseFundId, parseUserId, type UserId } from "@yen/shared";
 import { describe, expect, it } from "vitest";
-import { InMemoryChannelProvider } from "./channels/in-memory.js";
+import { InMemoryChannelProvider, InMemoryDeliveryProvider } from "./channels/in-memory.js";
 import { NotificationsService } from "./service.js";
 import { InMemoryNotificationStore } from "./store.js";
 import type { NotificationChannel, NotificationTemplateId } from "./types.js";
@@ -82,6 +82,22 @@ describe("NotificationsService (End-to-End Integration)", () => {
 
     return { service, store, whatsapp, sms, mockTx };
   }
+
+  it("requires explicit shared providers in production", () => {
+    const store = new InMemoryNotificationStore();
+    expect(() => new NotificationsService({ store, environment: "production" })).toThrow(
+      "Production notification delivery providers are required",
+    );
+    const provider = new InMemoryDeliveryProvider();
+    expect(
+      () =>
+        new NotificationsService({
+          store,
+          environment: "production",
+          deliveryProviders: { whatsapp: provider, sms: provider },
+        }),
+    ).not.toThrow();
+  });
 
   it("handles event emission and delivers notification end-to-end", async () => {
     const { service, store, whatsapp, mockTx } = createService();

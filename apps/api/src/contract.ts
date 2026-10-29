@@ -657,7 +657,8 @@ export const sendOtpRoute = createRoute({
   path: "/v1/auth/otp/send",
   operationId: "sendOtp",
   tags: ["auth"],
-  description: "Send a 6-digit OTP to a phone number via WhatsApp or SMS fallback.",
+  description:
+    "Send a 6-digit OTP through the selected WhatsApp or SMS channel; no fallback occurs.",
   request: { body: { required: true, content: { "application/json": { schema: sendOtpInput } } } },
   responses: {
     200: jsonResponse(sendOtpResponse, "OTP challenge dispatched"),

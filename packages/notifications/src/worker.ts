@@ -1,6 +1,10 @@
 import type { NotificationOutboxRow } from "@yen/db";
+import type { DeliveryProvider } from "@yen/shared";
 import { parseFundId, parseUserId } from "@yen/shared";
+import { DeliveryChannelBridge } from "./channels/delivery-bridge.js";
+import { SMS_MESSAGE_COST_PAISE } from "./channels/sms.js";
 import type { ChannelProvider } from "./channels/types.js";
+import { WHATSAPP_MESSAGE_COST_PAISE } from "./channels/whatsapp.js";
 import { checkDailyCap, getTodayDateString } from "./cost-guard.js";
 import {
   calculateQuietHoursEnd,
@@ -14,12 +18,14 @@ import type { NotificationChannel, RenderedTemplate } from "./types.js";
 
 export interface NotificationsWorkerOptions {
   store: NotificationStore;
-  whatsappProvider: ChannelProvider;
-  smsProvider: ChannelProvider;
+  deliveryProviders?: Readonly<Record<"whatsapp" | "sms", DeliveryProvider>> | undefined;
+  whatsappProvider?: ChannelProvider | undefined;
+  smsProvider?: ChannelProvider | undefined;
   emailProvider?: ChannelProvider | undefined;
   leaseDurationMs?: number | undefined;
   batchSize?: number | undefined;
   backoffBaseSeconds?: number | undefined;
+  random?: (() => number) | undefined;
   clock?: (() => Date) | undefined;
   logger?:
     | {
@@ -32,6 +38,7 @@ export interface NotificationsWorkerOptions {
 
 export interface BatchProcessingSummary {
   claimed: number;
+  submitted: number;
   delivered: number;
   failed: number;
   skipped: number;
@@ -46,17 +53,35 @@ export class NotificationsWorker {
   private readonly leaseDurationMs: number;
   private readonly batchSize: number;
   private readonly backoffBaseSeconds: number;
+  private readonly random: () => number;
   private readonly clock: () => Date;
   private readonly logger: NotificationsWorkerOptions["logger"];
 
   constructor(options: NotificationsWorkerOptions) {
     this.store = options.store;
-    this.whatsappProvider = options.whatsappProvider;
-    this.smsProvider = options.smsProvider;
+    const whatsappProvider =
+      options.whatsappProvider ??
+      (options.deliveryProviders
+        ? new DeliveryChannelBridge(
+            "whatsapp",
+            WHATSAPP_MESSAGE_COST_PAISE,
+            options.deliveryProviders.whatsapp,
+          )
+        : undefined);
+    const smsProvider =
+      options.smsProvider ??
+      (options.deliveryProviders
+        ? new DeliveryChannelBridge("sms", SMS_MESSAGE_COST_PAISE, options.deliveryProviders.sms)
+        : undefined);
+    if (!whatsappProvider) throw new Error("WhatsApp delivery provider is required");
+    if (!smsProvider) throw new Error("SMS delivery provider is required");
+    this.whatsappProvider = whatsappProvider;
+    this.smsProvider = smsProvider;
     this.emailProvider = options.emailProvider;
     this.leaseDurationMs = options.leaseDurationMs ?? 60_000;
     this.batchSize = options.batchSize ?? 20;
     this.backoffBaseSeconds = options.backoffBaseSeconds ?? 5;
+    this.random = options.random ?? Math.random;
     this.clock = options.clock ?? (() => new Date());
     this.logger = options.logger;
   }
@@ -69,6 +94,7 @@ export class NotificationsWorker {
 
     const summary: BatchProcessingSummary = {
       claimed: rows.length,
+      submitted: 0,
       delivered: 0,
       failed: 0,
       skipped: 0,
@@ -78,6 +104,9 @@ export class NotificationsWorker {
     for (const row of rows) {
       const result = await this.processNotification(row, now);
       switch (result) {
+        case "submitted":
+          summary.submitted++;
+          break;
         case "delivered":
           summary.delivered++;
           break;
@@ -99,7 +128,7 @@ export class NotificationsWorker {
   async processNotification(
     row: NotificationOutboxRow,
     now: Date = this.clock(),
-  ): Promise<"delivered" | "failed" | "skipped" | "dead_letter"> {
+  ): Promise<"submitted" | "delivered" | "failed" | "skipped" | "dead_letter"> {
     const claimToken = row.claim_token;
     if (!claimToken) {
       throw new Error("Claimed notification is missing its fencing token");
@@ -242,6 +271,34 @@ export class NotificationsWorker {
         });
         return "failed";
       }
+      const sendPreparation = await this.store.prepareSend({
+        notificationId: row.id,
+        claimToken,
+        fundId,
+        date: today,
+        costPaise: provider.costPerMessagePaise,
+        now,
+      });
+      if (sendPreparation === "claim_lost") {
+        this.logger?.warn("Notification send stopped after claim was replaced", {
+          notification_id: row.id,
+        });
+        return "failed";
+      }
+      if (sendPreparation === "cap_reached") {
+        await this.store.markFailed(
+          row.id,
+          claimToken,
+          "Daily notification cap reached",
+          new Date(now.getTime() + 24 * 60 * 60 * 1000),
+          now,
+        );
+        this.logger?.warn("Notification blocked by cost guard: daily cap reached", {
+          notification_id: row.id,
+          fund_id: fundId,
+        });
+        return "failed";
+      }
 
       const channelIdempotencyKey = row.idempotency_key;
 
@@ -254,36 +311,49 @@ export class NotificationsWorker {
       });
 
       if (deliveryResult.success) {
-        // Record delivery and cost
-        const claimedByThisWorker = await this.store.markDelivered(
-          row.id,
-          claimToken,
-          channel,
-          deliveryResult.cost_paise,
-          now,
-        );
+        const accepted = deliveryResult.provider_status === "accepted";
+        const claimedByThisWorker =
+          accepted && deliveryResult.provider_message_id
+            ? await this.store.markSubmitted(
+                row.id,
+                claimToken,
+                channel,
+                deliveryResult.cost_paise,
+                deliveryResult.provider_message_id,
+                now,
+              )
+            : await this.store.markDelivered(
+                row.id,
+                claimToken,
+                channel,
+                deliveryResult.cost_paise,
+                now,
+              );
         if (!claimedByThisWorker) {
           this.logger?.warn("Notification result ignored after claim was replaced", {
             notification_id: row.id,
           });
           return "failed";
         }
-        await this.store.incrementFundUsage(fundId, today, deliveryResult.cost_paise);
 
-        this.logger?.info("Notification successfully delivered", {
-          notification_id: row.id,
-          fund_id: fundId,
-          channel,
-          cost_paise: deliveryResult.cost_paise,
-        });
+        this.logger?.info(
+          accepted ? "Notification accepted by provider" : "Notification delivered",
+          {
+            notification_id: row.id,
+            fund_id: fundId,
+            channel,
+            cost_paise: deliveryResult.cost_paise,
+          },
+        );
 
         delivered = true;
+        if (accepted) retrySafe = false;
         break;
       }
 
       // Keep provider details out of logs because they can contain recipient data.
       lastError = "provider_error";
-      retrySafe = deliveryResult.retryable !== false;
+      retrySafe = deliveryResult.retryable === true;
       this.logger?.warn("Channel delivery failed", {
         notification_id: row.id,
         channel,
@@ -292,19 +362,27 @@ export class NotificationsWorker {
     }
 
     if (delivered) {
-      return "delivered";
+      return retrySafe ? "delivered" : "submitted";
     }
 
     // A provider can accept a send and then time out before returning its ID.
     // If it does not promise idempotency, never send that outbox row again.
     if (!retrySafe) {
-      await this.store.markDeadLetter(row.id, claimToken, "Ambiguous provider result; automatic retry suppressed", now);
-      this.logger?.error("Notification moved to dead-letter queue after ambiguous provider result", {
-        notification_id: row.id,
-        fund_id: fundId,
-        attempts: row.attempts,
-        error: "ambiguous_provider_result",
-      });
+      await this.store.markDeadLetter(
+        row.id,
+        claimToken,
+        "Ambiguous provider result; automatic retry suppressed",
+        now,
+      );
+      this.logger?.error(
+        "Notification moved to dead-letter queue after ambiguous provider result",
+        {
+          notification_id: row.id,
+          fund_id: fundId,
+          attempts: row.attempts,
+          error: "ambiguous_provider_result",
+        },
+      );
       return "dead_letter";
     }
 
@@ -321,7 +399,8 @@ export class NotificationsWorker {
     }
 
     // Schedule retry with exponential backoff
-    const delaySeconds = this.backoffBaseSeconds * 2 ** Math.max(0, row.attempts - 1);
+    const delayCapSeconds = this.backoffBaseSeconds * 2 ** Math.max(0, row.attempts - 1);
+    const delaySeconds = Math.floor(delayCapSeconds * this.random());
     const nextAttemptAt = new Date(now.getTime() + delaySeconds * 1000);
     await this.store.markFailed(row.id, claimToken, lastError, nextAttemptAt, now);
 

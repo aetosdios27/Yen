@@ -33,6 +33,57 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllEnvs());
 
+function setProductionDeliveryEnv() {
+  vi.stubEnv("DELIVERY_PROVIDER", "external");
+  vi.stubEnv("WHATSAPP_API_BASE_URL", "https://graph.example.test");
+  vi.stubEnv("WHATSAPP_API_VERSION", "v1.0");
+  vi.stubEnv("WHATSAPP_PHONE_NUMBER_ID", "local-phone-id");
+  vi.stubEnv("WHATSAPP_ACCESS_TOKEN", "local-access-token");
+  const names = [
+    "otp",
+    "approval_needed",
+    "approved_rejected",
+    "donation_received",
+    "objection_raised",
+    "weekly_summary",
+  ];
+  const templates = Object.fromEntries(
+    names.map((name) => [
+      name,
+      {
+        name,
+        language: { en: "en", hi: "hi" },
+        parameters: name === "otp" ? ["code"] : [],
+      },
+    ]),
+  );
+  vi.stubEnv("WHATSAPP_TEMPLATES_JSON", JSON.stringify(templates));
+  vi.stubEnv("EXOTEL_SMS_ENDPOINT", "https://sms.example.test/send");
+  vi.stubEnv(
+    "EXOTEL_SMS_STATUS_CALLBACK_URL",
+    "https://relay.example.test/v1/delivery/webhooks/exotel",
+  );
+  vi.stubEnv("EXOTEL_API_KEY", "local-api-key");
+  vi.stubEnv("EXOTEL_API_TOKEN", "local-api-token");
+  vi.stubEnv("EXOTEL_SENDER_ID", "TESTID");
+  vi.stubEnv("EXOTEL_DLT_ENTITY_ID", "local-entity");
+  const smsTemplates = Object.fromEntries(
+    names.map((name) => [
+      name,
+      {
+        templateId: { en: `${name}-en`, hi: `${name}-hi` },
+        ...(name === "otp"
+          ? { otpBody: { en: "Your Yen login code is {{code}}", hi: "Yen login code {{code}}" } }
+          : {}),
+      },
+    ]),
+  );
+  vi.stubEnv("EXOTEL_SMS_TEMPLATES_JSON", JSON.stringify(smsTemplates));
+  vi.stubEnv("META_APP_SECRET", "local-meta-secret");
+  vi.stubEnv("META_WEBHOOK_VERIFY_TOKEN", "local-verify-token");
+  vi.stubEnv("EXOTEL_RELAY_WEBHOOK_SECRET", "local-relay-secret");
+}
+
 it("exports typed env and parses it only once per startup", async () => {
   vi.stubEnv("PORT", "3001");
   const { env } = await import("./env.js");
@@ -138,6 +189,7 @@ it("accepts a PostgreSQL URL in production and rejects invalid URLs without expo
   vi.stubEnv("WEBAUTHN_ORIGIN", "https://yen.example");
   vi.stubEnv("DATABASE_URL", "postgres://postgres:pw@localhost:55432/postgres");
   vi.stubEnv("EVIDENCE_STORAGE_DIR", "/var/lib/yen/evidence");
+  setProductionDeliveryEnv();
   expect((await import("./env.js")).env.DATABASE_URL).toBe(
     "postgres://postgres:pw@localhost:55432/postgres",
   );

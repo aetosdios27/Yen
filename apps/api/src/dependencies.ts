@@ -6,12 +6,12 @@ import { type ApprovalProofVerifier, type ExpenseStore, InMemoryExpenseStore } f
 import type { FundRole } from "@yen/policy";
 import { failClosedPayeeVerifier, type PayeeVerifier } from "@yen/policy";
 import { paise } from "@yen/shared";
+import type { DeliveryProvider } from "@yen/shared";
 import type { Context } from "hono";
 import {
   type AuthStore,
-  DevStubOtpDeliveryProvider,
+  createOtpDeliveryProvider,
   MemoryAuthStore,
-  type OtpDeliveryProvider,
   type Session,
   TRUSTED_DEVICE_IDLE_TIMEOUT_MS,
 } from "./auth/index.js";
@@ -393,7 +393,7 @@ export interface AppDependencies {
   readonly pinService: PinService;
   readonly authStore: AuthStore;
   readonly privacyStore: PrivacyStore;
-  readonly otpDeliveryProvider: OtpDeliveryProvider;
+  readonly otpDeliveryProvider: DeliveryProvider;
   readonly otpCooldownMs: number;
   readonly otpExpiryMs: number;
   readonly otpMaxAttempts: number;
@@ -521,7 +521,14 @@ export function defaultDependencies(
     pinService,
     authStore: new MemoryAuthStore(),
     privacyStore: new MemoryPrivacyStore(),
-    otpDeliveryProvider: new DevStubOtpDeliveryProvider(clock),
+    otpDeliveryProvider: createOtpDeliveryProvider(
+      process.env.NODE_ENV === "production"
+        ? "production"
+        : process.env.NODE_ENV === "test"
+          ? "test"
+          : "development",
+      clock,
+    ),
     otpCooldownMs: 60_000,
     otpExpiryMs: 300_000,
     otpMaxAttempts: 3,

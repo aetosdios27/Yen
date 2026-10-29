@@ -321,11 +321,13 @@ ledgerDatabaseSuite("YEN-61 real randomized crash scenarios", (sql) => {
 });
 
 ledgerDatabaseSuite("YEN-61 real notification crash points and chain outage", (sql, url) => {
-  it("recovers claimed, post-provider, and status-recorded notification kills without duplicate effects", async () => {
+  it("does not resend notifications after a worker dies during or after provider send", async () => {
     const fundId = await createLedgerTestFund(sql);
     const users = await sql<
-      { owner_id: string }[]
-    >`SELECT owner_id FROM orgs WHERE id = (SELECT org_id FROM funds WHERE id = ${fundId})`;
+      { owner_id: string; phone: string }[]
+    >`SELECT orgs.owner_id, users.phone FROM users
+         JOIN orgs ON orgs.owner_id = users.id
+         WHERE orgs.id = (SELECT org_id FROM funds WHERE id = ${fundId})`;
     const user = parseUserId(users[0]?.owner_id ?? "");
     if (!user.ok) throw new Error("Invalid test identifiers");
     const store = new PostgresNotificationStore(sql as never);
@@ -346,7 +348,7 @@ ledgerDatabaseSuite("YEN-61 real notification crash points and chain outage", (s
       VALUES (${uuidv7()}, ${user.value}, 'notification_whatsapp', ${PRIVACY_NOTICE_VERSION}, now())`;
     await sql`CREATE TABLE yen61_provider_calls (id bigserial PRIMARY KEY, idempotency_key text NOT NULL)`;
     await sql`CREATE TABLE yen61_provider_effects (idempotency_key text PRIMARY KEY)`;
-    const killPoints = ["claimed", "sent-to-provider", "status-recorded"] as const;
+    const killPoints = ["claimed", "send-started", "sent-to-provider", "status-recorded"] as const;
     for (const point of killPoints) {
       const id = uuidv7();
       await enqueueNotification(sql as never, {
@@ -427,6 +429,7 @@ ledgerDatabaseSuite("YEN-61 real notification crash points and chain outage", (s
             channel: "whatsapp",
             cost_paise: paise(0),
             provider_message_id: input.idempotencyKey,
+            provider_status: "delivered",
           };
         },
       };
@@ -440,16 +443,173 @@ ledgerDatabaseSuite("YEN-61 real notification crash points and chain outage", (s
       const row = await sql<
         { status: string; attempts: number; last_error: string | null }[]
       >`SELECT status, attempts, last_error FROM notification_outbox WHERE idempotency_key = ${`kill:${point}:${id}`}`;
-      expect(row[0]?.status, JSON.stringify(row[0])).toBe("delivered");
+      const expectedStatus =
+        point === "claimed"
+          ? "delivered"
+          : point === "status-recorded"
+            ? "submitted"
+            : "dead_letter";
+      expect(row[0]?.status, JSON.stringify(row[0])).toBe(expectedStatus);
       const calls = await sql<{ count: number }[]>`
         SELECT COUNT(*)::int AS count FROM yen61_provider_calls WHERE idempotency_key = ${`kill:${point}:${id}`}
       `;
       const effects = await sql<{ count: number }[]>`
         SELECT COUNT(*)::int AS count FROM yen61_provider_effects WHERE idempotency_key = ${`kill:${point}:${id}`}
       `;
-      expect(effects[0]?.count).toBe(1);
-      expect(calls[0]?.count).toBe(point === "sent-to-provider" ? 2 : 1);
+      expect(effects[0]?.count).toBe(
+        point === "claimed" || point === "sent-to-provider" || point === "status-recorded" ? 1 : 0,
+      );
+      expect(calls[0]?.count).toBe(
+        point === "claimed" || point === "sent-to-provider" || point === "status-recorded" ? 1 : 0,
+      );
     }
+  });
+
+  it("reconciles signed delivery events that arrive early or out of order", async () => {
+    const fundId = await createLedgerTestFund(sql);
+    const users = await sql<
+      { owner_id: string; phone: string }[]
+    >`SELECT orgs.owner_id, users.phone FROM users
+       JOIN orgs ON orgs.owner_id = users.id
+       WHERE orgs.id = (SELECT org_id FROM funds WHERE id = ${fundId})`;
+    const user = parseUserId(users[0]?.owner_id ?? "");
+    const phone = users[0]?.phone;
+    if (!user.ok || !phone) throw new Error("Invalid test identifiers");
+    const store = new PostgresNotificationStore(sql as never);
+    await store.setUserContact(user.value, { phone });
+    await store.setUserPreferences({
+      user_id: user.value,
+      whatsapp_enabled: true,
+      sms_enabled: false,
+      email_enabled: false,
+      opted_out: false,
+      locale: "en",
+      quiet_hours_enabled: false,
+      quiet_hours_start: null,
+      quiet_hours_end: null,
+      timezone: "UTC",
+    });
+    const id = uuidv7();
+    await enqueueNotification(sql as never, {
+      fund_id: fundId,
+      user_id: user.value,
+      idempotency_key: `status-order:${id}`,
+      template_id: "donation_received",
+      template_data: { fund_title: "Delivery Test Fund", donation_id: id, amount_paise: 100 },
+    });
+    const workerNow = new Date(Date.now() + 60_000);
+    const deliveredAt = workerNow;
+    const failedAt = new Date(workerNow.getTime() - 60_000);
+    expect(
+      await store.applyDeliveryStatus(
+        "meta_whatsapp",
+        "wamid-early",
+        "delivered",
+        "early-delivered",
+        deliveredAt,
+      ),
+    ).toBe(true);
+    expect(
+      await store.applyDeliveryStatus(
+        "meta_whatsapp",
+        "wamid-early",
+        "dead_letter",
+        "older-failed",
+        failedAt,
+      ),
+    ).toBe(true);
+
+    let sendCount = 0;
+    const provider: ChannelProvider = {
+      channel: "whatsapp",
+      costPerMessagePaise: paise(30),
+      async send() {
+        sendCount++;
+        if (sendCount === 1) {
+          return {
+            success: false,
+            channel: "whatsapp",
+            cost_paise: paise(30),
+            error: "provider_error",
+            retryable: true,
+          };
+        }
+        return {
+          success: true,
+          channel: "whatsapp",
+          cost_paise: paise(30),
+          provider_message_id: "wamid-early",
+          provider_status: "accepted",
+        };
+      },
+    };
+    const worker = new NotificationsWorker({
+      store,
+      whatsappProvider: provider,
+      smsProvider: provider,
+      clock: () => workerNow,
+      random: () => 0,
+    });
+    expect((await worker.processNextBatch()).failed).toBe(1);
+    expect((await worker.processNextBatch()).submitted).toBe(1);
+    expect(sendCount).toBe(2);
+    const parsedUsageFund = parseFundId(fundId);
+    if (!parsedUsageFund.ok) throw new Error("Invalid test fund ID");
+    const usage = await store.getDailyFundUsage(
+      parsedUsageFund.value,
+      workerNow.toISOString().slice(0, 10),
+    );
+    expect(usage.sent_count).toBe(1);
+    expect(usage.total_cost_paise).toBe(30);
+    let row = await sql<{ status: string }[]>`
+      SELECT status FROM notification_outbox WHERE idempotency_key = ${`status-order:${id}`}
+    `;
+    expect(row[0]?.status).toBe("delivered");
+
+    expect(
+      await store.applyDeliveryStatus(
+        "meta_whatsapp",
+        "wamid-early",
+        "dead_letter",
+        "newer-failed",
+        new Date(workerNow.getTime() + 60_000),
+      ),
+    ).toBe(true);
+    expect(
+      await store.applyDeliveryStatus(
+        "meta_whatsapp",
+        "wamid-early",
+        "delivered",
+        "old-delivered",
+        new Date(workerNow.getTime() - 120_000),
+      ),
+    ).toBe(true);
+    row = await sql<{ status: string }[]>`
+      SELECT status FROM notification_outbox WHERE idempotency_key = ${`status-order:${id}`}
+    `;
+    expect(row[0]?.status).toBe("dead_letter");
+    let deadLetters = await sql<{ count: number }[]>`
+      SELECT COUNT(*)::int AS count FROM notification_dead_letter
+      WHERE idempotency_key = ${`status-order:${id}`}
+    `;
+    expect(deadLetters[0]?.count).toBe(1);
+
+    await store.applyDeliveryStatus(
+      "meta_whatsapp",
+      "wamid-early",
+      "delivered",
+      "newest-delivered",
+      new Date(workerNow.getTime() + 120_000),
+    );
+    row = await sql<{ status: string }[]>`
+      SELECT status FROM notification_outbox WHERE idempotency_key = ${`status-order:${id}`}
+    `;
+    deadLetters = await sql<{ count: number }[]>`
+      SELECT COUNT(*)::int AS count FROM notification_dead_letter
+      WHERE idempotency_key = ${`status-order:${id}`}
+    `;
+    expect(row[0]?.status).toBe("delivered");
+    expect(deadLetters[0]?.count).toBe(0);
   });
 
   it("alerts and retries through chain RPC outage, then drains one durable anchor on recovery", async () => {

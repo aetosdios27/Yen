@@ -33,8 +33,29 @@ const otpHashKey = "test-only-otp-hash-key-with-at-least-32-bytes";
 it("does not report fake OTP delivery as successful in production", async () => {
   const provider = createOtpDeliveryProvider("production");
   await expect(
-    provider.sendOtp({ phone: testPhone, code: "123456", preferredChannel: "sms" }),
-  ).resolves.toMatchObject({ success: false, channel: "sms" });
+    provider.send({
+      channel: "sms",
+      to: testPhone,
+      template: "otp",
+      params: { code: "123456" },
+      idempotencyKey: "production-config-test",
+    }),
+  ).rejects.toThrow("Delivery provider is not configured");
+});
+
+it("deduplicates development deliveries with the caller's idempotency key", async () => {
+  const provider = new DevStubOtpDeliveryProvider(() => 1000);
+  const request = {
+    channel: "sms" as const,
+    to: testPhone,
+    template: "otp",
+    params: { code: "123456" },
+    idempotencyKey: "dev-dedupe-test",
+  };
+
+  const first = await provider.send(request);
+  await expect(provider.send(request)).resolves.toEqual(first);
+  expect(provider.getDeliveries()).toHaveLength(1);
 });
 
 const errorResponseSchema = z.object({
@@ -308,13 +329,15 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     expect(otpDeliveryProvider.getDeliveries()).toHaveLength(0);
   });
 
-  it("does not persist a challenge when a provider silently switches channels", async () => {
+  it("does not persist a challenge when a provider fails", async () => {
     const { authStore } = createTestSetup();
     const mismatched = createApp({
       authStore,
       otpHashKey,
       otpDeliveryProvider: {
-        sendOtp: async () => ({ success: true, channel: "whatsapp" as const }),
+        send: async () => {
+          throw new Error("Provider failure");
+        },
       },
     });
     const response = await mismatched.request("/v1/auth/otp/send", {

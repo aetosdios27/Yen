@@ -1,5 +1,6 @@
 import { isAbsolute } from "node:path";
 import { parseDatabaseUrl } from "@yen/db";
+import { parseExotelSmsTemplates, parseWhatsAppTemplates } from "@yen/notifications";
 import * as z from "zod";
 import { clamAvEnv, payeeRulesEnv, poolEnv, rateLimitEnv, runtimeEnv } from "./config.js";
 
@@ -18,6 +19,25 @@ const schema = z
     WEBAUTHN_RP_ID: z.string().min(1).optional(),
     WEBAUTHN_ORIGIN: z.url().optional(),
     WEBAUTHN_RP_NAME: z.string().min(1).max(80).default("Yen"),
+    DELIVERY_PROVIDER: z.enum(["stub", "external"]).default("stub"),
+    WHATSAPP_API_BASE_URL: z.string().url().optional(),
+    WHATSAPP_API_VERSION: z
+      .string()
+      .regex(/^v\d+\.\d+$/)
+      .optional(),
+    WHATSAPP_PHONE_NUMBER_ID: z.string().min(1).optional(),
+    WHATSAPP_ACCESS_TOKEN: z.string().min(1).optional(),
+    WHATSAPP_TEMPLATES_JSON: z.string().optional(),
+    EXOTEL_SMS_ENDPOINT: z.string().url().optional(),
+    EXOTEL_SMS_STATUS_CALLBACK_URL: z.string().url().optional(),
+    EXOTEL_API_KEY: z.string().min(1).optional(),
+    EXOTEL_API_TOKEN: z.string().min(1).optional(),
+    EXOTEL_SENDER_ID: z.string().min(1).optional(),
+    EXOTEL_DLT_ENTITY_ID: z.string().min(1).optional(),
+    EXOTEL_SMS_TEMPLATES_JSON: z.string().optional(),
+    META_APP_SECRET: z.string().min(1).optional(),
+    META_WEBHOOK_VERIFY_TOKEN: z.string().min(1).optional(),
+    EXOTEL_RELAY_WEBHOOK_SECRET: z.string().min(1).optional(),
     YEN_ALLOW_MEMORY_STORES: z.enum(["true", "false"]).optional(),
     READINESS_CACHE_MS: z.coerce.number().int().min(0).max(60000).default(1000),
     TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
@@ -77,6 +97,75 @@ const schema = z
         path: ["WEBAUTHN_ORIGIN"],
         message: "Required in production for device credential verification",
       });
+    if (value.NODE_ENV === "production") {
+      const required: Array<keyof typeof value> = [
+        "DELIVERY_PROVIDER",
+        "WHATSAPP_API_BASE_URL",
+        "WHATSAPP_API_VERSION",
+        "WHATSAPP_PHONE_NUMBER_ID",
+        "WHATSAPP_ACCESS_TOKEN",
+        "WHATSAPP_TEMPLATES_JSON",
+        "EXOTEL_SMS_ENDPOINT",
+        "EXOTEL_SMS_STATUS_CALLBACK_URL",
+        "EXOTEL_API_KEY",
+        "EXOTEL_API_TOKEN",
+        "EXOTEL_SENDER_ID",
+        "EXOTEL_DLT_ENTITY_ID",
+        "EXOTEL_SMS_TEMPLATES_JSON",
+        "META_APP_SECRET",
+        "META_WEBHOOK_VERIFY_TOKEN",
+        "EXOTEL_RELAY_WEBHOOK_SECRET",
+      ];
+      for (const key of required) {
+        if (!value[key])
+          ctx.addIssue({
+            code: "custom",
+            path: [key],
+            message: "Required in production delivery configuration",
+          });
+      }
+      if (value.DELIVERY_PROVIDER !== "external") {
+        ctx.addIssue({
+          code: "custom",
+          path: ["DELIVERY_PROVIDER"],
+          message: "Production requires explicitly configured external delivery providers",
+        });
+      }
+      if (value.WHATSAPP_TEMPLATES_JSON) {
+        try {
+          parseWhatsAppTemplates(value.WHATSAPP_TEMPLATES_JSON);
+        } catch {
+          ctx.addIssue({
+            code: "custom",
+            path: ["WHATSAPP_TEMPLATES_JSON"],
+            message: "Expected configured provider template names, languages, and parameter lists",
+          });
+        }
+      }
+      if (value.EXOTEL_SMS_TEMPLATES_JSON) {
+        try {
+          parseExotelSmsTemplates(value.EXOTEL_SMS_TEMPLATES_JSON);
+        } catch {
+          ctx.addIssue({
+            code: "custom",
+            path: ["EXOTEL_SMS_TEMPLATES_JSON"],
+            message: "Expected configured Exotel DLT template IDs and OTP message templates",
+          });
+        }
+      }
+      for (const [name, address] of [
+        ["WHATSAPP_API_BASE_URL", value.WHATSAPP_API_BASE_URL],
+        ["EXOTEL_SMS_ENDPOINT", value.EXOTEL_SMS_ENDPOINT],
+        ["EXOTEL_SMS_STATUS_CALLBACK_URL", value.EXOTEL_SMS_STATUS_CALLBACK_URL],
+      ] as const) {
+        if (address && new URL(address).protocol !== "https:") {
+          ctx.addIssue({
+            code: "custom",
+            path: [name],
+            message: "HTTPS is required for production delivery providers",
+          });
+        }
+      }
     }
     if (value.SERVER_HEADERS_TIMEOUT_MS <= value.SERVER_KEEP_ALIVE_TIMEOUT_MS) {
       ctx.addIssue({

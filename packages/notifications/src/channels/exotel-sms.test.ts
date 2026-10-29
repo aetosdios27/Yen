@@ -1,61 +1,140 @@
 import { createServer } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
-import { paise } from "@yen/shared";
 import { ExotelSmsProvider } from "./exotel-sms.js";
 
 const servers: ReturnType<typeof createServer>[] = [];
-async function fakeServer(handler: (body: string, authorization: string | undefined) => { status: number; body: string }) {
+async function fakeServer(
+  handler: (body: string, authorization: string | undefined) => { status: number; body: string },
+  delayMs = 0,
+) {
   let captured = "";
+  let calls = 0;
   const server = createServer((request, response) => {
+    calls++;
     request.setEncoding("utf8");
-    request.on("data", (chunk: string) => { captured += chunk; });
+    request.on("data", (chunk: string) => {
+      captured += chunk;
+    });
     request.on("end", () => {
       const result = handler(captured, request.headers.authorization);
-      response.writeHead(result.status, { "content-type": "application/json" });
-      response.end(result.body);
+      setTimeout(() => {
+        response.writeHead(result.status, { "content-type": "application/json" });
+        response.end(result.body);
+      }, delayMs);
     });
   });
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("fake server failed to bind");
-  return { endpoint: `http://127.0.0.1:${address.port}`, getBody: () => captured };
+  return {
+    endpoint: `http://127.0.0.1:${address.port}`,
+    getBody: () => captured,
+    getCalls: () => calls,
+  };
 }
 
 afterEach(async () => {
-  await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve()))));
+  await Promise.all(
+    servers
+      .splice(0)
+      .map((server) => new Promise<void>((resolve) => server.close(() => resolve()))),
+  );
 });
-const input = { recipientContact: "+919876543210", rendered: { body: "code {{code}}", locale: "en" as const }, idempotencyKey: "outbox-test-key", templateId: "approval_needed" as const, templateData: {} };
-const config = (endpoint: string) => ({ endpoint, apiKey: "local-user", apiToken: "local-password", senderId: "TESTID", entityId: "entity-test", templateId: "template-test" });
+const input = {
+  channel: "sms" as const,
+  to: "+919876543210",
+  template: "otp",
+  params: { code: "123456", locale: "hi" },
+  idempotencyKey: "outbox-test-key",
+};
+const templateNames = [
+  "otp",
+  "approval_needed",
+  "approved_rejected",
+  "donation_received",
+  "objection_raised",
+  "weekly_summary",
+];
+const config = (endpoint: string, timeoutMs?: number) => ({
+  endpoint,
+  apiKey: "local-user",
+  apiToken: "local-password",
+  senderId: "TESTID",
+  entityId: "entity-test",
+  statusCallbackUrl: "http://127.0.0.1:3001/v1/delivery/webhooks/exotel",
+  templates: Object.fromEntries(
+    templateNames.map((name) => [
+      name,
+      {
+        templateId: { en: `${name}-en`, hi: `${name}-hi` },
+        ...(name === "otp"
+          ? { otpBody: { en: "Yen login code {{code}}", hi: "Yen login code {{code}}" } }
+          : {}),
+      },
+    ]),
+  ),
+  ...(timeoutMs ? { timeoutMs } : {}),
+});
 
-describe("Exotel SMS contract against a local fake", () => {
-  it("sends documented form fields and parses the provider SID", async () => {
-    const fake = await fakeServer(() => ({ status: 200, body: JSON.stringify({ SMSMessage: { Sid: "sms-fake-1", Status: "queued" } }) }));
+describe("Exotel SMS contract against local fake servers", () => {
+  it("sends documented DLT fields and parses the provider SID", async () => {
+    const fake = await fakeServer((_, authorization) => {
+      expect(authorization).toBe(
+        `Basic ${Buffer.from("local-user:local-password").toString("base64")}`,
+      );
+      return {
+        status: 200,
+        body: JSON.stringify({ SMSMessage: { Sid: "sms-fake-1", Status: "queued" } }),
+      };
+    });
     const provider = new ExotelSmsProvider(config(fake.endpoint));
-    expect(await provider.send(input)).toEqual({ success: true, channel: "sms", cost_paise: paise(0), provider_message_id: "sms-fake-1" });
+    expect(await provider.send(input)).toEqual({
+      messageId: "sms-fake-1",
+      status: "accepted",
+      idempotencyGuaranteed: false,
+    });
     const fields = new URLSearchParams(fake.getBody());
-    expect(fields.get("To")).toBe(input.recipientContact);
+    expect(fields.get("To")).toBe(input.to);
+    expect(fields.get("Body")).toBe("Yen login code 123456");
     expect(fields.get("DltEntityId")).toBe("entity-test");
-    expect(fields.get("DltTemplateId")).toBe("template-test");
+    expect(fields.get("DltTemplateId")).toBe("otp-hi");
+    expect(fields.get("StatusCallback")).toBe(config(fake.endpoint).statusCallbackUrl);
   });
 
-  it("does not retry transport errors or leak recipient/message data", async () => {
-    const provider = new ExotelSmsProvider(config("http://127.0.0.1:1"));
-    const result = await provider.send(input);
-    expect(result).toMatchObject({ success: false, retryable: false, error: "Ambiguous SMS gateway failure" });
-    expect(JSON.stringify(result)).not.toContain(input.recipientContact);
-    expect(JSON.stringify(result)).not.toContain("code");
+  it.each([400, 503])("does not expose provider or recipient data on HTTP %s", async (status) => {
+    const fake = await fakeServer(() => ({ status, body: "{}" }));
+    await expect(new ExotelSmsProvider(config(fake.endpoint)).send(input)).rejects.toThrow(
+      "SMS gateway rejected request",
+    );
+    expect(fake.getCalls()).toBe(1);
   });
 
-  it("returns safe failures for 4xx, 5xx, malformed payload and timeout-shaped abort", async () => {
-    const bad = await fakeServer(() => ({ status: 400, body: "{}" }));
-    expect(await new ExotelSmsProvider(config(bad.endpoint)).send(input)).toMatchObject({ success: false, retryable: false });
-    const serverError = await fakeServer(() => ({ status: 503, body: "{}" }));
-    expect(await new ExotelSmsProvider(config(serverError.endpoint)).send(input)).toMatchObject({ success: false, retryable: false });
-    const malformed = await fakeServer(() => ({ status: 200, body: "{}" }));
-    expect(await new ExotelSmsProvider(config(malformed.endpoint)).send(input)).toMatchObject({ success: false, retryable: false });
-    const slow = await fakeServer(() => ({ status: 200, body: JSON.stringify({ SMSMessage: { Sid: "late" } }) }));
-    const timed = await new ExotelSmsProvider({ ...config(slow.endpoint), timeoutMs: 1 }).send(input);
-    expect(timed).toMatchObject({ success: false, retryable: false, error: "Ambiguous SMS gateway failure" });
+  it("does not retry transport timeout and does not leak phone or code", async () => {
+    const slow = await fakeServer(
+      () => ({
+        status: 200,
+        body: JSON.stringify({ SMSMessage: { Sid: "late" } }),
+      }),
+      300,
+    );
+    const provider = new ExotelSmsProvider(config(slow.endpoint, 75));
+    let safeError = "";
+    try {
+      await provider.send(input);
+    } catch (error) {
+      safeError = error instanceof Error ? error.message : "unknown";
+    }
+    expect(safeError).toBe("SMS gateway request failed");
+    expect(safeError).not.toContain("+919876543210");
+    expect(safeError).not.toContain("123456");
+    expect(slow.getCalls()).toBe(1);
+  });
+
+  it("rejects a malformed success body without exposing its contents", async () => {
+    const fake = await fakeServer(() => ({ status: 200, body: "{}" }));
+    await expect(new ExotelSmsProvider(config(fake.endpoint)).send(input)).rejects.toThrow(
+      "SMS gateway returned a malformed response",
+    );
   });
 });
