@@ -1,4 +1,5 @@
-import type { Sql, TransactionSql } from "@yen/db";
+import { ensureFundPseudonym, type Sql, type TransactionSql } from "@yen/db";
+import type { PseudonymId } from "@yen/eventlog";
 import {
   approveExpenseInTx,
   ExpenseNotFoundError,
@@ -70,7 +71,11 @@ export class PostgresExpenseStore implements ExpenseStore {
 
   async save(
     expense: ExpenseRequest,
-    context: { readonly actorId?: string; readonly policy?: FundPolicy } = {},
+    context: {
+      readonly actorId?: PseudonymId;
+      readonly actorUserId?: string;
+      readonly policy?: FundPolicy;
+    } = {},
   ): Promise<ExpenseRequest> {
     return this.sql.begin(async (tx) => {
       const rows = await tx<ExpenseRow[]>`
@@ -84,13 +89,16 @@ export class PostgresExpenseStore implements ExpenseStore {
       }
 
       const policy = context.policy ?? DEFAULT_EXPENSE_POLICY;
+      const actorId = context.actorUserId
+        ? await ensureFundPseudonym(tx, { userId: context.actorUserId, fundId: expense.fundId })
+        : context.actorId;
       let updated = expense;
       if (current.status === "draft" && expense.status === "submitted") {
         const result = await submitExpenseInTx({
           tx,
           expense: current,
           policy,
-          actorPseudonym: context.actorId ?? expense.requesterId,
+          actorPseudonym: actorId ?? expense.requesterId,
           idempotencyKey: `expense:${expense.id}:hold`,
           ...(expense.submittedAt ? { nowUtc: expense.submittedAt } : {}),
         });
@@ -100,7 +108,7 @@ export class PostgresExpenseStore implements ExpenseStore {
           tx,
           expense: current,
           reason: expense.rejectionReason ?? "policy",
-          ...(context.actorId ? { actorPseudonym: context.actorId } : {}),
+          ...(actorId ? { actorPseudonym: actorId } : {}),
           ...(expense.rejectedAt ? { nowUtc: expense.rejectedAt } : {}),
         });
         updated = result.updatedExpense;
@@ -111,7 +119,7 @@ export class PostgresExpenseStore implements ExpenseStore {
           tx,
           expense: current,
           bankTransactionId: transactionId,
-          ...(context.actorId ? { actorPseudonym: context.actorId } : {}),
+          ...(actorId ? { actorPseudonym: actorId } : {}),
           ...(expense.paidAt ? { nowUtc: expense.paidAt } : {}),
         });
         updated = result.updatedExpense;
@@ -123,7 +131,7 @@ export class PostgresExpenseStore implements ExpenseStore {
           tx,
           expense: current,
           bankTransactionId: transactionId,
-          ...(context.actorId ? { actorPseudonym: context.actorId } : {}),
+          ...(actorId ? { actorPseudonym: actorId } : {}),
           ...(expense.reconciledAt ? { nowUtc: expense.reconciledAt } : {}),
         });
         updated = result.updatedExpense;
@@ -141,6 +149,7 @@ export class PostgresExpenseStore implements ExpenseStore {
     policy: FundPolicy,
     verifyApprovalProof: Parameters<ExpenseStore["atomicApprove"]>[3],
     nowUtc?: string,
+    actorUserId?: string,
   ) {
     return this.sql.begin(async (tx) => {
       const rows = await tx<ExpenseRow[]>`
@@ -148,13 +157,16 @@ export class PostgresExpenseStore implements ExpenseStore {
       `;
       const expense = decode(rows[0]);
       if (!expense) throw new ExpenseNotFoundError(expenseId);
+      const actorId = actorUserId
+        ? await ensureFundPseudonym(tx, { userId: actorUserId, fundId: expense.fundId })
+        : approval.approverId;
       const result = await approveExpenseInTx({
         tx,
         expense,
-        approval,
+        approval: { ...approval, approverId: actorId },
         policy,
         verifyApprovalProof,
-        actorPseudonym: approval.approverId,
+        actorPseudonym: actorId,
         ...(nowUtc ? { nowUtc } : {}),
       });
       await persist(tx, result.updatedExpense);

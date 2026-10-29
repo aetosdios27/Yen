@@ -21,7 +21,6 @@ import type { SampleQueryContext } from "./query-registry.js";
 
 export type SeedStats = {
   users: number;
-  pseudonyms: number;
   orgs: number;
   funds: number;
   memberships: number;
@@ -44,10 +43,6 @@ export async function seedRealisticDataset(sql: Sql): Promise<{
       '+919' || lpad(g::text, 9, '0'),
       'User ' || g
     FROM generate_series(1, 120000) g;
-
-    -- 120,000 pseudonym mappings
-    INSERT INTO pseudonyms (pseudonym_id, user_id)
-    SELECT gen_random_uuid(), id FROM users;
 
     -- 10,000 organizations (thousands of orgs)
     INSERT INTO orgs (id, name, legal_form, owner_id)
@@ -135,7 +130,6 @@ export async function seedRealisticDataset(sql: Sql): Promise<{
 
   const stats: SeedStats = {
     users: tableRowCounts["public.users"] ?? 120000,
-    pseudonyms: tableRowCounts["public.pseudonyms"] ?? 120000,
     orgs: tableRowCounts["public.orgs"] ?? 10000,
     funds: tableRowCounts["public.funds"] ?? 20000,
     memberships: tableRowCounts["public.memberships"] ?? 120000,

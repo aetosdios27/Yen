@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { OpenAPIHono, type z } from "@hono/zod-openapi";
 import { normalizeWaitlistContact } from "@yen/db";
-import { payloadSchemas, pseudonymIdSchema } from "@yen/eventlog";
+import { payloadSchemas } from "@yen/eventlog";
 import {
   BankTransactionMismatchError,
   createDraftRequest,
@@ -10,7 +10,6 @@ import {
   type FundPolicy,
   InvalidPasskeySignatureError,
   InvalidStateTransitionError,
-  type PseudonymId,
   payExpense,
   reconcileExpense,
   rejectExpense,
@@ -168,6 +167,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       clock: baseDeps.clock,
     });
   const deps = { ...baseDeps, pinService };
+  const actorFor = (principal: Principal, fundId: string) =>
+    deps.actorForUser(principal.id, fundId);
   const app = new OpenAPIHono<ApiEnv>({
     strict: false,
     defaultHook: (result) => {
@@ -837,12 +838,13 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const fundIdResult = parseFundId(c.req.valid("param").fundId);
     if (!fundIdResult.ok) throw new ApiError("not_found");
     const input = c.req.valid("json");
+    const requesterId = await actorFor(principal, fundIdResult.value);
     const amount = paise(Number(input.amountPaise));
     const now = new Date(deps.clock()).toISOString();
     const draft = createDraftRequest({
       id: deps.idGenerator(),
       fundId: fundIdResult.value,
-      requesterId: principal.id as PseudonymId,
+      requesterId,
       amountPaise: amount,
       description: input.description,
       recipientRef: input.recipientRef,
@@ -908,6 +910,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       throw new ApiError("conflict");
     }
     const now = new Date(deps.clock()).toISOString();
+    const actorId = await actorFor(principal, fundIdResult.value);
     const holdId = deps.idGenerator();
     const updated = submitExpense(expense, {
       holdId,
@@ -915,7 +918,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       nowUtc: now,
     });
     const persisted = await deps.expenseStore.save(updated, {
-      actorId: principal.id,
+      actorId,
+      actorUserId: principal.id,
       policy: defaultFundPolicy,
     });
     const finalExpense = persisted ?? updated;
@@ -943,7 +947,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       expense: { owner: expense.requesterId, expense: view },
     } as const;
     const principal = authorizedExpense(c, "expense:approve", resource);
-    if (expense.requesterId === principal.id) {
+    const approverId = await actorFor(principal, fundIdResult.value);
+    if (expense.requesterId === approverId) {
       throw new ApiError("forbidden");
     }
     if (expense.status !== "submitted") {
@@ -961,7 +966,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       approvalToken: c.req.header("x-approval-token") ?? input.approvalToken,
     });
     const approval: SignedApproval = {
-      approverId: principal.id as PseudonymId,
+      approverId,
       passkeySignature: {
         credentialId: "pin-proof",
         signatureHex: "00",
@@ -977,6 +982,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         defaultFundPolicy,
         deps.approvalProofVerifier,
         now,
+        principal.id,
       );
       await deps.pinNotificationService.notify({
         kind: "approval_executed",
@@ -1024,6 +1030,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     }
     const input = c.req.valid("json");
     const now = new Date(deps.clock()).toISOString();
+    const actorId = await actorFor(principal, fundIdResult.value);
     const actionDetails = {
       action: "expense:reject",
       fundId: fundIdResult.value,
@@ -1035,7 +1042,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     });
     const updated = rejectExpense(expense, input.reason, now);
     const persisted = await deps.expenseStore.save(updated, {
-      actorId: principal.id,
+      actorId,
+      actorUserId: principal.id,
       policy: defaultFundPolicy,
     });
     const finalExpense = persisted ?? updated;
@@ -1077,9 +1085,11 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     }
     const input = c.req.valid("json");
     const now = new Date(deps.clock()).toISOString();
+    const actorId = await actorFor(principal, fundIdResult.value);
     const updated = payExpense(expense, input.bankTransactionId, now);
     const persisted = await deps.expenseStore.save(updated, {
-      actorId: principal.id,
+      actorId,
+      actorUserId: principal.id,
       policy: defaultFundPolicy,
     });
     const finalExpense = persisted ?? updated;
@@ -1112,6 +1122,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     }
     const input = c.req.valid("json");
     const now = new Date(deps.clock()).toISOString();
+    const actorId = await actorFor(principal, fundIdResult.value);
     let updated: ExpenseRequest;
     try {
       updated = reconcileExpense(expense, input.bankTransactionId, now);
@@ -1119,7 +1130,11 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       if (err instanceof BankTransactionMismatchError) throw new ApiError("conflict");
       throw err;
     }
-    await deps.expenseStore.save(updated);
+    await deps.expenseStore.save(updated, {
+      actorId,
+      actorUserId: principal.id,
+      policy: defaultFundPolicy,
+    });
     const updatedView = toExpenseView(updated);
     return c.json(
       redactExpense(principal, {
@@ -1147,6 +1162,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const resource = donationResource(id.value);
     if (!deps.policy.canDonate(resource)) throw new ApiError("not_found");
     const input = c.req.valid("json");
+    const donorPrincipal = c.get("principal");
+    const donorPseudonym = donorPrincipal ? await actorFor(donorPrincipal, id.value) : undefined;
     const donorContact =
       input.donorContact === undefined ? undefined : normalizeWaitlistContact(input.donorContact);
     if (donorContact === null) {
@@ -1164,6 +1181,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       ...(input.donorName === undefined ? {} : { donorName: input.donorName }),
       ...(donorContact === undefined ? {} : { donorContact }),
       donorNameChoice: input.donorNameChoice,
+      ...(donorPseudonym ? { actorPseudonym: donorPseudonym } : {}),
+      ...(donorPrincipal ? { actorUserId: donorPrincipal.id } : {}),
     });
     if (outcome.kind === "duplicate_utr") throw new ApiError("donation_utr_claimed");
     return c.json(
@@ -1536,8 +1555,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         evidence_id: evidenceId,
         content_sha256: fileSha256,
       });
-      const actorRaw = principal.id.startsWith("psn_") ? principal.id : `psn_${principal.id}`;
-      const actor = pseudonymIdSchema.parse(actorRaw);
+      const actor = await actorFor(principal, fundParam.value);
       await deps.eventAppender({
         fundId: fundParam.value,
         type: "expense.evidence_added",

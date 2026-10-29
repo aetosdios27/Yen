@@ -1,10 +1,18 @@
 import { randomInt } from "node:crypto";
-import { createSql, migrate, uuidv7 } from "@yen/db";
-import { createDraftRequest, type PseudonymId } from "@yen/ledger";
-import { paise } from "@yen/shared";
+import { createSql, ensureFundPseudonym, getDisplayName, migrate, uuidv7 } from "@yen/db";
+import { eventLeafHash, hashHexSchema } from "@yen/eventlog";
+import {
+  createDraftRequest,
+  type PseudonymId,
+  payExpense,
+  recordDonation,
+  submitExpense,
+} from "@yen/ledger";
+import { paise, salt32, toHex } from "@yen/shared";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { databaseSuite } from "../../../packages/db/src/test/database.js";
 import { initLedgerSchema } from "../../../packages/ledger/src/schema.js";
+import { PostgresDonationPledgeStore } from "./donation-store.js";
 import { PostgresExpenseStore } from "./expense-store.js";
 
 const QUORUM_TWO = { approvalQuorum: 2, objectionWindowHours: 0, autoExpireHours: 0 } as const;
@@ -149,5 +157,137 @@ databaseSuite("Postgres expense store", (sql, url) => {
         "DROP TRIGGER fail_expense_update ON expenses; DROP FUNCTION fail_expense_update()",
       );
     }
+  });
+
+  it("keeps every journey actor fund-scoped and personal data out of both event chains and leaves", async () => {
+    const userIds: [string, string, string] = [uuidv7(), uuidv7(), uuidv7()];
+    const userFixtures = [
+      { id: userIds[0], phone: "+919111111111", name: "Journey Alice" },
+      { id: userIds[1], phone: "+919222222222", name: "Journey Bhavna" },
+      { id: userIds[2], phone: "+919333333333", name: "Journey Chandra" },
+    ];
+    for (const fixture of userFixtures) {
+      await sql`INSERT INTO users (id, phone, display_name) VALUES (${fixture.id}, ${fixture.phone}, ${fixture.name})`;
+    }
+    const fundIds: string[] = [];
+    for (let index = 0; index < 2; index++) {
+      const orgId = uuidv7();
+      const fundId = uuidv7();
+      await sql`INSERT INTO orgs (id, name, legal_form, owner_id) VALUES (${orgId}, 'Journey Org', 'society', ${userIds[0]})`;
+      await sql`INSERT INTO funds (id, org_id, title, policy_json) VALUES (${fundId}, ${orgId}, 'Journey Fund', '{}'::jsonb)`;
+      fundIds.push(fundId);
+    }
+
+    const expenseStore = new PostgresExpenseStore(sql);
+    const donationStore = new PostgresDonationPledgeStore(sql);
+    const everyActor: string[][] = [];
+    for (const [fundIndex, fundId] of fundIds.entries()) {
+      const [requester, approverOne, approverTwo] = await Promise.all(
+        userIds.map((userId) => ensureFundPseudonym(sql, { userId, fundId })),
+      );
+      if (!requester || !approverOne || !approverTwo) {
+        throw new Error("Journey fixtures were incomplete");
+      }
+      const donationActor = approverOne;
+      await sql.begin(async (tx) => {
+        const actorPseudonym = await ensureFundPseudonym(tx, {
+          userId: userIds[1],
+          fundId,
+        });
+        await recordDonation(tx, {
+          fundId,
+          amount: paise(100_000),
+          actorPseudonym,
+          donationId: uuidv7(),
+          bankTransactionId: uuidv7(),
+        });
+      });
+      await donationStore.pledge({
+        fundId,
+        amountPaise: 1000,
+        utr: `1234567890${fundIndex}1`,
+        actorPseudonym: donationActor,
+        actorUserId: userIds[1],
+        donorName: "Journey Bhavna",
+        donorNameChoice: "full",
+        donorContact: "+919222222222",
+      });
+      expect(await getDisplayName(sql, { fundId, pseudonymId: donationActor })).toBe(
+        "Journey Bhavna",
+      );
+
+      const now = new Date().toISOString();
+      const draftExpense = createDraftRequest({
+        id: uuidv7(),
+        fundId,
+        requesterId: requester,
+        amountPaise: paise(5000),
+        description: "Supplies",
+        recipientRef: "supplier",
+        createdAt: now,
+      });
+      await expenseStore.save(draftExpense);
+      const submitted = submitExpense(draftExpense, {
+        holdId: uuidv7(),
+        policy: QUORUM_TWO,
+        nowUtc: now,
+      });
+      await expenseStore.save(submitted, { actorUserId: userIds[0], policy: QUORUM_TWO });
+      for (const [approverIndex, approverId] of [approverOne, approverTwo].entries()) {
+        await expenseStore.atomicApprove(
+          draftExpense.id,
+          {
+            approverId,
+            passkeySignature: {
+              credentialId: "journey-test",
+              signatureHex: "00",
+              clientDataJson: "{}",
+              authenticatorDataHex: "00",
+            },
+            approvedAt: new Date(Date.now() + approverIndex).toISOString(),
+          },
+          QUORUM_TWO,
+          verified,
+          new Date(Date.now() + approverIndex).toISOString(),
+          userIds[approverIndex + 1],
+        );
+      }
+      const approved = await expenseStore.get(draftExpense.id);
+      if (!approved) throw new Error("Expense disappeared during journey");
+      await expenseStore.save(
+        payExpense(approved, uuidv7(), new Date(Date.now() + 10).toISOString()),
+        { actorUserId: userIds[0], policy: QUORUM_TWO },
+      );
+
+      const events = await sql<
+        { actor: string; payload: unknown; hash: string }[]
+      >`SELECT actor, payload, hash FROM fund_events WHERE fund_id = ${fundId} ORDER BY seq`;
+      expect(events.map((event) => event.actor)).toContain(requester);
+      const serialized = JSON.stringify(events);
+      for (const personalValue of [
+        ...userIds,
+        ...userFixtures.map((fixture) => fixture.phone),
+        ...userFixtures.map((fixture) => fixture.name),
+      ]) {
+        expect(serialized).not.toContain(personalValue);
+      }
+      const leaves = await Promise.all(
+        events.map(async (event) =>
+          toHex(await eventLeafHash(salt32(new Uint8Array(32)), hashHexSchema.parse(event.hash))),
+        ),
+      );
+      const serializedLeaves = JSON.stringify(leaves);
+      for (const personalValue of [
+        ...userIds,
+        ...userFixtures.map((fixture) => fixture.phone),
+        ...userFixtures.map((fixture) => fixture.name),
+      ]) {
+        expect(serializedLeaves).not.toContain(personalValue);
+      }
+      everyActor.push(events.map((event) => event.actor));
+    }
+    expect(everyActor[0]).toBeDefined();
+    expect(everyActor[1]).toBeDefined();
+    expect(everyActor[0]?.filter((actor) => everyActor[1]?.includes(actor))).toEqual([]);
   });
 });

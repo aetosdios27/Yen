@@ -1,4 +1,5 @@
 import type { AppendEventInput, StoredFundEvent, WaitlistEntry } from "@yen/db";
+import { type PseudonymId, parsePseudonymId } from "@yen/eventlog";
 import { type ApprovalProofVerifier, type ExpenseStore, InMemoryExpenseStore } from "@yen/ledger";
 import type { FundRole } from "@yen/policy";
 import type { Context } from "hono";
@@ -71,6 +72,8 @@ export interface DonationPledgeRequest {
   readonly donorName?: string;
   readonly donorContact?: string;
   readonly donorNameChoice?: "full" | "initials" | "anonymous";
+  readonly actorPseudonym?: PseudonymId;
+  readonly actorUserId?: string;
 }
 
 export type DonationPledgeOutcome =
@@ -150,6 +153,7 @@ export class DefaultInFlightTracker implements InFlightTracker {
 export interface AppDependencies {
   readonly waitlistStore: WaitlistStore;
   readonly expenseStore: ExpenseStore;
+  readonly actorForUser: (userId: string, fundId: string) => Promise<PseudonymId>;
   readonly approvalProofVerifier: ApprovalProofVerifier;
   readonly donationPledgeStore: DonationPledgeStore;
   readonly displayNameStore: DisplayNameStore;
@@ -218,10 +222,20 @@ export function defaultDependencies(
     otpVerifier: null,
     clock,
   });
+  const actors = new Map<string, PseudonymId>();
 
   return {
     waitlistStore: new MemoryWaitlistStore(),
     expenseStore: resolvedExpenseStore,
+    actorForUser: async (userId, fundId) => {
+      const key = `${fundId}:${userId}`;
+      let actor = actors.get(key);
+      if (!actor) {
+        actor = parsePseudonymId(`psn_${globalThis.crypto.randomUUID()}`);
+        actors.set(key, actor);
+      }
+      return actor;
+    },
     approvalProofVerifier: (signature) => signature.credentialId === "pin-proof",
     donationPledgeStore: new MemoryDonationPledgeStore(),
     displayNameStore: new MemoryDisplayNameStore(),

@@ -1,3 +1,4 @@
+import type { PseudonymId } from "@yen/eventlog";
 import { addSignedApproval } from "./state-machine.js";
 import {
   type ApprovalProofVerifier,
@@ -12,7 +13,11 @@ export interface ExpenseStore {
   list(fundId: string): Promise<ExpenseRequest[]>;
   save(
     expense: ExpenseRequest,
-    context?: { readonly actorId?: string; readonly policy?: FundPolicy },
+    context?: {
+      readonly actorId?: PseudonymId;
+      readonly actorUserId?: string;
+      readonly policy?: FundPolicy;
+    },
   ): Promise<ExpenseRequest | undefined>;
   atomicApprove(
     expenseId: string,
@@ -20,6 +25,7 @@ export interface ExpenseStore {
     policy: FundPolicy,
     verifyApprovalProof: ApprovalProofVerifier,
     nowUtc?: string,
+    actorUserId?: string,
   ): Promise<{ expense: ExpenseRequest; reachedQuorum: boolean }>;
 }
 
