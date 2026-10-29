@@ -34,6 +34,7 @@ describe("row parsing at the database boundary", () => {
       display_name: "Owner",
       locale: "en",
       created_at: now,
+      assurance: "otp_verified",
     };
     expect(userRowSchema.safeParse({ ...user, id: "invalid" }).success).toBe(false);
     expect(
@@ -60,7 +61,13 @@ describe("row parsing at the database boundary", () => {
 
   it("requires canonical E.164 phone values in user rows", () => {
     expectTypeOf<UserRow["phone"]>().toEqualTypeOf<PhoneE164>();
-    const user = { id, display_name: "Owner", locale: "en", created_at: now };
+    const user = {
+      id,
+      display_name: "Owner",
+      locale: "en",
+      created_at: now,
+      assurance: "otp_verified" as const,
+    };
     expect(userRowSchema.safeParse({ ...user, phone: "+919876543210" }).success).toBe(true);
     for (const phone of ["9876543210", "+91 98765 43210", ""]) {
       expect(userRowSchema.safeParse({ ...user, phone }).success).toBe(false);

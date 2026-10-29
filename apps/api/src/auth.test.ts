@@ -23,6 +23,7 @@ import {
 import type { LogEntry } from "./logging.js";
 import { MemoryPinStore } from "./pin/index.js";
 import { devPolicy } from "./policy.js";
+import { MemoryIdempotencyStore } from "./stores.js";
 
 const parsedTestPhone = normalizePhone("+919876543210");
 if (!parsedTestPhone) throw new Error("Invalid test phone");
@@ -142,7 +143,10 @@ describe("Device Info Parser", () => {
 });
 
 describe("Phone OTP Login and Session Lifecycle Integration", () => {
-  function createTestSetup(initialTime = 1_000_000) {
+  function createTestSetup(
+    initialTime = 1_000_000,
+    principal: { id: string; role?: "owner" } | null = null,
+  ) {
     let now = initialTime;
     const clock = () => now;
     const logs: LogEntry[] = [];
@@ -153,14 +157,17 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     };
     const otpDeliveryProvider = new DevStubOtpDeliveryProvider(clock);
     const authStore = new MemoryAuthStore();
+    const idempotencyStore = new RecordingIdempotencyStore({ clock });
     const pinStore = new MemoryPinStore({ clock });
 
     const app = createApp({
       clock,
       logger,
       policy: devPolicy,
+      principal,
       otpDeliveryProvider,
       authStore,
+      idempotencyStore,
       pinStore,
       pinSecret: "test-yen72-pin-hmac-secret-with-more-than-32-bytes",
       otpCooldownMs: 60_000,
@@ -175,6 +182,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     return {
       app,
       authStore,
+      idempotencyStore,
       otpDeliveryProvider,
       logs,
       advanceClock: (ms: number) => {
@@ -182,6 +190,15 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
       },
       getNow: () => now,
     };
+  }
+
+  class RecordingIdempotencyStore extends MemoryIdempotencyStore {
+    beginCalls = 0;
+
+    override async begin(request: Parameters<MemoryIdempotencyStore["begin"]>[0]) {
+      this.beginCalls++;
+      return super.begin(request);
+    }
   }
 
   async function setupPin(app: ReturnType<typeof createApp>, token: string) {
@@ -843,6 +860,132 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
       (await app.request("/v1/me", { headers: { authorization: `Bearer ${session.token}` } }))
         .status,
     ).toBe(401);
+  });
+
+  it("requires PIN after idle expiry and OTP after the absolute session lifetime", async () => {
+    const { app, otpDeliveryProvider, advanceClock } = createTestSetup();
+    await app.request("/v1/auth/otp/send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: testPhone, channel: "sms" }),
+    });
+    const verify = await app.request("/v1/auth/otp/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: testPhone, code: getDelivery(otpDeliveryProvider).code }),
+    });
+    const session = verifyOtpResponse.parse(await verify.json()).session;
+    expect((await setupPin(app, session.token)).status).toBe(201);
+    advanceClock(7 * 24 * 60 * 60 * 1000);
+    expect(
+      (await app.request("/v1/me", { headers: { authorization: `Bearer ${session.token}` } }))
+        .status,
+    ).toBe(401);
+    expect((await unlockDevice(app, session.token)).status).toBe(200);
+    expect(
+      (await app.request("/v1/me", { headers: { authorization: `Bearer ${session.token}` } }))
+        .status,
+    ).toBe(200);
+    advanceClock(23 * 24 * 60 * 60 * 1000);
+    expect(
+      (await app.request("/v1/me", { headers: { authorization: `Bearer ${session.token}` } }))
+        .status,
+    ).toBe(401);
+    expect((await unlockDevice(app, session.token)).status).toBe(401);
+    await app.request("/v1/auth/otp/send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: testPhone, channel: "sms" }),
+    });
+    const reauth = await app.request("/v1/auth/otp/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: testPhone, code: getDelivery(otpDeliveryProvider).code }),
+    });
+    expect(reauth.status).toBe(200);
+  });
+
+  it("lets only the fund owner issue and confirm a phone-bound owner-vouched invite", async () => {
+    const ownerId = "00000000-0000-4000-8000-000000000011";
+    const { app, authStore, idempotencyStore, logs } = createTestSetup(1_000_000, {
+      id: ownerId,
+      role: "owner",
+    });
+    const fundRes = await app.request("/v1/funds", {
+      method: "POST",
+      headers: { "content-type": "application/json", "Idempotency-Key": "fund-create" },
+      body: JSON.stringify({
+        name: "Pilot fund",
+        targetPaise: "0",
+        upiVpa: "pilot@bank",
+        upiPayeeName: "Pilot",
+      }),
+    });
+    expect(fundRes.status).toBe(201);
+    const fundId = ((await fundRes.json()) as { id: string }).id;
+    const idempotencyCountBeforeInvite = idempotencyStore.beginCalls;
+    const inviteRes = await app.request(`/v1/funds/${fundId}/invites`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: testPhone }),
+    });
+    expect(inviteRes.status).toBe(201);
+    expect(idempotencyStore.beginCalls).toBe(idempotencyCountBeforeInvite);
+    const invite = (await inviteRes.json()) as { inviteId: string; code: string };
+    expect(invite.code).toMatch(/^[0-9a-f]{64}$/);
+    const wrongPhone = await app.request("/v1/auth/invites/redeem", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code: invite.code, phone: "+14155552671", displayName: "Ramesh" }),
+    });
+    expect(wrongPhone.status).toBe(404);
+    const redeemBody = JSON.stringify({
+      code: invite.code,
+      phone: testPhone,
+      displayName: "Ramesh",
+    });
+    const pending = await app.request("/v1/auth/invites/redeem", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: redeemBody,
+    });
+    expect(await pending.json()).toEqual({ status: "pending_owner_confirmation" });
+    const listed = await app.request(`/v1/funds/${fundId}/invites`);
+    expect(await listed.json()).toMatchObject({
+      invites: [
+        {
+          inviteId: invite.inviteId,
+          displayName: "Ramesh",
+          phoneEnding: "3210",
+          status: "redeemed",
+        },
+      ],
+    });
+    const confirmed = await app.request(`/v1/funds/${fundId}/invites/${invite.inviteId}/confirm`, {
+      method: "POST",
+      headers: { "Idempotency-Key": "invite-confirm" },
+    });
+    expect(confirmed.status).toBe(200);
+    const completed = await app.request("/v1/auth/invites/redeem", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: redeemBody,
+    });
+    expect(completed.status).toBe(200);
+    const user = await authStore.getUserById(
+      ((await completed.json()) as { session: { user: { id: string } } }).session.user.id,
+    );
+    expect(user?.assurance).toBe("owner_vouched");
+    expect(JSON.stringify(logs)).not.toContain(invite.code);
+    expect(JSON.stringify(logs)).not.toContain(testPhone);
+    expect(JSON.stringify(logs)).not.toContain("Ramesh");
+    expect(
+      await app.request("/v1/auth/invites/redeem", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: redeemBody,
+      }),
+    ).toHaveProperty("status", 404);
   });
 
   it("satisfies security acceptance criteria: OTPs and tokens NEVER appear in logs or error bodies", async () => {

@@ -20,7 +20,12 @@ describe("Approval PIN (YEN-25)", () => {
   function buildTestApp(
     options: {
       clockStart?: number;
-      principal?: { id: string; roles?: readonly string[]; capabilities?: readonly string[] };
+      principal?: {
+        id: string;
+        roles?: readonly string[];
+        capabilities?: readonly string[];
+        assurance?: "otp_verified" | "owner_vouched";
+      };
       pinSecret?: string | null;
       otpVerifier?: PinOtpVerifier | null;
     } = {},
@@ -719,6 +724,20 @@ describe("Approval PIN (YEN-25)", () => {
         pin: "482915",
       });
       expect(removeRes.status).toBe(200);
+    });
+
+    it("blocks owner-vouched members from approving expenses", async () => {
+      const { post, postAs } = buildTestApp({
+        principal: { id: userId, roles: ["approver"], assurance: "owner_vouched" },
+      });
+      const fundId = await setupFund(post);
+      const expenseId = await setupSubmittedExpense(postAs, fundId);
+
+      const response = await post(`/v1/funds/${fundId}/expenses/${expenseId}/approve`, {
+        pin: "482915",
+      });
+      expect(response.status).toBe(403);
+      expect((await jsonOf(response)).error.code).toBe("forbidden");
     });
   });
 

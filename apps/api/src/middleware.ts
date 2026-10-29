@@ -30,7 +30,11 @@ export function isAuthRoute(path: string): boolean {
 
 export function isPublicAuthRoute(path: string): boolean {
   const clean = path.replace(/\/$/, "");
-  return clean === "/v1/auth/otp/send" || clean === "/v1/auth/otp/verify";
+  return (
+    clean === "/v1/auth/otp/send" ||
+    clean === "/v1/auth/otp/verify" ||
+    clean === "/v1/auth/invites/redeem"
+  );
 }
 
 export function isPendingDeviceAuthRoute(path: string): boolean {
@@ -51,6 +55,10 @@ export function isHealthRoute(path: string): boolean {
 
 export function isEvidenceRoute(path: string): boolean {
   return /^\/v1\/funds\/[^/]+\/expenses\/[^/]+\/evidence\/?$/.test(path);
+}
+
+function isOwnerInviteIssueRoute(path: string): boolean {
+  return /^\/v1\/funds\/[0-9a-f-]{36}\/invites\/?$/i.test(path);
 }
 
 async function storeCall<T>(operation: () => Promise<T>): Promise<T> {
@@ -97,7 +105,13 @@ export function requestContext(deps: AppDependencies): MiddlewareHandler<ApiEnv>
         const isTrusted =
           trustedDevice?.userId === session.userId && now < trustedDevice.idleExpiresAt;
         const pendingDeviceAuth = isPendingDeviceAuthRoute(c.req.path);
-        c.set("principal", isTrusted || pendingDeviceAuth ? { id: session.userId } : null);
+        const user = await storeCall(() => deps.authStore.getUserById(session.userId));
+        c.set(
+          "principal",
+          isTrusted || pendingDeviceAuth
+            ? { id: session.userId, ...(user ? { assurance: user.assurance } : {}) }
+            : null,
+        );
         c.set("session", session);
         if (isTrusted) {
           await storeCall(() =>
@@ -259,7 +273,8 @@ export function idempotency(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
     if (
       ["GET", "HEAD", "OPTIONS"].includes(c.req.method) ||
       isWaitlistRoute(c.req.path) ||
-      isAuthRoute(c.req.path)
+      isAuthRoute(c.req.path) ||
+      (c.req.method === "POST" && isOwnerInviteIssueRoute(c.req.path))
     )
       return next();
     // Anonymous donors still get replay protection; their key is scoped to the caller's IP.
