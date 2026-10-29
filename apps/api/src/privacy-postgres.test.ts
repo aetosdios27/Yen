@@ -136,6 +136,9 @@ databaseSuite("privacy erasure operations", (sql) => {
     });
     expect(await snapshot()).toEqual(beforeEvents);
 
+    await sql`INSERT INTO device_credentials (credential_id, user_id, public_key, label)
+      VALUES ('cred-erasure-privacy', ${userId}, ${Buffer.from([1, 2, 3])}, 'Phone')`;
+
     const result = await app.request("/v1/privacy/erasure-requests", {
       method: "POST",
       headers: { "content-type": "application/json", "Idempotency-Key": "privacy-erasure-execute" },
@@ -143,6 +146,9 @@ databaseSuite("privacy erasure operations", (sql) => {
     });
     expect(result.status).toBe(200);
     expect(await result.json()).toMatchObject({ status: "completed", retained: false });
+    expect(
+      await sql`SELECT count(*)::int AS count FROM device_credentials WHERE user_id = ${userId}`,
+    ).toEqual([{ count: 0 }]);
     expect(await snapshot()).toEqual(beforeEvents);
     expect(await verifyStoredChain(sql, fundId, head)).toEqual(beforeVerify);
     expect(
