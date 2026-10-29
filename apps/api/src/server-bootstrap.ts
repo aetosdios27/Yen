@@ -13,12 +13,12 @@ import { PostgresDisplayNameStore } from "./display-name-store.js";
 import { PostgresDonationPledgeStore } from "./donation-store.js";
 import { PostgresEvidenceStore } from "./evidence-store-postgres.js";
 import { PostgresExpenseStore } from "./expense-store.js";
-import { PostgresPublicFundReadStore } from "./public-fund-store.js";
 import { FileSystemStorageAdapter } from "./filesystem-storage.js";
 import { PostgresFundStore } from "./fund-store.js";
 import { createServerLifecycle, type ServerLifecycle, shutdownOnSignal } from "./lifecycle.js";
 import { startObservability } from "./observability.js";
 import { PostgresPinStore } from "./pin/index.js";
+import { PostgresPublicFundReadStore } from "./public-fund-store.js";
 import { PostgresReconciliationStore } from "./reconciliation/postgres-store.js";
 import { useMemoryStore } from "./server-config.js";
 import {

@@ -6,8 +6,8 @@ import { createApp } from "./app.js";
 import {
   type AppDependencies,
   type DisplayNameStore,
-  MemoryPublicFundReadStore,
   MemoryDisplayNameStore,
+  MemoryPublicFundReadStore,
 } from "./dependencies.js";
 import { devPolicy } from "./policy.js";
 
@@ -164,12 +164,21 @@ describe("public fund read API", () => {
     const app = fixtureApp(new MemoryDisplayNameStore(), owner, donations);
     await createPublicFund(app);
     const summary = (await app.request(`/v1/funds/${fundId}/public/summary`)).json();
-    await expect(summary).resolves.toMatchObject({ raisedPaise: "7000", verification: "bank-matched" });
+    await expect(summary).resolves.toMatchObject({
+      raisedPaise: "7000",
+      verification: "bank-matched",
+    });
     const timeline = (await app.request(`/v1/funds/${fundId}/public/timeline`)).json();
     await expect(timeline).resolves.toMatchObject({
       items: expect.arrayContaining([
-        expect.objectContaining({ id: "00000000-0000-4000-8000-000000000051", actorDisplayName: "Aarav Sharma" }),
-        expect.objectContaining({ id: "00000000-0000-4000-8000-000000000052", actorDisplayName: "B. K." }),
+        expect.objectContaining({
+          id: "00000000-0000-4000-8000-000000000051",
+          actorDisplayName: "Aarav Sharma",
+        }),
+        expect.objectContaining({
+          id: "00000000-0000-4000-8000-000000000052",
+          actorDisplayName: "B. K.",
+        }),
         expect.not.objectContaining({ actorDisplayName: "Private Donor" }),
       ]),
     });
