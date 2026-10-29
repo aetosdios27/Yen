@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import type { ReactNode } from "react";
 import { AppShell } from "../components/app-shell";
 import { ServiceWorkerRegistration } from "../components/service-worker-registration";
@@ -38,7 +39,10 @@ export const viewport: Viewport = {
   themeColor: MANIFEST_THEME_COLOR,
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  // Read request-scoped headers so Next renders its inline bootstrap scripts with the
+  // nonce supplied by proxy.ts instead of prerendering nonce-free HTML.
+  await headers();
   return (
     <html lang="en">
       <body>
