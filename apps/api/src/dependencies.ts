@@ -22,6 +22,7 @@ import {
   PinService,
   type PinStore,
 } from "./pin/index.js";
+import type { FundRecord } from "./policy.js";
 import { denyAllPolicy, type Policy } from "./policy.js";
 import { MemoryStorageAdapter, type StorageAdapter } from "./storage.js";
 import {
@@ -37,6 +38,7 @@ import { UnconfiguredVirusScannerAdapter, type VirusScannerAdapter } from "./vir
 
 export interface Principal {
   readonly id: string;
+  readonly assurance?: "otp_verified" | "owner_vouched" | undefined;
   readonly role?: FundRole | undefined;
   readonly roles?: readonly string[];
   readonly capabilities?: readonly string[];
@@ -69,6 +71,7 @@ export interface DonationPledgeRequest {
   readonly utr: string;
   readonly donorName?: string;
   readonly donorContact?: string;
+  readonly donorNameChoice?: "full" | "initials" | "anonymous";
 }
 
 export type DonationPledgeOutcome =
@@ -77,6 +80,33 @@ export type DonationPledgeOutcome =
 
 export interface DonationPledgeStore {
   pledge(request: DonationPledgeRequest): Promise<DonationPledgeOutcome>;
+}
+
+export interface DisplayNameStore {
+  get(fundId: string, pseudonymId: string): Promise<string | null>;
+  officeholderNamesShown(fundId: string): Promise<boolean>;
+}
+
+export class MemoryDisplayNameStore implements DisplayNameStore {
+  private readonly names = new Map<string, string>();
+  private readonly officeholderSettings = new Set<string>();
+
+  async get(fundId: string, pseudonymId: string) {
+    return this.names.get(`${fundId}:${pseudonymId}`) ?? null;
+  }
+
+  async officeholderNamesShown(fundId: string) {
+    return this.officeholderSettings.has(fundId);
+  }
+
+  set(fundId: string, pseudonymId: string, name: string) {
+    this.names.set(`${fundId}:${pseudonymId}`, name);
+  }
+
+  setOfficeholderNamesShown(fundId: string, shown: boolean) {
+    if (shown) this.officeholderSettings.add(fundId);
+    else this.officeholderSettings.delete(fundId);
+  }
 }
 
 /** Dev and test store. One reference can only be claimed once, like the real table. */
@@ -118,11 +148,31 @@ export class DefaultInFlightTracker implements InFlightTracker {
   }
 }
 
+export interface FundStore {
+  get(fundId: string): FundRecord | undefined;
+  set(fundId: string, fund: FundRecord): void;
+}
+
+/** Process-local test/development fund store. Fund persistence is tracked separately. */
+export class MemoryFundStore implements FundStore {
+  private readonly funds = new Map<string, FundRecord>();
+
+  get(fundId: string) {
+    return this.funds.get(fundId);
+  }
+
+  set(fundId: string, fund: FundRecord) {
+    this.funds.set(fundId, fund);
+  }
+}
+
 export interface AppDependencies {
   readonly waitlistStore: WaitlistStore;
   readonly expenseStore: ExpenseStore;
+  readonly fundStore?: FundStore | undefined;
   readonly approvalProofVerifier: ApprovalProofVerifier;
   readonly donationPledgeStore: DonationPledgeStore;
+  readonly displayNameStore: DisplayNameStore;
   readonly pledgeLimit: RateLimit;
   readonly pledgeBodyLimit: number;
   readonly waitlistLimit: RateLimit;
@@ -194,6 +244,7 @@ export function defaultDependencies(
     expenseStore: resolvedExpenseStore,
     approvalProofVerifier: (signature) => signature.credentialId === "pin-proof",
     donationPledgeStore: new MemoryDonationPledgeStore(),
+    displayNameStore: new MemoryDisplayNameStore(),
     pledgeLimit: { capacity: 10, refillMs: 3600000 },
     pledgeBodyLimit: 4096,
     waitlistLimit: { capacity: 5, refillMs: 3600000 },

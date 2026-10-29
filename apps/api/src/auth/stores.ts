@@ -1,4 +1,11 @@
-import { authOtpRowSchema, type Sql, sessionRowSchema, userRowSchema, uuidv7 } from "@yen/db";
+import {
+  authOtpRowSchema,
+  ownerInviteRowSchema,
+  type Sql,
+  sessionRowSchema,
+  userRowSchema,
+  uuidv7,
+} from "@yen/db";
 import type { PhoneE164 } from "@yen/shared";
 
 export const TRUSTED_DEVICE_IDLE_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000;
@@ -22,6 +29,21 @@ export interface User {
   readonly phone: PhoneE164;
   readonly displayName: string;
   readonly locale: string;
+  readonly createdAt: number;
+  readonly assurance: "otp_verified" | "owner_vouched";
+}
+
+export interface OwnerInvite {
+  readonly id: string;
+  readonly fundId: string;
+  readonly ownerId: string;
+  readonly phone: PhoneE164;
+  readonly memberName: string | null;
+  readonly secretHash: string;
+  readonly expiresAt: number;
+  readonly redeemedAt: number | null;
+  readonly confirmedAt: number | null;
+  readonly completedAt: number | null;
   readonly createdAt: number;
 }
 
@@ -86,6 +108,21 @@ export interface AuthStore {
 
   findOrCreateUserByPhone(phone: PhoneE164, now: number): Promise<User>;
   getUserById(userId: string): Promise<User | null>;
+  createOwnerInvite(input: OwnerInvite): Promise<void>;
+  listOwnerInvites(fundId: string, ownerId: string): Promise<readonly OwnerInvite[]>;
+  redeemOwnerInvite(
+    secretHash: string,
+    phone: PhoneE164,
+    memberName: string,
+    now: number,
+  ): Promise<OwnerInvite | null>;
+  confirmOwnerInvite(
+    id: string,
+    fundId: string,
+    ownerId: string,
+    now: number,
+  ): Promise<OwnerInvite | null>;
+  completeOwnerInvite(secretHash: string, phone: PhoneE164, now: number): Promise<User | null>;
 
   createSession(input: CreateSessionInput): Promise<Session>;
   trustDevice(sessionId: string, userId: string, now: number, idleTimeoutMs: number): Promise<void>;
@@ -108,6 +145,7 @@ export class MemoryAuthStore implements AuthStore {
   private readonly sessions = new Map<string, Session>(); // key: sessionId
   private readonly sessionTokenToId = new Map<string, string>(); // tokenHash -> sessionId
   private readonly trustedDevices = new Map<string, TrustedDevice>();
+  private readonly ownerInvites = new Map<string, OwnerInvite>();
 
   constructor(private readonly idGenerator: () => string = () => crypto.randomUUID()) {}
 
@@ -208,6 +246,7 @@ export class MemoryAuthStore implements AuthStore {
       displayName: "Member",
       locale: "en",
       createdAt: now,
+      assurance: "otp_verified",
     };
     this.users.set(newUser.id, newUser);
     this.usersByPhone.set(phone, newUser.id);
@@ -216,6 +255,82 @@ export class MemoryAuthStore implements AuthStore {
 
   async getUserById(userId: string): Promise<User | null> {
     return this.users.get(userId) ?? null;
+  }
+
+  async createOwnerInvite(input: OwnerInvite): Promise<void> {
+    this.ownerInvites.set(input.id, input);
+  }
+
+  async listOwnerInvites(fundId: string, ownerId: string): Promise<readonly OwnerInvite[]> {
+    return [...this.ownerInvites.values()].filter(
+      (invite) =>
+        invite.fundId === fundId && invite.ownerId === ownerId && invite.completedAt === null,
+    );
+  }
+
+  async redeemOwnerInvite(
+    secretHash: string,
+    phone: PhoneE164,
+    memberName: string,
+    now: number,
+  ): Promise<OwnerInvite | null> {
+    const invite = [...this.ownerInvites.values()].find((item) => item.secretHash === secretHash);
+    if (!invite || invite.phone !== phone || now >= invite.expiresAt || invite.completedAt !== null)
+      return null;
+    if (invite.redeemedAt !== null) return invite;
+    const updated = { ...invite, memberName, redeemedAt: now };
+    this.ownerInvites.set(invite.id, updated);
+    return updated;
+  }
+
+  async confirmOwnerInvite(
+    id: string,
+    fundId: string,
+    ownerId: string,
+    now: number,
+  ): Promise<OwnerInvite | null> {
+    const invite = this.ownerInvites.get(id);
+    if (
+      !invite ||
+      invite.fundId !== fundId ||
+      invite.ownerId !== ownerId ||
+      invite.redeemedAt === null ||
+      invite.completedAt !== null ||
+      now >= invite.expiresAt
+    )
+      return null;
+    const updated = { ...invite, confirmedAt: now };
+    this.ownerInvites.set(id, updated);
+    return updated;
+  }
+
+  async completeOwnerInvite(
+    secretHash: string,
+    phone: PhoneE164,
+    now: number,
+  ): Promise<User | null> {
+    const invite = [...this.ownerInvites.values()].find((item) => item.secretHash === secretHash);
+    if (
+      !invite ||
+      invite.phone !== phone ||
+      invite.confirmedAt === null ||
+      invite.completedAt !== null ||
+      now >= invite.expiresAt
+    )
+      return null;
+    if (this.usersByPhone.has(phone)) return null;
+    const user: User = {
+      id: this.idGenerator(),
+      phone,
+      displayName: invite.memberName ?? "Member",
+      locale: "en",
+      createdAt: now,
+      assurance: "owner_vouched",
+    };
+    this.users.set(user.id, user);
+    this.usersByPhone.set(phone, user.id);
+    this.ownerInvites.set(invite.id, { ...invite, completedAt: now });
+    return user;
   }
 
   async createSession(input: CreateSessionInput): Promise<Session> {
@@ -390,6 +505,24 @@ function parseUserRow(row: unknown): User {
     displayName: parsed.display_name,
     locale: parsed.locale,
     createdAt: parsed.created_at.getTime(),
+    assurance: parsed.assurance,
+  };
+}
+
+function parseOwnerInvite(row: unknown): OwnerInvite {
+  const parsed = ownerInviteRowSchema.parse(row);
+  return {
+    id: parsed.id,
+    fundId: parsed.fund_id,
+    ownerId: parsed.owner_id,
+    phone: parsed.phone,
+    memberName: parsed.member_name,
+    secretHash: parsed.secret_hash,
+    expiresAt: parsed.expires_at.getTime(),
+    redeemedAt: parsed.redeemed_at?.getTime() ?? null,
+    confirmedAt: parsed.confirmed_at?.getTime() ?? null,
+    completedAt: parsed.completed_at?.getTime() ?? null,
+    createdAt: parsed.created_at.getTime(),
   };
 }
 
@@ -517,6 +650,83 @@ export class PostgresAuthStore implements AuthStore {
   async getUserById(userId: string): Promise<User | null> {
     const rows = await this.sql`SELECT * FROM users WHERE id = ${userId}`;
     return rows.length > 0 ? parseUserRow(rows[0]) : null;
+  }
+
+  async createOwnerInvite(input: OwnerInvite): Promise<void> {
+    await this.sql`
+      INSERT INTO owner_invites (id, fund_id, owner_id, phone, secret_hash, expires_at, created_at)
+      VALUES (${input.id}, ${input.fundId}, ${input.ownerId}, ${input.phone}, ${input.secretHash}, ${new Date(input.expiresAt)}, ${new Date(input.createdAt)})
+    `;
+  }
+
+  async listOwnerInvites(fundId: string, ownerId: string): Promise<readonly OwnerInvite[]> {
+    const rows = await this.sql`
+      SELECT * FROM owner_invites WHERE fund_id = ${fundId} AND owner_id = ${ownerId}
+        AND completed_at IS NULL ORDER BY created_at DESC
+    `;
+    return rows.map(parseOwnerInvite);
+  }
+
+  async redeemOwnerInvite(
+    secretHash: string,
+    phone: PhoneE164,
+    memberName: string,
+    now: number,
+  ): Promise<OwnerInvite | null> {
+    const rows = await this.sql`
+      UPDATE owner_invites SET member_name = COALESCE(member_name, ${memberName}), redeemed_at = COALESCE(redeemed_at, ${new Date(now)})
+      WHERE secret_hash = ${secretHash} AND phone = ${phone} AND expires_at > ${new Date(now)}
+        AND completed_at IS NULL
+      RETURNING *
+    `;
+    return rows.length ? parseOwnerInvite(rows[0]) : null;
+  }
+
+  async confirmOwnerInvite(
+    id: string,
+    fundId: string,
+    ownerId: string,
+    now: number,
+  ): Promise<OwnerInvite | null> {
+    const rows = await this.sql`
+      UPDATE owner_invites SET confirmed_at = ${new Date(now)}
+      WHERE id = ${id} AND fund_id = ${fundId} AND owner_id = ${ownerId}
+        AND redeemed_at IS NOT NULL AND confirmed_at IS NULL AND completed_at IS NULL
+        AND expires_at > ${new Date(now)}
+      RETURNING *
+    `;
+    return rows.length ? parseOwnerInvite(rows[0]) : null;
+  }
+
+  async completeOwnerInvite(
+    secretHash: string,
+    phone: PhoneE164,
+    now: number,
+  ): Promise<User | null> {
+    return this.sql.begin(async (tx) => {
+      const rows = await tx`
+        SELECT * FROM owner_invites WHERE secret_hash = ${secretHash} AND phone = ${phone}
+          AND confirmed_at IS NOT NULL AND completed_at IS NULL AND expires_at > ${new Date(now)}
+          FOR UPDATE
+      `;
+      if (!rows.length) return null;
+      const invite = parseOwnerInvite(rows[0]);
+      const userId = uuidv7();
+      const created = await tx`
+        INSERT INTO users (id, phone, display_name, locale, assurance, created_at)
+        VALUES (${userId}, ${phone}, ${invite.memberName ?? "Member"}, 'en', 'owner_vouched', ${new Date(now)})
+        ON CONFLICT (phone) DO NOTHING RETURNING *
+      `;
+      if (!created.length) return null;
+      await tx`INSERT INTO pseudonyms (pseudonym_id, user_id) VALUES (${uuidv7()}, ${userId})`;
+      await tx`
+        INSERT INTO memberships (fund_id, user_id, role, status, created_at)
+        VALUES (${invite.fundId}, ${userId}, 'member', 'active', ${new Date(now)})
+        ON CONFLICT DO NOTHING
+      `;
+      await tx`UPDATE owner_invites SET completed_at = ${new Date(now)} WHERE id = ${invite.id}`;
+      return parseUserRow(created[0]);
+    });
   }
 
   async createSession(input: CreateSessionInput): Promise<Session> {

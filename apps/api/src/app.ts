@@ -22,6 +22,8 @@ import {
   DEFAULT_FUND_POLICY,
   isValidRole,
   can as policyCan,
+  redactExpenseDetails,
+  redactExpenseProofs,
   redactFundReadModel,
 } from "@yen/policy";
 import { paise, parseFundId, parseGstin } from "@yen/shared";
@@ -42,6 +44,7 @@ import {
   parseDeviceInfo,
   verifyOtp,
 } from "./auth/index.js";
+import { registerOwnerInviteRoutes } from "./auth/invite-routes.js";
 import { buildInfo } from "./build-info.js";
 import {
   ALLOWED_EVIDENCE_MIME_TYPES,
@@ -55,7 +58,6 @@ import {
   createFundRoute,
   donationDetailsRoute,
   type expenseSchema,
-  type fundSchema,
   getEvidenceRoute,
   getExpenseRoute,
   getFundRoute,
@@ -98,6 +100,7 @@ import {
   type ApiEnv,
   type AppDependencies,
   defaultDependencies,
+  MemoryFundStore,
   type Principal,
 } from "./dependencies.js";
 import { ApiError, errorBody, errorStatus, ReadinessError, StoreError } from "./errors.js";
@@ -130,6 +133,7 @@ import type {
   FundResource,
 } from "./policy.js";
 import { redactActionReceipt as redactReceipt } from "./policy.js";
+import { publicExpenseDetailRoute, publicExpenseProofsRoute } from "./public-expense-contract.js";
 import { buildOpaqueEvidenceKey, sanitizeEvidenceFilename } from "./storage.js";
 import type { AllowedEvidenceMimeType, StoredEvidence } from "./stores.js";
 import type { VirusScanResult } from "./virus-scanner.js";
@@ -295,7 +299,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       : requireAuth(c, next),
   );
 
-  const funds = new Map<string, { owner: string; fund: z.infer<typeof fundSchema> }>();
+  const funds = deps.fundStore ?? new MemoryFundStore();
   const authorizedFund = (c: Context<ApiEnv>, action: FundAction, resource: FundResource) => {
     const principal = c.get("principal");
     if (!principal) throw new ApiError("unauthenticated");
@@ -366,7 +370,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const now = deps.clock();
 
     const existing = await deps.authStore.getLatestActiveOtpChallenge(phone, now);
-    if (existing && now < existing.resendAvailableAt) {
+    if (existing && existing.channel === input.channel && now < existing.resendAvailableAt) {
       const waitSeconds = Math.max(1, Math.ceil((existing.resendAvailableAt - now) / 1000));
       c.header("retry-after", String(waitSeconds));
       throw new ApiError("rate_limited");
@@ -634,17 +638,16 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const principal = authorizedFund(c, "fund:read", resource);
     return c.json(deps.policy.redact(principal, resource), 200);
   });
-
-  const publicFundContext = (fundId: string, principal: Principal | null) => {
+  const publicFundContext = async (fundId: string, principal: Principal | null) => {
+    const startedAt = performance.now();
     const entry = funds.get(fundId);
-    if (!entry) throw new ApiError("not_found");
     const parsedFundId = parseFundId(fundId);
     if (!parsedFundId.ok) throw new ApiError("not_found");
-    const visibilityTier = entry.fund.visibility;
+    const visibilityTier = entry?.fund.visibility ?? "private";
     const requestedRole: string | undefined =
       principal?.role ?? principal?.roles?.find(isValidRole);
     const role =
-      principal?.id === entry.owner
+      principal?.id === entry?.owner
         ? "owner"
         : requestedRole && isValidRole(requestedRole)
           ? requestedRole
@@ -654,12 +657,36 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       kind: "fund",
       fund: {
         fundId: parsedFundId.value,
-        ownerId: entry.owner,
+        ownerId: entry?.owner ?? "",
         policy: { ...DEFAULT_FUND_POLICY, visibilityTier },
       },
     });
-    if (!allowed) throw new ApiError("not_found");
+    if (!entry || !allowed) {
+      const remainingMs = 50 - (performance.now() - startedAt);
+      if (remainingMs > 0) await deps.sleep(remainingMs);
+      throw new ApiError("not_found");
+    }
     return { entry, actor, publicTier: principal === null && visibilityTier === "public" };
+  };
+  const publicExpenseContext = async (
+    fundId: string,
+    expenseId: string,
+    principal: Principal | null,
+  ) => {
+    const fundContext = await publicFundContext(fundId, principal);
+    const parsedFundId = parseFundId(fundId);
+    if (!parsedFundId.ok) throw new ApiError("not_found");
+    const expense = await deps.expenseStore.get(expenseId);
+    if (
+      !expense ||
+      expense.fundId !== parsedFundId.value ||
+      (expense.status === "draft" &&
+        (fundContext.actor.role === "public" || fundContext.actor.role === "donor"))
+    ) {
+      throw new ApiError("not_found");
+    }
+    const proofs = await deps.evidenceStore.getByExpense(parsedFundId.value, expenseId);
+    return { ...fundContext, expense, proofs };
   };
   const setFundReadCache = (c: Context<ApiEnv>, publicTier: boolean, body: unknown) => {
     if (!publicTier) {
@@ -675,7 +702,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     "Donation records are not queryable; raised amount is unknown.",
     "Expense categories are not stored; spending is grouped as Uncategorized.",
     "The event log and anchoring query are not connected; timeline entries are derived from expense records.",
-    "Donor display-name preferences are not stored; donor names and labels are omitted.",
+    "Donation records are not queryable; donation display labels cannot be shown.",
     "Authenticated member assignments are not loaded into sessions; donor and member access requires a role-bearing principal.",
   ];
   const listFundExpenses = async (fundId: string) => deps.expenseStore.list(fundId);
@@ -686,7 +713,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   };
   app.openapi(publicFundSummaryRoute, async (c) => {
     const fundId = c.req.valid("param").fundId;
-    const { entry, actor, publicTier } = publicFundContext(fundId, c.get("principal"));
+    const { entry, actor, publicTier } = await publicFundContext(fundId, c.get("principal"));
     const expenses = await listFundExpenses(fundId);
     const spentPaise = safePaiseSum(
       expenses
@@ -697,7 +724,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       kind: "fund_summary",
       fundId,
       name: entry.fund.name,
-      purpose: entry.fund.purpose ?? null,
+      purpose: actor.role === "public" ? null : (entry.fund.purpose ?? null),
       raisedPaise: null,
       spentPaise: String(spentPaise),
       verification: "unverified",
@@ -708,7 +735,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   });
   app.openapi(publicFundBreakdownRoute, async (c) => {
     const fundId = c.req.valid("param").fundId;
-    const { actor, publicTier } = publicFundContext(fundId, c.get("principal"));
+    const { actor, publicTier } = await publicFundContext(fundId, c.get("principal"));
     const expenses = await listFundExpenses(fundId);
     const spentPaise = safePaiseSum(
       expenses
@@ -727,42 +754,108 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   });
   app.openapi(publicFundTimelineRoute, async (c) => {
     const fundId = c.req.valid("param").fundId;
-    const { actor, publicTier } = publicFundContext(fundId, c.get("principal"));
+    const { actor, publicTier } = await publicFundContext(fundId, c.get("principal"));
     const expenses = await listFundExpenses(fundId);
-    const items = expenses
-      .filter((expense) => expense.status !== "draft")
-      .map((expense) => {
-        const occurredAt =
-          expense.reconciledAt ??
-          expense.paidAt ??
-          expense.rejectedAt ??
-          expense.approvedAt ??
-          expense.submittedAt ??
-          expense.createdAt;
-        const statusWords: Record<string, string> = {
-          submitted: "A spending request was submitted.",
-          approved: "A spending request was approved.",
-          rejected: "A spending request was rejected.",
-          expired: "A spending request expired.",
-          paid: "An approved expense was marked paid.",
-          reconciled: "An expense was marked reconciled.",
-        };
-        return {
-          id: expense.id,
-          occurredAt,
-          message: statusWords[expense.status] ?? "A fund activity was recorded.",
-          ...(expense.status === "paid" || expense.status === "reconciled"
-            ? { amountPaise: String(expense.amountPaise) }
-            : {}),
-          verified: "unverified" as const,
-        };
-      })
-      .sort((left, right) => left.occurredAt.localeCompare(right.occurredAt));
+    const officeholderNamesShown = await deps.displayNameStore.officeholderNamesShown(fundId);
+    const items = await Promise.all(
+      expenses
+        .filter((expense) => expense.status !== "draft")
+        .map(async (expense) => {
+          const occurredAt =
+            expense.reconciledAt ??
+            expense.paidAt ??
+            expense.rejectedAt ??
+            expense.approvedAt ??
+            expense.submittedAt ??
+            expense.createdAt;
+          const statusWords: Record<string, string> = {
+            submitted: "A spending request was submitted.",
+            approved: "A spending request was approved.",
+            rejected: "A spending request was rejected.",
+            expired: "A spending request expired.",
+            paid: "An approved expense was marked paid.",
+            reconciled: "An expense was marked reconciled.",
+          };
+          const displayName = await deps.displayNameStore.get(fundId, expense.requesterId);
+          return {
+            id: expense.id,
+            occurredAt,
+            message: statusWords[expense.status] ?? "A fund activity was recorded.",
+            ...(displayName === null
+              ? {}
+              : {
+                  actorDisplayName: displayName,
+                  actorNameChoice: officeholderNamesShown
+                    ? ("full" as const)
+                    : ("initials" as const),
+                }),
+            ...(expense.status === "paid" || expense.status === "reconciled"
+              ? { amountPaise: String(expense.amountPaise) }
+              : {}),
+            verified: "unverified" as const,
+          };
+        }),
+    ).then((sorted) =>
+      sorted.sort((left, right) => left.occurredAt.localeCompare(right.occurredAt)),
+    );
     const body = redactFundReadModel(actor, {
       kind: "fund_timeline",
       fundId,
       items,
       dataGaps: publicDataGaps,
+    });
+    setFundReadCache(c, publicTier, body);
+    return c.json(body, 200);
+  });
+  app.openapi(publicExpenseDetailRoute, async (c) => {
+    const { fundId, expenseId } = c.req.valid("param");
+    const { actor, publicTier, expense, proofs } = await publicExpenseContext(
+      fundId,
+      expenseId,
+      c.get("principal"),
+    );
+    const payeeName = proofs.find((proof) => proof.vendorName)?.vendorName;
+    const body = redactExpenseDetails(actor, {
+      kind: "expense_details",
+      expenseId: expense.id,
+      fundId: expense.fundId,
+      amountPaise: paise(expense.amountPaise),
+      category: "Uncategorized",
+      status: expense.status,
+      ...(payeeName === undefined ? {} : { payeeName }),
+      payeeVerified: false,
+      description: expense.description,
+      createdAt: expense.createdAt,
+      updatedAt: expense.updatedAt,
+    });
+    setFundReadCache(c, publicTier, body);
+    return c.json(body, 200);
+  });
+  app.openapi(publicExpenseProofsRoute, async (c) => {
+    const { fundId, expenseId } = c.req.valid("param");
+    const { actor, publicTier, proofs } = await publicExpenseContext(
+      fundId,
+      expenseId,
+      c.get("principal"),
+    );
+    const proofRecords = await Promise.all(
+      proofs.map(async (proof) => {
+        if (actor.role === "public") {
+          return { sha256: proof.fileSha256, scanStatus: proof.scan.result } as const;
+        }
+        const storedObject = await getVerifiedEvidenceObject(proof, deps.storageAdapter);
+        return {
+          sha256: proof.fileSha256,
+          scanStatus: proof.scan.result,
+          mimeType: proof.mimeType,
+          contentBase64: Buffer.from(storedObject.data).toString("base64"),
+        } as const;
+      }),
+    );
+    const body = redactExpenseProofs(actor, {
+      kind: "expense_proofs",
+      expenseId,
+      proofs: proofRecords,
     });
     setFundReadCache(c, publicTier, body);
     return c.json(body, 200);
@@ -804,6 +897,9 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   ) => {
     const principal = c.get("principal");
     if (!principal) throw new ApiError("unauthenticated");
+    if (principal.assurance === "owner_vouched" && action === "expense:approve") {
+      throw new ApiError("forbidden");
+    }
     if (!deps.policy.can(principal, action, resource)) {
       throw new ApiError(action === "expense:read" ? "not_found" : "forbidden");
     }
@@ -1146,6 +1242,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       utr: input.utr,
       ...(input.donorName === undefined ? {} : { donorName: input.donorName }),
       ...(donorContact === undefined ? {} : { donorContact }),
+      donorNameChoice: input.donorNameChoice,
     });
     if (outcome.kind === "duplicate_utr") throw new ApiError("donation_utr_claimed");
     return c.json(
@@ -1166,6 +1263,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     if (!entry) throw new ApiError("not_found");
     return { id: id.value, resource: { kind: "fund", fund: entry } as const };
   };
+
+  registerOwnerInviteRoutes(app, deps, getFundOrNotFound, authorizedFund);
 
   app.openapi(setupPinRoute, async (c) => {
     const principal = c.get("principal");

@@ -55,6 +55,18 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Verify published audit vectors in Node and Python
+        run: pnpm --filter @yen/verifier vectors:check
+      - name: Rehearse release archive checks (no publish or signing)
+        if: github.event_name == 'pull_request'
+        run: |
+          rehearsal_dir="$(mktemp -d)"
+          trap 'rm -rf "$rehearsal_dir"' EXIT
+          release_tag="local-${GITHUB_SHA:0:12}"
+          YEN_RELEASE_TAG="$release_tag" bash scripts/repro-build.sh "$rehearsal_dir"
+          printf '{"bomFormat":"CycloneDX","specVersion":"1.6","components":[]}\n' > "$rehearsal_dir/rehearsal-sbom.json"
+          bash scripts/prepare-release-assets.sh "$rehearsal_dir" "$release_tag" "$rehearsal_dir/rehearsal-sbom.json"
+
       - name: Lint and format
         run: pnpm check
 
@@ -163,6 +175,22 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: yen_test
+          POSTGRES_DB: yen_anvil
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d yen_anvil"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      YEN_ANVIL_TEST_DATABASE_URL: postgres://postgres:yen_test@127.0.0.1:5432/yen_anvil
+      YEN_ANVIL_INTEGRATION_REQUIRED: "1"
     defaults:
       run:
         working-directory: contracts
@@ -193,12 +221,18 @@ jobs:
             --output "$archive"
           printf '5cd98f9092bcc28be087939491f786b2bf3ed55e492996a409e29519b8ab4dc8  %s\n' "$archive" | sha256sum --check --strict
           mkdir -p "$RUNNER_TEMP/foundry-bin"
-          tar -xzf "$archive" -C "$RUNNER_TEMP/foundry-bin" forge
+          tar -xzf "$archive" -C "$RUNNER_TEMP/foundry-bin" forge anvil
           echo "$RUNNER_TEMP/foundry-bin" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/foundry-bin/forge" --version
 
       - run: forge fmt --check
       - run: forge build
+      - name: Build queue and workspace dependencies
+        run: pnpm --filter @yen/queue... build
+        working-directory: .
+      - name: Run the real Anvil anchoring integration test
+        run: pnpm --filter @yen/queue exec vitest run src/anchoring.test.ts -t "deploys RootRegistry and publishes a root on a real local Anvil chain"
+        working-directory: .
       - name: Test deployment manifest writer
         run: node --test contracts/script/*.test.mjs
         working-directory: .

@@ -1,7 +1,11 @@
 import {
   AnchoringWorker,
+  createAnchorRpcResilience,
+  KmsRootSigner,
   LocalDevRootSigner,
   registerAnchoringDiscovery,
+  registerAnchorReconciliation,
+  stderrAnchorAlertSink,
   ViemRootChain,
 } from "./anchoring.js";
 import { DEFAULT_QUEUES } from "./config.js";
@@ -30,16 +34,22 @@ const worker = new WorkerRuntime({
 const anchorRpc = process.env.ANCHOR_RPC_URL;
 const anchorAddress = process.env.ROOT_REGISTRY_ADDRESS;
 const anchorConfigured = Boolean(anchorRpc && anchorAddress);
+let anchorPublisherAddress: `0x${string}` | undefined;
+let anchorChain: ViemRootChain | undefined;
+let anchorResilience: ReturnType<typeof createAnchorRpcResilience> | undefined;
 if (anchorRpc && anchorAddress) {
+  anchorChain = new ViemRootChain(anchorRpc, anchorAddress as `0x${string}`);
+  anchorResilience = createAnchorRpcResilience();
+  const signer = process.env.ANCHOR_KMS_KEY_ID
+    ? new KmsRootSigner()
+    : LocalDevRootSigner.fromEnvironment();
+  anchorPublisherAddress = (await signer.getAccount()).address;
   const anchoring = new AnchoringWorker(
     worker.getSql(),
-    new ViemRootChain(anchorRpc, anchorAddress as `0x${string}`),
-    LocalDevRootSigner.fromEnvironment(),
-    (alert) => {
-      process.stderr.write(
-        `${JSON.stringify({ event: "outbound_dependency_failure", ...alert })}\n`,
-      );
-    },
+    anchorChain,
+    signer,
+    stderrAnchorAlertSink,
+    anchorResilience,
   );
   worker.registerHandler("blockchain-anchoring", async (job) => {
     const data = job.data as { fundId?: unknown };
@@ -94,10 +104,23 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
 }
 
 process.stdout.write("Worker runtime started and listening for jobs.\n");
-if (anchorConfigured) {
+if (anchorConfigured && anchorChain && anchorResilience) {
   void registerAnchoringDiscovery(worker.getBoss(), worker.getSql()).catch((error) => {
     process.stderr.write(
       `Anchoring discovery failed to start: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    process.exitCode = 1;
+  });
+  void registerAnchorReconciliation(
+    worker.getBoss(),
+    worker.getSql(),
+    anchorChain,
+    stderrAnchorAlertSink,
+    anchorPublisherAddress,
+    anchorResilience,
+  ).catch((error) => {
+    process.stderr.write(
+      `Anchor reconciliation failed to start: ${error instanceof Error ? error.message : String(error)}\n`,
     );
     process.exitCode = 1;
   });

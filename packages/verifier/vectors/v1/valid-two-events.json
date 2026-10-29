@@ -1,0 +1,89 @@
+{
+  "name": "valid-two-events",
+  "bundle": {
+    "format": "yen/audit-bundle/v1",
+    "fund_id": "00000000-0000-4000-8000-000000000001",
+    "chain": {
+      "start_seq": 0,
+      "start_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "events": [
+      {
+        "event": {
+          "fund_id": "00000000-0000-4000-8000-000000000001",
+          "seq": 1,
+          "version": 1,
+          "actor": "psn_00000000-0000-4000-8000-000000000002",
+          "occurred_at": "2026-01-01T00:00:01.000Z",
+          "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "hash": "6645a97f27ad89aa508b9306882fad4876df7b11059313683e333a73c740ea25",
+          "type": "fund.created",
+          "payload": {
+            "org_id": "00000000-0000-4000-8000-000000000003",
+            "visibility": "public"
+          }
+        },
+        "salt": "1111111111111111111111111111111111111111111111111111111111111111",
+        "latest_event_hash": "c88fb400168e6bcb47881df4d4eed4374a577835143bd737b35ef47027cda1c8",
+        "eventProof": {
+          "index": 0,
+          "size": 2,
+          "path": ["9c637ca6e9ed8efbffd0b847da852fc587b6ebdb0f8dc04c9d9478718634737e"]
+        },
+        "fundProof": {
+          "index": 0,
+          "size": 1,
+          "path": []
+        }
+      },
+      {
+        "event": {
+          "fund_id": "00000000-0000-4000-8000-000000000001",
+          "seq": 2,
+          "version": 1,
+          "actor": "psn_00000000-0000-4000-8000-000000000002",
+          "occurred_at": "2026-01-01T00:00:02.000Z",
+          "prev_hash": "6645a97f27ad89aa508b9306882fad4876df7b11059313683e333a73c740ea25",
+          "hash": "c88fb400168e6bcb47881df4d4eed4374a577835143bd737b35ef47027cda1c8",
+          "type": "fund.created",
+          "payload": {
+            "org_id": "00000000-0000-4000-8000-000000000003",
+            "visibility": "public"
+          }
+        },
+        "salt": "2222222222222222222222222222222222222222222222222222222222222222",
+        "latest_event_hash": "c88fb400168e6bcb47881df4d4eed4374a577835143bd737b35ef47027cda1c8",
+        "eventProof": {
+          "index": 1,
+          "size": 2,
+          "path": ["52b5274b7aa947bbc37df4b159dcc2e6b60daa55129df3d112a841d1bb976bba"]
+        },
+        "fundProof": {
+          "index": 0,
+          "size": 1,
+          "path": []
+        }
+      }
+    ],
+    "roots": [
+      {
+        "start_seq": 1,
+        "end_seq": 2,
+        "event_root": "e1a1cd950866bba9b6e2a5cdf61f8ce8c7d19a6f58e0aa9c795a101501a15f9a",
+        "fund_count": 1,
+        "global_root": "c6fe769dc22bc4685bbea2242aa53e209cf4f985785d709d2919d1eb52794027"
+      }
+    ],
+    "anchor": {
+      "chain_id": 80002,
+      "contract_address": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "tx_hash": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "root": "c6fe769dc22bc4685bbea2242aa53e209cf4f985785d709d2919d1eb52794027",
+      "sequence": 1
+    }
+  },
+  "expected": {
+    "valid": true,
+    "reason_code": null
+  }
+}

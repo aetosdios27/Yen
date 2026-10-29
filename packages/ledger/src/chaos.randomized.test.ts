@@ -10,11 +10,13 @@ import {
   PostgresNotificationStore,
 } from "@yen/notifications";
 import {
-  type AnchoringAlert,
+  type AnchorAlert,
+  type AnchorAlertSink,
   AnchoringWorker,
   type ChainReceipt,
   type Publication,
   type RootChain,
+  type RootSigner,
 } from "@yen/queue";
 import {
   buildIntervalTree,
@@ -22,6 +24,7 @@ import {
   paise,
   parseFundId,
   parseUserId,
+  ResilientCall,
   salt32,
   toHex,
 } from "@yen/shared";
@@ -48,6 +51,9 @@ class DeterministicChain implements RootChain {
   async getBlockNumber() {
     return 200n;
   }
+  async getBalance(_address: `0x${string}`) {
+    return 1n;
+  }
   async getLatestSequence() {
     return [...this.roots.keys()].reduce(
       (latest, value) =>
@@ -61,6 +67,9 @@ class DeterministicChain implements RootChain {
     this.publications.set(sequence, { txHash, blockNumber: 100n });
     this.receipts.set(txHash, { status: "success", blockNumber: 100n });
     return txHash;
+  }
+  async replacePending(hash: string, _root: `0x${string}`, _sequence: bigint, _signer: RootSigner) {
+    return hash;
   }
 }
 
@@ -443,7 +452,7 @@ ledgerDatabaseSuite("YEN-61 real notification crash points and chain outage", (s
   it("alerts and retries through chain RPC outage, then drains one durable anchor on recovery", async () => {
     const fundId = await createLedgerTestFund(sql);
     await sql.begin((tx) => recordDonation(tx, { fundId, amount: paise(1000) }));
-    const alerts: AnchoringAlert[] = [];
+    const alerts: AnchorAlert[] = [];
     const chain = new DeterministicChain();
     let down = true;
     const outageChain: RootChain = {
@@ -452,13 +461,21 @@ ledgerDatabaseSuite("YEN-61 real notification crash points and chain outage", (s
       getReceipt: (hash) => chain.getReceipt(hash),
       getPublication: (sequence) => chain.getPublication(sequence),
       getBlockNumber: () => chain.getBlockNumber(),
+      getBalance: (address) => chain.getBalance(address),
       getLatestSequence: async () => {
         if (down) throw new Error("RPC unavailable");
         return chain.getLatestSequence();
       },
       publish: (root, sequence) => chain.publish(root, sequence),
+      replacePending: (hash, root, sequence, signer) =>
+        chain.replacePending(hash, root, sequence, signer),
     };
     let now = 0;
+    const alertSink: AnchorAlertSink = {
+      async emit(alert) {
+        alerts.push(alert);
+      },
+    };
     const worker = new AnchoringWorker(
       sql,
       outageChain,
@@ -467,10 +484,8 @@ ledgerDatabaseSuite("YEN-61 real notification crash points and chain outage", (s
           throw new Error("unused");
         },
       },
-      (alert) => {
-        alerts.push(alert);
-      },
-      {
+      alertSink,
+      new ResilientCall({
         timeoutMs: 10,
         maxAttempts: 1,
         baseDelayMs: 0,
@@ -480,10 +495,15 @@ ledgerDatabaseSuite("YEN-61 real notification crash points and chain outage", (s
         now: () => now,
         random: () => 0,
         sleep: async () => {},
-      },
+      }),
     );
     await expect(worker.runFund(fundId)).rejects.toThrow("RPC unavailable");
     expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toMatchObject({
+      type: "anchor.rpc_unavailable",
+      fundId,
+      details: expect.stringContaining("RPC unavailable"),
+    });
     expect(await sql`SELECT id FROM anchors WHERE fund_id = ${fundId}`).toHaveLength(0);
     const health = await createApp().request("/health");
     expect(health.status).toBe(200);

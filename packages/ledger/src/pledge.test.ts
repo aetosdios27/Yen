@@ -21,6 +21,10 @@ ledgerDatabaseSuite("donation pledges", (sql) => {
     expect(balances.donationsPaise).toBe(0n);
     expect(balances.pledgedPaise).toBe(50000n);
     expect(await available(sql, fundId)).toBe(0n);
+    const storedChoice = await sql<{ donor_name_choice: string }[]>`
+      SELECT donor_name_choice FROM donation_pledges WHERE fund_id = ${fundId}
+    `;
+    expect(storedChoice[0]?.donor_name_choice).toBe("initials");
   });
 
   it("rejects a repeated UPI reference, including against another fund", async () => {
@@ -85,6 +89,7 @@ ledgerDatabaseSuite("donation pledges", (sql) => {
         utr: "555666777888",
         donorDisplayName: "Asha Rao",
         donorContact: "+919876543210",
+        donorNameChoice: "full",
       }),
     );
 
@@ -96,10 +101,18 @@ ledgerDatabaseSuite("donation pledges", (sql) => {
     expect(stored).not.toContain("9876543210");
     expect(stored).not.toContain("555666777888");
 
-    const pledge = await sql<{ donor_contact: string | null; utr: string }[]>`
-      SELECT donor_contact, utr FROM donation_pledges WHERE fund_id = ${fundId}
+    const pledge = await sql<
+      {
+        donor_contact: string | null;
+        donor_name_choice: string;
+        utr: string;
+      }[]
+    >`
+      SELECT donor_contact, donor_name_choice, utr FROM donation_pledges WHERE fund_id = ${fundId}
     `;
-    expect(pledge).toEqual([{ donor_contact: "+919876543210", utr: "555666777888" }]);
+    expect(pledge).toEqual([
+      { donor_contact: "+919876543210", donor_name_choice: "full", utr: "555666777888" },
+    ]);
   });
 
   it("replays to the same balances the ledger holds", async () => {

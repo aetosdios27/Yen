@@ -15,7 +15,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "vectors:generate-audit": "pnpm exec turbo run build --filter=@yen/eventlog... && node scripts/generate-audit-vectors.ts"
   },
   "dependencies": {
     "@yen/shared": "workspace:*",

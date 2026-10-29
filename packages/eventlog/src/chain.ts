@@ -16,10 +16,10 @@ import {
   type EventHashHex,
   type EventInput,
   hashHexSchema,
+  isKnownEventVersion,
   isUtcEventTime,
   parseEvent,
   parseUnsignedEvent,
-  payloadSchemas,
   type UnsignedEvent,
 } from "./model.js";
 
@@ -185,8 +185,8 @@ async function scanChainStructureStream(
       }
       if (
         typeof raw.type !== "string" ||
-        !Object.hasOwn(payloadSchemas, raw.type) ||
-        raw.version !== 1
+        typeof raw.version !== "number" ||
+        !isKnownEventVersion(raw.type, raw.version)
       ) {
         return broken("unknown type/version");
       }

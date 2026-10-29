@@ -1,14 +1,19 @@
 export {
-  type AnchoringAlert,
-  type AnchoringAlertSink,
+  ANCHOR_RPC_RESILIENCE_OPTIONS,
+  type AnchorAlert,
+  type AnchorAlertSink,
   AnchoringWorker,
   type ChainReceipt,
   createAnchoringWorker,
+  createAnchorRpcResilience,
   KmsRootSigner,
   LocalDevRootSigner,
   type Publication,
   type RootChain,
   type RootSigner,
+  reconcileAnchors,
+  registerAnchorReconciliation,
+  stderrAnchorAlertSink,
   ViemRootChain,
 } from "./anchoring.js";
 export { createPgBoss, ensureQueueSchema } from "./boss.js";
