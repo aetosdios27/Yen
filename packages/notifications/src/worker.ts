@@ -212,6 +212,7 @@ export class NotificationsWorker {
     // 7. Deliver only through the user's selected channel.
     let lastError = "Delivery failed across all channels";
     let delivered = false;
+    let retrySafe = true;
 
     for (const channel of eligibleChannels) {
       const provider = this.getProvider(channel);
@@ -281,7 +282,8 @@ export class NotificationsWorker {
       }
 
       // Keep provider details out of logs because they can contain recipient data.
-      lastError = deliveryResult.error ?? `Failure on channel ${channel}`;
+      lastError = "provider_error";
+      retrySafe = deliveryResult.retryable !== false;
       this.logger?.warn("Channel delivery failed", {
         notification_id: row.id,
         channel,
@@ -291,6 +293,19 @@ export class NotificationsWorker {
 
     if (delivered) {
       return "delivered";
+    }
+
+    // A provider can accept a send and then time out before returning its ID.
+    // If it does not promise idempotency, never send that outbox row again.
+    if (!retrySafe) {
+      await this.store.markDeadLetter(row.id, claimToken, "Ambiguous provider result; automatic retry suppressed", now);
+      this.logger?.error("Notification moved to dead-letter queue after ambiguous provider result", {
+        notification_id: row.id,
+        fund_id: fundId,
+        attempts: row.attempts,
+        error: "ambiguous_provider_result",
+      });
+      return "dead_letter";
     }
 
     // If all channels failed

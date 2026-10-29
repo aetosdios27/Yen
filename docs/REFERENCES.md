@@ -684,3 +684,18 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **URL:** https://www.postgresql.org/docs/16/continuous-archiving.html
 - **What we use it for:** PITR requires a base backup and a continuous sequence of archived WAL; logical `pg_dump` archives are not a WAL-replay base. The runbook records this operational distinction and does not claim PITR coverage.
 - **Where in this repo:** docs/runbooks/backup-restore.md
+
+<a id="exotel-sms-api"></a>
+### Exotel SMS API
+
+- **Source:** Exotel Developer Docs, SMS API and Send SMS reference.
+- **URLs:** https://developer.exotel.com/docs/sms-api/overview and https://developer.exotel.com/docs/sms-api/api-reference/send-sms
+- **What we use it for:** The HTTP endpoint and form encoded request fields, basic authentication, DLT entity/template identifiers, accepted response SID, and delivery status callback fields.
+- **Verification:** Opened and read on 2026-10-29. No live request was made.
+
+<a id="meta-whatsapp-docs"></a>
+### Meta WhatsApp Cloud API
+
+- **Source:** Meta for Developers, WhatsApp Cloud API documentation.
+- **URLs:** https://developers.facebook.com/docs/whatsapp/cloud-api/reference/messages and https://developers.facebook.com/docs/whatsapp/cloud-api/guides/send-message-templates
+- **Status:** The official pages returned HTTP 429 when opened on 2026-10-29. No endpoint, payload, or signature behavior is implemented from unverified sources.

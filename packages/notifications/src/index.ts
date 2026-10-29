@@ -12,6 +12,7 @@ export {
   SmsChannelProvider,
   type SmsTransportFn,
 } from "./channels/sms.js";
+export { ExotelSmsProvider, type ExotelSmsConfig } from "./channels/exotel-sms.js";
 export type {
   ChannelProvider,
   ChannelSendMessageInput,
