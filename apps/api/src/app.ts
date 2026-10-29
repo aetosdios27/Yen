@@ -767,22 +767,39 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     c.header("cache-control", "public, s-maxage=30, max-age=0, must-revalidate");
   };
   const publicDataGaps = [
-    "Donation records are not queryable; raised amount is unknown.",
-    "Expense categories are not stored; spending is grouped as Uncategorized.",
     "The event log and anchoring query are not connected; timeline entries are derived from expense records.",
-    "Donation records are not queryable; donation display labels cannot be shown.",
     "Authenticated member assignments are not loaded into sessions; donor and member access requires a role-bearing principal.",
   ];
   const listFundExpenses = async (fundId: string) => deps.expenseStore.list(fundId);
-  const safePaiseSum = (values: number[]) => {
-    const total = values.reduce((sum, value) => sum + value, 0);
-    if (!Number.isSafeInteger(total) || total < 0) throw new ApiError("internal");
+  const safePaiseSum = (values: readonly (number | bigint)[]) => {
+    const total = values.reduce<bigint>((sum, value) => sum + BigInt(value), 0n);
+    if (total < 0n) throw new ApiError("internal");
     return total;
+  };
+  const paidExpenseCategories = (expenses: readonly ExpenseRequest[]) => {
+    const categories = new Map<string, { amount: bigint; transactionCount: number }>();
+    for (const expense of expenses) {
+      if (expense.status !== "paid" && expense.status !== "reconciled") continue;
+      const category = expense.category ?? "Other";
+      const current = categories.get(category) ?? { amount: 0n, transactionCount: 0 };
+      categories.set(category, {
+        amount: current.amount + BigInt(expense.amountPaise),
+        transactionCount: current.transactionCount + 1,
+      });
+    }
+    return [...categories.entries()].map(([category, value]) => ({
+      category,
+      spentPaise: String(value.amount),
+      transactionCount: value.transactionCount,
+    }));
   };
   app.openapi(publicFundSummaryRoute, async (c) => {
     const fundId = c.req.valid("param").fundId;
     const { entry, actor, publicTier } = await publicFundContext(fundId, c.get("principal"));
-    const expenses = await listFundExpenses(fundId);
+    const [expenses, donations] = await Promise.all([
+      listFundExpenses(fundId),
+      deps.publicFundReadStore.donations(fundId),
+    ]);
     const spentPaise = safePaiseSum(
       expenses
         .filter((expense) => expense.status === "paid" || expense.status === "reconciled")
@@ -793,9 +810,9 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       fundId,
       name: entry.fund.name,
       purpose: actor.role === "public" ? null : (entry.fund.purpose ?? null),
-      raisedPaise: null,
+      raisedPaise: String(safePaiseSum(donations.map((donation) => donation.amountPaise))),
       spentPaise: String(spentPaise),
-      verification: "unverified",
+      verification: donations.length > 0 ? "bank-matched" : "unverified",
       dataGaps: publicDataGaps,
     });
     setFundReadCache(c, publicTier, body);
@@ -805,16 +822,10 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const fundId = c.req.valid("param").fundId;
     const { actor, publicTier } = await publicFundContext(fundId, c.get("principal"));
     const expenses = await listFundExpenses(fundId);
-    const spentPaise = safePaiseSum(
-      expenses
-        .filter((expense) => expense.status === "paid" || expense.status === "reconciled")
-        .map((expense) => expense.amountPaise),
-    );
     const body = redactFundReadModel(actor, {
       kind: "fund_breakdown",
       fundId,
-      categories:
-        spentPaise === 0 ? [] : [{ category: "Uncategorized", spentPaise: String(spentPaise) }],
+      categories: paidExpenseCategories(expenses),
       dataGaps: publicDataGaps,
     });
     setFundReadCache(c, publicTier, body);
@@ -823,9 +834,12 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   app.openapi(publicFundTimelineRoute, async (c) => {
     const fundId = c.req.valid("param").fundId;
     const { actor, publicTier } = await publicFundContext(fundId, c.get("principal"));
-    const expenses = await listFundExpenses(fundId);
+    const [expenses, donations] = await Promise.all([
+      listFundExpenses(fundId),
+      deps.publicFundReadStore.donations(fundId),
+    ]);
     const officeholderNamesShown = await deps.displayNameStore.officeholderNamesShown(fundId);
-    const items = await Promise.all(
+    const expenseItems = await Promise.all(
       expenses
         .filter((expense) => expense.status !== "draft")
         .map(async (expense) => {
@@ -863,8 +877,22 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
             verified: "unverified" as const,
           };
         }),
-    ).then((sorted) =>
-      sorted.sort((left, right) => left.occurredAt.localeCompare(right.occurredAt)),
+    );
+    const donationItems = donations.map((donation) => ({
+      id: donation.id,
+      occurredAt: donation.occurredAt,
+      message: "A donation was bank matched.",
+      ...(donation.donorDisplayName === null || donation.donorNameChoice === "anonymous"
+        ? {}
+        : {
+            actorDisplayName: donation.donorDisplayName,
+            actorNameChoice: donation.donorNameChoice,
+          }),
+      amountPaise: String(donation.amountPaise),
+      verified: "bank-matched" as const,
+    }));
+    const items = [...expenseItems, ...donationItems].sort((left, right) =>
+      left.occurredAt.localeCompare(right.occurredAt),
     );
     const body = redactFundReadModel(actor, {
       kind: "fund_timeline",
@@ -888,7 +916,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       expenseId: expense.id,
       fundId: expense.fundId,
       amountPaise: paise(expense.amountPaise),
-      category: "Uncategorized",
+      category: expense.category ?? "Other",
       status: expense.status,
       ...(payeeName === undefined ? {} : { payeeName }),
       payeeVerified: false,
@@ -942,6 +970,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     fundId: exp.fundId,
     requesterId: exp.requesterId,
     amountPaise: String(exp.amountPaise),
+    category: exp.category ?? "Other",
     description: exp.description,
     recipientRef: exp.recipientRef,
     status: exp.status,
@@ -994,6 +1023,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       fundId: fundIdResult.value,
       requesterId,
       amountPaise: amount,
+      category: input.category,
       description: input.description,
       recipientRef: input.recipientRef,
       evidence: input.evidence,
