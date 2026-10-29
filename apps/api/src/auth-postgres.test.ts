@@ -65,6 +65,7 @@ databaseSuite("Postgres OTP store", (sql) => {
     const store = new PostgresAuthStore(sql);
     const now = Date.UTC(2026, 0, 1);
     const user = await store.findOrCreateUserByPhone(phone, now);
+    expect(await sql`SELECT user_id FROM pseudonyms WHERE user_id = ${user.id}`).toEqual([]);
     const sessionId = randomUUID();
     await store.createSession({
       id: sessionId,
@@ -146,6 +147,10 @@ databaseSuite("Postgres OTP store", (sql) => {
     expect(
       await sql`SELECT role, status FROM memberships WHERE fund_id = ${fundId} AND user_id = ${invitedUser.id}`,
     ).toEqual([{ role: "member", status: "active" }]);
+    expect(
+      await sql`SELECT user_id, fund_id FROM fund_pseudonyms WHERE user_id = ${invitedUser.id} AND fund_id = ${fundId}`,
+    ).toHaveLength(1);
+    expect(await sql`SELECT user_id FROM pseudonyms WHERE user_id = ${invitedUser.id}`).toEqual([]);
     const persistedSecret = await sql`SELECT secret_hash FROM owner_invites WHERE id = ${inviteId}`;
     expect(persistedSecret).toEqual([{ secret_hash: secretHash }]);
     expect(JSON.stringify(persistedSecret)).not.toContain(code);

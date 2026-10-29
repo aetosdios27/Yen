@@ -1,6 +1,6 @@
 import type { Server } from "node:http";
 import { serve } from "@hono/node-server";
-import { createSql, type Sql } from "@yen/db";
+import { createSql, ensureFundPseudonym, type Sql } from "@yen/db";
 import { createApp } from "./app.js";
 import { createOtpDeliveryProvider, PostgresAuthStore } from "./auth/index.js";
 import { type CleanupScheduler, startCleanupScheduler } from "./cleanup-scheduler.js";
@@ -155,6 +155,12 @@ export async function startServer(
     ...(sql ? { donationPledgeStore: new PostgresDonationPledgeStore(sql) } : {}),
     ...(sql ? { displayNameStore: new PostgresDisplayNameStore(sql) } : {}),
     ...(sql ? { expenseStore: new PostgresExpenseStore(sql) } : {}),
+    ...(sql
+      ? {
+          actorForUser: (userId: string, fundId: string) =>
+            ensureFundPseudonym(sql, { userId, fundId }),
+        }
+      : {}),
     pledgeLimit: {
       capacity: resolvedConfig.PLEDGE_RATE_LIMIT_CAPACITY ?? 10,
       refillMs: resolvedConfig.PLEDGE_RATE_LIMIT_REFILL_MS ?? 3_600_000,

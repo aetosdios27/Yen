@@ -5,7 +5,7 @@ import {
   rollbackHoldInTx,
 } from "@konto-ledger/core";
 import type { KontoTransactionExecutor } from "@konto-ledger/types";
-import type { Event, PseudonymId } from "@yen/eventlog";
+import { type Event, type PseudonymId, parsePseudonymId } from "@yen/eventlog";
 import { paise } from "@yen/shared";
 import { ensureFundAccounts } from "../accounts.js";
 import { appendFundEventInTx, nowUtcIso, toEventInput } from "../eventlog.js";
@@ -21,13 +21,15 @@ import {
 } from "./state-machine.js";
 import type { ApprovalProofVerifier, ExpenseRequest, FundPolicy, SignedApproval } from "./types.js";
 
-export const SYSTEM_ACTOR: PseudonymId = "psn_00000000-0000-7000-8000-000000000000" as PseudonymId;
+export const SYSTEM_ACTOR: PseudonymId = parsePseudonymId(
+  "psn_00000000-0000-7000-8000-000000000000",
+);
 
 export interface SubmitExpenseInTxInput {
   readonly tx: KontoTransactionExecutor;
   readonly expense: ExpenseRequest;
   readonly policy: FundPolicy;
-  readonly actorPseudonym?: PseudonymId | string;
+  readonly actorPseudonym?: PseudonymId;
   readonly idempotencyKey?: string;
   readonly nowUtc?: string;
 }
@@ -44,7 +46,7 @@ export async function submitExpenseInTx(
   const { tx, expense, policy } = input;
   assertValidTransition(expense.status, "submitted");
   const fundId = expense.fundId;
-  const actor = (input.actorPseudonym ?? expense.requesterId ?? SYSTEM_ACTOR) as PseudonymId;
+  const actor = input.actorPseudonym ?? expense.requesterId ?? SYSTEM_ACTOR;
   const time = input.nowUtc ?? nowUtcIso();
 
   // Take advisory lock keyed by fundId to serialize event log appends and state transitions
@@ -112,7 +114,7 @@ export interface ApproveExpenseInTxInput {
   readonly approval: SignedApproval;
   readonly policy: FundPolicy;
   readonly verifyApprovalProof: ApprovalProofVerifier;
-  readonly actorPseudonym?: PseudonymId | string;
+  readonly actorPseudonym?: PseudonymId;
   readonly nowUtc?: string;
 }
 
@@ -127,7 +129,7 @@ export async function approveExpenseInTx(
 ): Promise<ApproveExpenseInTxResult> {
   const { tx, expense, approval, policy } = input;
   const fundId = expense.fundId;
-  const actor = (input.actorPseudonym ?? approval.approverId ?? SYSTEM_ACTOR) as PseudonymId;
+  const actor = input.actorPseudonym ?? approval.approverId ?? SYSTEM_ACTOR;
   const time = input.nowUtc ?? nowUtcIso();
 
   const { expense: updatedExpense, reachedQuorum } = addSignedApproval(
@@ -169,7 +171,7 @@ export interface RejectExpenseInTxInput {
   readonly tx: KontoTransactionExecutor;
   readonly expense: ExpenseRequest;
   readonly reason: "quorum" | "objection" | "policy";
-  readonly actorPseudonym?: PseudonymId | string;
+  readonly actorPseudonym?: PseudonymId;
   readonly nowUtc?: string;
 }
 
@@ -184,7 +186,7 @@ export async function rejectExpenseInTx(
   const { tx, expense, reason } = input;
   assertValidTransition(expense.status, "rejected");
   const fundId = expense.fundId;
-  const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
+  const actor = input.actorPseudonym ?? SYSTEM_ACTOR;
   const time = input.nowUtc ?? nowUtcIso();
 
   await tx`SELECT pg_advisory_xact_lock(hashtext(${fundId}))`;
@@ -219,7 +221,7 @@ export async function rejectExpenseInTx(
 export interface ExpireExpenseInTxInput {
   readonly tx: KontoTransactionExecutor;
   readonly expense: ExpenseRequest;
-  readonly actorPseudonym?: PseudonymId | string;
+  readonly actorPseudonym?: PseudonymId;
   readonly nowUtc?: string;
 }
 
@@ -234,7 +236,7 @@ export async function expireExpenseInTx(
   const { tx, expense } = input;
   assertValidTransition(expense.status, "expired");
   const fundId = expense.fundId;
-  const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
+  const actor = input.actorPseudonym ?? SYSTEM_ACTOR;
   const time = input.nowUtc ?? nowUtcIso();
 
   await tx`SELECT pg_advisory_xact_lock(hashtext(${fundId}))`;
@@ -269,7 +271,7 @@ export interface PayExpenseInTxInput {
   readonly tx: KontoTransactionExecutor;
   readonly expense: ExpenseRequest;
   readonly bankTransactionId: string;
-  readonly actorPseudonym?: PseudonymId | string;
+  readonly actorPseudonym?: PseudonymId;
   readonly nowUtc?: string;
 }
 
@@ -283,7 +285,7 @@ export async function payExpenseInTx(input: PayExpenseInTxInput): Promise<PayExp
   const { tx, expense, bankTransactionId } = input;
   assertValidTransition(expense.status, "paid");
   const fundId = expense.fundId;
-  const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
+  const actor = input.actorPseudonym ?? SYSTEM_ACTOR;
   const time = input.nowUtc ?? nowUtcIso();
 
   await tx`SELECT pg_advisory_xact_lock(hashtext(${fundId}))`;
@@ -325,7 +327,7 @@ export interface ReconcileExpenseInTxInput {
   readonly tx: KontoTransactionExecutor;
   readonly expense: ExpenseRequest;
   readonly bankTransactionId: string;
-  readonly actorPseudonym?: PseudonymId | string;
+  readonly actorPseudonym?: PseudonymId;
   readonly nowUtc?: string;
 }
 
@@ -340,7 +342,7 @@ export async function reconcileExpenseInTx(
   const { tx, expense, bankTransactionId } = input;
   assertValidTransition(expense.status, "reconciled");
   const fundId = expense.fundId;
-  const actor = (input.actorPseudonym ?? SYSTEM_ACTOR) as PseudonymId;
+  const actor = input.actorPseudonym ?? SYSTEM_ACTOR;
   const time = input.nowUtc ?? nowUtcIso();
   const updatedExpense = reconcileExpense(expense, bankTransactionId, time);
 

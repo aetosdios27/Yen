@@ -638,12 +638,6 @@ export class PostgresAuthStore implements AuthStore {
       RETURNING *
     `;
     const user = parseUserRow(rows[0]);
-    // Create initial pseudonym row for anonymity
-    await this.sql`
-      INSERT INTO pseudonyms (pseudonym_id, user_id)
-      VALUES (${uuidv7()}, ${user.id})
-      ON CONFLICT DO NOTHING
-    `;
     return user;
   }
 
@@ -718,11 +712,15 @@ export class PostgresAuthStore implements AuthStore {
         ON CONFLICT (phone) DO NOTHING RETURNING *
       `;
       if (!created.length) return null;
-      await tx`INSERT INTO pseudonyms (pseudonym_id, user_id) VALUES (${uuidv7()}, ${userId})`;
       await tx`
         INSERT INTO memberships (fund_id, user_id, role, status, created_at)
         VALUES (${invite.fundId}, ${userId}, 'member', 'active', ${new Date(now)})
         ON CONFLICT DO NOTHING
+      `;
+      await tx`
+        INSERT INTO fund_pseudonyms (pseudonym_id, user_id, fund_id)
+        VALUES (gen_random_uuid(), ${userId}, ${invite.fundId})
+        ON CONFLICT (user_id, fund_id) DO NOTHING
       `;
       await tx`UPDATE owner_invites SET completed_at = ${new Date(now)} WHERE id = ${invite.id}`;
       return parseUserRow(created[0]);
