@@ -20,6 +20,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@aws-sdk/client-kms": "^3.1158.0",
     "@yen/db": "workspace:*",
     "@yen/shared": "workspace:*",
     "pg-boss": "^12.38.0",

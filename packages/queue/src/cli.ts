@@ -1,7 +1,9 @@
 import {
   AnchoringWorker,
+  KmsRootSigner,
   LocalDevRootSigner,
   registerAnchoringDiscovery,
+  registerAnchorReconciliation,
   ViemRootChain,
 } from "./anchoring.js";
 import { DEFAULT_QUEUES } from "./config.js";
@@ -30,12 +32,14 @@ const worker = new WorkerRuntime({
 const anchorRpc = process.env.ANCHOR_RPC_URL;
 const anchorAddress = process.env.ROOT_REGISTRY_ADDRESS;
 const anchorConfigured = Boolean(anchorRpc && anchorAddress);
+let anchorPublisherAddress: `0x${string}` | undefined;
 if (anchorRpc && anchorAddress) {
-  const anchoring = new AnchoringWorker(
-    worker.getSql(),
-    new ViemRootChain(anchorRpc, anchorAddress as `0x${string}`),
-    LocalDevRootSigner.fromEnvironment(),
-  );
+  const chain = new ViemRootChain(anchorRpc, anchorAddress as `0x${string}`);
+  const signer = process.env.ANCHOR_KMS_KEY_ID
+    ? new KmsRootSigner()
+    : LocalDevRootSigner.fromEnvironment();
+  anchorPublisherAddress = (await signer.getAccount()).address;
+  const anchoring = new AnchoringWorker(worker.getSql(), chain, signer);
   worker.registerHandler("blockchain-anchoring", async (job) => {
     const data = job.data as { fundId?: unknown };
     if (typeof data.fundId !== "string") throw new Error("Anchoring job requires a fundId");
@@ -93,6 +97,23 @@ if (anchorConfigured) {
   void registerAnchoringDiscovery(worker.getBoss(), worker.getSql()).catch((error) => {
     process.stderr.write(
       `Anchoring discovery failed to start: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    process.exitCode = 1;
+  });
+  const chain = new ViemRootChain(anchorRpc as string, anchorAddress as `0x${string}`);
+  void registerAnchorReconciliation(
+    worker.getBoss(),
+    worker.getSql(),
+    chain,
+    {
+      async emit(alert) {
+        process.stderr.write(`${JSON.stringify({ level: "alert", ...alert })}\n`);
+      },
+    },
+    anchorPublisherAddress,
+  ).catch((error) => {
+    process.stderr.write(
+      `Anchor reconciliation failed to start: ${error instanceof Error ? error.message : String(error)}\n`,
     );
     process.exitCode = 1;
   });
