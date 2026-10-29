@@ -1929,14 +1929,20 @@ export const partnerWebhookRoute = createRoute({
   operationId: "partnerWebhook",
   summary: "Payment partner webhook",
   description:
-    "Idempotent webhook receiver for payment partner notifications (e.g. UPI virtual account credit).",
+    "Idempotent webhook receiver authenticated with X-Yen-Timestamp and X-Yen-Signature. The signature is v1=<hex HMAC-SHA256> over the UTF-8 timestamp, a period, and the exact raw request body.",
   request: {
+    headers: z.object({
+      "X-Yen-Timestamp": z.string().regex(/^\d{1,12}$/),
+      "X-Yen-Signature": z.string().regex(/^v1=[0-9a-f]{64}$/),
+    }),
     body: { required: true, content: { "application/json": { schema: partnerWebhookInput } } },
   },
   responses: {
     200: jsonResponse(partnerWebhookResultSchema, "Webhook processed"),
     400: protectedErrors[400],
+    401: protectedErrors[401],
     404: protectedErrors[404],
+    409: protectedErrors[409],
     429: limitedResponse,
     500: internalResponse,
     503: overloadedResponse,

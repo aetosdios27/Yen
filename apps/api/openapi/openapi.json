@@ -8149,7 +8149,21 @@
         "tags": ["reconciliation"],
         "operationId": "partnerWebhook",
         "summary": "Payment partner webhook",
-        "description": "Idempotent webhook receiver for payment partner notifications (e.g. UPI virtual account credit).",
+        "description": "Idempotent webhook receiver authenticated with X-Yen-Timestamp and X-Yen-Signature. The signature is v1=<hex HMAC-SHA256> over the UTF-8 timestamp, a period, and the exact raw request body.",
+        "parameters": [
+          {
+            "schema": { "type": "string", "pattern": "^\\d{1,12}$" },
+            "required": true,
+            "name": "X-Yen-Timestamp",
+            "in": "header"
+          },
+          {
+            "schema": { "type": "string", "pattern": "^v1=[0-9a-f]{64}$" },
+            "required": true,
+            "name": "X-Yen-Signature",
+            "in": "header"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -8185,8 +8199,34 @@
               "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
             }
           },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
           "404": {
             "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "409": {
+            "description": "Resource conflict, changed idempotency input, or request in progress",
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },

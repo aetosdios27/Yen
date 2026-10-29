@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 beforeEach(() => {
@@ -7,6 +8,8 @@ beforeEach(() => {
   vi.stubEnv("CLAMAV_PORT", undefined);
   vi.stubEnv("CLAMAV_TIMEOUT_MS", undefined);
   vi.stubEnv("CLAMAV_MAX_SIZE_BYTES", undefined);
+  vi.stubEnv("PARTNER_WEBHOOK_SECRET", undefined);
+  vi.stubEnv("PARTNER_WEBHOOK_SECONDARY_SECRET", undefined);
   vi.stubEnv("PORT", undefined);
   vi.stubEnv("RATE_LIMIT_IP_CAPACITY", undefined);
   vi.stubEnv("RATE_LIMIT_PRINCIPAL_CAPACITY", undefined);
@@ -114,6 +117,7 @@ it("accepts a PostgreSQL URL in production and rejects invalid URLs without expo
   vi.stubEnv("NODE_ENV", "production");
   vi.stubEnv("OTP_HASH_KEY", "test-production-secret-with-at-least-32-characters");
   vi.stubEnv("CLAMAV_HOST", "clamav.internal");
+  vi.stubEnv("PARTNER_WEBHOOK_SECRET", randomBytes(32).toString("hex"));
   vi.stubEnv("DATABASE_URL", "postgres://postgres:pw@localhost:55432/postgres");
   expect((await import("./env.js")).env.DATABASE_URL).toBe(
     "postgres://postgres:pw@localhost:55432/postgres",
@@ -122,6 +126,15 @@ it("accepts a PostgreSQL URL in production and rejects invalid URLs without expo
   vi.stubEnv("DATABASE_URL", "private-invalid-value");
   await expect(import("./env.js")).rejects.toThrow("DATABASE_URL");
   await expect(import("./env.js")).rejects.not.toThrow("private-invalid-value");
+});
+
+it("requires the partner webhook secret in production", async () => {
+  vi.stubEnv("PORT", "3001");
+  vi.stubEnv("NODE_ENV", "production");
+  vi.stubEnv("OTP_HASH_KEY", randomBytes(32).toString("hex"));
+  vi.stubEnv("CLAMAV_HOST", "clamav.internal");
+  vi.stubEnv("DATABASE_URL", "postgres://postgres:pw@localhost:55432/postgres");
+  await expect(import("./env.js")).rejects.toThrow("PARTNER_WEBHOOK_SECRET");
 });
 
 it("requires a long OTP hash key in production", async () => {

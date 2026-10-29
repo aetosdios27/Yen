@@ -139,6 +139,7 @@ import { redactActionReceipt as redactReceipt } from "./policy.js";
 import { publicExpenseDetailRoute, publicExpenseProofsRoute } from "./public-expense-contract.js";
 import { parseBankStatementCsv } from "./reconciliation/csv-parser.js";
 import { normalizePartnerWebhook } from "./reconciliation/partner-schema.js";
+import { authenticatePartnerWebhook } from "./reconciliation/webhook-auth.js";
 import { buildOpaqueEvidenceKey, sanitizeEvidenceFilename } from "./storage.js";
 import type { AllowedEvidenceMimeType, StoredEvidence } from "./stores.js";
 import type { VirusScanResult } from "./virus-scanner.js";
@@ -176,6 +177,10 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       clock: baseDeps.clock,
     });
   const deps = { ...baseDeps, pinService };
+  const partnerWebhookRequests = new WeakMap<
+    Request,
+    { readonly rawBody: Uint8Array; readonly bodyHash: string; readonly replayKey: string }
+  >();
   const actorFor = (principal: Principal, fundId: string) =>
     deps.actorForUser(principal.id, fundId);
   const app = new OpenAPIHono<ApiEnv>({
@@ -204,7 +209,13 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       cors({
         origin: deps.corsOrigins,
         allowMethods: ["GET", "HEAD", "POST", "OPTIONS"],
-        allowHeaders: ["Content-Type", "Idempotency-Key", "X-Request-Id"],
+        allowHeaders: [
+          "Content-Type",
+          "Idempotency-Key",
+          "X-Request-Id",
+          "X-Yen-Timestamp",
+          "X-Yen-Signature",
+        ],
         exposeHeaders: ["X-Request-Id", "Retry-After", "Idempotent-Replayed"],
       }),
     );
@@ -1724,25 +1735,87 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       200,
     );
   });
-  app.openapi(partnerWebhookRoute, async (c) => {
-    const raw = c.req.valid("json");
-    const parsed = normalizePartnerWebhook(raw);
-    const result = await deps.reconciliationStore.ingest([parsed]);
-    const summary = result.transactions[0];
-
-    return c.json(
-      {
-        status: "processed" as const,
-        duplicate: summary?.duplicate ?? false,
-        transactionId: summary?.id ?? "",
-        reconciliationStatus: summary?.reconciliationStatus ?? "unmatched",
-        ...(summary?.matchedPledgeId !== undefined
-          ? { matchedPledgeId: summary.matchedPledgeId }
-          : {}),
+  app.openapi(
+    {
+      ...partnerWebhookRoute,
+      middleware: async (c, next) => {
+        if (!deps.partnerWebhookSecret) {
+          c.header("retry-after", "60");
+          throw new ApiError("overloaded");
+        }
+        const rawBody = new Uint8Array(await c.req.raw.clone().arrayBuffer());
+        if (rawBody.byteLength > 65536) throw new ApiError("payload_too_large");
+        const authenticated = authenticatePartnerWebhook({
+          timestamp: c.req.header("X-Yen-Timestamp"),
+          signature: c.req.header("X-Yen-Signature"),
+          rawBody,
+          nowMs: deps.clock(),
+          toleranceSeconds: deps.partnerWebhookToleranceSeconds,
+          secrets: [deps.partnerWebhookSecret, deps.partnerWebhookSecondarySecret].filter(
+            (secret): secret is string => secret !== null,
+          ),
+        });
+        if (!authenticated) throw new ApiError("unauthenticated");
+        partnerWebhookRequests.set(c.req.raw, {
+          rawBody,
+          bodyHash: authenticated.bodyHash,
+          replayKey: authenticated.replayKey,
+        });
+        await next();
       },
-      200,
-    );
-  });
+    },
+    async (c) => {
+      const auth = partnerWebhookRequests.get(c.req.raw);
+      if (!auth) throw new ApiError("unauthenticated");
+      const raw = c.req.valid("json");
+      const parsed = normalizePartnerWebhook(raw);
+      const replayRequest = {
+        key: `partner-webhook:${auth.replayKey}`,
+        requestHash: auth.bodyHash,
+        createdAt: deps.clock(),
+      };
+      let reservation: Awaited<ReturnType<typeof deps.idempotencyStore.begin>>;
+      try {
+        reservation = await deps.idempotencyStore.begin(replayRequest);
+      } catch {
+        throw new StoreError();
+      }
+      if (reservation.kind !== "new") throw new ApiError("idempotency_conflict");
+      let result: Awaited<ReturnType<typeof deps.reconciliationStore.ingest>>;
+      try {
+        result = await deps.reconciliationStore.ingest([parsed]);
+      } catch (error) {
+        try {
+          await deps.idempotencyStore.release(replayRequest, reservation.token);
+        } catch {
+          throw new StoreError();
+        }
+        throw error;
+      }
+      const summary = result.transactions[0];
+      try {
+        await deps.idempotencyStore.complete(replayRequest, reservation.token, {
+          status: 200,
+          headers: [],
+          bodyBase64: null,
+        });
+      } catch {
+        throw new StoreError();
+      }
+      return c.json(
+        {
+          status: "processed" as const,
+          duplicate: summary?.duplicate ?? false,
+          transactionId: summary?.id ?? "",
+          reconciliationStatus: summary?.reconciliationStatus ?? "unmatched",
+          ...(summary?.matchedPledgeId !== undefined
+            ? { matchedPledgeId: summary.matchedPledgeId }
+            : {}),
+        },
+        200,
+      );
+    },
+  );
   app.openapi(unmatchedCreditsRoute, async (c) => {
     const id = parseFundId(c.req.valid("param").fundId);
     if (!id.ok) throw new ApiError("not_found");

@@ -1,3 +1,4 @@
+import { createHmac, randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
@@ -8,6 +9,13 @@ import { devPolicy } from "../policy.js";
 
 const principal = { id: "00000000-0000-4000-8000-000000000001" };
 const otherPrincipal = { id: "00000000-0000-4000-8000-000000000002" };
+const partnerWebhookSecret = randomBytes(32).toString("hex");
+
+function partnerWebhookSignature(timestamp: string, body: string): string {
+  return `v1=${createHmac("sha256", partnerWebhookSecret)
+    .update(`${timestamp}.${body}`)
+    .digest("hex")}`;
+}
 
 const fundInput = {
   name: "RoboCup 2026 Fund",
@@ -25,6 +33,7 @@ function setup(overrides: Partial<AppDependencies> = {}) {
     idGenerator: () => `00000000-0000-4000-8000-${String(sequence++).padStart(12, "0")}`,
     logger: { log: () => undefined },
     policy: devPolicy,
+    partnerWebhookSecret,
     ...overrides,
   });
   return {
@@ -152,7 +161,7 @@ describe("Reconciliation Engine Integration", () => {
   });
 
   it("processes partner webhook idempotently and reconciles credit", async () => {
-    const { app } = setup();
+    const { app, now } = setup();
     const fundId = await createFund(app);
 
     const utr = "998877665544";
@@ -176,11 +185,19 @@ describe("Reconciliation Engine Integration", () => {
       },
     };
 
-    // First webhook call
+    const rawBody = JSON.stringify(webhookPayload);
+    const requestTimestamp = String(Math.floor(now() / 1000));
+    const webhookHeaders = {
+      "content-type": "application/json",
+      "X-Yen-Timestamp": requestTimestamp,
+      "X-Yen-Signature": partnerWebhookSignature(requestTimestamp, rawBody),
+    };
+
+    // First authenticated webhook call
     const firstRes = await app.request("/v1/reconciliation/webhooks/partner", {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(webhookPayload),
+      headers: webhookHeaders,
+      body: rawBody,
     });
 
     expect(firstRes.status).toBe(200);
@@ -192,21 +209,14 @@ describe("Reconciliation Engine Integration", () => {
       duplicate: false,
     });
 
-    // Replay identical webhook (idempotent receiver)
+    // A captured signed request cannot be replayed inside the timestamp window.
     const secondRes = await app.request("/v1/reconciliation/webhooks/partner", {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(webhookPayload),
+      headers: webhookHeaders,
+      body: rawBody,
     });
 
-    expect(secondRes.status).toBe(200);
-    const secondBody = await secondRes.json();
-    expect(secondBody).toMatchObject({
-      status: "processed",
-      reconciliationStatus: "matched",
-      matchedPledgeId: pledge.donationId,
-      duplicate: true,
-    });
+    expect(secondRes.status).toBe(409);
   });
 
   it("serves unmatched review queue and performs manual match with audit reason", async () => {

@@ -1,6 +1,6 @@
 import { parseDatabaseUrl } from "@yen/db";
 import * as z from "zod";
-import { clamAvEnv, poolEnv, rateLimitEnv, runtimeEnv } from "./config.js";
+import { clamAvEnv, partnerWebhookEnv, poolEnv, rateLimitEnv, runtimeEnv } from "./config.js";
 
 const schema = z
   .object({
@@ -8,6 +8,7 @@ const schema = z
     ...rateLimitEnv.shape,
     ...poolEnv.shape,
     ...runtimeEnv.shape,
+    ...partnerWebhookEnv.shape,
     ...clamAvEnv.shape,
     DATABASE_URL: z.string().optional(),
     OTP_HASH_KEY: z.string().min(32).optional(),
@@ -31,6 +32,13 @@ const schema = z
         code: "custom",
         path: ["OTP_HASH_KEY"],
         message: "Required in production and must contain at least 32 characters",
+      });
+    }
+    if (value.NODE_ENV === "production" && value.PARTNER_WEBHOOK_SECRET === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["PARTNER_WEBHOOK_SECRET"],
+        message: "Required in production to authenticate partner reconciliation webhooks",
       });
     }
     if (value.SERVER_HEADERS_TIMEOUT_MS <= value.SERVER_KEEP_ALIVE_TIMEOUT_MS) {

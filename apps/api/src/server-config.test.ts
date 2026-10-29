@@ -56,6 +56,10 @@ it("applies Node HTTP server timeout and slow-client settings", async () => {
   } finally {
     await started.lifecycle.shutdown();
   }
+
+  await expect(
+    startServer({ ...customConfig, NODE_ENV: "production" }, { registerSignals: false }),
+  ).rejects.toThrow("PARTNER_WEBHOOK_SECRET is required in production");
 });
 
 it("isolates rate-limit buckets for different forwarded client IPs when trusted proxy hops are enabled", async () => {

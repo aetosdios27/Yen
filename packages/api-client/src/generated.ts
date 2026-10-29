@@ -790,7 +790,7 @@ export interface paths {
     put?: never;
     /**
      * Payment partner webhook
-     * @description Idempotent webhook receiver for payment partner notifications (e.g. UPI virtual account credit).
+     * @description Idempotent webhook receiver authenticated with X-Yen-Timestamp and X-Yen-Signature. The signature is v1=<hex HMAC-SHA256> over the UTF-8 timestamp, a period, and the exact raw request body.
      */
     post: operations["partnerWebhook"];
     delete?: never;
@@ -6805,7 +6805,10 @@ export interface operations {
   partnerWebhook: {
     parameters: {
       query?: never;
-      header?: never;
+      header: {
+        "X-Yen-Timestamp": string;
+        "X-Yen-Signature": string;
+      };
       path?: never;
       cookie?: never;
     };
@@ -6837,8 +6840,30 @@ export interface operations {
           "application/json": components["schemas"]["ErrorEnvelope"];
         };
       };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
       /** @description Resource not found */
       404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource conflict, changed idempotency input, or request in progress */
+      409: {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;

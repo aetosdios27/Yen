@@ -32,6 +32,9 @@ export interface ServerConfig {
   readonly CLAMAV_MAX_SIZE_BYTES?: number | undefined;
   readonly DATABASE_URL?: string | undefined;
   readonly OTP_HASH_KEY?: string | undefined;
+  readonly PARTNER_WEBHOOK_SECRET?: string | undefined;
+  readonly PARTNER_WEBHOOK_SECONDARY_SECRET?: string | undefined;
+  readonly PARTNER_WEBHOOK_TOLERANCE_SECONDS?: number | undefined;
   readonly YEN_ALLOW_MEMORY_STORES?: "true" | "false" | undefined;
   readonly READINESS_CACHE_MS: number;
   readonly TRUSTED_PROXY_HOPS: number;
@@ -75,6 +78,9 @@ export async function startServer(
   options: { readonly registerSignals?: boolean } = {},
 ): Promise<StartedServer> {
   const resolvedConfig = config ?? (await import("./env.js")).env;
+  if (resolvedConfig.NODE_ENV === "production" && !resolvedConfig.PARTNER_WEBHOOK_SECRET) {
+    throw new Error("PARTNER_WEBHOOK_SECRET is required in production");
+  }
   const memory = useMemoryStore(resolvedConfig);
   const sql = resolvedConfig.DATABASE_URL
     ? createSql(resolvedConfig.DATABASE_URL, {
@@ -176,6 +182,9 @@ export async function startServer(
     ...(sql ? { authStore: new PostgresAuthStore(sql) } : {}),
     ...(sql ? { pinStore: new PostgresPinStore(sql) } : {}),
     otpHashKey: resolvedConfig.OTP_HASH_KEY ?? "development-only-otp-hash-key-change-me",
+    partnerWebhookSecret: resolvedConfig.PARTNER_WEBHOOK_SECRET ?? null,
+    partnerWebhookSecondarySecret: resolvedConfig.PARTNER_WEBHOOK_SECONDARY_SECRET ?? null,
+    partnerWebhookToleranceSeconds: resolvedConfig.PARTNER_WEBHOOK_TOLERANCE_SECONDS ?? 300,
     otpDeliveryProvider: createOtpDeliveryProvider(resolvedConfig.NODE_ENV),
     waitlistLimit: {
       capacity: resolvedConfig.WAITLIST_RATE_LIMIT_CAPACITY,

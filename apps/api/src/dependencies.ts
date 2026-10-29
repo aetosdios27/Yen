@@ -215,6 +215,9 @@ export interface AppDependencies {
   readonly otpExpiryMs: number;
   readonly otpMaxAttempts: number;
   readonly otpHashKey: string;
+  readonly partnerWebhookSecret: string | null;
+  readonly partnerWebhookSecondarySecret: string | null;
+  readonly partnerWebhookToleranceSeconds: number;
   readonly otpRateLimitIp: RateLimit;
   readonly otpRateLimitPhone: RateLimit;
   readonly sessionCookieName: string;
@@ -297,6 +300,9 @@ export function defaultDependencies(
     otpExpiryMs: 300_000,
     otpMaxAttempts: 3,
     otpHashKey: "development-only-otp-hash-key-change-me",
+    partnerWebhookSecret: null,
+    partnerWebhookSecondarySecret: null,
+    partnerWebhookToleranceSeconds: 300,
     otpRateLimitIp: { capacity: 10, refillMs: 600_000 },
     otpRateLimitPhone: { capacity: 5, refillMs: 600_000 },
     sessionCookieName: "yen_session",

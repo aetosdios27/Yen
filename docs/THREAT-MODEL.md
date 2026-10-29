@@ -20,7 +20,7 @@ No threat in this model is fully mitigated today. Most money paths have no code.
 
 | ID  | Threat                                                | STRIDE | Severity | Why                                                                                                  | Status  |
 | --- | ----------------------------------------------------- | ------ | -------- | ---------------------------------------------------------------------------------------------------- | ------- |
-| D1  | Donation marked verified without a bank credit        | S, T   | high     | Verified donations drive public totals, and no bank check exists                                     | none    |
+| D1  | Donation marked verified without a bank credit        | S, T   | high     | Verified donations drive public totals, and bank inputs remain a trust boundary                      | partial |
 | D2  | Replayed pledge creates a duplicate                   | R, T   | medium   | HTTP idempotency exists but is in memory, and no donation route exists                               | partial |
 | D3  | Amount or fund changed before verification            | T      | medium   | Money wire rules exist, but no append path binds the amount yet                                      | partial |
 | D4  | QR swap at collection point                           | T, S   | high     | Payee UPI ID hash committed to events; no QR intake code exists                                      | planned |
@@ -57,7 +57,7 @@ No threat in this model is fully mitigated today. Most money paths have no code.
 
 Counts. High: 20 (D1, D4, E1, E3, E4, P1, P2, R1, R2, R4, V1, V2, V3, X4, X5, X7, X8, X9, X10, X11). Medium: 13 (D2, D3, E2, E5, P3, R3, V4, V5, V6, X1, X2, X3, X12). Low: 1 (X6).
 
-Status: `exists` 0, `partial` 14, `planned` 8, `none` 12.
+Status: `exists` 0, `partial` 15, `planned` 8, `none` 11.
 
 ## Assets
 
@@ -136,10 +136,10 @@ Stages: pledge, bank verification, and the verified total.
 #### D1. Donation marked verified without a bank credit
 
 - **STRIDE.** Spoofing, tampering.
-- **Abuse case.** A treasurer, the operator, or an attacker records `donation.verified` with a `bank_transaction_id` that has no matching bank credit. A pledge that was never paid is verified.
-- **Exists today.** None. `donation.verified` is a provisional payload in `payloadSchemas` in `packages/eventlog/src/model.ts`. `parseEvent` checks format only. No code writes or matches bank transactions.
-- **Planned.** The event append path is YEN-18. Role checks are YEN-26. The bank feed integration is untracked.
-- **Residual risk.** Yen cannot prove a bank transfer happened. A matching credit is a claim from the bank feed, which is a trust input. Once a false verification is hashed and published, it is hard to remove.
+- **Abuse case.** An attacker submits a fabricated bank credit that matches a pledge's UTR and amount, causing reconciliation to verify an unpaid donation.
+- **Exists today.** Partial. `POST /v1/reconciliation/webhooks/partner` verifies an HMAC-SHA256 signature over the exact raw body and timestamp, enforces a timestamp window, rejects replayed signature/timestamp/body tuples through the shared idempotency store, and uses the shared IP rate limiter. Postgres reconciliation then inserts and matches authenticated partner data. Tests in `apps/api/src/reconciliation/webhook-auth.integration.test.ts` exercise acceptance and rejection against Postgres.
+- **Planned.** YEN-7 must select the payment partner and adapt its delivery to the documented header and signing contract in `docs/PARTNER-WEBHOOK.md`.
+- **Residual risk.** Yen cannot prove a bank transfer happened off-platform or that a compromised partner key describes a real transfer. A matching credit remains a trusted partner assertion; false verification can be hard to remove after publication.
 
 #### D2. Replayed pledge creates a duplicate
 

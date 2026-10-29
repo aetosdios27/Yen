@@ -32,6 +32,20 @@ export const runtimeEnv = z.object({
   SERVER_MAX_HEADER_SIZE_BYTES: z.coerce.number().int().min(1024).max(1048576).default(16384),
 });
 
+export const partnerWebhookEnv = z.object({
+  PARTNER_WEBHOOK_SECRET: z
+    .string()
+    .min(32)
+    .refine((secret) => secret.trim().length >= 32)
+    .optional(),
+  PARTNER_WEBHOOK_SECONDARY_SECRET: z
+    .string()
+    .min(32)
+    .refine((secret) => secret.trim().length >= 32)
+    .optional(),
+  PARTNER_WEBHOOK_TOLERANCE_SECONDS: z.coerce.number().int().min(1).max(3600).default(300),
+});
+
 export const clamAvEnv = z.object({
   CLAMAV_HOST: z.preprocess(
     (value) => (value === "" ? undefined : value),

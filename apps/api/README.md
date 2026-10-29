@@ -358,6 +358,35 @@ Lifecycle management is handled by `createServerLifecycle` in `lifecycle.ts`:
 - Closes the Postgres pool (`sql.end({ timeout })`) with bounded timeout.
 - Exits with code 0 when cleanup succeeded. If closing the pool fails, writes one line to stderr (`Error during <signal> shutdown: Database pool failed to close`) and exits with code 1. The error details are not printed.
 
+## Partner reconciliation webhook authentication
+
+`POST /v1/reconciliation/webhooks/partner` requires these headers:
+
+- `X-Yen-Timestamp`: Unix time in whole seconds.
+- `X-Yen-Signature`: `v1=` followed by 64 lowercase hexadecimal characters.
+
+The value is an HMAC-SHA256 signature over the exact request bytes, prefixed by
+the timestamp and a period: `HMAC_SHA256(secret, timestamp + "." + rawBody)`.
+Send the UTF-8 JSON bytes that were signed without parsing and re-serializing
+them. The API accepts timestamps within five minutes of its current time by
+default; `PARTNER_WEBHOOK_TOLERANCE_SECONDS` can configure a window from 1 to
+3600 seconds. Requests larger than the shared 64 KiB API body limit are
+rejected, and the endpoint uses the shared per-IP rate limiter.
+
+Configure `PARTNER_WEBHOOK_SECRET` with at least 32 characters before starting
+the API in production. An unset secret outside production makes this endpoint
+return `503` without ingesting. During rotation, configure
+`PARTNER_WEBHOOK_SECONDARY_SECRET` with the next secret; either key is accepted
+until the old one is removed. Signatures are checked in constant time. A
+successfully authenticated `(signature, timestamp, body hash)` tuple can be
+used once; the shared idempotency store prevents retries and concurrent
+replays from being ingested again.
+
+The payment partner is not selected yet (YEN-7). This protocol is the current
+integration contract and can be adapted when that partner is chosen. See
+[`docs/PARTNER-WEBHOOK.md`](../../docs/PARTNER-WEBHOOK.md) for the sending-side
+procedure.
+
 ## Prior art
 
 - [AWS idempotent APIs](../../docs/REFERENCES.md#aws-idempotency) explain atomic coordination of a request identifier and mutations, which the current store does not provide.
