@@ -934,7 +934,7 @@ databaseSuite("fund_events persistence layer", (sql, url) => {
             fundId,
             seq: 1,
             type: ev.type,
-            version: 1,
+            version: ev.version,
             actor: ev.actor,
             occurredAt: "2026-01-01T00:00:00.000Z",
             payload: ev.payload,

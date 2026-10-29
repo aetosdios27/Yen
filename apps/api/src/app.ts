@@ -47,6 +47,7 @@ import {
   ALLOWED_EVIDENCE_MIME_TYPES,
   addMemberRoute,
   approveExpenseRoute,
+  changeFundVisibilityRoute,
   changePayeeRoute,
   changePinRoute,
   changePolicyRoute,
@@ -633,6 +634,34 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const resource = { kind: "fund", fund: entry } as const;
     const principal = authorizedFund(c, "fund:read", resource);
     return c.json(deps.policy.redact(principal, resource), 200);
+  });
+  app.openapi(changeFundVisibilityRoute, async (c) => {
+    const fundId = parseFundId(c.req.valid("param").fundId);
+    if (!fundId.ok) throw new ApiError("not_found");
+    const resourceFund = funds.get(fundId.value);
+    if (!resourceFund) throw new ApiError("not_found");
+    const resource = { kind: "fund", fund: resourceFund } as const;
+    const principal = authorizedFund(c, "fund:update_visibility", resource);
+    const { visibility } = c.req.valid("json");
+    const oldVisibility = resourceFund.fund.visibility;
+    if (oldVisibility !== visibility) {
+      if (!deps.eventAppender) throw new ApiError("overloaded");
+      const actor = pseudonymIdSchema.parse(`psn_${deps.idGenerator()}`);
+      await deps.eventAppender({
+        fund_id: fundId.value,
+        type: "fund.visibility_changed",
+        version: 2,
+        actor,
+        occurred_at: new Date(deps.clock()).toISOString(),
+        payload: { old_visibility: oldVisibility, new_visibility: visibility },
+      });
+      const updated = { ...resourceFund, fund: { ...resourceFund.fund, visibility } };
+      funds.set(fundId.value, updated);
+      const redacted = deps.policy.redact(principal, { kind: "fund", fund: updated });
+      return c.json({ status: "updated" as const, visibility: redacted.visibility }, 200);
+    }
+    const redacted = deps.policy.redact(principal, resource);
+    return c.json({ status: "updated" as const, visibility: redacted.visibility }, 200);
   });
 
   const publicFundContext = (fundId: string, principal: Principal | null) => {

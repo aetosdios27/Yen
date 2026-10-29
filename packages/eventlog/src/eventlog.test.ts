@@ -193,8 +193,8 @@ describe("frozen event hashes", () => {
       /unsigned event envelope/,
     );
   });
-  it("pins every v1 event, canonical string, and hash", async () => {
-    expect(events.length).toBe(24);
+  it("pins every versioned event, canonical string, and hash", async () => {
+    expect(events.length).toBe(25);
     expect(eventHashDomain).toBe(golden.domain_utf8);
     expect(genesisHash).toBe(golden.genesis_hash);
     expect(
@@ -223,6 +223,19 @@ describe("frozen event hashes", () => {
       latestHash: head.latestHash,
       verifiedAgainst: head,
     });
+  });
+
+  it("pins the v2 visibility transition schema without changing v1 vectors", async () => {
+    const event = events.at(-1);
+    expect(event).toMatchObject({
+      type: "fund.visibility_changed",
+      version: 2,
+      payload: { old_visibility: "private", new_visibility: "public" },
+    });
+    if (event === undefined) throw new Error("Missing v2 visibility event vector");
+    const { hash, ...unsigned } = event;
+    expect(await computeEventHash(unsigned)).toBe(hash);
+    expect(parseEvent({ ...event, version: 1 }).ok).toBe(false);
   });
 
   it("reproduces the independent chain with makeNextEvent", async () => {
@@ -891,7 +904,7 @@ describe("chain verification", () => {
       verifiedAgainst: head,
     });
     const badVersion: unknown[] = [...events];
-    badVersion[2] = { ...events[2], version: 2 };
+    badVersion[2] = { ...events[2], type: "member.added", version: 2 };
     expect(await verifyChain(badVersion, head)).toEqual({
       ok: false,
       index: 2,

@@ -17,7 +17,7 @@ export type StoredFundEvent = Event & {
   readonly canonical_envelope: string;
 };
 
-type EventPayload<T extends Event["type"]> = (Event & { type: T })["payload"];
+type EventPayload<T extends Event["type"]> = Extract<Event, { type: T; version: 1 }>["payload"];
 
 export type AppendEventInput =
   | {
