@@ -5,10 +5,19 @@ import { test } from "node:test";
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const workflow = read("workflows/release.yml");
 const settings = read("scripts/apply-repo-settings.sh");
+const prepare = read("../scripts/prepare-release-assets.sh");
 
 test("release workflow is tag-only and does not deploy", () => {
   assert.match(workflow, /^on:\n {2}push:\n {4}tags: \["v\*"\]$/m);
   assert.doesNotMatch(workflow, /pull_request_target|vercel|deploy/i);
+});
+
+test("release build exercises reproducibility and verification without publishing", () => {
+  const build = workflow.split("  build:\n")[1]?.split("  sign:\n")[0] ?? "";
+  assert.match(build, /scripts\/repro-build\.sh/);
+  assert.match(build, /scripts\/prepare-release-assets\.sh/);
+  assert.match(prepare, /scripts\/test-tampered-artifact\.mjs/);
+  assert.match(build, /permissions:\n      contents: read/);
 });
 
 test("every release action is pinned to a full SHA and names its upstream tag", () => {
