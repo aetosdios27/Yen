@@ -22,7 +22,8 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 | Privacy and law                      |       4 |
 | Supply chain and CI                  |       2 |
 | Security and threat modeling         |       2 |
-| **Total**                            |  **73** |
+| Cryptographic hashes                 |       1 |
+| **Total**                            |  **74** |
 
 ## Tamper-evident logs and transparency
 
@@ -39,8 +40,16 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 
 - **Source:** Ben Laurie, Adam Langley and Emilia Kasper; RFC 6962, 2013.
 - **URL:** https://www.rfc-editor.org/rfc/rfc6962.html
-- **What we use it for:** The Merkle split and leaf/node domains inform inclusion proofs. RFC signed tree heads authenticate size separately; Yen adds salted event leaves and commits counts in its nested root because a plain inclusion path alone can be ambiguous.
-- **Where in this repo:** packages/shared/src/merkle/README.md
+- **What we use it for:** Section 2.1's largest-power-of-two split and leaf/node domain separation inform inclusion proofs. Yen adds salted event leaves and commits counts in its nested root; it does not implement Certificate Transparency signed tree heads.
+- **Where in this repo:** packages/shared/src/merkle/README.md; packages/verifier/README.md
+
+<a id="fips-180-4"></a>
+### Secure Hash Standard (SHS)
+
+- **Source:** National Institute of Standards and Technology; FIPS PUB 180-4, August 2015.
+- **URL:** https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf
+- **What we use it for:** Specifies SHA-256, used by the event hash and Yen Merkle domains. The standard's algorithm does not validate that an event is truthful or that a particular implementation is secure.
+- **Where in this repo:** packages/eventlog/src/chain.ts; packages/verifier/src/verify.ts
 
 <a id="rfc-9162"></a>
 ### Certificate Transparency Version 2.0
