@@ -227,6 +227,42 @@ preserves the original absolute expiry. The production entrypoint fails closed w
 no concrete WhatsApp/SMS adapter is configured; the in-memory delivery stub is limited
 to development and tests.
 
+## Partner reconciliation webhook (YEN-41)
+
+`POST /v1/reconciliation/webhooks/partner` is authenticated by a shared secret, not by a
+session. Configure `PARTNER_WEBHOOK_SECRET` (at least 32 characters) with the value shared
+with the payment partner. While it is unset, every request to the endpoint returns `401`.
+
+The partner sends two headers:
+
+- `X-Webhook-Timestamp`: Unix time in whole seconds, ASCII decimal digits without sign,
+  fraction, or leading zeroes.
+- `X-Webhook-Signature`: 64 lowercase hexadecimal characters, no prefix.
+
+The signature is `HMAC-SHA256(secret, "v1." + timestamp + "." + rawBody)` where `secret` is
+the UTF-8 secret, `timestamp` is the exact header string, and `rawBody` is the exact request
+bytes. Do not re-serialize the JSON between signing and sending. The timestamp is part of
+the signed input, so it cannot be changed without invalidating the signature.
+
+```js
+const signature = createHmac("sha256", secret)
+  .update(`v1.${timestamp}.`)
+  .update(rawBody)
+  .digest("hex");
+```
+
+The API checks the headers, the timestamp, and the signature before it parses the body or
+touches the ledger, and compares signatures in constant time. A timestamp more than five
+minutes from server time, in either direction, is rejected. A missing, malformed, stale,
+future-dated, or mismatched credential returns `401`; the response does not say which. A
+correctly signed body that is not valid JSON or fails schema validation returns `400`.
+`amount_paise` must be a positive safe integer, as a number or a decimal string.
+
+Replays inside the five-minute window are accepted and idempotent: the receiver keys
+transactions on `(fund_id, bank_reference)`, so a repeated delivery returns the original
+transaction with `duplicate: true` and does not reconcile twice. Rotating the secret
+requires the partner to switch at the same time.
+
 ## Rate limits and logs
 
 Both token buckets apply to `/v1` requests. The default per-IP capacity is 120;
