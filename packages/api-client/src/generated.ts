@@ -739,6 +739,8 @@ export interface components {
     Version: {
       gitSha: string;
       buildId: string;
+      artifactDigest: string;
+      releaseTag: string;
     };
     Principal: {
       /** Format: uuid */
@@ -1311,7 +1313,7 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Source commit and deterministic build identifier */
+      /** @description Source commit, deterministic build identifier, and optional release metadata */
       200: {
         headers: {
           /** @description Request correlation ID */

@@ -125,7 +125,12 @@ export const fundSchema = z
 
 const statusSchema = z.object({ status: z.literal("ok") });
 const versionSchema = z
-  .object({ gitSha: z.string(), buildId: z.string() })
+  .object({
+    gitSha: z.string(),
+    buildId: z.string(),
+    artifactDigest: z.string(),
+    releaseTag: z.string(),
+  })
   .strict()
   .openapi("Version");
 
@@ -142,7 +147,10 @@ export const versionRoute = createRoute({
   operationId: "version",
   summary: "Build version",
   responses: {
-    200: jsonResponse(versionSchema, "Source commit and deterministic build identifier"),
+    200: jsonResponse(
+      versionSchema,
+      "Source commit, deterministic build identifier, and optional release metadata",
+    ),
   },
 });
 export const readyRoute = createRoute({
