@@ -26,6 +26,22 @@ export const en = {
     primary: "Primary",
     designSystem: "Design system",
     login: "Sign in",
+    build: "Build details",
+  },
+  buildPage: {
+    title: "Build details",
+    intro:
+      "This page shows the version reported by the API running now. It does not check or verify the files in your browser.",
+    loading: "Checking the running API version…",
+    unavailable: "The API version could not be reached right now. No version details are shown.",
+    missing: "The running API did not provide version details. No release details are shown.",
+    commit: "Source commit",
+    buildId: "Build identifier",
+    digest: "Release archive digest",
+    noDigest: "No release archive digest was included in this build.",
+    release: "Matching GitHub release",
+    attestation: "Build record for this commit",
+    guide: "How to check a release",
   },
   locale: {
     label: "Language",

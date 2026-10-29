@@ -26,7 +26,13 @@ export class AuthPinOtpVerifier implements PinOtpVerifier {
     const user = await authStore.getUserById(userId);
     if (!user) throw new ApiError("unauthenticated");
     const active = await authStore.getLatestActiveOtpChallenge(user.phone, now);
-    if (active && now < active.resendAvailableAt) throw new ApiError("rate_limited");
+    // A different channel is an explicit "try the other way" action. It gets a
+    // fresh code immediately; creating it consumes the old live code. Same-channel
+    // resends still honor the cooldown, and the phone-wide send limiter below
+    // applies equally to both channels.
+    if (active && active.channel === channel && now < active.resendAvailableAt) {
+      throw new ApiError("rate_limited");
+    }
 
     const rate = await this.options.rateLimitStore.consume(
       JSON.stringify(["otp_send_phone", user.phone]),

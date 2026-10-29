@@ -1,22 +1,30 @@
 {
   "name": "@yen/verifier",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/verify.d.ts",
+      "import": "./dist/verify.js"
+    }
+  },
+  "types": "./dist/verify.d.ts",
   "bin": {
     "yen-verify": "./dist/cli.js"
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md",
+    "vectors"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "vectors:check": "node scripts/check-vectors.ts && pnpm --filter @yen/verifier build && node scripts/check-pack.ts"
   },
   "devDependencies": {
-    "@yen/eventlog": "workspace:*",
-    "@yen/shared": "workspace:*",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
   }

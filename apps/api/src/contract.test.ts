@@ -407,6 +407,41 @@ it("validates every documented status and sent header against the committed Open
   await check(evidencePath, "post", await otherPrincipalApp.request(evidenceUrl, evidencePost));
   await check(evidencePath, "get", await otherPrincipalApp.request(evidenceUrl));
 
+  const invitePath = `/v1/funds/${id}/invites`;
+  const inviteResponse = await app.request(invitePath, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ phone: "+14155550123" }),
+  });
+  const createdInvite = z
+    .object({ inviteId: z.string().uuid(), code: z.string() })
+    .parse(await inviteResponse.clone().json());
+  await check("/v1/funds/{fundId}/invites", "post", inviteResponse);
+  await check(
+    "/v1/auth/invites/redeem",
+    "post",
+    await app.request("/v1/auth/invites/redeem", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        code: createdInvite.code,
+        phone: "+14155550123",
+        displayName: "Contract Member",
+      }),
+    }),
+  );
+  await check("/v1/funds/{fundId}/invites", "get", await app.request(invitePath));
+  await check(
+    "/v1/funds/{fundId}/invites/{inviteId}/confirm",
+    "post",
+    await app.request(`${invitePath}/${createdInvite.inviteId}/confirm`, {
+      method: "POST",
+      headers: { "Idempotency-Key": "invite-contract-confirm" },
+    }),
+  );
+
   await check(
     evidencePath,
     "post",
@@ -444,6 +479,7 @@ it("validates every documented status and sent header against the committed Open
       path.endsWith("/payee") ||
       path.endsWith("/policy") ||
       path.endsWith("/members") ||
+      path.includes("/invites") ||
       path.endsWith("/remove")
     )
       continue;

@@ -5,7 +5,7 @@ export type OtpChannel = "whatsapp" | "sms";
 export interface SendOtpRequest {
   readonly phone: PhoneE164;
   readonly code: string;
-  readonly preferredChannel?: OtpChannel;
+  readonly preferredChannel: OtpChannel;
 }
 
 export interface SendOtpResult {
@@ -23,7 +23,7 @@ export class UnconfiguredOtpDeliveryProvider implements OtpDeliveryProvider {
   async sendOtp(request: SendOtpRequest): Promise<SendOtpResult> {
     return {
       success: false,
-      channel: request.preferredChannel ?? "whatsapp",
+      channel: request.preferredChannel,
       error: "OTP delivery provider is not configured",
     };
   }
@@ -61,7 +61,7 @@ export class DevStubOtpDeliveryProvider implements OtpDeliveryProvider {
   }
 
   async sendOtp(request: SendOtpRequest): Promise<SendOtpResult> {
-    const channel = request.preferredChannel ?? "whatsapp";
+    const channel = request.preferredChannel;
     if (this.simulateFailure) {
       return {
         success: false,
