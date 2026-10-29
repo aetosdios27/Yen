@@ -187,6 +187,7 @@ export async function createExpenseRequest(
       const submitRes = await client.POST("/v1/funds/{fundId}/expenses/{expenseId}/submit", {
         params: {
           path: { fundId, expenseId: createRes.data.id },
+          header: { "Idempotency-Key": crypto.randomUUID() },
         },
       });
       const finalData = submitRes.data ?? createRes.data;

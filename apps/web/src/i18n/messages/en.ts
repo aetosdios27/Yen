@@ -458,6 +458,14 @@ export const en = {
     pinError: "PIN must be exactly 6 digits",
     pinSubmit: "Confirm approval",
     pinSubmitting: "Approving...",
+    pinLockoutNotice:
+      "PIN is temporarily locked due to repeated incorrect attempts. Please try again after 30 minutes.",
+    pinPermanentLockoutNotice:
+      "PIN is locked out after 10 failed attempts. Contact an administrator to reset or unlock.",
+    pinCoolingOffNotice:
+      "PIN is in a 24-hour security cooling-off period following a recent reset. Approvals are temporarily paused.",
+    pinIncorrectAttemptsRemaining:
+      "Incorrect PIN. {remaining} attempts remaining before temporary lockout.",
     rejectModalTitle: "Reject expense request",
     rejectModalDescription:
       "A rejection reason is mandatory and will be recorded in the audit log.",
