@@ -248,7 +248,6 @@ databaseSuite("migration runner", (sql, url) => {
       },
       {
         version: 20,
-<<<<<<< HEAD
         name: "0020_evidence_records.sql",
         checksum: createHash("sha256").update(evidenceSource).digest("hex"),
         applied_at: expect.any(Date),

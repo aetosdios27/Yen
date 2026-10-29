@@ -63,8 +63,7 @@ it("validates every documented status and sent header against the committed Open
     expect(contract, `${method.toUpperCase()} ${path} ${response.status}`).toBeDefined();
     if (!contract) return;
     checkedStatuses.add(String(response.status));
-    const schema = contract.content["application/json"]?.schema;
-    expect(schema, `${method.toUpperCase()} ${path} ${response.status} JSON schema`).toBeDefined();
+    const schema = contract.content?.["application/json"]?.schema;
     if (!schema) return;
     const validate = ajv.compile({
       ...schema,

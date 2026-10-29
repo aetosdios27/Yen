@@ -97,6 +97,7 @@ const schema = z
         path: ["WEBAUTHN_ORIGIN"],
         message: "Required in production for device credential verification",
       });
+    }
     if (value.NODE_ENV === "production") {
       const required: Array<keyof typeof value> = [
         "DELIVERY_PROVIDER",

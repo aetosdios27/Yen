@@ -74,7 +74,6 @@ export interface ServerConfig {
   readonly META_APP_SECRET?: string | undefined;
   readonly META_WEBHOOK_VERIFY_TOKEN?: string | undefined;
   readonly EXOTEL_RELAY_WEBHOOK_SECRET?: string | undefined;
->>>>>>> 7401210 (feat(notifications): add WhatsApp and SMS delivery adapters (YEN-76))
   readonly YEN_ALLOW_MEMORY_STORES?: "true" | "false" | undefined;
   readonly READINESS_CACHE_MS: number;
   readonly TRUSTED_PROXY_HOPS: number;
