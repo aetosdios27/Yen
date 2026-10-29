@@ -125,7 +125,12 @@ export const fundSchema = z
 
 const statusSchema = z.object({ status: z.literal("ok") });
 const versionSchema = z
-  .object({ gitSha: z.string(), buildId: z.string() })
+  .object({
+    gitSha: z.string(),
+    buildId: z.string(),
+    artifactDigest: z.string(),
+    releaseTag: z.string(),
+  })
   .strict()
   .openapi("Version");
 
@@ -142,7 +147,10 @@ export const versionRoute = createRoute({
   operationId: "version",
   summary: "Build version",
   responses: {
-    200: jsonResponse(versionSchema, "Source commit and deterministic build identifier"),
+    200: jsonResponse(
+      versionSchema,
+      "Source commit, deterministic build identifier, and optional release metadata",
+    ),
   },
 });
 export const readyRoute = createRoute({
@@ -233,6 +241,7 @@ const publicTimelineItem = z.object({
   id: z.string().uuid(),
   occurredAt: z.iso.datetime(),
   message: z.string(),
+  actorDisplayName: z.string().optional(),
   amountPaise: paiseWire.optional(),
   verified: verificationState,
 });
@@ -530,6 +539,124 @@ export const verifyOtpRoute = createRoute({
     429: limitedResponse,
     500: internalResponse,
     503: overloadedResponse,
+  },
+});
+
+const ownerInviteParams = z.object({ fundId: z.string().uuid() });
+export const createOwnerInviteRoute = createRoute({
+  method: "post",
+  path: "/v1/funds/{fundId}/invites",
+  tags: ["auth", "members"],
+  operationId: "createOwnerInvite",
+  security,
+  request: {
+    params: ownerInviteParams,
+    body: {
+      required: true,
+      content: { "application/json": { schema: z.object({ phone: z.string() }).strict() } },
+    },
+  },
+  responses: {
+    201: jsonResponse(
+      z.object({
+        inviteId: z.string().uuid(),
+        code: z.string().regex(/^[0-9a-f]{64}$/),
+        expiresAt: z.iso.datetime(),
+      }),
+      "Single-use invite code; show as QR or pass in person",
+    ),
+    ...protectedErrors,
+  },
+});
+export const listOwnerInvitesRoute = createRoute({
+  method: "get",
+  path: "/v1/funds/{fundId}/invites",
+  tags: ["auth", "members"],
+  operationId: "listOwnerInvites",
+  security,
+  request: { params: ownerInviteParams },
+  responses: {
+    200: jsonResponse(
+      z.object({
+        invites: z.array(
+          z.object({
+            inviteId: z.string().uuid(),
+            displayName: z.string().nullable(),
+            phoneEnding: z.string().length(4),
+            status: z.enum(["issued", "redeemed"]),
+          }),
+        ),
+      }),
+      "Owner invites awaiting confirmation",
+    ),
+    ...protectedErrors,
+  },
+});
+export const confirmOwnerInviteRoute = createRoute({
+  method: "post",
+  path: "/v1/funds/{fundId}/invites/{inviteId}/confirm",
+  tags: ["auth", "members"],
+  operationId: "confirmOwnerInvite",
+  security,
+  request: {
+    params: z.object({ fundId: z.string().uuid(), inviteId: z.string().uuid() }),
+    headers: z.object({ "Idempotency-Key": idempotencyKey }),
+  },
+  responses: {
+    200: jsonResponse(
+      z.object({
+        status: z.literal("confirmed"),
+        displayName: z.string(),
+        phoneEnding: z.string().length(4),
+      }),
+      "Owner confirmed the in-person member",
+    ),
+    ...protectedErrors,
+  },
+});
+export const redeemOwnerInviteRoute = createRoute({
+  method: "post",
+  path: "/v1/auth/invites/redeem",
+  tags: ["auth"],
+  operationId: "redeemOwnerInvite",
+  request: {
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z
+            .object({
+              code: z.string().regex(/^[0-9a-f]{64}$/),
+              phone: z.string(),
+              displayName: z.string().trim().min(1).max(80),
+            })
+            .strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: jsonResponse(
+      z.union([
+        z.object({ status: z.literal("pending_owner_confirmation") }),
+        z.object({
+          status: z.literal("authenticated"),
+          session: z.object({
+            id: z.string().uuid(),
+            token: z.string(),
+            expiresAt: z.iso.datetime(),
+            user: z.object({
+              id: z.string().uuid(),
+              phone: z.string(),
+              displayName: z.string(),
+              locale: z.string(),
+            }),
+          }),
+        }),
+      ]),
+      "Redeemed invite or completed sign-in",
+    ),
+    ...protectedErrors,
   },
 });
 
@@ -1267,6 +1394,7 @@ export const donationPledgeInput = z
       .openapi({ description: "The 12-digit reference shown in the donor's UPI app" }),
     donorName: z.string().trim().min(1).max(60).optional(),
     donorContact: contact.optional(),
+    donorNameChoice: z.enum(["full", "initials", "anonymous"]).default("initials"),
   })
   .strict()
   .openapi("DonationPledge");

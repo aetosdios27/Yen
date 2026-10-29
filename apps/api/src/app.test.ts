@@ -68,6 +68,8 @@ it("serves build identity without auth", async () => {
   expect(await response.json()).toEqual({
     gitSha: expect.any(String),
     buildId: expect.any(String),
+    artifactDigest: expect.any(String),
+    releaseTag: expect.any(String),
   });
   expect(response.headers.get("x-request-id")).toBeTruthy();
 });

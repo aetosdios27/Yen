@@ -38,6 +38,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               >
                 {t("nav.designSystem")}
               </Link>
+              <Link
+                href="/about/build"
+                className="tap-target inline-flex items-center rounded-control text-small font-semibold text-ink-muted underline-offset-4 hover:underline"
+              >
+                {t("nav.build")}
+              </Link>
             </nav>
           </div>
           <LocaleSwitcher showPseudo={showPseudo} className="min-w-0" />

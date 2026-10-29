@@ -59,6 +59,40 @@ cosign verify-blob \
   SHA256SUMS
 ```
 
+The public build page at `/about/build` shows the version reported by the
+running API. It does not verify files in the browser. The API's optional
+`artifactDigest` is populated only when `YEN_ARTIFACT_DIGEST` is explicitly
+supplied at build time; ordinary builds leave it empty because embedding an
+archive's own digest in that archive would change the digest.
+
+## Local release rehearsal and tamper check
+
+Run the same asset preparation and checksum checks used by the release
+workflow:
+
+```sh
+mkdir -p /tmp/yen-release
+cp ./rebuild/yen-local.tar /tmp/yen-release/yen-local.tar
+bash scripts/prepare-release-assets.sh /tmp/yen-release local ./sbom.cdx.json
+```
+
+This verifies the archive against `SHA256SUMS`, flips one byte in a temporary
+copy, and requires `scripts/verify-release` to reject it with
+`RELEASE_VERIFY_DIGEST_MISMATCH`. Direct usage:
+
+```sh
+node scripts/verify-release yen-v1.2.3.tar SHA256SUMS yen-v1.2.3.tar.intoto.jsonl
+node scripts/test-tampered-artifact.mjs yen-v1.2.3.tar SHA256SUMS local-rehearsal
+```
+
+Local rehearsal checks bytes and checksums only; it cannot verify GitHub
+identity or transparency data. Use `gh attestation verify` above for the
+published attestation. If a statement file is passed directly to the Node
+verifier, it checks only that the statement names the archive digest; it does
+not check that the statement is signed or trusted. CI runs reproducible build, SBOM, checksum and tamper
+checks in its read-only build job. Signing, attestation and publishing remain
+in separate tag-triggered jobs.
+
 ## Rebuild the archive
 
 Use Node `24.21.0`, pnpm `12.6.0`, GNU tar, and a Linux x86-64 environment.
@@ -104,16 +138,24 @@ they contain host-specific or time-dependent data and are not runtime files.
   dependencies, or that the SBOM is complete beyond what Syft detects.
 - Provenance records GitHub's account of the build. These checks do not prove
   that GitHub, its hosted runner, the repository configuration or the workflow
-  was uncompromised, and Yen does not claim a SLSA level from this setup.
+  was uncompromised. **Yen does not currently claim a SLSA Build Level.** The
+  workflow is designed to produce hosted, signed provenance, but it has never
+  run for a real release tag, so there is no release artifact and provenance to
+  assess together. SLSA v1.2 requires the producer to distribute provenance;
+  Build Level 2 additionally requires authentic provenance and a hosted build
+  platform, and Level 3 requires unforgeable provenance and isolation. We have
+  not assessed all platform requirements for Yen. See the [SLSA v1.2 Build
+  requirements](https://slsa.dev/spec/v1.2/build-requirements), especially the
+  [level table](https://slsa.dev/spec/v1.2/build-requirements#build-levels).
 - The two builds run on one host. A matching digest is not an independent
   rebuild and does not establish reproducibility across operating systems,
   CPU architectures or future runner images. The release job pins Ubuntu
   24.04 and the Node and pnpm versions; system libraries and the full runner
   image are not content-addressed here.
 - The archive is a build output, not proof of what a separate deployment host
-  is serving. The API `/version` endpoint reports the commit and Git tree ID
-  embedded during the API build; an operator can still replace the running
-  service or its response.
+  is serving. The API `/version` endpoint reports the commit, Git tree ID,
+  release tag and any build-time archive digest embedded during the API build;
+  an operator can still replace the running service or its response.
 - The SBOM records dependencies found by Syft from the source checkout and
   lockfile. Its generation timestamp can differ between releases and it is not
   part of the reproducibility archive.

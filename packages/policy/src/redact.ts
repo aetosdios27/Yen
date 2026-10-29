@@ -86,11 +86,21 @@ export interface DonationRecord {
   readonly fundId: string;
   readonly amountPaise: Paise;
   readonly donorDisplayName?: string | undefined;
+  /** Explicit choice attached to this donation; omitted legacy records stay pseudonymous. */
+  readonly donorNameChoice?: "full" | "initials" | "anonymous" | undefined;
   readonly donorPhone?: string | undefined;
   readonly donorEmail?: string | undefined;
   readonly donorPseudonymId: PseudonymId;
   readonly bankTransactionId?: string | undefined;
   readonly createdAt: string;
+}
+
+function selectedDonationName(record: DonationRecord): string | undefined {
+  if (record.donorNameChoice === undefined) return undefined;
+  if (record.donorNameChoice === "anonymous") return "A donor";
+  const name = optionalStr(record.donorDisplayName);
+  if (name === undefined) return "A donor";
+  return record.donorNameChoice === "full" ? name : maskNameToInitials(name) || "A donor";
 }
 
 export type FundVerificationState = "bank-matched" | "anchored" | "unverified";
@@ -117,6 +127,8 @@ export interface FundTimelineRecord {
     readonly id: string;
     readonly occurredAt: string;
     readonly message: string;
+    readonly actorDisplayName?: string | undefined;
+    readonly actorNameChoice?: "full" | "initials" | undefined;
     readonly amountPaise?: string | undefined;
     readonly verified: FundVerificationState;
   }[];
@@ -426,6 +438,9 @@ export function redact(
         fundId: str(don.fundId),
         amountPaise,
         donorPseudonymId,
+        ...(don.donorNameChoice === undefined
+          ? {}
+          : { donorDisplayName: selectedDonationName(don) }),
         createdAt: str(don.createdAt),
       };
       return markRedacted(result);
@@ -437,6 +452,9 @@ export function redact(
         fundId: str(don.fundId),
         amountPaise,
         donorPseudonymId,
+        ...(don.donorNameChoice === undefined
+          ? {}
+          : { donorDisplayName: selectedDonationName(don) }),
         createdAt: str(don.createdAt),
       };
       return markRedacted(result);
@@ -501,6 +519,14 @@ export function redactFundReadModel<T extends FundReadRecord>(
         id: str(item.id),
         occurredAt: str(item.occurredAt),
         message: publicText(item.message),
+        ...(item.actorDisplayName === undefined
+          ? {}
+          : {
+              actorDisplayName:
+                item.actorNameChoice === "full"
+                  ? publicText(str(item.actorDisplayName))
+                  : maskNameToInitials(str(item.actorDisplayName)),
+            }),
         ...(item.amountPaise === undefined ? {} : { amountPaise: paiseString(item.amountPaise) }),
         verified: verificationState(item.verified),
       })),

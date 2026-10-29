@@ -3,13 +3,20 @@ import { type Actor, can, redact, redactFundReadModel } from "@yen/policy";
 import { paise } from "@yen/shared";
 import { describe, expect, it } from "vitest";
 import { createApp } from "./app.js";
-import type { AppDependencies } from "./dependencies.js";
+import {
+  type AppDependencies,
+  type DisplayNameStore,
+  MemoryDisplayNameStore,
+} from "./dependencies.js";
 import { devPolicy } from "./policy.js";
 
 const owner = { id: "00000000-0000-4000-8000-000000000001", role: "owner" as const };
 const fundId = "00000000-0000-4000-8000-000000000010";
 
-function fixtureApp() {
+function fixtureApp(
+  displayNameStore: DisplayNameStore = new MemoryDisplayNameStore(),
+  principalValue: AppDependencies["principal"] = owner,
+) {
   const expenses = new InMemoryExpenseStore();
   const expense = {
     id: "00000000-0000-4000-8000-000000000020",
@@ -43,9 +50,10 @@ function fixtureApp() {
     evidenceUrl: "https://files.example/private-bill.pdf",
   } as unknown as ExpenseRequest;
   const app = createApp({
-    principal: owner,
+    principal: principalValue,
     idGenerator: () => fundId,
     policy: devPolicy,
+    displayNameStore,
     expenseStore: {
       ...expenses,
       get: expenses.get.bind(expenses),
@@ -123,9 +131,28 @@ describe("public fund read API", () => {
     expect(body.dataGaps).toEqual(
       expect.arrayContaining([
         expect.stringContaining("Donation records are not queryable"),
-        expect.stringContaining("display-name preferences are not stored"),
+        expect.stringContaining("donation display labels cannot be shown"),
       ]),
     );
+  });
+
+  it("resolves timeline labels from the display-name store and honors the fund officeholder setting", async () => {
+    const names = new MemoryDisplayNameStore();
+    names.set(fundId, "psn_00000000-0000-4000-8000-000000000021", "Aarav Sharma");
+    const app = fixtureApp(names);
+    await createPublicFund(app);
+    const initialsResponse = await app.request(`/v1/funds/${fundId}/public/timeline`);
+    const initialsBody = JSON.parse(await initialsResponse.text()) as {
+      items: { actorDisplayName?: string }[];
+    };
+    expect(initialsBody.items[0]?.actorDisplayName).toBe("A. S.");
+
+    names.setOfficeholderNamesShown(fundId, true);
+    const fullNameResponse = await app.request(`/v1/funds/${fundId}/public/timeline`);
+    const fullNameBody = JSON.parse(await fullNameResponse.text()) as {
+      items: { actorDisplayName?: string }[];
+    };
+    expect(fullNameBody.items[0]?.actorDisplayName).toBe("Aarav Sharma");
   });
 
   it("redacts private fields from every source record and from aggregate projection extras", () => {
