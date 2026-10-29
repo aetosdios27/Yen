@@ -1153,6 +1153,7 @@ export const expenseApprovalInput = z
   .object({
     approvalToken: z.string().uuid().optional(),
     pin: pinSchema.optional(),
+    deviceProof: z.string().uuid().optional(),
     credentialId: z.string().min(1).max(256).optional(),
     signatureHex: z
       .string()
@@ -1221,6 +1222,7 @@ export const expenseRejectionInput = z
     reason: z.enum(["quorum", "objection", "policy"]).default("policy"),
     approvalToken: z.string().uuid().optional(),
     pin: pinSchema.optional(),
+    deviceProof: z.string().uuid().optional(),
   })
   .strict()
   .openapi("ExpenseRejectionInput");
@@ -1657,6 +1659,9 @@ export const rejectExpenseInput = z
 export const payExpenseInput = z
   .object({
     bankTransactionId: z.string().uuid(),
+    approvalToken: z.string().uuid().optional(),
+    pin: pinSchema.optional(),
+    deviceProof: z.string().uuid().optional(),
   })
   .strict()
   .openapi("PayExpenseInput");

@@ -279,6 +279,11 @@ export class PostgresPrivacyStore implements PrivacyStore {
       await tx`DELETE FROM user_notification_preferences WHERE user_id = ${userId}`;
       await tx`DELETE FROM owner_invites WHERE owner_id = ${userId} OR phone = ${phone}`;
       await tx`DELETE FROM user_approval_pins WHERE user_id = ${userId}`;
+      // Device credentials are access material. Erasure keeps the users row (it is anonymized,
+      // not deleted), so the users FK cascade never fires; remove them explicitly.
+      await tx`DELETE FROM device_webauthn_challenges WHERE user_id = ${userId}`;
+      await tx`DELETE FROM device_signature_proofs WHERE user_id = ${userId}`;
+      await tx`DELETE FROM device_credentials WHERE user_id = ${userId}`;
       await tx`DELETE FROM auth_otps WHERE phone = ${phone}`;
       await tx`DELETE FROM auth_otp_attempt_limits WHERE phone = ${phone}`;
       await tx`DELETE FROM waitlist_entries WHERE contact = ${phone}`;

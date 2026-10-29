@@ -36,6 +36,8 @@ export interface SignedApproval {
   readonly approverId: PseudonymId;
   readonly passkeySignature: PasskeySignatureData;
   readonly approvedAt: string;
+  readonly deviceSignaturePresent?: boolean;
+  readonly credentialIdHash?: string;
 }
 
 export type ApprovalProofVerifier = (
@@ -94,6 +96,7 @@ export interface FundPolicy {
   readonly objectionWindowHours: number;
   readonly autoExpireHours: number;
   readonly amountThresholds?: readonly AmountThreshold[];
+  readonly requireDeviceSignatureAbove?: Paise | null;
 }
 
 export class InvalidStateTransitionError extends Error {

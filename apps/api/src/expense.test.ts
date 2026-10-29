@@ -210,7 +210,7 @@ describe("Expense Requests API Routes (YEN-30)", () => {
 
   it("executes complete lifecycle: draft -> submitted -> approved -> paid -> reconciled", async () => {
     const expenseStore = new InMemoryExpenseStore();
-    const { app, advance } = setup({ expenseStore });
+    const { app, advance, pinService } = setup({ expenseStore });
 
     // 1. Create draft
     const createRes = await app.request(
@@ -339,11 +339,12 @@ describe("Expense Requests API Routes (YEN-30)", () => {
     // 4. Pay (commits hold)
     advance(25 * 60 * 60 * 1000);
     const bankTxId = "00000000-0000-4000-8000-000000000077";
+    await pinService.setupPin(REQUESTER.id, "482915", { userId: REQUESTER.id });
     const payRes = await app.request(
       req(
         "POST",
         `/v1/funds/${FUND_ID}/expenses/${created.id}/pay`,
-        { bankTransactionId: bankTxId },
+        { bankTransactionId: bankTxId, pin: "482915" },
         "lifecycle-pay",
       ),
     );
@@ -357,7 +358,7 @@ describe("Expense Requests API Routes (YEN-30)", () => {
       req(
         "POST",
         `/v1/funds/${FUND_ID}/expenses/${created.id}/pay`,
-        { bankTransactionId: bankTxId },
+        { bankTransactionId: bankTxId, pin: "482915" },
         "lifecycle-pay",
       ),
     );

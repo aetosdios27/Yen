@@ -1,7 +1,7 @@
 import { appendEvent, ensureFundPseudonym, type Sql, uuidv7 } from "@yen/db";
 import type { FundPolicy } from "@yen/ledger";
 import { ensureFundAccounts } from "@yen/ledger";
-import { type FundId, parseOrgId } from "@yen/shared";
+import { type FundId, paise, parseOrgId } from "@yen/shared";
 import type { FundStore } from "./dependencies.js";
 import type { FundRecord } from "./policy.js";
 
@@ -79,10 +79,15 @@ export class PostgresFundStore implements FundStore {
     ) {
       throw new TypeError("Invalid stored fund policy");
     }
+    const threshold = policy.requireDeviceSignatureAbove ?? null;
+    if (threshold !== null && (typeof threshold !== "number" || !Number.isSafeInteger(threshold))) {
+      throw new TypeError("Invalid stored fund policy");
+    }
     return {
       approvalQuorum: Number(approvalQuorum),
       objectionWindowHours: Number(objectionWindowHours),
       autoExpireHours: Number(policy.autoExpireHours ?? policy.auto_expire_hours ?? 72),
+      requireDeviceSignatureAbove: threshold === null ? null : paise(threshold),
     };
   }
 

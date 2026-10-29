@@ -49,8 +49,14 @@ async function persist(tx: TransactionSql, expense: ExpenseRequest): Promise<voi
   `;
   for (const approval of expense.approvals) {
     await tx`
-      INSERT INTO expense_approvals (expense_id, approver_id, approved_at, approval_data)
-      VALUES (${expense.id}, ${approval.approverId}, ${approval.approvedAt}, ${JSON.stringify(approval)}::jsonb)
+      INSERT INTO expense_approvals (
+        expense_id, approver_id, approved_at, approval_data,
+        device_signature_present, credential_id_hash
+      )
+      VALUES (
+        ${expense.id}, ${approval.approverId}, ${approval.approvedAt}, ${JSON.stringify(approval)}::jsonb,
+        ${approval.deviceSignaturePresent ?? false}, ${approval.credentialIdHash ?? null}
+      )
       ON CONFLICT (expense_id, approver_id) DO NOTHING
     `;
   }
