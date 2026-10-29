@@ -22,6 +22,7 @@ import { PostgresEvidenceStore } from "./evidence-store-postgres.js";
 import type { PostgresExpenseObjectionStore } from "./expense-objections.js";
 import { jsonLogger, type Logger } from "./logging.js";
 import { MemoryPayeeProfileStore, type PayeeProfileStore } from "./payee-rules/profile-store.js";
+import { PayoutService, ReferencePayoutAdapter } from "./payout-service.js";
 import {
   type ActionTokenStore,
   MemoryActionTokenStore,
@@ -410,6 +411,7 @@ export interface AppDependencies {
   readonly concurrencyLimit: number;
   readonly requestTimeoutMs: number;
   readonly inFlightTracker: InFlightTracker;
+  readonly payoutService: PayoutService;
   readonly isShuttingDown: () => boolean;
 }
 
@@ -549,6 +551,7 @@ export function defaultDependencies(
     concurrencyLimit: 100,
     requestTimeoutMs: 15000,
     inFlightTracker: new DefaultInFlightTracker(),
+    payoutService: new PayoutService(new ReferencePayoutAdapter()),
     isShuttingDown: () => false,
   };
 }
