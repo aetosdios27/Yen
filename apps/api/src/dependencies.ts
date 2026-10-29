@@ -22,6 +22,7 @@ import {
   PinService,
   type PinStore,
 } from "./pin/index.js";
+import type { FundRecord } from "./policy.js";
 import { denyAllPolicy, type Policy } from "./policy.js";
 import { MemoryStorageAdapter, type StorageAdapter } from "./storage.js";
 import {
@@ -118,9 +119,28 @@ export class DefaultInFlightTracker implements InFlightTracker {
   }
 }
 
+export interface FundStore {
+  get(fundId: string): FundRecord | undefined;
+  set(fundId: string, fund: FundRecord): void;
+}
+
+/** Process-local test/development fund store. Fund persistence is tracked separately. */
+export class MemoryFundStore implements FundStore {
+  private readonly funds = new Map<string, FundRecord>();
+
+  get(fundId: string) {
+    return this.funds.get(fundId);
+  }
+
+  set(fundId: string, fund: FundRecord) {
+    this.funds.set(fundId, fund);
+  }
+}
+
 export interface AppDependencies {
   readonly waitlistStore: WaitlistStore;
   readonly expenseStore: ExpenseStore;
+  readonly fundStore?: FundStore | undefined;
   readonly approvalProofVerifier: ApprovalProofVerifier;
   readonly donationPledgeStore: DonationPledgeStore;
   readonly pledgeLimit: RateLimit;

@@ -17,8 +17,9 @@ function asFundId(id: string): FundId {
 
 /**
  * Scans route handler source text to verify that every data-returning branch in any route handler
- * dealing with fund data passes through policy.redact() or policy.redactReceipt()
- * (e.g. `deps.policy.redact(...)`, `redact(...)`, `deps.policy.redactReceipt(...)`, or `redactReceipt(...)`).
+ * dealing with fund data passes through policy.redact(), a named policy projection, or
+ * policy.redactReceipt() (e.g. `deps.policy.redact(...)`, `redactExpenseDetails(...)`, or
+ * `redactReceipt(...)`).
  *
  * NOTE: This is a static tripwire designed to catch unredacted leak paths (such as raw return branches
  * or expression-bodied raw returns) during development and CI. It is a tripwire, not a formal proof.
@@ -81,7 +82,7 @@ function scanRouteHandlersForRedaction(sourceText: string): string[] {
     if (isFundRoute) {
       const redactedVariables = new Set<string>();
       const redactedAssignment =
-        /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*[^;]*\b(?:redactFundReadModel|redactExpense|redactReceipt|redact)\s*\(/g;
+        /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*[^;]*\b(?:redactFundReadModel|redactExpenseDetails|redactExpenseProofs|redactExpense|redactReceipt|redact)\s*\(/g;
       let assignmentMatch: RegExpExecArray | null = null;
       while (true) {
         assignmentMatch = redactedAssignment.exec(handlerBody);
@@ -94,6 +95,8 @@ function scanRouteHandlersForRedaction(sourceText: string): string[] {
         argument.includes(".redactReceipt(") ||
         argument.includes("redactReceipt(") ||
         argument.includes("redactExpense(") ||
+        argument.includes("redactExpenseDetails(") ||
+        argument.includes("redactExpenseProofs(") ||
         argument.includes("redactFundReadModel(") ||
         [...redactedVariables].some((name) => new RegExp(`\\b${name}\\b`).test(argument.trim()));
       if (!isBlock) {
@@ -214,6 +217,32 @@ describe("API route redaction guard (tripwire)", () => {
       });
     `;
     expect(scanRouteHandlersForRedaction(source)).toEqual([]);
+  });
+
+  it("requires policy redaction on public expense details and proof responses", () => {
+    const rawRoutes = `
+      app.openapi(publicExpenseDetailRoute, async (c) => {
+        const expense = await deps.expenseStore.get(c.req.valid("param").expenseId);
+        return c.json(expense, 200);
+      });
+      app.openapi(publicExpenseProofsRoute, async (c) => {
+        const proofs = await deps.evidenceStore.getByExpense(fundId, expenseId);
+        return c.json({ proofs }, 200);
+      });
+    `;
+    expect(scanRouteHandlersForRedaction(rawRoutes)).toHaveLength(2);
+
+    const redactedRoutes = `
+      app.openapi(publicExpenseDetailRoute, async (c) => {
+        const body = redactExpenseDetails(actor, expense);
+        return c.json(body, 200);
+      });
+      app.openapi(publicExpenseProofsRoute, async (c) => {
+        const body = redactExpenseProofs(actor, proofs);
+        return c.json(body, 200);
+      });
+    `;
+    expect(scanRouteHandlersForRedaction(redactedRoutes)).toEqual([]);
   });
 
   it("detects and flags violations when an action route handler returns raw fund data directly", () => {

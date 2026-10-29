@@ -9,7 +9,7 @@ import { devPolicy } from "./policy.js";
 const owner = { id: "00000000-0000-4000-8000-000000000001", role: "owner" as const };
 const fundId = "00000000-0000-4000-8000-000000000010";
 
-function fixtureApp(options: { eventAppender?: AppDependencies["eventAppender"] } = {}) {
+function fixtureApp() {
   const expenses = new InMemoryExpenseStore();
   const expense = {
     id: "00000000-0000-4000-8000-000000000020",
@@ -46,7 +46,6 @@ function fixtureApp(options: { eventAppender?: AppDependencies["eventAppender"] 
     principal: owner,
     idGenerator: () => fundId,
     policy: devPolicy,
-    eventAppender: options.eventAppender,
     expenseStore: {
       ...expenses,
       get: expenses.get.bind(expenses),
@@ -76,34 +75,6 @@ async function createPublicFund(app: ReturnType<typeof createApp>) {
 }
 
 describe("public fund read API", () => {
-  it("logs an owner visibility transition as v2 before it takes effect", async () => {
-    const appended: unknown[] = [];
-    const app = fixtureApp({
-      eventAppender: async (event) => {
-        appended.push(event);
-        return {} as Awaited<ReturnType<NonNullable<AppDependencies["eventAppender"]>>>;
-      },
-    });
-    await createPublicFund(app);
-    const changed = await app.request(`/v1/funds/${fundId}/visibility`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json", "Idempotency-Key": "change-visibility" },
-      body: JSON.stringify({ visibility: "private" }),
-    });
-    expect(changed.status).toBe(200);
-    expect(await changed.json()).toEqual({ status: "updated", visibility: "private" });
-    expect(appended).toEqual([
-      expect.objectContaining({
-        type: "fund.visibility_changed",
-        version: 2,
-        payload: { old_visibility: "public", new_visibility: "private" },
-      }),
-    ]);
-    const ownerView = await app.request(`/v1/funds/${fundId}/public/summary`);
-    expect(ownerView.status).toBe(200);
-    expect(ownerView.headers.get("cache-control")).toBe("private, no-store");
-  });
-
   it("returns summary, categorized spending, and a plain language unverified timeline privately to an authenticated owner", async () => {
     const app = fixtureApp();
     await createPublicFund(app);

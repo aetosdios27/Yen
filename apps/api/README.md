@@ -1,23 +1,28 @@
 # Yen API foundation
 
-`openapi/openapi.json` is the committed OpenAPI 3.1 contract for YEN-15.
-Route definitions in `src/contract.ts` own request and response schemas.
-`@yen/api-client` generates its types from this file.
+`openapi/openapi.json` is the committed OpenAPI 3.1 contract. Route definitions
+in `src/contract.ts` and `src/public-expense-contract.ts` own request and response
+schemas. `@yen/api-client` generates its types from this file.
 
 ## Routes
 
-| Method | Path                     | Behavior                                          |
-| ------ | ------------------------ | ------------------------------------------------- |
-| GET    | `/health`                | Public liveness                                   |
-| GET    | `/ready`                 | Public readiness, through an injected async check |
-| GET    | `/version`               | Public source commit and deterministic build ID   |
-| GET    | `/v1/openapi.json`       | Public OpenAPI document                           |
-| GET    | `/v1/me`                 | Current principal                                 |
-| POST   | `/v1/auth/device/unlock` | Unlock an OTP-proven session with the Yen PIN     |
-| POST   | `/v1/auth/device/lock`   | End the current trusted-device unlock period      |
-| GET    | `/v1/auth/sessions`      | List active trusted devices                       |
-| POST   | `/v1/funds`              | Stub: create an in-memory fake fund               |
-| GET    | `/v1/funds/{fundId}`     | Stub: read a fake fund owned by the principal     |
+| Method | Path                                                    | Behavior                                          |
+| ------ | ------------------------------------------------------- | ------------------------------------------------- |
+| GET    | `/health`                                               | Public liveness                                   |
+| GET    | `/ready`                                                | Public readiness, through an injected async check |
+| GET    | `/version`                                              | Public source commit and deterministic build ID   |
+| GET    | `/v1/openapi.json`                                      | Public OpenAPI document                           |
+| GET    | `/v1/me`                                                | Current principal                                 |
+| POST   | `/v1/auth/device/unlock`                                | Unlock an OTP-proven session with the Yen PIN     |
+| POST   | `/v1/auth/device/lock`                                  | End the current trusted-device unlock period      |
+| GET    | `/v1/auth/sessions`                                     | List active trusted devices                       |
+| POST   | `/v1/funds`                                             | Stub: create an in-memory fake fund               |
+| GET    | `/v1/funds/{fundId}`                                    | Stub: read a fake fund owned by the principal     |
+| GET    | `/v1/funds/{fundId}/public/summary`                     | Tier-filtered fund totals and summary             |
+| GET    | `/v1/funds/{fundId}/public/breakdown`                   | Tier-filtered spend categories                    |
+| GET    | `/v1/funds/{fundId}/public/timeline`                    | Tier-filtered activity timeline                   |
+| GET    | `/v1/funds/{fundId}/public/expenses/{expenseId}`        | Tier-filtered expense detail                      |
+| GET    | `/v1/funds/{fundId}/public/expenses/{expenseId}/proofs` | Proof metadata and allowed files                  |
 
 ## Sign-in policy (YEN-72)
 
@@ -59,16 +64,33 @@ The device unlock endpoint is method-shaped so YEN-71 can add a device-bound
 biometric verifier without changing session or device-list semantics. The API
 does not receive or store fingerprint data.
 
-Fund data disappears on restart. A fund starts with `name` and `targetPaise`.
+Fund data is still held in a process-local store and disappears on restart; this
+PR does not add a Postgres fund store. A fund starts with `name` and `targetPaise`.
 The response adds a canonical lowercase UUID `id` and an ISO timestamp `createdAt`.
 Invalid or missing FundIds return `404`, using `@yen/shared`'s branded parser.
-`createApp` defaults to a deny-all `Policy`. Every fund handler calls `can(principal,
-action, resource)` before accessing or changing fund data and sends only the result
-of `redact(viewer, resource)`. Inject `devPolicy` explicitly in tests and `dev:mock`;
-it permits creation and owner reads. Denied creates return `403 forbidden`. Denied
-reads return `404 not_found` so a caller cannot learn whether a fund exists.
-YEN-26 will supply the real role and approval checks; YEN-31 will supply public
-visibility and redaction rules. Until then, production needs an explicit policy.
+`createApp` defaults to a deny-all `Policy`. Create and owner reads use that
+injected policy. Public read routes use `@yen/policy` visibility checks and
+field-level redaction. Anonymous callers can only read funds whose visibility is
+explicitly `public`; there is no fund collection listing. Unknown and private
+fund reads share a 404 response and timing floor.
+
+Expense detail and proof responses are tier-filtered. Anonymous public responses
+include proof hashes and scan status without filenames, MIME types, thumbnails,
+or file bytes. An explicitly verified payee would be shown as `Vendor (verified)`;
+the current stored data has no trusted payee-verification signal, so this API does
+not make that claim. Donors and members with access can see payee names and
+integrity-verified bill bytes. Member detail fields are allowlisted and scrub
+phone numbers, UTRs, VPAs, and account numbers; bank identifiers are never copied
+into these read models. Private funds remain restricted by the policy visibility
+matrix.
+
+The `fund.visibility_changed` v2 event schema, canonical vector, and database
+validation are included, with its v1 schema and hashes unchanged. The owner-only
+visibility-change route is deferred until fund settings are persisted: changing
+the tier and appending its audit event must commit in the same database
+transaction, which the current in-memory fund store cannot provide. That route
+will land with durable fund persistence. Until then, production needs an explicit
+policy for fund creation and owner reads.
 All authenticated routes reject requests until a principal is explicitly injected.
 The bearer security scheme reserves the contract for YEN-22; it does not authenticate tokens today.
 

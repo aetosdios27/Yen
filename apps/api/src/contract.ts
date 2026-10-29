@@ -309,27 +309,6 @@ export const publicFundTimelineRoute = createRoute({
     ...publicFundErrors,
   },
 });
-export const changeFundVisibilityRoute = createRoute({
-  method: "patch",
-  path: "/v1/funds/{fundId}/visibility",
-  tags: ["funds"],
-  operationId: "changeFundVisibility",
-  security,
-  request: {
-    params: publicFundIdParams,
-    body: {
-      required: true,
-      content: { "application/json": { schema: z.strictObject({ visibility: fundVisibility }) } },
-    },
-  },
-  responses: {
-    200: jsonResponse(
-      z.strictObject({ status: z.literal("updated"), visibility: fundVisibility }),
-      "Visibility updated and logged",
-    ),
-    ...protectedErrors,
-  },
-});
 export const openapiSchema = z.record(z.string(), z.unknown());
 
 export const openapiRoute = createRoute({

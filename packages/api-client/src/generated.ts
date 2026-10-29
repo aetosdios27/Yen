@@ -253,22 +253,6 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/v1/funds/{fundId}/visibility": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch: operations["changeFundVisibility"];
-    trace?: never;
-  };
   "/v1/funds/{fundId}/public/summary": {
     parameters: {
       query?: never;
@@ -309,6 +293,40 @@ export interface paths {
       cookie?: never;
     };
     get: operations["getPublicFundTimeline"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/funds/{fundId}/public/expenses/{expenseId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Reads a policy-redacted expense detail for a fund tier. Anonymous public views receive no free-text identity fields. */
+    get: operations["getPublicExpenseDetail"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/funds/{fundId}/public/expenses/{expenseId}/proofs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Reads filename-free evidence metadata. Verified bill bytes are returned only to donor and member tiers. */
+    get: operations["getPublicExpenseProofs"];
     put?: never;
     post?: never;
     delete?: never;
@@ -855,6 +873,37 @@ export interface components {
       upiPayeeName: string;
       /** @enum {string} */
       visibility?: "public" | "donors" | "members" | "private";
+    };
+    PublicExpenseDetail: {
+      /** Format: uuid */
+      expenseId: string;
+      /** Format: uuid */
+      fundId: string;
+      /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
+      amountPaise: string;
+      category: string;
+      /** @enum {string} */
+      status: "draft" | "submitted" | "approved" | "rejected" | "expired" | "paid" | "reconciled";
+      payeeName?: string;
+      requesterDisplayName?: string;
+      description?: string;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    PublicExpenseProofs: {
+      /** Format: uuid */
+      expenseId: string;
+      proofs: components["schemas"]["PublicExpenseProof"][];
+    };
+    PublicExpenseProof: {
+      sha256: string;
+      /** @enum {string} */
+      scanStatus: "clean" | "infected" | "unavailable";
+      /** @enum {string} */
+      mimeType?: "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
+      contentBase64?: string;
     };
     Expense: {
       /** Format: uuid */
@@ -2233,146 +2282,6 @@ export interface operations {
       };
     };
   };
-  changeFundVisibility: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Canonical FundId UUID; inaccessible funds return 404 */
-        fundId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          /** @enum {string} */
-          visibility: "public" | "donors" | "members" | "private";
-        };
-      };
-    };
-    responses: {
-      /** @description Visibility updated and logged */
-      200: {
-        headers: {
-          /** @description Request correlation ID */
-          "x-request-id": string;
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            /** @enum {string} */
-            status: "updated";
-            /** @enum {string} */
-            visibility: "public" | "donors" | "members" | "private";
-          };
-        };
-      };
-      /** @description Validation failed; details contain field paths */
-      400: {
-        headers: {
-          /** @description Request correlation ID */
-          "x-request-id": string;
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorEnvelope"];
-        };
-      };
-      /** @description Authentication required */
-      401: {
-        headers: {
-          /** @description Request correlation ID */
-          "x-request-id": string;
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorEnvelope"];
-        };
-      };
-      /** @description Access denied */
-      403: {
-        headers: {
-          /** @description Request correlation ID */
-          "x-request-id": string;
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorEnvelope"];
-        };
-      };
-      /** @description Resource not found */
-      404: {
-        headers: {
-          /** @description Request correlation ID */
-          "x-request-id": string;
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorEnvelope"];
-        };
-      };
-      /** @description Resource conflict, changed idempotency input, or request in progress */
-      409: {
-        headers: {
-          /** @description Request correlation ID */
-          "x-request-id": string;
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorEnvelope"];
-        };
-      };
-      /** @description Rate limit exceeded */
-      429: {
-        headers: {
-          /** @description Request correlation ID */
-          "x-request-id": string;
-          /** @description Seconds until retry */
-          "retry-after": string;
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorEnvelope"];
-        };
-      };
-      /** @description Internal failure; no private error information */
-      500: {
-        headers: {
-          /** @description Request correlation ID */
-          "x-request-id": string;
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorEnvelope"];
-        };
-      };
-      /** @description Rate limit store at capacity */
-      503: {
-        headers: {
-          /** @description Request correlation ID */
-          "x-request-id": string;
-          /** @description Seconds until retry */
-          "retry-after": string;
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorEnvelope"];
-        };
-      };
-      /** @description Gateway timeout */
-      504: {
-        headers: {
-          /** @description Request correlation ID */
-          "x-request-id": string;
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorEnvelope"];
-        };
-      };
-    };
-  };
   getPublicFundSummary: {
     parameters: {
       query?: never;
@@ -2632,6 +2541,174 @@ export interface operations {
           "x-request-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  getPublicExpenseDetail: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        fundId: string;
+        expenseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Tier-filtered expense details */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Representation validator */
+          etag?: string;
+          /** @description Visibility-tier cache policy */
+          "cache-control"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PublicExpenseDetail"];
+        };
+      };
+      /** @description Invalid fund or expense identifier */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Unknown or inaccessible fund or expense */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Dependency unavailable */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  getPublicExpenseProofs: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        fundId: string;
+        expenseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Tier-filtered proof metadata and allowed files */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Representation validator */
+          etag?: string;
+          /** @description Visibility-tier cache policy */
+          "cache-control"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PublicExpenseProofs"];
+        };
+      };
+      /** @description Invalid fund or expense identifier */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Unknown or inaccessible fund or expense */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Dependency unavailable */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
           [name: string]: unknown;
         };
         content: {
