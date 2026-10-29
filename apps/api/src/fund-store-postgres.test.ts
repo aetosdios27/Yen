@@ -190,6 +190,10 @@ databaseSuite("Postgres fund store", (sql, url) => {
         amountPaise: "2500",
         description: "Policy propagation test",
         recipientRef: "fixture-recipient",
+        payee: {
+          identity: { kind: "upi", vpa: "policy-test@yenbank" },
+          name: "Policy Test Vendor",
+        },
       }),
     });
     expect(draftResponse.status).toBe(201);

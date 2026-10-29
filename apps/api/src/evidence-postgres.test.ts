@@ -158,6 +158,10 @@ databaseSuite("Postgres evidence persistence", (sql, url) => {
     const secondRead = await store.getByExpense(fundId, second.expenseId);
     expect(firstRead[0]?.duplicateExpenseId).toBe(second.expenseId);
     expect(secondRead[0]?.duplicateExpenseId).toBe(first.expenseId);
+    const hashMatches = await store.findBySha256(fundId, first.fileSha256);
+    expect(hashMatches.map((item) => item.expenseId).sort()).toEqual(
+      [first.expenseId, second.expenseId].sort(),
+    );
   });
 
   it("rejects updates to pinned file fields, deletes, and truncates", async () => {
