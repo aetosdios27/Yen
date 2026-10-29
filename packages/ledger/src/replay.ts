@@ -6,6 +6,7 @@ export interface FundBalances {
   pendingSpendPaise: bigint;
   availablePaise: bigint;
   donationsPaise: bigint;
+  pledgedPaise: bigint;
   expensesPaise: bigint;
 }
 
@@ -16,6 +17,7 @@ export interface FundBalances {
 export function replayFundEvents(fundId: string, events: readonly Event[]): FundBalances {
   let bank = 0n;
   let donations = 0n;
+  let pledged = 0n;
   let expenses = 0n;
   let pendingSpend = 0n;
 
@@ -36,13 +38,16 @@ export function replayFundEvents(fundId: string, events: readonly Event[]): Fund
     switch (event.type) {
       case "donation.pledged": {
         const payload = event.payload as { donation_id: string; amount_paise: number };
-        pledges.set(payload.donation_id, BigInt(payload.amount_paise));
+        const amount = BigInt(payload.amount_paise);
+        pledges.set(payload.donation_id, amount);
+        pledged += amount;
         break;
       }
 
       case "donation.verified": {
         const payload = event.payload as { donation_id: string; bank_transaction_id: string };
         const amount = pledges.get(payload.donation_id) ?? 0n;
+        if (pledges.delete(payload.donation_id)) pledged -= amount;
         if (!seenBankCredits.has(payload.bank_transaction_id)) {
           bank += amount;
           donations += amount;
@@ -54,6 +59,11 @@ export function replayFundEvents(fundId: string, events: readonly Event[]): Fund
 
       case "donation.rejected": {
         const payload = event.payload as { donation_id: string; reason: string };
+        const pendingAmount = pledges.get(payload.donation_id);
+        if (pendingAmount !== undefined) {
+          pledged -= pendingAmount;
+          pledges.delete(payload.donation_id);
+        }
         const verifiedAmount = verifiedDonations.get(payload.donation_id);
         if (verifiedAmount !== undefined) {
           bank -= verifiedAmount;
@@ -141,6 +151,7 @@ export function replayFundEvents(fundId: string, events: readonly Event[]): Fund
     pendingSpendPaise: pendingSpend,
     availablePaise: available,
     donationsPaise: donations,
+    pledgedPaise: pledged >= 0n ? pledged : 0n,
     expensesPaise: expenses,
   };
 }

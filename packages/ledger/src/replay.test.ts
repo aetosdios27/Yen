@@ -30,6 +30,7 @@ describe("replayFundEvents unit tests", () => {
       pendingSpendPaise: 0n,
       availablePaise: 0n,
       donationsPaise: 0n,
+      pledgedPaise: 0n,
       expensesPaise: 0n,
     });
   });
@@ -53,6 +54,7 @@ describe("replayFundEvents unit tests", () => {
     expect(balances.bankPaise).toBe(0n);
     expect(balances.availablePaise).toBe(0n);
     expect(balances.donationsPaise).toBe(0n);
+    expect(balances.pledgedPaise).toBe(50000n);
   });
 
   it("updates bank and donations once pledge is verified", async () => {
@@ -88,6 +90,7 @@ describe("replayFundEvents unit tests", () => {
     expect(balances.bankPaise).toBe(50000n);
     expect(balances.availablePaise).toBe(50000n);
     expect(balances.donationsPaise).toBe(50000n);
+    expect(balances.pledgedPaise).toBe(0n);
     expect(balances.expensesPaise).toBe(0n);
     expect(balances.pendingSpendPaise).toBe(0n);
   });

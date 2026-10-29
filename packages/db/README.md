@@ -14,9 +14,21 @@ The five fund roles are `owner`, `treasurer`, `approver`, `auditor`, and `member
 
 ## Use typed rows
 
-`createSql(url)` returns a postgres.js client with at most 10 connections, prepared statements, a 10-second connection timeout, a 20-second idle timeout, quiet notices, and UTC sessions. Close the client with `await sql.end()`.
+`createSql(url, options)` returns a postgres.js client with configurable pool settings:
+- `max`: maximum connection pool size (default: 10 connections).
+- `idleTimeout`: idle connection timeout in seconds before reaping (default: 20 seconds).
+- `connectTimeout`: connection acquisition timeout in seconds (default: 10 seconds).
+- `prepare`: boolean to enable or disable named prepared statements (default: `true`).
 
-Parse query results with the exported `userRowSchema`, `orgRowSchema`, `fundRowSchema`, `membershipRowSchema`, `pseudonymRowSchema`, `idempotencyKeyRowSchema`, or `fundEventRowSchema`. Each schema has a corresponding inferred `*Row` type. ID parsing uses `@yen/shared`'s branded `UserId`, `OrgId`, and `FundId` parsers.
+Close the client with `await sql.end({ timeout })`.
+
+### PgBouncer compatibility and pooling caveats
+
+- **Session state**: Connections are established with startup parameters (`TimeZone: "UTC"`) to avoid runtime `SET` commands that leak across pooled transactions.
+- **Advisory locks**: In PgBouncer transaction mode, connections are recycled across transactions. Session-level advisory locks (`pg_advisory_lock` / `pg_advisory_unlock`) are unsafe in transaction mode because release calls can hit a different backend connection. Transaction-scoped advisory locks (`pg_advisory_xact_lock`) must be used for transaction-level synchronization (such as event log appends); they release automatically on commit or rollback. Migration runs require a session advisory lock and therefore must run against direct Postgres or session pooling.
+- **Prepared statements**: Named prepared statements are tied to backend connection state. In PgBouncer transaction mode without `max_prepared_statements` (PgBouncer 1.21.0+), named prepared statements cause collisions or cache errors across clients. Pass `prepare: false` to `createSql` when using transaction pooling without named prepared statement support.
+
+Parse query results with the exported `userRowSchema`, `orgRowSchema`, `fundRowSchema`, `membershipRowSchema`, `pseudonymRowSchema`, `idempotencyKeyRowSchema`, `fundEventRowSchema`, or `rateLimitRowSchema`. Each schema has a corresponding inferred `*Row` type. ID parsing uses `@yen/shared`'s branded `UserId`, `OrgId`, and `FundId` parsers.
 
 User phones are stored only in canonical E.164 form and parsed as `PhoneE164` from `@yen/shared`. Converting free text such as `98765 43210` to `+919876543210` belongs to the login flow (YEN-22) and needs a product decision; the database and shared parser do not guess country codes.
 

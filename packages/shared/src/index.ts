@@ -38,7 +38,7 @@ export {
   proveInclusion,
   verifyInclusion,
 } from "./merkle/tree.js";
-export { addPaise, formatInr, type Paise, paise } from "./paise.js";
+export { addPaise, formatInr, type Paise, paise, type paiseBrand } from "./paise.js";
 export { paiseWire } from "./paise-wire.js";
 export { type PhoneE164, parsePhoneE164 } from "./phone.js";
 export {
