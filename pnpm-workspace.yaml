@@ -4,6 +4,7 @@ packages:
   - contracts
 allowBuilds:
   esbuild: true
+  protobufjs: false
 minimumReleaseAgeExclude:
   - "@konto-ledger/adapters@0.2.0"
   - "@konto-ledger/core@0.2.0"

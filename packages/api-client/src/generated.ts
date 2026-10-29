@@ -1489,6 +1489,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1503,6 +1505,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1514,6 +1518,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1525,6 +1531,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -1538,6 +1546,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1549,6 +1559,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -1562,6 +1574,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1584,6 +1598,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1598,6 +1614,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1620,6 +1638,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1642,6 +1662,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1656,6 +1678,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1667,6 +1691,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1689,6 +1715,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1700,6 +1728,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1711,6 +1741,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1722,6 +1754,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1733,6 +1767,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1744,6 +1780,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1755,6 +1793,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -1768,6 +1808,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1779,6 +1821,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -1792,6 +1836,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1818,6 +1864,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1829,6 +1877,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1840,6 +1890,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -1853,6 +1905,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1864,6 +1918,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -1892,6 +1948,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Session cookie for browser clients */
           "set-cookie"?: string;
           [name: string]: unknown;
@@ -1905,6 +1963,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1916,6 +1976,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -1929,6 +1991,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1940,6 +2004,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -1964,6 +2030,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Session cookie for browser clients */
           "set-cookie"?: string;
           [name: string]: unknown;
@@ -1977,6 +2045,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -1988,6 +2058,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2010,6 +2082,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2021,6 +2095,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2032,6 +2108,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2054,6 +2132,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2068,6 +2148,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2079,6 +2161,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2101,6 +2185,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Session cookie for browser clients */
           "set-cookie"?: string;
           [name: string]: unknown;
@@ -2117,6 +2203,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2128,6 +2216,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2150,6 +2240,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Session cookie for browser clients */
           "set-cookie"?: string;
           [name: string]: unknown;
@@ -2166,6 +2258,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2177,6 +2271,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2202,6 +2298,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Session cookie for browser clients */
           "set-cookie"?: string;
           [name: string]: unknown;
@@ -2218,6 +2316,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2229,6 +2329,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2240,6 +2342,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2268,6 +2372,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -2281,6 +2387,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -2294,6 +2402,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -2307,6 +2417,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -2320,6 +2432,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -2333,6 +2447,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           /** @description Seconds until retry */
@@ -2348,6 +2464,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -2361,6 +2479,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2372,6 +2492,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -2385,6 +2507,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2410,6 +2534,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2421,6 +2547,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2432,6 +2560,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2443,6 +2573,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2454,6 +2586,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2465,6 +2599,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2476,6 +2612,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -2489,6 +2627,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2500,6 +2640,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -2513,6 +2655,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2538,6 +2682,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Representation validator for public-tier responses */
           etag?: string;
           /** @description Public short shared cache; authenticated tiers are private and no-store */
@@ -2565,6 +2711,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2576,6 +2724,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -2589,6 +2739,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2600,6 +2752,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -2627,6 +2781,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Representation validator for public-tier responses */
           etag?: string;
           /** @description Public short shared cache; authenticated tiers are private and no-store */
@@ -2651,6 +2807,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2662,6 +2820,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -2675,6 +2835,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2686,6 +2848,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -2713,6 +2877,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Representation validator for public-tier responses */
           etag?: string;
           /** @description Public short shared cache; authenticated tiers are private and no-store */
@@ -2744,6 +2910,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2755,6 +2923,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -2768,6 +2938,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2779,6 +2951,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -2973,6 +3147,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2984,6 +3160,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -2995,6 +3173,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -3006,6 +3186,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -3017,6 +3199,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -3028,6 +3212,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -3039,6 +3225,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -3052,6 +3240,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -3063,6 +3253,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -3076,6 +3268,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -3107,6 +3301,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3120,6 +3316,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3133,6 +3331,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3146,6 +3346,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3159,6 +3361,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3172,6 +3376,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           /** @description Seconds until retry */
@@ -3187,6 +3393,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -3200,6 +3408,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -3211,6 +3421,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -3238,6 +3450,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -3249,6 +3463,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -3260,6 +3476,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -3271,6 +3489,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -3282,6 +3502,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -3293,6 +3515,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -3304,6 +3528,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -3317,6 +3543,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -3328,6 +3556,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -3341,6 +3571,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -3368,6 +3600,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3381,6 +3615,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3394,6 +3630,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3407,6 +3645,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3420,6 +3660,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3433,6 +3675,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           /** @description Seconds until retry */
@@ -3448,6 +3692,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -3461,6 +3707,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -3472,6 +3720,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -3508,6 +3758,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3521,6 +3773,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3534,6 +3788,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3547,6 +3803,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3560,6 +3818,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3573,6 +3833,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           /** @description Seconds until retry */
@@ -3588,6 +3850,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -3601,6 +3865,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -3612,6 +3878,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -3648,6 +3916,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3661,6 +3931,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3674,6 +3946,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3687,6 +3961,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3700,6 +3976,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3713,6 +3991,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           /** @description Seconds until retry */
@@ -3728,6 +4008,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -3741,6 +4023,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -3752,6 +4036,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -3785,6 +4071,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3798,6 +4086,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3811,6 +4101,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3824,6 +4116,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3837,6 +4131,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3850,6 +4146,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           /** @description Seconds until retry */
@@ -3865,6 +4163,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -3878,6 +4178,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -3889,6 +4191,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -3922,6 +4226,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3935,6 +4241,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3948,6 +4256,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3961,6 +4271,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3974,6 +4286,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -3987,6 +4301,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           /** @description Seconds until retry */
@@ -4002,6 +4318,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -4015,6 +4333,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4026,6 +4346,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -4053,6 +4375,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4064,6 +4388,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4075,6 +4401,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -4088,6 +4416,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4099,6 +4429,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -4132,6 +4464,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -4145,6 +4479,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4156,6 +4492,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4167,6 +4505,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4178,6 +4518,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4189,6 +4531,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -4202,6 +4546,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4213,6 +4559,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -4239,6 +4587,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4259,6 +4609,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4270,6 +4622,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4281,6 +4635,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4292,6 +4648,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4303,6 +4661,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4314,6 +4674,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -4327,6 +4689,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4338,6 +4702,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -4351,6 +4717,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4381,6 +4749,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4398,6 +4768,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4409,6 +4781,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4420,6 +4794,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4431,6 +4807,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4442,6 +4820,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4453,6 +4833,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -4466,6 +4848,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4477,6 +4861,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -4490,6 +4876,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4517,6 +4905,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4533,6 +4923,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4544,6 +4936,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4555,6 +4949,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4566,6 +4962,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4577,6 +4975,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4588,6 +4988,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -4601,6 +5003,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4612,6 +5016,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -4625,6 +5031,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4655,6 +5063,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4688,6 +5098,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4699,6 +5111,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4710,6 +5124,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4721,6 +5137,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4732,6 +5150,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4743,6 +5163,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -4756,6 +5178,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4767,6 +5191,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -4780,6 +5206,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4806,6 +5234,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4817,6 +5247,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4828,6 +5260,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4839,6 +5273,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4850,6 +5286,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4861,6 +5299,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4872,6 +5312,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -4885,6 +5327,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4896,6 +5340,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -4909,6 +5355,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4935,6 +5383,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4946,6 +5396,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4957,6 +5409,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -4968,6 +5422,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -4981,6 +5437,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5003,6 +5461,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5014,6 +5474,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5025,6 +5487,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5036,6 +5500,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5047,6 +5513,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5058,6 +5526,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5069,6 +5539,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -5082,6 +5554,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5093,6 +5567,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -5106,6 +5582,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5132,6 +5610,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5143,6 +5623,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5154,6 +5636,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5165,6 +5649,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5176,6 +5662,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5187,6 +5675,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5198,6 +5688,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -5211,6 +5703,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5222,6 +5716,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -5235,6 +5731,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5261,6 +5759,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5272,6 +5772,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5283,6 +5785,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5294,6 +5798,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5305,6 +5811,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5316,6 +5824,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5327,6 +5837,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -5340,6 +5852,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5351,6 +5865,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -5364,6 +5880,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5390,6 +5908,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5401,6 +5921,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5412,6 +5934,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5423,6 +5947,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5434,6 +5960,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5445,6 +5973,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5456,6 +5986,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -5469,6 +6001,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5480,6 +6014,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -5493,6 +6029,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5519,6 +6057,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5530,6 +6070,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5541,6 +6083,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5552,6 +6096,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5563,6 +6109,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5574,6 +6122,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5585,6 +6135,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -5598,6 +6150,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5609,6 +6163,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -5622,6 +6178,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5648,6 +6206,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5659,6 +6219,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5670,6 +6232,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5681,6 +6245,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5692,6 +6258,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5703,6 +6271,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5714,6 +6284,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -5727,6 +6299,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5738,6 +6312,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -5751,6 +6327,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5784,6 +6362,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -5797,6 +6377,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -5810,6 +6392,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -5823,6 +6407,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -5836,6 +6422,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -5849,6 +6437,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           /** @description Seconds until retry */
@@ -5864,6 +6454,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -5877,6 +6469,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -5888,6 +6482,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -5923,6 +6519,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -5936,6 +6534,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -5949,6 +6549,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -5962,6 +6564,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -5975,6 +6579,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -5988,6 +6594,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           /** @description Seconds until retry */
@@ -6003,6 +6611,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -6016,6 +6626,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6027,6 +6639,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -6062,6 +6676,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -6075,6 +6691,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -6088,6 +6706,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -6101,6 +6721,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -6114,6 +6736,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -6127,6 +6751,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           /** @description Seconds until retry */
@@ -6142,6 +6768,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -6155,6 +6783,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6166,6 +6796,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -6202,6 +6834,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -6215,6 +6849,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -6228,6 +6864,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -6241,6 +6879,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -6254,6 +6894,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -6267,6 +6909,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           /** @description Seconds until retry */
@@ -6282,6 +6926,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -6295,6 +6941,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6306,6 +6954,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -6335,6 +6985,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6388,6 +7040,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6399,6 +7053,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6410,6 +7066,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6421,6 +7079,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6432,6 +7092,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6443,6 +7105,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -6456,6 +7120,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6467,6 +7133,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -6480,6 +7148,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6511,6 +7181,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6562,6 +7234,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6573,6 +7247,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6584,6 +7260,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6595,6 +7273,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6606,6 +7286,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6617,6 +7299,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6628,6 +7312,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -6641,6 +7327,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6652,6 +7340,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -6665,6 +7355,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6691,6 +7383,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6702,6 +7396,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6713,6 +7409,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6724,6 +7422,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6735,6 +7435,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6746,6 +7448,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6757,6 +7461,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -6770,6 +7476,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6781,6 +7489,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -6794,6 +7504,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6820,6 +7532,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6831,6 +7545,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6842,6 +7558,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6853,6 +7571,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -6866,6 +7586,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6877,6 +7599,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -6904,6 +7628,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6915,6 +7641,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6926,6 +7654,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6937,6 +7667,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6948,6 +7680,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6959,6 +7693,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6970,6 +7706,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -6983,6 +7721,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -6994,6 +7734,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -7007,6 +7749,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -7038,6 +7782,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Present on replay */
           "idempotent-replayed"?: "true";
           [name: string]: unknown;
@@ -7051,6 +7797,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -7062,6 +7810,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -7073,6 +7823,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -7084,6 +7836,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -7095,6 +7849,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -7106,6 +7862,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -7119,6 +7877,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -7130,6 +7890,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -7154,6 +7916,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -7167,6 +7931,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -7180,6 +7946,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {
@@ -7191,6 +7959,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
           [name: string]: unknown;
@@ -7204,6 +7974,8 @@ export interface operations {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {

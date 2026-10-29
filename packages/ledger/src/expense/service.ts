@@ -5,6 +5,7 @@ import {
   rollbackHoldInTx,
 } from "@konto-ledger/core";
 import type { KontoTransactionExecutor } from "@konto-ledger/types";
+import { context, SpanStatusCode, trace } from "@opentelemetry/api";
 import { type Event, type PseudonymId, parsePseudonymId } from "@yen/eventlog";
 import { paise } from "@yen/shared";
 import { ensureFundAccounts } from "../accounts.js";
@@ -125,6 +126,22 @@ export interface ApproveExpenseInTxResult {
 }
 
 export async function approveExpenseInTx(
+  input: ApproveExpenseInTxInput,
+): Promise<ApproveExpenseInTxResult> {
+  const span = trace.getTracer("yen-ledger").startSpan("ledger.approve");
+  return context.with(trace.setSpan(context.active(), span), async () => {
+    try {
+      return await approveExpenseInTxInner(input);
+    } catch (error) {
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+}
+
+async function approveExpenseInTxInner(
   input: ApproveExpenseInTxInput,
 ): Promise<ApproveExpenseInTxResult> {
   const { tx, expense, approval, policy } = input;

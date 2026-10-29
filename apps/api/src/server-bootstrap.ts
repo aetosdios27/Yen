@@ -12,6 +12,7 @@ import { PostgresDisplayNameStore } from "./display-name-store.js";
 import { PostgresDonationPledgeStore } from "./donation-store.js";
 import { PostgresExpenseStore } from "./expense-store.js";
 import { createServerLifecycle, type ServerLifecycle, shutdownOnSignal } from "./lifecycle.js";
+import { startObservability } from "./observability.js";
 import { PostgresPinStore } from "./pin/index.js";
 import { PostgresReconciliationStore } from "./reconciliation/postgres-store.js";
 import { useMemoryStore } from "./server-config.js";
@@ -107,6 +108,7 @@ export async function startServer(
     await sql?.end({ timeout: 1 });
     throw new Error("DATABASE_URL connection failed or waitlist_entries table is unavailable");
   }
+  const telemetrySdk = await startObservability();
 
   const inFlightTracker = new DefaultInFlightTracker();
   let lifecycleInstance: ServerLifecycle | undefined;
@@ -222,13 +224,25 @@ export async function startServer(
   (server as unknown as { maxHeaderSize?: number }).maxHeaderSize =
     resolvedConfig.SERVER_MAX_HEADER_SIZE_BYTES;
 
-  const lifecycle = createServerLifecycle({
+  const baseLifecycle = createServerLifecycle({
     server,
     sql,
     cleanup,
     getInFlight: () => inFlightTracker.count,
     shutdownTimeoutMs: resolvedConfig.SHUTDOWN_TIMEOUT_MS,
   });
+  const lifecycle: ServerLifecycle = {
+    get isShuttingDown() {
+      return baseLifecycle.isShuttingDown;
+    },
+    async shutdown(signal) {
+      try {
+        await baseLifecycle.shutdown(signal);
+      } finally {
+        await telemetrySdk?.shutdown();
+      }
+    },
+  };
   lifecycleInstance = lifecycle;
 
   if (options.registerSignals ?? true) {

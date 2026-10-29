@@ -20,9 +20,11 @@
   "dependencies": {
     "@hono/node-server": "2.1.5",
     "@hono/zod-openapi": "1.6.3",
+    "@opentelemetry/api": "^1.10.0",
+    "@opentelemetry/context-async-hooks": "^2.12.0",
     "@yen/db": "workspace:*",
-    "@yen/ledger": "workspace:*",
     "@yen/eventlog": "workspace:*",
+    "@yen/ledger": "workspace:*",
     "@yen/policy": "workspace:*",
     "@yen/shared": "workspace:*",
     "bcryptjs": "^3.0.3",
@@ -30,6 +32,8 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@opentelemetry/sdk-trace-base": "^2.12.0",
+    "@opentelemetry/sdk-trace-node": "^2.12.0",
     "@types/bcryptjs": "^3.0.0",
     "@types/node": "^26.6.5",
     "ajv": "^8.20.0",

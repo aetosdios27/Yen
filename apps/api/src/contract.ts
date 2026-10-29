@@ -8,6 +8,11 @@ const responseHeaders = {
     description: "Request correlation ID",
     required: true,
   },
+  "x-trace-id": {
+    schema: { type: "string", pattern: "^[0-9a-f]{32}$" },
+    description: "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+    required: true,
+  },
 } as const;
 const replayHeader = {
   "idempotent-replayed": {

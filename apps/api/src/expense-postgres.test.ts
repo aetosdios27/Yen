@@ -1,4 +1,7 @@
 import { randomInt } from "node:crypto";
+import { trace } from "@opentelemetry/api";
+import { InMemorySpanExporter, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { createSql, ensureFundPseudonym, getDisplayName, migrate, uuidv7 } from "@yen/db";
 import { eventLeafHash, hashHexSchema } from "@yen/eventlog";
 import {
@@ -12,16 +15,31 @@ import { paise, salt32, toHex } from "@yen/shared";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { databaseSuite } from "../../../packages/db/src/test/database.js";
 import { initLedgerSchema } from "../../../packages/ledger/src/schema.js";
+import { createApp } from "./app.js";
 import { PostgresDonationPledgeStore } from "./donation-store.js";
 import { PostgresExpenseStore } from "./expense-store.js";
+import {
+  MemoryActionTokenStore,
+  MemoryPinNotificationService,
+  MemoryPinStore,
+  PinService,
+} from "./pin/index.js";
+import { devPolicy } from "./policy.js";
+import { withMoneyOperation, withSpan } from "./telemetry.js";
 
 const QUORUM_TWO = { approvalQuorum: 2, objectionWindowHours: 0, autoExpireHours: 0 } as const;
 const verified = () => true;
+const spanExporter = new InMemorySpanExporter();
+const tracerProvider = new NodeTracerProvider({
+  spanProcessors: [new SimpleSpanProcessor(spanExporter)],
+});
 
 databaseSuite("Postgres expense store", (sql, url) => {
   let secondSql: ReturnType<typeof createSql>;
 
   beforeAll(async () => {
+    trace.disable();
+    tracerProvider.register();
     await migrate(sql);
     await initLedgerSchema(sql);
     secondSql = createSql(url);
@@ -29,6 +47,7 @@ databaseSuite("Postgres expense store", (sql, url) => {
 
   afterAll(async () => {
     await secondSql?.end({ timeout: 5 });
+    await tracerProvider.shutdown();
   });
 
   async function fund(): Promise<string> {
@@ -160,6 +179,7 @@ databaseSuite("Postgres expense store", (sql, url) => {
   });
 
   it("keeps every journey actor fund-scoped and personal data out of both event chains and leaves", async () => {
+    spanExporter.reset();
     const userIds: [string, string, string] = [uuidv7(), uuidv7(), uuidv7()];
     const userFixtures = [
       { id: userIds[0], phone: "+919111111111", name: "Journey Alice" },
@@ -234,29 +254,37 @@ databaseSuite("Postgres expense store", (sql, url) => {
       });
       await expenseStore.save(submitted, { actorUserId: userIds[0], policy: QUORUM_TWO });
       for (const [approverIndex, approverId] of [approverOne, approverTwo].entries()) {
-        await expenseStore.atomicApprove(
-          draftExpense.id,
-          {
-            approverId,
-            passkeySignature: {
-              credentialId: "journey-test",
-              signatureHex: "00",
-              clientDataJson: "{}",
-              authenticatorDataHex: "00",
-            },
-            approvedAt: new Date(Date.now() + approverIndex).toISOString(),
-          },
-          QUORUM_TWO,
-          verified,
-          new Date(Date.now() + approverIndex).toISOString(),
-          userIds[approverIndex + 1],
+        await withMoneyOperation("approve", () =>
+          withSpan("db.expense.atomic_approve", () =>
+            expenseStore.atomicApprove(
+              draftExpense.id,
+              {
+                approverId,
+                passkeySignature: {
+                  credentialId: "journey-test",
+                  signatureHex: "00",
+                  clientDataJson: "{}",
+                  authenticatorDataHex: "00",
+                },
+                approvedAt: new Date(Date.now() + approverIndex).toISOString(),
+              },
+              QUORUM_TWO,
+              verified,
+              new Date(Date.now() + approverIndex).toISOString(),
+              userIds[approverIndex + 1],
+            ),
+          ),
         );
       }
       const approved = await expenseStore.get(draftExpense.id);
       if (!approved) throw new Error("Expense disappeared during journey");
-      await expenseStore.save(
-        payExpense(approved, uuidv7(), new Date(Date.now() + 10).toISOString()),
-        { actorUserId: userIds[0], policy: QUORUM_TWO },
+      await withMoneyOperation("pay", () =>
+        withSpan("db.expense.save", () =>
+          expenseStore.save(
+            payExpense(approved, uuidv7(), new Date(Date.now() + 10).toISOString()),
+            { actorUserId: userIds[0], policy: QUORUM_TWO },
+          ),
+        ),
       );
 
       const events = await sql<
@@ -288,6 +316,159 @@ databaseSuite("Postgres expense store", (sql, url) => {
     }
     expect(everyActor[0]).toBeDefined();
     expect(everyActor[1]).toBeDefined();
+    const spans = spanExporter.getFinishedSpans();
+    expect(spans.map(({ name }) => name)).toEqual(
+      expect.arrayContaining([
+        "money.approve",
+        "db.expense.atomic_approve",
+        "ledger.approve",
+        "event.append",
+        "money.pay",
+        "db.expense.save",
+      ]),
+    );
+    const personalValues = [
+      ...userIds,
+      "+919111111111",
+      "+919222222222",
+      "+919333333333",
+      "Journey Alice",
+      "Journey Bhavna",
+      "Journey Chandra",
+    ];
+    for (const { attributes } of spans) {
+      for (const [key, value] of Object.entries(attributes)) {
+        expect(key).not.toMatch(/user.?id|phone|name|upi|amount/i);
+        for (const personalValue of personalValues) {
+          expect(JSON.stringify(value)).not.toContain(personalValue);
+        }
+      }
+    }
     expect(everyActor[0]?.filter((actor) => everyActor[1]?.includes(actor))).toEqual([]);
+  });
+
+  it("traces API approval and payment on Postgres without personal span attributes", async () => {
+    spanExporter.reset();
+    const ownerId = uuidv7();
+    const approverIds = [uuidv7(), uuidv7()] as const;
+    const personalFixtures = [
+      { id: ownerId, phone: "+919111112222", name: "Trace Journey Owner" },
+      { id: approverIds[0], phone: "+919222223333", name: "Trace Journey Approver One" },
+      { id: approverIds[1], phone: "+919333334444", name: "Trace Journey Approver Two" },
+    ];
+    for (const fixture of personalFixtures) {
+      await sql`INSERT INTO users (id, phone, display_name) VALUES (${fixture.id}, ${fixture.phone}, ${fixture.name})`;
+    }
+    const orgId = uuidv7();
+    const fundId = uuidv7();
+    await sql`INSERT INTO orgs (id, name, legal_form, owner_id) VALUES (${orgId}, 'Trace Journey Org', 'society', ${ownerId})`;
+    await sql`INSERT INTO funds (id, org_id, title, policy_json) VALUES (${fundId}, ${orgId}, 'Trace Journey Fund', '{}'::jsonb)`;
+    await sql.begin((tx) =>
+      recordDonation(tx, {
+        fundId,
+        amount: paise(100_000),
+        actorPseudonym: `psn_${uuidv7()}` as PseudonymId,
+      }),
+    );
+
+    const expenseStore = new PostgresExpenseStore(sql);
+    const pinStore = new MemoryPinStore();
+    const actionTokenStore = new MemoryActionTokenStore();
+    const pinNotificationService = new MemoryPinNotificationService();
+    const pinService = new PinService({
+      pinStore,
+      actionTokenStore,
+      notificationService: pinNotificationService,
+      pinSecret: "trace_test_pin_secret_32_bytes_long",
+    });
+    const makeApp = (principal: { id: string; role: "owner" | "approver" }) =>
+      createApp({
+        principal,
+        policy: devPolicy,
+        expenseStore,
+        pinStore,
+        actionTokenStore,
+        pinNotificationService,
+        pinService,
+        logger: { log: () => undefined },
+      });
+    const ownerApp = makeApp({ id: ownerId, role: "owner" });
+    const createResponse = await ownerApp.request(`/v1/funds/${fundId}/expenses`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "idempotency-key": "trace-create" },
+      body: JSON.stringify({
+        amountPaise: "5000",
+        description: "Traceable supplies",
+        recipientRef: "trace-supplier",
+      }),
+    });
+    expect(createResponse.status).toBe(201);
+    const created = (await createResponse.json()) as { id: string; status: string };
+    expect(created.status).toBe("draft");
+
+    const submitResponse = await ownerApp.request(
+      `/v1/funds/${fundId}/expenses/${created.id}/submit`,
+      { method: "POST", headers: { "idempotency-key": "trace-submit" } },
+    );
+    expect(submitResponse.status).toBe(200);
+
+    for (const approverId of approverIds) {
+      await pinService.setupPin(approverId, "482915", { userId: approverId });
+      const response = await makeApp({ id: approverId, role: "approver" }).request(
+        `/v1/funds/${fundId}/expenses/${created.id}/approve`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "idempotency-key": `trace-approve-${approverId}`,
+          },
+          body: JSON.stringify({ pin: "482915" }),
+        },
+      );
+      expect(response.status).toBe(200);
+    }
+
+    const payResponse = await ownerApp.request(`/v1/funds/${fundId}/expenses/${created.id}/pay`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "idempotency-key": "trace-pay" },
+      body: JSON.stringify({ bankTransactionId: uuidv7() }),
+    });
+    expect(payResponse.status).toBe(200);
+    expect((await expenseStore.get(created.id))?.status).toBe("paid");
+
+    await tracerProvider.forceFlush();
+    const spans = spanExporter.getFinishedSpans();
+    expect(spans.map(({ name }) => name)).toEqual(
+      expect.arrayContaining([
+        "POST /v1/funds/:fundId/expenses",
+        "POST /v1/funds/:fundId/expenses/:expenseId/submit",
+        "POST /v1/funds/:fundId/expenses/:expenseId/approve",
+        "POST /v1/funds/:fundId/expenses/:expenseId/pay",
+        "pin.verify",
+        "money.approve",
+        "db.expense.atomic_approve",
+        "ledger.approve",
+        "event.append",
+        "notification.enqueue",
+        "money.pay",
+        "ledger.pay",
+        "db.expense.save",
+      ]),
+    );
+    const personalValues = [
+      ...personalFixtures.flatMap(({ id, phone, name }) => [id, phone, name]),
+      "5000",
+      "482915",
+      fundId,
+      created.id,
+    ];
+    for (const { attributes } of spans) {
+      for (const [key, value] of Object.entries(attributes)) {
+        expect(key).not.toMatch(/user.?id|phone|name|upi|amount/i);
+        for (const personalValue of personalValues) {
+          expect(JSON.stringify(value)).not.toContain(personalValue);
+        }
+      }
+    }
   });
 });

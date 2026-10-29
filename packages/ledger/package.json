@@ -26,6 +26,7 @@
     "@konto-ledger/adapters": "0.2.0",
     "@konto-ledger/core": "0.2.0",
     "@konto-ledger/types": "0.2.0",
+    "@opentelemetry/api": "^1.10.0",
     "@yen/db": "workspace:*",
     "@yen/eventlog": "workspace:*",
     "@yen/shared": "workspace:*",
