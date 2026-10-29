@@ -31,7 +31,12 @@ async function main() {
         "content-type": "application/json",
         "idempotency-key": idempotencyKey,
       },
-      body: JSON.stringify({ name, targetPaise: "100" }),
+      body: JSON.stringify({
+        name,
+        targetPaise: "100",
+        upiVpa: "club@upi",
+        upiPayeeName: "Shared Club",
+      }),
     });
 
     const body = await res.json();
