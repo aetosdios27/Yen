@@ -30,6 +30,9 @@ export async function runRetentionCli(
   }
 }
 
-if (process.argv[1]?.endsWith("/retention-cli.ts") || process.argv[1]?.endsWith("/retention-cli.js")) {
+if (
+  process.argv[1]?.endsWith("/retention-cli.ts") ||
+  process.argv[1]?.endsWith("/retention-cli.js")
+) {
   process.exitCode = await runRetentionCli(process.argv.slice(2));
 }

@@ -2,7 +2,6 @@ import type {
   FundNotificationDailyUsageRow,
   NotificationDeadLetterRow,
   NotificationOutboxRow,
-  UserNotificationPreferencesRow,
 } from "@yen/db";
 import { uuidv7 } from "@yen/db";
 import { addPaise, type FundId, type Paise, paise, type UserId } from "@yen/shared";
@@ -57,6 +56,14 @@ export interface NotificationStore {
   getDailyFundUsage(fundId: FundId, date: string): Promise<DailyFundUsage>;
   incrementFundUsage(fundId: FundId, date: string, costPaise: Paise): Promise<DailyFundUsage>;
 }
+
+type NotificationPreferencesStateRow = Omit<UserPreferences, "user_id"> & {
+  erased_at: Date | null;
+  has_preferences: boolean;
+  has_whatsapp_consent: boolean;
+  has_sms_consent: boolean;
+  has_email_consent: boolean;
+};
 
 export class InMemoryNotificationStore implements NotificationStore {
   public outbox = new Map<string, NotificationOutboxRow>();
@@ -439,26 +446,62 @@ export class PostgresNotificationStore implements NotificationStore {
 
   async getUserPreferences(userId: UserId): Promise<UserPreferences> {
     const rows = (await this.client.unsafe(
-      `SELECT * FROM user_notification_preferences WHERE user_id = $1`,
+      `SELECT u.erased_at,
+         p.user_id IS NOT NULL AS has_preferences,
+         EXISTS (SELECT 1 FROM consent_records c WHERE c.user_id = u.id
+           AND c.purpose = 'notification_whatsapp' AND c.withdrawn_at IS NULL) AS has_whatsapp_consent,
+         EXISTS (SELECT 1 FROM consent_records c WHERE c.user_id = u.id
+           AND c.purpose = 'notification_sms' AND c.withdrawn_at IS NULL) AS has_sms_consent,
+         EXISTS (SELECT 1 FROM consent_records c WHERE c.user_id = u.id
+           AND c.purpose = 'notification_email' AND c.withdrawn_at IS NULL) AS has_email_consent,
+         COALESCE(p.whatsapp_enabled, true) AS whatsapp_enabled,
+         COALESCE(p.sms_enabled, true) AS sms_enabled,
+         COALESCE(p.email_enabled, true) AS email_enabled,
+         COALESCE(p.opted_out, false) AS opted_out,
+         COALESCE(p.locale, 'en') AS locale,
+         COALESCE(p.quiet_hours_enabled, false) AS quiet_hours_enabled,
+         p.quiet_hours_start,
+         p.quiet_hours_end,
+         COALESCE(p.timezone, 'Asia/Kolkata') AS timezone
+       FROM users u
+       LEFT JOIN user_notification_preferences p ON p.user_id = u.id
+       WHERE u.id = $1`,
       [userId],
-    )) as UserNotificationPreferencesRow[];
+    )) as NotificationPreferencesStateRow[];
 
     const row = rows[0];
     if (!row) {
       return getDefaultUserPreferences(userId);
     }
 
+    if (row.erased_at !== null) {
+      return {
+        ...getDefaultUserPreferences(userId),
+        whatsapp_enabled: false,
+        sms_enabled: false,
+        email_enabled: false,
+        opted_out: true,
+      };
+    }
+
+    if (row.locale !== "en" && row.locale !== "hi") {
+      throw new Error("Invalid notification preference locale");
+    }
+
+    const defaults = getDefaultUserPreferences(userId);
     return {
       user_id: userId,
-      whatsapp_enabled: row.whatsapp_enabled,
-      sms_enabled: row.sms_enabled,
-      email_enabled: row.email_enabled,
-      opted_out: row.opted_out,
-      locale: row.locale as "en" | "hi",
-      quiet_hours_enabled: row.quiet_hours_enabled,
-      quiet_hours_start: row.quiet_hours_start,
-      quiet_hours_end: row.quiet_hours_end,
-      timezone: row.timezone,
+      whatsapp_enabled: row.has_whatsapp_consent && (!row.has_preferences || row.whatsapp_enabled),
+      sms_enabled: row.has_sms_consent && (!row.has_preferences || row.sms_enabled),
+      email_enabled: row.has_email_consent && (!row.has_preferences || row.email_enabled),
+      opted_out: row.has_preferences ? row.opted_out : defaults.opted_out,
+      locale: row.has_preferences ? row.locale : defaults.locale,
+      quiet_hours_enabled: row.has_preferences
+        ? row.quiet_hours_enabled
+        : defaults.quiet_hours_enabled,
+      quiet_hours_start: row.has_preferences ? row.quiet_hours_start : defaults.quiet_hours_start,
+      quiet_hours_end: row.has_preferences ? row.quiet_hours_end : defaults.quiet_hours_end,
+      timezone: row.has_preferences ? row.timezone : defaults.timezone,
     };
   }
 
@@ -495,9 +538,10 @@ export class PostgresNotificationStore implements NotificationStore {
   }
 
   async getUserContact(userId: UserId): Promise<RecipientContactInfo | null> {
-    const rows = (await this.client.unsafe(`SELECT phone FROM users WHERE id = $1`, [
-      userId,
-    ])) as Array<{ phone: string }>;
+    const rows = (await this.client.unsafe(
+      `SELECT phone FROM users WHERE id = $1 AND erased_at IS NULL`,
+      [userId],
+    )) as Array<{ phone: string }>;
 
     const row = rows[0];
     if (!row) return null;

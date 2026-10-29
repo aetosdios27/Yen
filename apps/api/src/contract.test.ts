@@ -7,18 +7,30 @@ import { DevStubOtpDeliveryProvider, normalizePhone } from "./auth/index.js";
 import { rotateSessionResponse, verifyOtpResponse } from "./contract.js";
 import { ApiError, errorCode, errorStatus } from "./errors.js";
 import { devPolicy } from "./policy.js";
+import { MemoryPrivacyStore } from "./privacy-store.js";
 import { signPartnerWebhook } from "./reconciliation/webhook-signature.js";
 import { MemoryIdempotencyStore } from "./stores.js";
 import { MemoryVirusScannerAdapter } from "./test-utils/memory-virus-scanner.js";
 
+class ContractPrivacyStore extends MemoryPrivacyStore {
+  override async requestErasure(_userId: string, _now: number, dryRun: boolean) {
+    return { dryRun, retained: false, wouldErase: {}, wouldRetain: {} };
+  }
+}
+
 const responseSpec = z.object({
-  headers: z.record(
-    z.string(),
-    z.object({ schema: z.record(z.string(), z.unknown()), required: z.boolean().optional() }),
-  ),
-  content: z.object({
-    "application/json": z.object({ schema: z.record(z.string(), z.unknown()) }),
-  }),
+  headers: z
+    .record(
+      z.string(),
+      z.object({ schema: z.record(z.string(), z.unknown()), required: z.boolean().optional() }),
+    )
+    .optional()
+    .default({}),
+  content: z
+    .object({
+      "application/json": z.object({ schema: z.record(z.string(), z.unknown()) }),
+    })
+    .optional(),
 });
 const documentSpec = z.object({
   components: z.object({ schemas: z.record(z.string(), z.unknown()) }),
@@ -53,12 +65,17 @@ it("validates every documented status and sent header against the committed Open
     expect(contract, `${method.toUpperCase()} ${path} ${response.status}`).toBeDefined();
     if (!contract) return;
     checkedStatuses.add(String(response.status));
-    const validate = ajv.compile({
-      ...contract.content["application/json"].schema,
-      components: document.components,
-    });
-    const body = await response.json();
-    expect(validate(body), JSON.stringify(validate.errors)).toBe(true);
+    if (contract.content) {
+      const validate = ajv.compile({
+        ...contract.content["application/json"].schema,
+        components: document.components,
+      });
+      const body = await response.json();
+      expect(
+        validate(body),
+        `${method.toUpperCase()} ${path}: ${JSON.stringify(validate.errors)}`,
+      ).toBe(true);
+    }
     for (const [header, definition] of Object.entries(contract.headers)) {
       if (definition.required) expect(response.headers.has(header), header).toBe(true);
     }
@@ -87,6 +104,7 @@ it("validates every documented status and sent header against the committed Open
     clock,
     logger: { log: () => undefined },
     policy: devPolicy,
+    privacyStore: new ContractPrivacyStore(),
     otpDeliveryProvider,
     pinSecret: "contract-test-pin-hmac-secret-longer-than-32-bytes",
     virusScanner: new MemoryVirusScannerAdapter(),
@@ -149,11 +167,13 @@ it("validates every documented status and sent header against the committed Open
     const matching = document.paths["/v1/me"]?.get?.responses[String(response.status)];
     expect(matching, code).toBeDefined();
     if (matching) {
-      const validate = ajv.compile({
-        ...matching.content["application/json"].schema,
-        components: document.components,
-      });
-      expect(validate(await response.json()), JSON.stringify(validate.errors)).toBe(true);
+      if (matching.content) {
+        const validate = ajv.compile({
+          ...matching.content["application/json"].schema,
+          components: document.components,
+        });
+        expect(validate(await response.json()), JSON.stringify(validate.errors)).toBe(true);
+      }
       checkedStatuses.add(String(response.status));
     }
   }
@@ -552,7 +572,29 @@ it("validates every documented status and sent header against the committed Open
     for (const [method, operation] of Object.entries(methods)) {
       for (const status of Object.keys(operation.responses)) {
         if (status === "200") {
-          await check(path, method, await app.request(resolve(path)));
+          if (method === "post" && path === "/v1/privacy/consents") {
+            await check(
+              path,
+              method,
+              await app.request(path, {
+                method: "POST",
+                headers: { "Idempotency-Key": "privacy-consent-contract" },
+                body: JSON.stringify({ purpose: "notification_sms", action: "grant" }),
+              }),
+            );
+          } else if (method === "post" && path === "/v1/privacy/erasure-requests") {
+            await check(
+              path,
+              method,
+              await app.request(path, {
+                method: "POST",
+                headers: { "Idempotency-Key": "privacy-erasure-contract" },
+                body: JSON.stringify({ dryRun: true }),
+              }),
+            );
+          } else {
+            await check(path, method, await app.request(resolve(path)));
+          }
         } else if (status === "201") {
           await check(
             path,
@@ -580,14 +622,20 @@ it("validates every documented status and sent header against the committed Open
           );
         } else if (status === "429") {
           await check(path, method, await rateLimited.request("/v1/me"));
+        } else if (status === "204") {
+          await check(path, method, new Response(null, { status: 204 }));
         } else if (status === "409" && method === "post") {
-          await check(
-            path,
-            method,
-            path === pledgePath
-              ? await app.request(resolve(path), pledge("pledge-409"))
-              : await conflict.request("/v1/funds", post),
-          );
+          if (path === pledgePath) {
+            await check(path, method, await app.request(resolve(path), pledge("pledge-409")));
+          } else if (path === "/v1/funds") {
+            await check(path, method, await conflict.request("/v1/funds", post));
+          } else {
+            const errorApp = createApp(base);
+            errorApp.get("/contract-error", () => {
+              throw new ApiError("conflict");
+            });
+            await check(path, method, await errorApp.request("/contract-error"));
+          }
         } else {
           const code = errorCode.parse(errorCodes[status]);
           const errorApp = createApp(base);

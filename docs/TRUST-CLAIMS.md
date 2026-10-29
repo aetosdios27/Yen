@@ -115,15 +115,15 @@ Each README claim that has a row carries a `<!-- claim: CLAIM-ID -->` marker. Th
 - **Reference:** `ethereum-reorg`, `opentimestamps`
 - **Missing:** No anchoring worker, publication schedule, or batching exists. No Amoy deployment exists: `contracts/deployments/amoy.json` is a template with null fields. Nothing authenticates a root for verifiers to use.
 
-### CLAIM-11 Personal data stays off the chain
+### CLAIM-11 Names and contact details stay off the chain
 
 - **Status:** partial
-- **Wording:** "Personal data stays off the chain"
+- **Wording:** "Names, phone numbers, and email addresses stay off the chain"
 - **Where:** README.md:69
-- **Mechanism:** `contracts/src/RootRegistry.sol` `publishRoot` accepts only a `bytes32` root. `packages/eventlog/src/model.ts` `parseEvent` rejects unknown payload fields and raw user IDs.
-- **Test:** `packages/eventlog/src/eventlog.test.ts` "rejects a raw user UUID as actor and unversioned payload additions"
+- **Mechanism:** `contracts/src/RootRegistry.sol` `publishRoot` accepts only a `bytes32` root. `packages/eventlog/src/model.ts` `parseEvent` accepts strict identifier and typed-value schemas. `packages/db/src/pseudonyms.ts` keeps account links in ordinary tables.
+- **Test:** `packages/eventlog/src/eventlog.test.ts` "rejects a raw user UUID as actor and unversioned payload additions"; `apps/api/src/expense-postgres.test.ts` "keeps journey actors fund-scoped and personal data out of API logs, event chains, and Merkle leaves"; `apps/api/src/privacy-postgres.test.ts` "runs the donation API journey without putting phone, name, or email in logs, events, or Merkle leaves"
 - **Reference:** `dpdp-act`, `ico-pseudonymisation`
-- **Missing:** This is a schema and payload boundary claim, not a guarantee that every user-entered string is safe. No privacy consent, erasure, or end-to-end PII scan workflow is implemented by this change. A chain publisher is not part of this claim; no personal data column is intentionally included in event payloads or Merkle leaves.
+- **Missing:** The tests cover current API journeys and event schemas, not every endpoint, database log configuration, backup, or notification provider. The chain publisher is not implemented; the claim is limited to direct names and contact details in current event and Merkle data. Fund-scoped pseudonyms remain in records and may still be linkable while their mapping exists. Personal data is stored in ordinary database tables and may remain where a fund owner marks retention required.
 
 ### CLAIM-12 Spending needs the configured approvals
 
@@ -211,7 +211,7 @@ Each README claim that has a row carries a `<!-- claim: CLAIM-ID -->` marker. Th
 - **Wording:** "No raw URL, query, body, header, principal, phone number, authorization, cookie, or idempotency key is logged."
 - **Where:** apps/api/README.md:133; apps/api/README.md:138
 - **Mechanism:** `apps/api/src/logging.ts` `serializeRequestLog` parses each entry with a Zod schema, which drops unknown fields
-- **Test:** `apps/api/src/app.test.ts` "logs only allowed metadata, using a route template and no raw inputs"; `apps/api/src/app.test.ts` "strips unexpected properties before JSON serialization"
+- **Test:** `apps/api/src/app.test.ts` "logs only allowed metadata, using a route template and no raw inputs"; `apps/api/src/app.test.ts` "strips unexpected properties before JSON serialization"; `apps/api/src/expense-postgres.test.ts` "keeps journey actors fund-scoped and personal data out of API logs, event chains, and Merkle leaves"
 - **Reference:** none yet (gap)
 - **Mutation:** Replaced the parse in `serializeRequestLog` with `JSON.stringify(entry)`. "strips unexpected properties before JSON serialization" and "never logs sensitive error contents or unexpected failure fields" failed.
 
@@ -288,23 +288,23 @@ Each README claim that has a row carries a `<!-- claim: CLAIM-ID -->` marker. Th
 
 ### CLAIM-28 Per-fund pseudonyms isolate identity across funds
 
-- **Status:** planned
-- **Wording:** "PII belongs only in application tables. `pseudonyms` is an erasable mapping from a public UUID to a user."
-- **Where:** packages/db/README.md:15
-- **Mechanism:** none in use. The `ensureFundPseudonym` helper is planned under YEN-70 in `@yen/db` to map `(user_id, fund_id)` pairs to distinct random UUIDv4 pseudonyms.
-- **Test:** none
+- **Status:** enforced
+- **Wording:** "Each account has a distinct, random pseudonym in each fund."
+- **Where:** packages/db/README.md:15; packages/eventlog/README.md:3
+- **Mechanism:** `packages/db/src/pseudonyms.ts` `ensureFundPseudonym` stores a unique `(user_id, fund_id)` mapping and creates a random UUIDv4. API expense and donation stores resolve authenticated actors to the matching fund pseudonym.
+- **Test:** `packages/db/src/pseudonyms.test.ts` "same user in two funds gets two different pseudonyms"; `packages/db/src/pseudonyms.test.ts` "no pseudonym id appears in two (user, fund) pairs"; `apps/api/src/expense-postgres.test.ts` "keeps journey actors fund-scoped and personal data out of API logs, event chains, and Merkle leaves"
 - **Reference:** `ico-pseudonymisation`, `dpdpa-transcription`
-- **Missing:** The per-fund pseudonym schema (`fund_pseudonyms`) and `ensureFundPseudonym` helper are not merged on this branch (developed on origin/aetosdios27/yen-70-fund-pseudonyms). Event persistence is unbuilt (YEN-18). Named tests to be written: `packages/db/src/pseudonyms.test.ts` "isolates pseudonyms for the same user across distinct funds", `packages/db/src/pseudonyms.test.ts` "generates random UUIDs without shared timestamp prefixes", and `packages/db/src/pseudonyms.test.ts` "converges idempotently under concurrent creation".
+- **Missing:** A pseudonym is still linkable to its account while the ordinary-table mapping exists. Erasure removes that mapping; it does not erase historical events.
 
-### CLAIM-29 Real names and Yen IDs stay outside event logs and public pages
+### CLAIM-29 Event schemas exclude direct names and contact details
 
 - **Status:** partial
-- **Wording:** "Names, phone numbers, VPAs, free-form notes, and raw evidence are not accepted."
-- **Where:** packages/eventlog/README.md:9
-- **Mechanism:** `packages/eventlog/src/model.ts` `parseEvent` rejects raw user UUIDs and unversioned payload fields. Private 9-digit Yen ID storage and exclusion from logs and public pages are planned under YEN-70 (#30, unmerged).
-- **Test:** `packages/eventlog/src/eventlog.test.ts` "rejects a raw user UUID as actor and unversioned payload additions"
+- **Wording:** "Names, phone numbers, VPAs, free-form notes, and raw evidence are not accepted as event fields."
+- **Where:** `packages/eventlog/src/model.ts:43`
+- **Mechanism:** `packages/eventlog/src/model.ts` `parseEvent` uses strict event and payload schemas with typed identifiers, enums, and financial values. Display names and contact hashes are stored separately by `packages/db/src/display-names.ts`.
+- **Test:** `packages/eventlog/src/eventlog.test.ts` "rejects a raw user UUID as actor and unversioned payload additions"; `apps/api/src/expense-postgres.test.ts` "keeps journey actors fund-scoped and personal data out of API logs, event chains, and Merkle leaves"
 - **Reference:** `dpdp-act`, `dpdpa-transcription`
-- **Missing:** The parse check covers the eventlog package only. Real names and phone numbers are stored in application tables; private 9-digit Yen ID storage is planned in separate, unmerged PR #30; UI donor visibility options (full name, initials, "a donor") and redaction tiers are unbuilt (YEN-31, YEN-70). No test scans receipts or API responses to verify absence of Yen IDs and real names. Named tests to be written: `apps/api/src/routes.test.ts` "never exposes 9-digit Yen ID in public endpoints, receipts, or event streams" and `apps/api/src/routes.test.ts` "redacts donor name according to selected visibility preference".
+- **Missing:** Fund policy can allow a chosen display name on a public timeline. This claim is about event fields, not a promise that names never appear on a public page. Current tests do not scan every endpoint response or uploaded evidence.
 
 ### CLAIM-30 Money actions require server-verified 6-digit PIN with lockout and cooling-off
 
@@ -325,3 +325,23 @@ Each README claim that has a row carries a `<!-- claim: CLAIM-ID -->` marker. Th
 - **Test:** `packages/verifier/src/verify.test.ts` "detects an edited event"
 - **Reference:** `rfc-6962`, `rfc-8785`, `fips-180-4`
 - **Missing:** The tools verify the supplied segment and do not establish completeness or authenticate the start checkpoint by themselves. RPC mode compares a root at a caller-supplied registry address, but no publication pipeline or deployed registry is in use. The database exporter operates on a fixture and is not wired into a public export flow.
+
+### CLAIM-32 The web app does not include third-party tracking
+
+- **Status:** partial
+- **Wording:** "Yen uses no third-party tracking cookies, no advertising cookies and no analytics scripts."
+- **Where:** `apps/web/src/app/layout.tsx:10`; `apps/web/package.json:17`
+- **Mechanism:** The current web app has no analytics or advertising integration in `apps/web/package.json` or `apps/web/src/app/layout.tsx`.
+- **Test:** none
+- **Reference:** none yet (gap)
+- **Missing:** No automated dependency or rendered-page check prevents a future third-party tracker from being added.
+
+### CLAIM-33 Privacy controls record consent and support erasure
+
+- **Status:** partial
+- **Wording:** "The API records purpose-specific consent and accepts authenticated erasure previews and requests."
+- **Where:** `apps/api/src/app.ts:379`; `apps/api/src/privacy-store.ts:1`; `apps/web/src/i18n/messages/en.ts:142`; `apps/web/src/i18n/messages/hi.ts:137`
+- **Mechanism:** `apps/api/src/privacy-store.ts` records notice version, grant time, and withdrawal time; authenticated routes expose consent history, erasure dry runs and execution, and owner-authorized retention decisions with an audit reason.
+- **Test:** `apps/api/src/privacy.test.ts` "records purpose-specific consent and makes withdrawal visible immediately"; `apps/api/src/privacy-postgres.test.ts` "dry-runs and erases mutable identity while preserving event bytes and verification"; `apps/api/src/privacy-postgres.test.ts` "allows only the owning fund owner to set logged retention and keeps minimal identity on erasure"; `apps/api/src/privacy-postgres.test.ts` "records the notice version and immediately disables a withdrawn notification channel"
+- **Reference:** none yet (gap)
+- **Missing:** The API has no self-service web form. Legal basis and statutory retention periods have not been assessed; this engineering work is not legal advice. A message already accepted by a notification provider cannot be recalled.

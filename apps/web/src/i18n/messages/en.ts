@@ -141,27 +141,27 @@ export const en = {
     },
     privacy: {
       title: "Privacy notice",
-      updated: "Last updated 26 October 2026",
+      updated: "Last updated 29 October 2026 · Notice version 2026-10-29",
       intro:
-        "This notice describes personal data currently stored by Yen and the privacy controls being built. It is not legal advice.",
+        "This notice describes personal data Yen stores and the privacy controls available through its authenticated API. It is not legal advice.",
       collectTitle: "What we collect",
       collectBody:
         "Depending on the feature you use, Yen stores account phone numbers and display names, club membership details, sign-in session and device data, waitlist contact details, donation contact choices, and notification settings. Yen also stores financial and audit records for clubs.",
       whyTitle: "Why we collect it",
       whyBody:
-        "We use this data to sign you in, run club features, show chosen names, deliver requested notifications, prevent abuse, and keep club records. The database has consent and erasure record tables, but user-facing consent and erasure workflows are not yet available.",
+        "We use this data to sign you in, run club features, show chosen names, deliver requested notifications, prevent abuse, and keep club records. The API records purpose-specific consent and accepts authenticated erasure previews and requests.",
       publicTitle: "What is never public",
       publicBody:
-        "Names, phone numbers, email addresses, and contact hashes are kept outside fund events and Merkle data. Public records use fund-scoped pseudonyms. Do not put personal details in event descriptions.",
+        "Names, phone numbers, emails, and codes made from contacts stay out of a fund's permanent records and the proof data created from them. Public records use a different code for each fund. Do not put personal details in record descriptions.",
       storageTitle: "Where it is stored",
       storageBody:
-        "Account and contact data is stored in ordinary database tables. The append-only event history is designed to contain no personal data. We do not currently offer a self-service deletion flow. A club may need to retain some financial records where another law requires it; Yen assumes the stricter reading and records such retention with a reason.",
+        "Account and contact data is stored in ordinary database tables. A fund's permanent records and the proof data made from them do not contain names, phone numbers, or emails. An authenticated erasure request removes or anonymizes identity data that can be changed. If a fund owner records that another law requires retention, Yen keeps the minimum account identity and logs the reason.",
       trackingTitle: "No tracking",
       trackingBody:
         "Yen uses no third-party tracking cookies, no advertising cookies and no analytics scripts.",
       rightsTitle: "Your choices",
       rightsBody:
-        "Contact the Yen team to request correction or deletion. The API does not yet provide consent withdrawal or erasure requests. This product notice does not determine your legal rights; seek qualified advice for legal questions.",
+        "For privacy questions, email raypranav718@gmail.com. Use the authenticated API route `/v1/privacy/consents` to grant or withdraw consent and `/v1/privacy/erasure-requests` to preview or request erasure. This page does not submit a request. Withdrawing consent stops queued notifications that have not started delivery; a message already sent to a provider cannot be recalled. This notice does not determine your legal rights; seek qualified advice for legal questions.",
       changesTitle: "Changes to this notice",
       changesBody:
         "When this notice changes, the updated version appears on this page with a new date.",

@@ -2,7 +2,12 @@ import type { NotificationOutboxRow } from "@yen/db";
 import { parseFundId, parseUserId } from "@yen/shared";
 import type { ChannelProvider } from "./channels/types.js";
 import { checkDailyCap, getTodayDateString } from "./cost-guard.js";
-import { calculateQuietHoursEnd, getEligibleChannels, isDuringQuietHours } from "./preferences.js";
+import {
+  calculateQuietHoursEnd,
+  getEligibleChannels,
+  isChannelEnabled,
+  isDuringQuietHours,
+} from "./preferences.js";
 import type { NotificationStore } from "./store.js";
 import { renderNotificationTemplate } from "./templates.js";
 import type { NotificationChannel, RenderedTemplate } from "./types.js";
@@ -126,6 +131,19 @@ export class NotificationsWorker {
       });
       return "skipped";
     }
+    if (!isChannelEnabled(preferences, row.preferred_channel)) {
+      await this.store.markSkipped(
+        row.id,
+        claimToken,
+        "User opted out of this notification channel",
+        now,
+      );
+      this.logger?.info("Notification skipped: channel disabled", {
+        notification_id: row.id,
+        fund_id: fundId,
+      });
+      return "skipped";
+    }
 
     // 2. Check quiet hours
     if (isDuringQuietHours(preferences, now)) {
@@ -201,6 +219,21 @@ export class NotificationsWorker {
 
       const recipientContact = channel === "email" ? contact.email : contact.phone;
       if (!recipientContact) continue;
+
+      const currentPreferences = await this.store.getUserPreferences(userId);
+      if (currentPreferences.opted_out || !isChannelEnabled(currentPreferences, channel)) {
+        await this.store.markSkipped(
+          row.id,
+          claimToken,
+          "User withdrew consent before delivery",
+          now,
+        );
+        this.logger?.info("Notification skipped: consent withdrawn before delivery", {
+          notification_id: row.id,
+          fund_id: fundId,
+        });
+        return "skipped";
+      }
 
       if (!(await this.store.ownsClaim(row.id, claimToken, now))) {
         this.logger?.warn("Notification delivery stopped after claim was replaced", {

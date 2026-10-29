@@ -368,6 +368,95 @@ export const publicFundTimelineRoute = createRoute({
     ...publicFundErrors,
   },
 });
+
+const consentPurpose = z.enum([
+  "account_otp",
+  "donation_receipt_contact",
+  "notification_whatsapp",
+  "notification_sms",
+  "notification_email",
+]);
+const privacyConsentsResponse = z.object({
+  consents: z.array(
+    z.object({
+      purpose: consentPurpose,
+      noticeVersion: z.string(),
+      grantedAt: z.iso.datetime(),
+      withdrawnAt: z.iso.datetime().nullable(),
+    }),
+  ),
+});
+const privacyConsentInput = z
+  .object({ purpose: consentPurpose, action: z.enum(["grant", "withdraw"]) })
+  .strict();
+const privacyStatusResponse = z.object({ status: z.literal("ok"), noticeVersion: z.string() });
+export const getPrivacyConsentsRoute = createRoute({
+  method: "get",
+  path: "/v1/privacy/consents",
+  operationId: "getPrivacyConsents",
+  security,
+  responses: {
+    200: jsonResponse(
+      privacyConsentsResponse,
+      "Current and historical purpose-specific consent records",
+    ),
+    ...protectedErrors,
+  },
+});
+export const updatePrivacyConsentRoute = createRoute({
+  method: "post",
+  path: "/v1/privacy/consents",
+  operationId: "updatePrivacyConsent",
+  security,
+  request: {
+    headers: z.object({ "Idempotency-Key": idempotencyKey }),
+    body: { content: { "application/json": { schema: privacyConsentInput } } },
+  },
+  responses: {
+    200: jsonResponse(privacyStatusResponse, "Consent recorded or withdrawn"),
+    ...protectedErrors,
+  },
+});
+const erasureInput = z.object({ dryRun: z.boolean().default(false) }).strict();
+const erasureReport = z.object({
+  status: z.enum(["preview", "completed"]),
+  retained: z.boolean(),
+  wouldErase: z.record(z.string(), z.number().int().nonnegative()),
+  wouldRetain: z.record(z.string(), z.number().int().nonnegative()),
+});
+export const requestErasureRoute = createRoute({
+  method: "post",
+  path: "/v1/privacy/erasure-requests",
+  operationId: "requestErasure",
+  security,
+  request: {
+    headers: z.object({ "Idempotency-Key": idempotencyKey }),
+    body: { content: { "application/json": { schema: erasureInput } } },
+  },
+  responses: {
+    200: jsonResponse(erasureReport, "Erasure preview or completed request"),
+    ...protectedErrors,
+  },
+});
+const retentionInput = z
+  .object({ userId: z.string().uuid(), reason: z.string().trim().min(10).max(1000) })
+  .strict();
+export const markRetentionRequiredRoute = createRoute({
+  method: "post",
+  path: "/v1/privacy/funds/{fundId}/retention-required",
+  operationId: "markRetentionRequired",
+  security,
+  request: {
+    params: z.object({ fundId: z.string().uuid() }),
+    headers: z.object({ "Idempotency-Key": idempotencyKey }),
+    body: { content: { "application/json": { schema: retentionInput } } },
+  },
+  responses: {
+    204: { description: "Retention requirement recorded with an audit reason" },
+    ...protectedErrors,
+  },
+});
+
 export const openapiSchema = z.record(z.string(), z.unknown());
 
 export const openapiRoute = createRoute({

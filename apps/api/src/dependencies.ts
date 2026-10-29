@@ -27,6 +27,7 @@ import {
 } from "./pin/index.js";
 import type { FundRecord } from "./policy.js";
 import { denyAllPolicy, type Policy } from "./policy.js";
+import { MemoryPrivacyStore, type PrivacyStore } from "./privacy-store.js";
 import {
   MemoryReconciliationStore,
   type ReconciliationStore,
@@ -374,6 +375,7 @@ export interface AppDependencies {
   readonly otpVerifier?: PinOtpVerifier | null;
   readonly pinService: PinService;
   readonly authStore: AuthStore;
+  readonly privacyStore: PrivacyStore;
   readonly otpDeliveryProvider: OtpDeliveryProvider;
   readonly otpCooldownMs: number;
   readonly otpExpiryMs: number;
@@ -476,6 +478,7 @@ export function defaultDependencies(
     otpVerifier: null,
     pinService,
     authStore: new MemoryAuthStore(),
+    privacyStore: new MemoryPrivacyStore(),
     otpDeliveryProvider: new DevStubOtpDeliveryProvider(clock),
     otpCooldownMs: 60_000,
     otpExpiryMs: 300_000,
