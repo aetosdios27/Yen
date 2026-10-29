@@ -6,6 +6,7 @@ import {
   getApprovalPin,
   type UserApprovalPinRow,
   updateApprovalPin,
+  userApprovalPinRowSchema,
 } from "@yen/db";
 
 export interface PinRecord {
@@ -29,11 +30,19 @@ export interface PinStore {
     userId: string,
     updates: Partial<Omit<PinRecord, "userId" | "createdAt">>,
   ): Promise<PinRecord>;
+  withLockedRecord<T>(
+    userId: string,
+    operation: (
+      record: PinRecord,
+      update: (updates: Partial<Omit<PinRecord, "userId" | "createdAt">>) => Promise<PinRecord>,
+    ) => Promise<T>,
+  ): Promise<T>;
   delete(userId: string): Promise<void>;
 }
 
 export class MemoryPinStore implements PinStore {
   private readonly records = new Map<string, PinRecord>();
+  private readonly locks = new Map<string, Promise<void>>();
   private readonly clock: () => number;
 
   constructor(options: { clock?: () => number } = {}) {
@@ -74,6 +83,30 @@ export class MemoryPinStore implements PinStore {
     };
     this.records.set(userId, updated);
     return { ...updated };
+  }
+
+  async withLockedRecord<T>(
+    userId: string,
+    operation: (
+      record: PinRecord,
+      update: (updates: Partial<Omit<PinRecord, "userId" | "createdAt">>) => Promise<PinRecord>,
+    ) => Promise<T>,
+  ): Promise<T> {
+    const previous = this.locks.get(userId);
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.locks.set(userId, current);
+    await previous;
+    try {
+      const record = await this.get(userId);
+      if (!record) throw new Error(`PIN record not found for user ${userId}`);
+      return await operation(record, (updates) => this.update(userId, updates));
+    } finally {
+      release();
+      if (this.locks.get(userId) === current) this.locks.delete(userId);
+    }
   }
 
   async delete(userId: string): Promise<void> {
@@ -151,6 +184,36 @@ export class PostgresPinStore implements PinStore {
     });
     if (!row) throw new Error(`PIN record not found for user ${userId}`);
     return rowToRecord(row);
+  }
+
+  async withLockedRecord<T>(
+    userId: string,
+    operation: (
+      record: PinRecord,
+      update: (updates: Partial<Omit<PinRecord, "userId" | "createdAt">>) => Promise<PinRecord>,
+    ) => Promise<T>,
+  ): Promise<T> {
+    return this.sql.begin(async (tx) => {
+      const rows = await tx`SELECT * FROM user_approval_pins WHERE user_id = ${userId} FOR UPDATE`;
+      if (rows.length === 0) throw new Error(`PIN record not found for user ${userId}`);
+      let current = rowToRecord(userApprovalPinRowSchema.parse(rows[0]));
+      return await operation(current, async (updates) => {
+        const next = { ...current, ...updates };
+        const updatedRows = await tx`
+          UPDATE user_approval_pins SET
+            salt = ${next.salt}, pin_hash = ${next.pinHash},
+            failed_attempts = ${next.failedAttempts}, total_failed_24h = ${next.totalFailed24h},
+            first_failed_at = ${next.firstFailedAt === null ? null : new Date(next.firstFailedAt)},
+            locked_until = ${next.lockedUntil === null ? null : new Date(next.lockedUntil)},
+            cooling_off_until = ${next.coolingOffUntil === null ? null : new Date(next.coolingOffUntil)},
+            status = ${next.status}, updated_at = CURRENT_TIMESTAMP
+          WHERE user_id = ${userId} RETURNING *
+        `;
+        if (updatedRows.length === 0) throw new Error(`PIN record not found for user ${userId}`);
+        current = rowToRecord(userApprovalPinRowSchema.parse(updatedRows[0]));
+        return current;
+      });
+    }) as unknown as Promise<T>;
   }
 
   async delete(userId: string): Promise<void> {

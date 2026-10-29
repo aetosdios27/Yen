@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { createSql } from "@yen/db";
 import { PgBoss } from "pg-boss";
 import { afterAll, beforeAll, expect, it } from "vitest";
+import { observePgBossErrors } from "./boss.js";
 import { describePostgres, waitFor } from "./test-utils.js";
 import { WorkerRuntime } from "./worker.js";
 
@@ -17,12 +18,14 @@ describePostgres("Worker Process Crash and Exact-Once Retry", (adminUrl) => {
   beforeAll(async () => {
     await admin`CREATE DATABASE ${admin(testDbName)}`;
     // Setup schema
-    const boss = new PgBoss({
-      connectionString: targetUrl.toString(),
-      schema: "pgboss",
-      migrate: true,
-      supervise: false,
-    });
+    const boss = observePgBossErrors(
+      new PgBoss({
+        connectionString: targetUrl.toString(),
+        schema: "pgboss",
+        migrate: true,
+        supervise: false,
+      }),
+    );
     await boss.start();
     await boss.createQueue("crash-resilient-queue", {
       retryLimit: 1,
@@ -35,21 +38,20 @@ describePostgres("Worker Process Crash and Exact-Once Retry", (adminUrl) => {
   afterAll(async () => {
     try {
       await sql.end({ timeout: 5 });
-      await new Promise((r) => setTimeout(r, 200));
-      await admin`DROP DATABASE IF EXISTS ${admin(testDbName)} WITH (FORCE)`;
-    } catch {
-      // Ignored
+      await admin`DROP DATABASE IF EXISTS ${admin(testDbName)}`;
     } finally {
       await admin.end({ timeout: 5 });
     }
   });
 
   it("retries an interrupted job exactly once to completion after killing the worker process mid-run", async () => {
-    const boss = new PgBoss({
-      connectionString: targetUrl.toString(),
-      schema: "pgboss",
-      migrate: false,
-    });
+    const boss = observePgBossErrors(
+      new PgBoss({
+        connectionString: targetUrl.toString(),
+        schema: "pgboss",
+        migrate: false,
+      }),
+    );
     let recoveryWorker: WorkerRuntime | null = null;
 
     try {

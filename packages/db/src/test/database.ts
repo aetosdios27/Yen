@@ -40,7 +40,7 @@ export function databaseSuite(name: string, tests: (sql: Sql, url: string) => vo
     afterAll(async () => {
       try {
         await sql.end({ timeout: 5 });
-        await admin`DROP DATABASE IF EXISTS ${admin(name)} WITH (FORCE)`;
+        await admin`DROP DATABASE IF EXISTS ${admin(name)}`;
       } finally {
         await admin.end({ timeout: 5 });
       }

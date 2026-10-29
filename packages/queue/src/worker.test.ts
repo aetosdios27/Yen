@@ -16,6 +16,12 @@ describePostgres("WorkerRuntime", (adminUrl) => {
 
   const processed: string[] = [];
   const concurrency = { active: 0, max: 0, completed: 0 };
+  let releaseConcurrency: (() => void) | undefined;
+  let concurrencyGate = Promise.resolve();
+  let resolveConcurrencyReached: (() => void) | undefined;
+  let concurrencyReached = Promise.resolve();
+  let resolveConcurrencyCompleted: (() => void) | undefined;
+  let concurrencyCompleted = Promise.resolve();
   const attemptsById = new Map<string, number>();
 
   beforeAll(async () => {
@@ -65,9 +71,11 @@ describePostgres("WorkerRuntime", (adminUrl) => {
     worker.registerHandler("concurrency-work", async () => {
       concurrency.active++;
       concurrency.max = Math.max(concurrency.max, concurrency.active);
-      await new Promise((r) => setTimeout(r, 100));
+      if (concurrency.active >= 2) resolveConcurrencyReached?.();
+      await concurrencyGate;
       concurrency.active--;
       concurrency.completed++;
+      if (concurrency.completed === 6) resolveConcurrencyCompleted?.();
     });
 
     worker.registerHandler("retry-policy-work", async (job) => {
@@ -87,7 +95,7 @@ describePostgres("WorkerRuntime", (adminUrl) => {
     try {
       await worker.stop();
       await sql.end({ timeout: 5 });
-      await admin`DROP DATABASE IF EXISTS ${admin(testDbName)} WITH (FORCE)`;
+      await admin`DROP DATABASE IF EXISTS ${admin(testDbName)}`;
     } finally {
       await admin.end({ timeout: 5 });
     }
@@ -107,14 +115,36 @@ describePostgres("WorkerRuntime", (adminUrl) => {
   it("never runs more handlers at once than localConcurrency, and reaches that limit", async () => {
     const boss = worker.getBoss();
 
+    concurrency.active = 0;
+    concurrency.max = 0;
+    concurrency.completed = 0;
+    concurrencyGate = new Promise<void>((resolve) => {
+      releaseConcurrency = resolve;
+    });
+    concurrencyReached = new Promise<void>((resolve) => {
+      resolveConcurrencyReached = resolve;
+    });
+    concurrencyCompleted = new Promise<void>((resolve) => {
+      resolveConcurrencyCompleted = resolve;
+    });
+
     for (let i = 0; i < 6; i++) {
       await boss.send("concurrency-work", { index: i });
     }
 
-    await waitFor(async () => (concurrency.completed >= 6 ? true : undefined));
-
+    try {
+      await concurrencyReached;
+      expect(concurrency.active).toBe(2);
+      expect(concurrency.max).toBe(2);
+    } finally {
+      releaseConcurrency?.();
+      releaseConcurrency = undefined;
+      resolveConcurrencyReached = undefined;
+    }
+    await concurrencyCompleted;
     expect(concurrency.completed).toBe(6);
     expect(concurrency.max).toBe(2);
+    resolveConcurrencyCompleted = undefined;
   });
 
   it("calls a handler that always throws retryLimit + 1 times, then marks the job failed", async () => {

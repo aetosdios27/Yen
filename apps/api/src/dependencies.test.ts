@@ -1,6 +1,50 @@
+import { createSql } from "@yen/db";
+import { InMemoryExpenseStore } from "@yen/ledger";
 import { describe, expect, it } from "vitest";
 import { createApp } from "./app.js";
 import { defaultDependencies, validatePinSecret } from "./dependencies.js";
+import { PostgresEvidenceStore } from "./evidence-store-postgres.js";
+import { MemoryStorageAdapter } from "./storage.js";
+import { MemoryEvidenceStore } from "./stores.js";
+
+describe("durable evidence dependency defaults", () => {
+  it("requires a configured evidence store and storage in production", async () => {
+    const original = process.env.NODE_ENV;
+    const sql = createSql("postgres://postgres:pw@localhost:55432/postgres");
+    process.env.NODE_ENV = "production";
+    try {
+      expect(() =>
+        defaultDependencies(
+          Date.now,
+          new InMemoryExpenseStore(),
+          undefined,
+          new MemoryStorageAdapter(),
+        ),
+      ).toThrow("PostgreSQL evidence store");
+      expect(() =>
+        defaultDependencies(
+          Date.now,
+          new InMemoryExpenseStore(),
+          new PostgresEvidenceStore(sql),
+          undefined,
+        ),
+      ).toThrow("configured durable evidence storage");
+      expect(() =>
+        defaultDependencies(
+          Date.now,
+          new InMemoryExpenseStore(),
+          new MemoryEvidenceStore(),
+          new MemoryStorageAdapter(),
+        ),
+      ).toThrow("PostgreSQL evidence store");
+      expect(PostgresEvidenceStore).toBeDefined();
+    } finally {
+      if (original === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = original;
+      await sql.end();
+    }
+  });
+});
 
 describe("dependencies PIN secret configuration", () => {
   it("rejects weak or short PIN secrets", () => {

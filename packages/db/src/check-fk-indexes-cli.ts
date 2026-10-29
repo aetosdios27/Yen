@@ -25,7 +25,7 @@ async function main() {
     } finally {
       try {
         await testSql.end({ timeout: 5 });
-        await admin`DROP DATABASE IF EXISTS ${admin(dbName)} WITH (FORCE)`;
+        await admin`DROP DATABASE IF EXISTS ${admin(dbName)}`;
       } finally {
         await admin.end({ timeout: 5 });
       }
