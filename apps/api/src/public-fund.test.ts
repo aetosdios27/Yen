@@ -168,8 +168,12 @@ describe("public fund read API", () => {
       raisedPaise: "7000",
       verification: "bank-matched",
     });
-    const timeline = (await app.request(`/v1/funds/${fundId}/public/timeline`)).json();
-    await expect(timeline).resolves.toMatchObject({
+    const timelineResponse = await app.request(`/v1/funds/${fundId}/public/timeline`);
+    const timelineText = await timelineResponse.text();
+    const timeline = JSON.parse(timelineText) as {
+      items: { id: string; actorDisplayName?: string }[];
+    };
+    expect(timeline).toMatchObject({
       items: expect.arrayContaining([
         expect.objectContaining({
           id: "00000000-0000-4000-8000-000000000051",
@@ -179,9 +183,14 @@ describe("public fund read API", () => {
           id: "00000000-0000-4000-8000-000000000052",
           actorDisplayName: "B. K.",
         }),
-        expect.not.objectContaining({ actorDisplayName: "Private Donor" }),
       ]),
     });
+    expect(timelineText).not.toContain("Private Donor");
+    const anonymousItem = timeline.items.find(
+      (item) => item.id === "00000000-0000-4000-8000-000000000053",
+    );
+    expect(anonymousItem).toBeDefined();
+    expect(anonymousItem).not.toHaveProperty("actorDisplayName");
   });
 
   it("resolves timeline labels from the display-name store and honors the fund officeholder setting", async () => {
