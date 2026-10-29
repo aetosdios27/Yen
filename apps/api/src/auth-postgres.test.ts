@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { migrate } from "@yen/db";
 import { beforeAll, expect, it } from "vitest";
 import { databaseSuite } from "../../../packages/db/src/test/database.js";
@@ -91,5 +91,64 @@ databaseSuite("Postgres OTP store", (sql) => {
     await store.trustDevice(sessionId, user.id, now + 1, 7 * 24 * 60 * 60 * 1000);
     await store.revokeSession(sessionId, now + 2);
     expect(await store.getTrustedDevice(sessionId, now + 2)).toBeNull();
+  });
+
+  it("persists phone-bound owner invites and creates a member-only lower-assurance user", async () => {
+    const store = new PostgresAuthStore(sql);
+    const now = Date.UTC(2026, 0, 1);
+    const owner = await store.findOrCreateUserByPhone(phone, now);
+    const orgId = randomUUID();
+    const fundId = randomUUID();
+    const inviteId = randomUUID();
+    const invitePhone = normalizePhone("+919999900003");
+    if (!invitePhone) throw new Error("Invalid invite test phone");
+    const code = randomBytes(32).toString("hex");
+    const secretHash = createHash("sha256").update(code).digest("hex");
+
+    await sql`
+      INSERT INTO orgs (id, name, legal_form, owner_id, created_at)
+      VALUES (${orgId}, 'Invite test org', 'association', ${owner.id}, ${new Date(now)})
+    `;
+    await sql`
+      INSERT INTO funds (id, org_id, title, policy_json, created_at)
+      VALUES (${fundId}, ${orgId}, 'Invite test fund', ${sql.json({})}, ${new Date(now)})
+    `;
+    await store.createOwnerInvite({
+      id: inviteId,
+      fundId,
+      ownerId: owner.id,
+      phone: invitePhone,
+      memberName: null,
+      secretHash,
+      expiresAt: now + 5 * 60_000,
+      redeemedAt: null,
+      confirmedAt: null,
+      completedAt: null,
+      createdAt: now,
+    });
+
+    expect(await store.redeemOwnerInvite(secretHash, phone, "Wrong number", now)).toBeNull();
+    expect(await store.redeemOwnerInvite(secretHash, invitePhone, "Ramesh", now)).toMatchObject({
+      memberName: "Ramesh",
+      redeemedAt: now,
+    });
+    expect(await store.listOwnerInvites(fundId, owner.id)).toHaveLength(1);
+    expect(await store.confirmOwnerInvite(inviteId, fundId, owner.id, now + 1)).toMatchObject({
+      confirmedAt: now + 1,
+    });
+    const invitedUser = await store.completeOwnerInvite(secretHash, invitePhone, now + 2);
+    expect(invitedUser).toMatchObject({
+      phone: invitePhone,
+      displayName: "Ramesh",
+      assurance: "owner_vouched",
+    });
+    if (!invitedUser) throw new Error("Invite did not create a user");
+    expect(
+      await sql`SELECT role, status FROM memberships WHERE fund_id = ${fundId} AND user_id = ${invitedUser.id}`,
+    ).toEqual([{ role: "member", status: "active" }]);
+    const persistedSecret = await sql`SELECT secret_hash FROM owner_invites WHERE id = ${inviteId}`;
+    expect(persistedSecret).toEqual([{ secret_hash: secretHash }]);
+    expect(JSON.stringify(persistedSecret)).not.toContain(code);
+    expect(await store.completeOwnerInvite(secretHash, invitePhone, now + 3)).toBeNull();
   });
 });
