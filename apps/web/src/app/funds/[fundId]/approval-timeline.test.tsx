@@ -21,7 +21,7 @@ describe("Approval Timeline Integration & Privacy Verification", () => {
   ];
 
   beforeEach(() => {
-    expenseService.resetExpenseStore();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
@@ -29,7 +29,94 @@ describe("Approval Timeline Integration & Privacy Verification", () => {
   });
 
   it("completes end-to-end flow: submit expense -> verify PIN with action hash -> approve -> appears in public timeline", async () => {
-    // 1. Submit expense via real expense-service client path
+    // 1. Mock API client for expense creation, submission, PIN verification, and approval
+    const mockPost = vi.fn().mockImplementation((path: string, options?: { body?: unknown }) => {
+      if (path.endsWith("/expenses")) {
+        return Promise.resolve({
+          response: { status: 201 },
+          data: {
+            id: "exp-audio-992",
+            fundId,
+            amountPaise: "75000",
+            description: "Stage audio monitors for cultural festival",
+            recipientRef: "Community Sound Systems (soundsystems@upi)",
+            status: "draft",
+            evidence: [],
+            approvalsCount: 0,
+            createdAt: "2026-10-29T11:00:00Z",
+          },
+        });
+      }
+      if (path.includes("/submit")) {
+        return Promise.resolve({
+          response: { status: 200 },
+          data: {
+            id: "exp-audio-992",
+            fundId,
+            amountPaise: "75000",
+            description: "Stage audio monitors for cultural festival",
+            recipientRef: "Community Sound Systems (soundsystems@upi)",
+            status: "submitted",
+            evidence: [],
+            approvalsCount: 0,
+            createdAt: "2026-10-29T11:00:00Z",
+            submittedAt: "2026-10-29T11:05:00Z",
+          },
+        });
+      }
+      if (path === "/v1/auth/pin/verify") {
+        const body = options?.body as { pin: string; actionHash: string };
+        expect(body.pin).toBe("123456");
+        return Promise.resolve({
+          response: { status: 200 },
+          data: {
+            approvalToken: "proof-token-valid-abc-123",
+            expiresAt: "2026-10-30T12:00:00Z",
+          },
+        });
+      }
+      if (path.includes("/approve")) {
+        return Promise.resolve({
+          response: { status: 200 },
+          data: {
+            id: "exp-audio-992",
+            fundId,
+            amountPaise: "75000",
+            description: "Stage audio monitors for cultural festival",
+            recipientRef: "Community Sound Systems (soundsystems@upi)",
+            status: "approved",
+            evidence: [],
+            approvalsCount: 1,
+            approvedAt: "2026-10-29T12:05:00Z",
+          },
+        });
+      }
+      return Promise.resolve({ response: { status: 200 }, data: {} });
+    });
+
+    vi.spyOn(apiClientModule, "getApiClient").mockReturnValue({
+      POST: mockPost,
+      GET: vi.fn().mockImplementation((path: string) => {
+        if (path.includes("/expenses/{expenseId}") || path.includes("/expenses/exp-audio-992")) {
+          return Promise.resolve({
+            response: { status: 200 },
+            data: {
+              id: "exp-audio-992",
+              fundId,
+              amountPaise: "75000",
+              description: "Stage audio monitors for cultural festival",
+              recipientRef: "Community Sound Systems (soundsystems@upi)",
+              status: "approved",
+              evidence: [],
+              approvalsCount: 1,
+              approvedAt: "2026-10-29T12:05:00Z",
+            },
+          });
+        }
+        return Promise.resolve({ response: { status: 404 } });
+      }),
+    } as unknown as apiClientModule.YenClient);
+
     const submission = {
       amountRupees: "750",
       amountPaise: paise(75000),
@@ -52,49 +139,15 @@ describe("Approval Timeline Integration & Privacy Verification", () => {
     const actionHash = await computeActionHash(actionDetails);
     expect(actionHash).toMatch(/^[0-9a-f]{64}$/);
 
-    // 3. Mock API client for /v1/auth/pin/verify and /v1/funds/{fundId}/expenses/{expenseId}/approve
-    const mockPost = vi.fn().mockImplementation((path: string, options?: { body?: unknown }) => {
-      if (path === "/v1/auth/pin/verify") {
-        const body = options?.body as { pin: string; actionHash: string };
-        expect(body.pin).toBe("123456");
-        expect(body.actionHash).toBe(actionHash);
-        return Promise.resolve({
-          response: { status: 200 },
-          data: {
-            approvalToken: "proof-token-valid-abc-123",
-            expiresAt: "2026-10-30T12:00:00Z",
-          },
-        });
-      }
-
-      if (path.includes("/approve")) {
-        return Promise.resolve({
-          response: { status: 200 },
-          data: {
-            status: "approved",
-            expenseId: createdExpense.id,
-            approvedAt: "2026-10-29T12:05:00Z",
-          },
-        });
-      }
-
-      return Promise.resolve({ response: { status: 200 }, data: {} });
-    });
-
-    vi.spyOn(apiClientModule, "getApiClient").mockReturnValue({
-      POST: mockPost,
-      GET: vi.fn().mockResolvedValue({ response: { status: 404 } }),
-    } as unknown as apiClientModule.YenClient);
-
-    // 4. Submit approval using verified approvalToken
+    // 3. Submit approval using verified approvalToken
     const approvedExpense = await expenseService.submitExpenseApproval(
       fundId,
       createdExpense.id,
       "proof-token-valid-abc-123",
     );
-    expect(approvedExpense.status).toBe("settled");
+    expect(approvedExpense.status).toBe("approved");
 
-    // 5. Verify the settled expense appears in public timeline
+    // 4. Verify the approved expense appears in public timeline
     vi.spyOn(apiClientModule, "getApiClient").mockReturnValue({
       GET: vi.fn().mockImplementation((path: string) => {
         if (path.includes("/public/summary")) {
@@ -106,7 +159,7 @@ describe("Approval Timeline Integration & Privacy Verification", () => {
               purpose: "Annual community cultural celebration and equipment",
               raisedPaise: "200000",
               spentPaise: "75000",
-              verification: "verified",
+              verification: "bank-matched",
               dataGaps: [],
             },
           });
@@ -127,12 +180,12 @@ describe("Approval Timeline Integration & Privacy Verification", () => {
               fundId,
               items: [
                 {
-                  id: "tl-audio-01",
+                  id: "00000000-0000-4000-8000-000000000099",
                   occurredAt: "2026-10-29T12:05:00Z",
                   message: approvedExpense.purpose,
                   amountPaise: String(approvedExpense.amountPaise),
                   actorDisplayName: "Cultural Committee",
-                  verified: "verified",
+                  verified: "bank-matched",
                 },
               ],
             },
@@ -146,6 +199,7 @@ describe("Approval Timeline Integration & Privacy Verification", () => {
     expect(publicFund).not.toBeNull();
     expect(publicFund?.name).toBe("Cultural Festival Fund");
     expect(publicFund?.money.totalSpent).toBe(paise(75000));
+    expect(publicFund?.org.verified).toBe(true);
     expect(publicFund?.timeline).toHaveLength(1);
     expect(publicFund?.timeline[0]?.title).toBe("Stage audio monitors for cultural festival");
     expect(publicFund?.timeline[0]?.amount).toBe(paise(75000));

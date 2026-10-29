@@ -70,7 +70,6 @@ it("gets the mock principal with no network request", async () => {
   expect(response.data?.id).toBe("00000000-0000-4000-8000-000000000001");
 });
 
-<<<<<<< HEAD
 it("builds browser WebAuthn options from the API's base64url JSON form", () => {
   const creation = buildCredentialCreationOptions({
     challenge: "AQID",

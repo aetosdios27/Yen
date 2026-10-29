@@ -98,11 +98,6 @@ export function ApprovalPinModal({
         }
 
         if (res.error) {
-          if (!res.response || res.response.status === 404) {
-            await onConfirm(cleanPin);
-            return;
-          }
-
           const detailMsg =
             res.error.error?.details?.[0]?.message ?? res.error.error?.message ?? "";
           const lower = detailMsg.toLowerCase();
@@ -125,9 +120,13 @@ export function ApprovalPinModal({
           return;
         }
 
-        if (res.data?.approvalToken) {
-          approvalToken = res.data.approvalToken;
+        if (!res.data?.approvalToken) {
+          setError(t("approver.pinError"));
+          setIsSubmitting(false);
+          return;
         }
+
+        approvalToken = res.data.approvalToken;
       }
 
       await onConfirm(approvalToken);

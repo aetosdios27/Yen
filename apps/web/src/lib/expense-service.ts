@@ -21,6 +21,7 @@ export interface DashboardExpenseItem {
   readonly submittedAt?: string | undefined;
   readonly holdReservedAt?: string | undefined;
   readonly approvals: readonly ExpenseTimelineApproval[];
+  readonly approvalsCount?: number | undefined;
   readonly requiredQuorum: number;
   readonly settledAt?: string | undefined;
   readonly rejectedAt?: string | undefined;
@@ -35,8 +36,6 @@ export interface FundTreasurerData {
   readonly pendingExpenses: readonly DashboardExpenseItem[];
 }
 
-const testStore = new Map<string, DashboardExpenseItem[]>();
-
 export function toDashboardExpenseItem(exp: {
   id: string;
   fundId: string;
@@ -46,6 +45,7 @@ export function toDashboardExpenseItem(exp: {
   status: string;
   holdId?: string | null;
   approvalsCount?: number;
+  approvals?: readonly { approverId: string; approverName?: string; approvedAt: string }[];
   submittedAt?: string | null;
   approvedAt?: string | null;
   rejectedAt?: string | null;
@@ -68,26 +68,23 @@ export function toDashboardExpenseItem(exp: {
   let status: ExpenseTimelineStatus = "draft";
   if (rawStatus === "submitted" || rawStatus === "hold_reserved") {
     status = "submitted";
-  } else if (
-    rawStatus === "approved" ||
-    rawStatus === "settled" ||
-    rawStatus === "paid" ||
-    rawStatus === "reconciled"
-  ) {
+  } else if (rawStatus === "approved") {
+    status = "approved";
+  } else if (rawStatus === "settled" || rawStatus === "paid" || rawStatus === "reconciled") {
     status = "settled";
   } else if (rawStatus === "rejected") {
     status = "rejected";
+  } else if (rawStatus === "expired") {
+    status = "expired";
   }
 
-  const approvals: ExpenseTimelineApproval[] = [];
-  const count = exp.approvalsCount ?? (exp.approvedAt ? 1 : 0);
-  for (let i = 0; i < count; i++) {
-    approvals.push({
-      approverId: `appr-${i + 1}`,
-      approverName: `Approver ${i + 1}`,
-      approvedAt: exp.approvedAt ?? exp.updatedAt ?? exp.createdAt ?? "",
-    });
-  }
+  const approvals: readonly ExpenseTimelineApproval[] = exp.approvals
+    ? exp.approvals.map((a) => ({
+        approverId: a.approverId,
+        approverName: a.approverName,
+        approvedAt: a.approvedAt,
+      }))
+    : [];
 
   return {
     id: exp.id,
@@ -96,9 +93,7 @@ export function toDashboardExpenseItem(exp: {
     payeeName,
     payeeUpi,
     purpose: exp.description ?? "",
-    receiptRef: exp.evidence?.[0]?.evidenceId
-      ? `EVI-${exp.evidence[0].evidenceId.slice(0, 8)}`
-      : undefined,
+    receiptRef: exp.evidence?.[0]?.evidenceId ? exp.evidence[0].evidenceId : undefined,
     status,
     requesterId: exp.requesterId ?? "requester",
     requesterName: "Treasurer",
@@ -106,39 +101,26 @@ export function toDashboardExpenseItem(exp: {
     submittedAt: exp.submittedAt ?? undefined,
     holdReservedAt: exp.holdId ? (exp.submittedAt ?? undefined) : undefined,
     approvals,
+    approvalsCount: exp.approvalsCount ?? approvals.length,
     requiredQuorum: 2,
-    settledAt: exp.paidAt ?? exp.approvedAt ?? undefined,
+    settledAt: exp.paidAt ?? undefined,
     rejectedAt: exp.rejectedAt ?? undefined,
     rejectionReason: exp.rejectionReason ?? undefined,
   };
 }
 
 export async function fetchFundTreasurerData(fundId: string): Promise<FundTreasurerData> {
-  if (testStore.has(fundId)) {
-    const expenses = testStore.get(fundId) ?? [];
-    const pending = expenses.filter(
-      (e) => e.status === "draft" || e.status === "submitted" || e.status === "hold_reserved",
-    );
-    const totalBalancePaise = paise(500000);
-    const heldPaise = pending.reduce((sum, e) => sum + e.amountPaise, 0);
-    const spendableBalancePaise = paise(Math.max(0, totalBalancePaise - heldPaise));
-    return {
-      fundId,
-      fundName: fundId === "demo-fund" ? "Greenwood Residents Fund" : `Community Fund (${fundId})`,
-      totalBalancePaise,
-      spendableBalancePaise,
-      pendingExpenses: pending,
-    };
-  }
-
   const client = getApiClient();
   const [summaryRes, expensesRes] = await Promise.all([
     client.GET("/v1/funds/{fundId}/public/summary", { params: { path: { fundId } } }),
     client.GET("/v1/funds/{fundId}/expenses", { params: { path: { fundId } } }),
   ]);
 
-  if (summaryRes.error && expensesRes.error) {
-    throw new Error(summaryRes.error?.error?.message ?? "Could not load dashboard");
+  if (summaryRes.error) {
+    throw new Error(summaryRes.error?.error?.message ?? "Could not load fund summary");
+  }
+  if (expensesRes.error) {
+    throw new Error(expensesRes.error?.error?.message ?? "Could not load fund expenses");
   }
 
   const allExpenses = (expensesRes.data ?? []).map(toDashboardExpenseItem);
@@ -146,15 +128,15 @@ export async function fetchFundTreasurerData(fundId: string): Promise<FundTreasu
     (e) => e.status === "draft" || e.status === "submitted" || e.status === "hold_reserved",
   );
 
-  const totalBalancePaise = summaryRes.data?.raisedPaise
+  const totalBalancePaise = summaryRes.data.raisedPaise
     ? paise(Number(summaryRes.data.raisedPaise))
-    : paise(500000);
+    : paise(0);
   const heldPaise = pending.reduce((sum, e) => sum + e.amountPaise, 0);
   const spendableBalancePaise = paise(Math.max(0, totalBalancePaise - heldPaise));
 
   return {
     fundId,
-    fundName: summaryRes.data?.name ?? `Community Fund (${fundId})`,
+    fundName: summaryRes.data.name ?? `Community Fund (${fundId})`,
     totalBalancePaise,
     spendableBalancePaise,
     pendingExpenses: pending,
@@ -170,82 +152,43 @@ export async function createExpenseRequest(
     ? `${submission.payeeName} (${submission.payeeUpi})`
     : submission.payeeName;
 
-  try {
-    const createRes = await client.POST("/v1/funds/{fundId}/expenses", {
-      params: {
-        path: { fundId },
-        header: { "Idempotency-Key": crypto.randomUUID() },
-      },
-      body: {
-        amountPaise: String(submission.amountPaise),
-        description: submission.purpose,
-        recipientRef,
-      },
-    });
+  const createRes = await client.POST("/v1/funds/{fundId}/expenses", {
+    params: {
+      path: { fundId },
+      header: { "Idempotency-Key": crypto.randomUUID() },
+    },
+    body: {
+      amountPaise: String(submission.amountPaise),
+      description: submission.purpose,
+      recipientRef,
+    },
+  });
 
-    if (createRes.data) {
-      const submitRes = await client.POST("/v1/funds/{fundId}/expenses/{expenseId}/submit", {
-        params: {
-          path: { fundId, expenseId: createRes.data.id },
-          header: { "Idempotency-Key": crypto.randomUUID() },
-        },
-      });
-      const finalData = submitRes.data ?? createRes.data;
-      const item = toDashboardExpenseItem(finalData);
-      const existing = testStore.get(fundId) ?? [];
-      testStore.set(fundId, [item, ...existing]);
-      return item;
-    }
-  } catch {
-    // Fall back to in-memory store in mock tests
+  if (createRes.error || !createRes.data) {
+    throw new Error(createRes.error?.error?.message ?? "Failed to create expense request");
   }
 
-  const now = new Date();
-  const timestamp = `${now.toISOString().split("T")[0]} ${now.toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  })}`;
-  const newItem: DashboardExpenseItem = {
-    id: `exp-${Date.now()}`,
-    fundId,
-    amountPaise: submission.amountPaise,
-    payeeName: submission.payeeName,
-    payeeUpi: submission.payeeUpi,
-    purpose: submission.purpose,
-    receiptRef: submission.receiptRef,
-    status: "submitted",
-    requesterId: "usr-treasurer-1",
-    requesterName: "Treasurer",
-    createdAt: timestamp,
-    submittedAt: timestamp,
-    holdReservedAt: timestamp,
-    approvals: [],
-    requiredQuorum: 2,
-  };
-  const existing = testStore.get(fundId) ?? [];
-  testStore.set(fundId, [newItem, ...existing]);
-  return newItem;
+  const submitRes = await client.POST("/v1/funds/{fundId}/expenses/{expenseId}/submit", {
+    params: {
+      path: { fundId, expenseId: createRes.data.id },
+      header: { "Idempotency-Key": crypto.randomUUID() },
+    },
+  });
+
+  const finalData = submitRes.data ?? createRes.data;
+  return toDashboardExpenseItem(finalData);
 }
 
 export async function fetchExpenseItem(
   fundId: string,
   expenseId: string,
 ): Promise<DashboardExpenseItem | null> {
-  const localList = testStore.get(fundId);
-  const localItem = localList?.find((e) => e.id === expenseId);
-  if (localItem) return localItem;
-
   const client = getApiClient();
-  try {
-    const res = await client.GET("/v1/funds/{fundId}/expenses/{expenseId}", {
-      params: { path: { fundId, expenseId } },
-    });
-    if (res.data) {
-      return toDashboardExpenseItem(res.data);
-    }
-  } catch {
-    // API not reachable
+  const res = await client.GET("/v1/funds/{fundId}/expenses/{expenseId}", {
+    params: { path: { fundId, expenseId } },
+  });
+  if (res.data) {
+    return toDashboardExpenseItem(res.data);
   }
 
   return null;
@@ -257,96 +200,36 @@ export async function submitExpenseApproval(
   approvalToken: string,
 ): Promise<DashboardExpenseItem> {
   const client = getApiClient();
-  try {
-    const res = await client.POST("/v1/funds/{fundId}/expenses/{expenseId}/approve", {
-      params: {
-        path: { fundId, expenseId },
-        header: {
-          "Idempotency-Key": crypto.randomUUID(),
-          "X-Approval-Token": approvalToken,
-        },
+  const res = await client.POST("/v1/funds/{fundId}/expenses/{expenseId}/approve", {
+    params: {
+      path: { fundId, expenseId },
+      header: {
+        "Idempotency-Key": crypto.randomUUID(),
+        "X-Approval-Token": approvalToken,
       },
-      body: {
-        approvalToken,
-      },
-    });
+    },
+    body: {
+      approvalToken,
+    },
+  });
 
-    if (res.data) {
-      const list = testStore.get(fundId) ?? [];
-      const idx = list.findIndex((e) => e.id === expenseId);
-      if (idx !== -1 && list[idx]) {
-        const item = list[idx];
-        const updatedStatus = res.data.status === "approved" ? "settled" : "submitted";
-        const updated: DashboardExpenseItem = {
-          ...item,
-          status: updatedStatus,
-          settledAt:
-            res.data.approvedAt ??
-            (updatedStatus === "settled" ? new Date().toISOString() : undefined),
-        };
-        list[idx] = updated;
-        testStore.set(fundId, [...list]);
-        return updated;
-      }
-      const updated = await fetchExpenseItem(fundId, expenseId);
-      if (updated) return updated;
-    }
-  } catch {
-    // Fall back to local update in mock tests
+  if (res.error || !res.data) {
+    throw new Error(res.error?.error?.message ?? "Failed to approve expense");
   }
 
-  const list = testStore.get(fundId) ?? [];
-  const idx = list.findIndex((e) => e.id === expenseId);
-  const now = new Date();
-  const timestamp = `${now.toISOString().split("T")[0]} ${now.toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  })}`;
-
-  if (idx !== -1 && list[idx]) {
-    const item = list[idx];
-    const updatedApprovals = [
-      ...item.approvals,
-      {
-        approverId: `usr-pin-${approvalToken.slice(0, 4)}`,
-        approverName: "Verified Approver",
-        approvedAt: timestamp,
-      },
-    ];
-    const quorumMet = updatedApprovals.length >= item.requiredQuorum;
-    const updated: DashboardExpenseItem = {
-      ...item,
-      approvals: updatedApprovals,
-      status: quorumMet ? "settled" : "submitted",
-      settledAt: quorumMet ? timestamp : undefined,
-    };
-    list[idx] = updated;
-    testStore.set(fundId, [...list]);
+  const updated = await fetchExpenseItem(fundId, expenseId);
+  if (updated) {
+    if (res.data.status === "approved") {
+      return {
+        ...updated,
+        status: "approved",
+        approvalsCount: res.data.approvalsCount ?? updated.approvalsCount,
+      };
+    }
     return updated;
   }
 
-  return {
-    id: expenseId,
-    fundId,
-    amountPaise: paise(45000),
-    payeeName: "Payee",
-    payeeUpi: "payee@upi",
-    purpose: "Approved Expense",
-    status: "settled",
-    requesterId: "usr-1",
-    requesterName: "Treasurer",
-    createdAt: timestamp,
-    settledAt: timestamp,
-    approvals: [
-      {
-        approverId: "usr-pin-token",
-        approverName: "Verified Approver",
-        approvedAt: timestamp,
-      },
-    ],
-    requiredQuorum: 2,
-  };
+  throw new Error(`Expense ${expenseId} could not be retrieved after approval`);
 }
 
 export async function submitExpenseRejection(
@@ -356,124 +239,33 @@ export async function submitExpenseRejection(
   approvalToken?: string,
 ): Promise<DashboardExpenseItem> {
   const client = getApiClient();
-  try {
-    const res = await client.POST("/v1/funds/{fundId}/expenses/{expenseId}/reject", {
-      params: {
-        path: { fundId, expenseId },
-        header: {
-          "Idempotency-Key": crypto.randomUUID(),
-          ...(approvalToken ? { "X-Approval-Token": approvalToken } : {}),
-        },
+  const res = await client.POST("/v1/funds/{fundId}/expenses/{expenseId}/reject", {
+    params: {
+      path: { fundId, expenseId },
+      header: {
+        "Idempotency-Key": crypto.randomUUID(),
+        ...(approvalToken ? { "X-Approval-Token": approvalToken } : {}),
       },
-      body: {
-        reason: "policy",
-        ...(approvalToken ? { approvalToken } : {}),
-      },
-    });
+    },
+    body: {
+      reason: "policy",
+      ...(approvalToken ? { approvalToken } : {}),
+    },
+  });
 
-    if (res.data) {
-      const list = testStore.get(fundId) ?? [];
-      const idx = list.findIndex((e) => e.id === expenseId);
-      if (idx !== -1 && list[idx]) {
-        const item = list[idx];
-        const updated: DashboardExpenseItem = {
-          ...item,
-          status: "rejected",
-          rejectedAt: res.data.rejectedAt ?? new Date().toISOString(),
-          rejectionReason: res.data.reason ?? reason,
-        };
-        list[idx] = updated;
-        testStore.set(fundId, [...list]);
-        return updated;
-      }
-      const updated = await fetchExpenseItem(fundId, expenseId);
-      if (updated) return updated;
-    }
-  } catch {
-    // Fall back to local update in mock tests
+  if (res.error || !res.data) {
+    throw new Error(res.error?.error?.message ?? "Failed to reject expense");
   }
 
-  const list = testStore.get(fundId) ?? [];
-  const idx = list.findIndex((e) => e.id === expenseId);
-  const now = new Date();
-  const timestamp = `${now.toISOString().split("T")[0]} ${now.toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  })}`;
-
-  if (idx !== -1 && list[idx]) {
-    const updated: DashboardExpenseItem = {
-      ...list[idx],
+  const updated = await fetchExpenseItem(fundId, expenseId);
+  if (updated) {
+    return {
+      ...updated,
       status: "rejected",
-      rejectedAt: timestamp,
-      rejectionReason: reason,
+      rejectedAt: res.data.rejectedAt,
+      rejectionReason: res.data.reason ?? reason,
     };
-    list[idx] = updated;
-    testStore.set(fundId, [...list]);
-    return updated;
   }
 
-  return {
-    id: expenseId,
-    fundId,
-    amountPaise: paise(120000),
-    payeeName: "Payee",
-    payeeUpi: "payee@upi",
-    purpose: "Rejected Expense",
-    status: "rejected",
-    requesterId: "usr-1",
-    requesterName: "Treasurer",
-    createdAt: timestamp,
-    rejectedAt: timestamp,
-    rejectionReason: reason,
-    approvals: [],
-    requiredQuorum: 2,
-  };
-}
-
-export function resetExpenseStore(): void {
-  testStore.clear();
-  testStore.set("demo-fund", [
-    {
-      id: "exp-101",
-      fundId: "demo-fund",
-      amountPaise: paise(45000),
-      payeeName: "Ramesh Hardware",
-      payeeUpi: "ramesh@upi",
-      purpose: "Replacement water valve and pipe fittings",
-      receiptRef: "INV-2026-441",
-      status: "submitted",
-      requesterId: "usr-treasurer-1",
-      requesterName: "Treasurer Vikram",
-      createdAt: "2026-10-28 09:30 AM",
-      submittedAt: "2026-10-28 09:35 AM",
-      holdReservedAt: "2026-10-28 09:35 AM",
-      approvals: [
-        {
-          approverId: "usr-appr-1",
-          approverName: "Asha Rao",
-          approvedAt: "2026-10-28 10:15 AM",
-        },
-      ],
-      requiredQuorum: 2,
-    },
-    {
-      id: "exp-102",
-      fundId: "demo-fund",
-      amountPaise: paise(120000),
-      payeeName: "Shakti Electricians",
-      payeeUpi: "shakti@okhdfcbank",
-      purpose: "Rewiring main courtyard breaker box",
-      receiptRef: "BILL-8902",
-      status: "submitted",
-      requesterId: "usr-treasurer-1",
-      requesterName: "Treasurer Vikram",
-      createdAt: "2026-10-28 11:00 AM",
-      submittedAt: "2026-10-28 11:05 AM",
-      holdReservedAt: "2026-10-28 11:05 AM",
-      approvals: [],
-      requiredQuorum: 2,
-    },
-  ]);
+  throw new Error(`Expense ${expenseId} could not be retrieved after approval`);
 }

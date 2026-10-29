@@ -64,27 +64,33 @@ export async function getPublicFund(fundId: string): Promise<PublicFund | null> 
       };
     });
 
-    const timelineEntries: PublicTimelineEntry[] = (timeline?.items ?? []).map((item) => ({
-      id: item.id,
-      type: "expense",
-      title: item.message,
-      description: item.actorDisplayName,
-      amount: item.amountPaise ? paise(Number(item.amountPaise)) : paise(0),
-      dateTime: item.occurredAt,
-      status: item.verified !== "unverified" ? "verified" : "pending",
-      verification: {
-        status: item.verified !== "unverified" ? "verified" : "pending",
-      },
-    }));
+    const isFundVerified =
+      summary.verification === "bank-matched" || summary.verification === "anchored";
+
+    const timelineEntries: PublicTimelineEntry[] = (timeline?.items ?? []).map((item) => {
+      const isItemVerified = item.verified === "bank-matched" || item.verified === "anchored";
+      return {
+        id: item.id,
+        type: "expense",
+        title: item.message,
+        description: item.actorDisplayName,
+        amount: item.amountPaise ? paise(Number(item.amountPaise)) : paise(0),
+        dateTime: item.occurredAt,
+        status: isItemVerified ? "verified" : "pending",
+        verification: {
+          status: isItemVerified ? "verified" : "pending",
+        },
+      };
+    });
 
     return {
       id: summary.fundId,
       name: summary.name,
       purpose: summary.purpose ?? "",
       org: {
-        id: `org_${summary.fundId}`,
+        id: summary.fundId,
         name: summary.name,
-        verified: summary.verification !== "unverified",
+        verified: isFundVerified,
       },
       money: {
         totalRaised: raisedPaise,
