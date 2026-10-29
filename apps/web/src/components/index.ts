@@ -1,3 +1,4 @@
+export { AppFooter } from "./app-footer";
 export { AppShell } from "./app-shell";
 export {
   ApprovalPinModal,
@@ -46,3 +47,4 @@ export {
   type UseInstallPromptOptions,
   useInstallPrompt,
 } from "./use-install-prompt";
+export { WaitlistForm } from "./waitlist-form";

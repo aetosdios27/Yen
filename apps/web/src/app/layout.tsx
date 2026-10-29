@@ -10,6 +10,19 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: en.metadata.appTitle,
   description: en.metadata.appDescription,
+  openGraph: {
+    title: en.metadata.appTitle,
+    description: en.metadata.appDescription,
+    siteName: en.app.name,
+    type: "website",
+    locale: "en_IN",
+    alternateLocale: ["hi_IN"],
+  },
+  twitter: {
+    card: "summary",
+    title: en.metadata.appTitle,
+    description: en.metadata.appDescription,
+  },
   icons: {
     icon: "/icons/icon-192.png",
     apple: "/icons/apple-touch-icon.png",
