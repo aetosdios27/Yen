@@ -17,6 +17,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:chaos": "vitest run src/chaos.test.ts",
+    "invariants:load": "pnpm --workspace-root exec turbo run build --filter=@yen/ledger... && node scripts/invariants-load.mjs",
     "backup:restore": "pnpm --filter @yen/ledger build && bash scripts/backup-restore.sh",
     "chaos:restart": "vitest run src/restart.test.ts"
   },
