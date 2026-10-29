@@ -1,3 +1,6 @@
 
 # Dummy PIN configuration fixture in a historical test commit; never a deployed credential.
 4658bcc6f8d8eb363db6bac7d1715ac639c7f73f:apps/api/src/dependencies.test.ts:generic-api-key:30
+
+# Anvil/Hardhat well-known dev account #0 key, published in the Foundry docs; used only by the opt-in local anvil test. Never a deployed credential.
+5732df75790217fcde8f10ac866ceab3e3ac57be:packages/queue/src/anchoring.test.ts:generic-api-key:204
