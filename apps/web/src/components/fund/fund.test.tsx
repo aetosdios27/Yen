@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { LocaleProvider } from "../../i18n";
-import { SANITIZED_DEMO_FUND } from "./data";
+import { SANITIZED_DEMO_FUND } from "./fixtures";
 import { FundHeader } from "./fund-header";
 import { FundTimeline } from "./fund-timeline";
 import { HowDoIKnowModal } from "./how-do-i-know-modal";

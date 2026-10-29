@@ -1,6 +1,6 @@
 import { describe, it } from "vitest";
 import { expectNoA11yViolations } from "../../test/a11y";
-import { SANITIZED_DEMO_FUND } from "./data";
+import { SANITIZED_DEMO_FUND } from "./fixtures";
 import { FundHeader } from "./fund-header";
 import { FundTimeline } from "./fund-timeline";
 import { HowDoIKnowModal } from "./how-do-i-know-modal";
