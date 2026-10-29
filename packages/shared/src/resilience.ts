@@ -25,29 +25,38 @@ export class ResilientCall {
     this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
 
-  async run<T>(operation: () => Promise<T>): Promise<T> {
+  async run<T>(operation: () => Promise<T>, runOptions: { maxAttempts?: number } = {}): Promise<T> {
+    const maxAttempts = runOptions.maxAttempts ?? this.options.maxAttempts;
     if (this.openedAt !== undefined) {
       if (this.now() - this.openedAt < this.options.resetAfterMs || this.probing)
         throw new Error("Circuit breaker is open");
       this.probing = true;
     }
+    const callWithTimeout = async <TValue>(call: () => Promise<TValue>): Promise<TValue> => {
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      try {
+        return await Promise.race([
+          call(),
+          new Promise<never>((_, reject) => {
+            timeout = setTimeout(
+              () => reject(new Error("Outbound call timed out")),
+              this.options.timeoutMs,
+            );
+          }),
+        ]);
+      } finally {
+        if (timeout !== undefined) clearTimeout(timeout);
+      }
+    };
     try {
       for (let attempt = 1; ; attempt++) {
         try {
-          const value = await Promise.race([
-            operation(),
-            new Promise<never>((_, reject) =>
-              setTimeout(
-                () => reject(new Error("Outbound call timed out")),
-                this.options.timeoutMs,
-              ),
-            ),
-          ]);
+          const value = await callWithTimeout(operation);
           this.failures = 0;
           this.openedAt = undefined;
           return value;
         } catch (error) {
-          if (attempt >= this.options.maxAttempts) throw error;
+          if (attempt >= maxAttempts) throw error;
           const cap = Math.min(
             this.options.maxDelayMs,
             this.options.baseDelayMs * 2 ** (attempt - 1),

@@ -1,8 +1,12 @@
 export {
+  type AnchoringAlert,
+  type AnchoringAlertSink,
   AnchoringWorker,
+  type ChainReceipt,
   createAnchoringWorker,
   KmsRootSigner,
   LocalDevRootSigner,
+  type Publication,
   type RootChain,
   type RootSigner,
   ViemRootChain,

@@ -35,6 +35,11 @@ if (anchorRpc && anchorAddress) {
     worker.getSql(),
     new ViemRootChain(anchorRpc, anchorAddress as `0x${string}`),
     LocalDevRootSigner.fromEnvironment(),
+    (alert) => {
+      process.stderr.write(
+        `${JSON.stringify({ event: "outbound_dependency_failure", ...alert })}\n`,
+      );
+    },
   );
   worker.registerHandler("blockchain-anchoring", async (job) => {
     const data = job.data as { fundId?: unknown };

@@ -26,6 +26,20 @@ describe("ResilientCall", () => {
     ).rejects.toThrow("timed out");
     expect(calls).toBe(3);
   });
+  it("lets a caller avoid retrying an ambiguous write", async () => {
+    let calls = 0;
+    const client = new ResilientCall(options());
+    await expect(
+      client.run(
+        async () => {
+          calls++;
+          throw new Error("response lost after acceptance");
+        },
+        { maxAttempts: 1 },
+      ),
+    ).rejects.toThrow("response lost after acceptance");
+    expect(calls).toBe(1);
+  });
   it("opens, half-opens after cooldown, and closes on a successful probe", async () => {
     let now = 0;
     const client = new ResilientCall(options({ now: () => now, maxAttempts: 1 }));
