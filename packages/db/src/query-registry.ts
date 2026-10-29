@@ -69,14 +69,15 @@ const INITIAL_HOT_PATH_QUERIES: RegisteredHotPathQuery[] = [
     id: "fund_read_by_id",
     name: "Fund read by ID",
     category: "fund_reads",
-    sqlTemplate: "SELECT * FROM funds WHERE id = $1",
+    sqlTemplate:
+      "SELECT f.id, f.org_id, f.title, f.target_paise, f.visibility_tier, f.payee_vpa, f.payee_name, f.created_at, f.policy_json, f.version, o.owner_id FROM funds f JOIN orgs o ON o.id = f.org_id WHERE f.id = $1",
     explain: (sql, ctx) =>
-      sql`EXPLAIN (FORMAT JSON, VERBOSE) SELECT * FROM funds WHERE id = ${ctx.fundId}`,
+      sql`EXPLAIN (FORMAT JSON, VERBOSE) SELECT f.id, f.org_id, f.title, f.target_paise, f.visibility_tier, f.payee_vpa, f.payee_name, f.created_at, f.policy_json, f.version, o.owner_id FROM funds f JOIN orgs o ON o.id = f.org_id WHERE f.id = ${ctx.fundId}`,
     expectedPlan: {
       targetTable: "funds",
       expectedIndex: "funds_pkey",
       disallowSeqScan: true,
-      maxCost: 15.0,
+      maxCost: 17.0,
     },
   },
   {
@@ -111,9 +112,10 @@ const INITIAL_HOT_PATH_QUERIES: RegisteredHotPathQuery[] = [
     id: "membership_read_by_fund_and_user",
     name: "Membership authorization lookup by fund ID and user ID",
     category: "membership_lookups",
-    sqlTemplate: "SELECT * FROM memberships WHERE fund_id = $1 AND user_id = $2",
+    sqlTemplate:
+      "SELECT role FROM memberships WHERE fund_id = $1 AND user_id = $2 AND status = 'active'",
     explain: (sql, ctx) =>
-      sql`EXPLAIN (FORMAT JSON, VERBOSE) SELECT * FROM memberships WHERE fund_id = ${ctx.membershipFundId} AND user_id = ${ctx.membershipUserId}`,
+      sql`EXPLAIN (FORMAT JSON, VERBOSE) SELECT role FROM memberships WHERE fund_id = ${ctx.membershipFundId} AND user_id = ${ctx.membershipUserId} AND status = 'active'`,
     expectedPlan: {
       targetTable: "memberships",
       expectedIndex: ["memberships_pkey", "memberships_user_id_idx"],

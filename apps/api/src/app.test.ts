@@ -238,13 +238,23 @@ it("denies every documented funds route with the default policy", async () => {
       )
       .map(([method]) => ({ path, method })),
   );
-  expect(routes).toHaveLength(2);
+  expect(routes).toHaveLength(3);
   for (const route of routes) {
     const url = route.path.replace("{fundId}", inboundId);
-    const response = await app.request(
-      url,
-      route.method === "post" ? post(input, "deny-route") : undefined,
-    );
+    const init =
+      route.method === "post"
+        ? post(input, "deny-route-post")
+        : route.method === "put"
+          ? {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                "Idempotency-Key": "deny-route-put",
+              },
+              body: JSON.stringify({ visibility: "public", expectedVersion: 1 }),
+            }
+          : undefined;
+    const response = await app.request(url, init);
     expect([403, 404]).toContain(response.status);
     expect(await response.text()).not.toMatch(/Festival|targetPaise|createdAt/);
   }

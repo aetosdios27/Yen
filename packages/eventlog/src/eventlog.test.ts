@@ -194,7 +194,7 @@ describe("frozen event hashes", () => {
     );
   });
   it("pins every versioned event, canonical string, and hash", async () => {
-    expect(events.length).toBe(25);
+    expect(events.length).toBe(26);
     expect(eventHashDomain).toBe(golden.domain_utf8);
     expect(genesisHash).toBe(golden.genesis_hash);
     expect(
@@ -226,7 +226,9 @@ describe("frozen event hashes", () => {
   });
 
   it("pins the v2 visibility transition schema without changing v1 vectors", async () => {
-    const event = events.at(-1);
+    const event = events.find(
+      (entry) => entry.type === "fund.visibility_changed" && entry.version === 2,
+    );
     expect(event).toMatchObject({
       type: "fund.visibility_changed",
       version: 2,

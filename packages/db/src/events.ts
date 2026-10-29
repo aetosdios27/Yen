@@ -55,6 +55,15 @@ function toEventInput(input: AppendEventInput): EventInput {
         occurred_at: input.occurredAt,
         payload: input.payload,
       };
+    case "fund.payee_changed":
+      return {
+        fund_id: input.fundId,
+        type: input.type,
+        version: 1,
+        actor: input.actor,
+        occurred_at: input.occurredAt,
+        payload: input.payload,
+      };
     case "fund.visibility_changed":
       return {
         fund_id: input.fundId,

@@ -49,6 +49,7 @@ export const payloadSchemas = {
     approval_quorum: positiveInt,
     objection_window_hours: nonnegativeInt,
   }),
+  "fund.payee_changed": z.strictObject({}),
   "fund.visibility_changed": z.strictObject({
     visibility: z.enum(["private", "members", "public"]),
   }),
@@ -147,6 +148,12 @@ const eventSchema = z.union([
     version: z.literal(1),
     type: z.literal("fund.policy_changed"),
     payload: payloadSchemas["fund.policy_changed"],
+  }),
+  z.strictObject({
+    ...envelope,
+    version: z.literal(1),
+    type: z.literal("fund.payee_changed"),
+    payload: payloadSchemas["fund.payee_changed"],
   }),
   z.strictObject({
     ...envelope,
@@ -365,6 +372,7 @@ export function eventSubjectId(event: Event): string {
   switch (event.type) {
     case "fund.created":
     case "fund.policy_changed":
+    case "fund.payee_changed":
     case "fund.visibility_changed":
       return event.fund_id;
     case "member.added":

@@ -1,4 +1,5 @@
 import type { AppendEventInput, StoredFundEvent, WaitlistEntry } from "@yen/db";
+import { uuidv7 } from "@yen/db";
 import { type PseudonymId, parsePseudonymId } from "@yen/eventlog";
 import { type ApprovalProofVerifier, type ExpenseStore, InMemoryExpenseStore } from "@yen/ledger";
 import type { FundRole } from "@yen/policy";
@@ -156,13 +157,53 @@ export class DefaultInFlightTracker implements InFlightTracker {
 }
 
 export interface FundStore {
-  get(fundId: string): FundRecord | undefined;
+  readonly persistent?: boolean;
+  get(fundId: string): Promise<FundRecord | undefined> | FundRecord | undefined;
   set(fundId: string, fund: FundRecord): void;
+  create?(fundId: string, fund: FundRecord, ownerUserId: string): Promise<void>;
+  changeVisibility?(input: {
+    fundId: string;
+    ownerUserId: string;
+    visibility: FundRecord["fund"]["visibility"];
+    expectedVersion: number;
+    occurredAt: string;
+  }): Promise<FundRecord | null>;
+  rolesFor?(fundId: string, userId: string): Promise<string[]>;
+  addMember?(input: {
+    fundId: string;
+    actorUserId: string;
+    userId: string;
+    role: "approver" | "treasurer" | "member";
+    occurredAt: string;
+  }): Promise<void>;
+  removeMember?(input: {
+    fundId: string;
+    actorUserId: string;
+    userId: string;
+    occurredAt: string;
+  }): Promise<void>;
+  changePayee?(input: {
+    fundId: string;
+    actorUserId: string;
+    vpa: string;
+    occurredAt: string;
+  }): Promise<void>;
+  changePolicy?(input: {
+    fundId: string;
+    actorUserId: string;
+    policy: Record<string, unknown>;
+    occurredAt: string;
+  }): Promise<void>;
+  getPolicy?(fundId: string): Promise<import("@yen/ledger").FundPolicy | undefined>;
 }
 
 /** Process-local test/development fund store. Fund persistence is tracked separately. */
 export class MemoryFundStore implements FundStore {
+  readonly persistent = false;
   private readonly funds = new Map<string, FundRecord>();
+  private readonly versions = new Map<string, number>();
+  private readonly policies = new Map<string, import("@yen/ledger").FundPolicy>();
+  private readonly members = new Map<string, Map<string, Set<string>>>();
 
   get(fundId: string) {
     return this.funds.get(fundId);
@@ -170,6 +211,98 @@ export class MemoryFundStore implements FundStore {
 
   set(fundId: string, fund: FundRecord) {
     this.funds.set(fundId, fund);
+    this.versions.set(fundId, fund.fund.version ?? this.versions.get(fundId) ?? 1);
+    if (!this.members.has(fundId))
+      this.members.set(fundId, new Map([[fund.owner, new Set(["owner"])]]));
+  }
+
+  async changeVisibility(input: {
+    fundId: string;
+    ownerUserId: string;
+    visibility: FundRecord["fund"]["visibility"];
+    expectedVersion: number;
+    occurredAt: string;
+  }) {
+    const current = this.funds.get(input.fundId);
+    if (
+      !current ||
+      current.owner !== input.ownerUserId ||
+      this.versions.get(input.fundId) !== input.expectedVersion
+    )
+      return null;
+    if (current.fund.visibility === input.visibility) return current;
+    const updated = {
+      ...current,
+      fund: { ...current.fund, visibility: input.visibility, version: input.expectedVersion + 1 },
+    };
+    this.funds.set(input.fundId, updated);
+    this.versions.set(input.fundId, input.expectedVersion + 1);
+    return updated;
+  }
+
+  async addMember(input: {
+    fundId: string;
+    actorUserId: string;
+    userId: string;
+    role: "approver" | "treasurer" | "member";
+    occurredAt: string;
+  }) {
+    const members = this.members.get(input.fundId);
+    if (!members) return;
+    const roles = members.get(input.userId) ?? new Set<string>();
+    roles.add(input.role);
+    members.set(input.userId, roles);
+    this.bumpVersion(input.fundId);
+  }
+
+  async removeMember(input: {
+    fundId: string;
+    actorUserId: string;
+    userId: string;
+    occurredAt: string;
+  }) {
+    this.members.get(input.fundId)?.delete(input.userId);
+    this.bumpVersion(input.fundId);
+  }
+
+  async changePayee(input: {
+    fundId: string;
+    actorUserId: string;
+    vpa: string;
+    occurredAt: string;
+  }) {
+    const current = this.funds.get(input.fundId);
+    this.bumpVersion(input.fundId);
+    if (current)
+      this.funds.set(input.fundId, {
+        ...current,
+        fund: { ...current.fund, upiVpa: input.vpa, version: this.versions.get(input.fundId) },
+      });
+  }
+
+  async changePolicy(input: {
+    fundId: string;
+    actorUserId: string;
+    policy: Record<string, unknown>;
+    occurredAt: string;
+  }) {
+    const approvalQuorum = Number(input.policy.approvalQuorum ?? input.policy.approval_quorum ?? 2);
+    const objectionWindowHours = Number(
+      input.policy.objectionWindowHours ?? input.policy.objection_window_hours ?? 0,
+    );
+    this.policies.set(input.fundId, { approvalQuorum, objectionWindowHours, autoExpireHours: 72 });
+    this.bumpVersion(input.fundId);
+  }
+
+  async getPolicy(fundId: string) {
+    return this.policies.get(fundId);
+  }
+
+  private bumpVersion(fundId: string) {
+    const version = (this.versions.get(fundId) ?? 1) + 1;
+    this.versions.set(fundId, version);
+    const current = this.funds.get(fundId);
+    if (current) this.funds.set(fundId, { ...current, fund: { ...current.fund, version } });
   }
 }
 
@@ -275,7 +408,7 @@ export function defaultDependencies(
     clock,
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     waitlistMinResponseMs: 75,
-    idGenerator: () => crypto.randomUUID(),
+    idGenerator: uuidv7,
     idempotencyStore: new MemoryIdempotencyStore({ clock }),
     rateLimitStore: new MemoryRateLimitStore(),
     logger: jsonLogger,
