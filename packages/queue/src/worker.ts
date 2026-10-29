@@ -1,5 +1,6 @@
 import { createSql, type Sql } from "@yen/db";
 import { type JobResult, PgBoss, type Queue, type WorkOptions } from "pg-boss";
+import { observePgBossErrors } from "./boss.js";
 import { DEFAULT_QUEUES, DEFAULT_SCHEMA } from "./config.js";
 import type { DeadLetterJob, Job, JobHandler, QueuePolicy, WorkerRuntimeOptions } from "./types.js";
 
@@ -32,12 +33,14 @@ export class WorkerRuntime {
     this.options = options;
     const schema = options.schema ?? DEFAULT_SCHEMA;
     const migrate = options.migrate ?? false;
-    this.boss = new PgBoss({
-      connectionString: options.connectionString,
-      schema,
-      migrate,
-      supervise: true,
-    });
+    this.boss = observePgBossErrors(
+      new PgBoss({
+        connectionString: options.connectionString,
+        schema,
+        migrate,
+        supervise: true,
+      }),
+    );
     this.sql = createSql(options.connectionString);
   }
 
