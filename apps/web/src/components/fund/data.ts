@@ -51,8 +51,7 @@ export async function getPublicFund(fundId: string): Promise<PublicFund | null> 
 
     const spendingCategories: SpendingCategory[] = (breakdown?.categories ?? []).map((cat) => {
       const catSpent = Number(cat.spentPaise);
-      const percentage =
-        totalBreakdown > 0 ? Math.round((catSpent * 100) / totalBreakdown) : 0;
+      const percentage = totalBreakdown > 0 ? Math.round((catSpent * 100) / totalBreakdown) : 0;
       const rawCategory = cat.category.toLowerCase();
       const id: SpendingCategoryId = VALID_CATEGORIES.includes(rawCategory as SpendingCategoryId)
         ? (rawCategory as SpendingCategoryId)

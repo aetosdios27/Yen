@@ -80,7 +80,7 @@ describe("Dashboard and Approver A11y & Navigation", () => {
     );
   });
 
-  it("ApprovalPinModal passes axe checks", async () => {
+  it("ApprovalPinModal passes axe checks in English", async () => {
     await expectNoA11yViolations(
       <ApprovalPinModal
         isOpen={true}
@@ -93,7 +93,20 @@ describe("Dashboard and Approver A11y & Navigation", () => {
     );
   });
 
-  it("RejectionModal passes axe checks", async () => {
+  it("ApprovalPinModal passes axe checks in Hindi", async () => {
+    await expectNoA11yViolations(
+      <ApprovalPinModal
+        isOpen={true}
+        onClose={vi.fn()}
+        onConfirm={vi.fn()}
+        amountPaise={paise(50000)}
+        payeeName="विक्रेता"
+      />,
+      "hi",
+    );
+  });
+
+  it("RejectionModal passes axe checks in English", async () => {
     await expectNoA11yViolations(
       <RejectionModal
         isOpen={true}
@@ -103,6 +116,19 @@ describe("Dashboard and Approver A11y & Navigation", () => {
         payeeName="Payee"
       />,
       "en",
+    );
+  });
+
+  it("RejectionModal passes axe checks in Hindi", async () => {
+    await expectNoA11yViolations(
+      <RejectionModal
+        isOpen={true}
+        onClose={vi.fn()}
+        onConfirm={vi.fn()}
+        amountPaise={paise(50000)}
+        payeeName="विक्रेता"
+      />,
+      "hi",
     );
   });
 
