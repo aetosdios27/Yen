@@ -41,14 +41,6 @@
             "integration_id": 15368
           },
           {
-            "context": "Greptile 5/5",
-            "integration_id": 15368
-          },
-          {
-            "context": "Greptile Review",
-            "integration_id": 867647
-          },
-          {
             "context": "Analyze (javascript-typescript)",
             "integration_id": 15368
           }
