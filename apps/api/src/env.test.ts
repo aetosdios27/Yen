@@ -9,6 +9,7 @@ beforeEach(() => {
   vi.stubEnv("CLAMAV_TIMEOUT_MS", undefined);
   vi.stubEnv("CLAMAV_MAX_SIZE_BYTES", undefined);
   vi.stubEnv("PORT", undefined);
+  vi.stubEnv("PARTNER_WEBHOOK_SECRET", undefined);
   vi.stubEnv("RATE_LIMIT_IP_CAPACITY", undefined);
   vi.stubEnv("RATE_LIMIT_PRINCIPAL_CAPACITY", undefined);
   vi.stubEnv("RATE_LIMIT_REFILL_MS", undefined);
@@ -146,6 +147,19 @@ it("requires a long OTP hash key in production", async () => {
   vi.stubEnv("OTP_HASH_KEY", "short");
   await expect(import("./env.js")).rejects.toThrow("OTP_HASH_KEY");
   await expect(import("./env.js")).rejects.not.toThrow("short");
+});
+
+it("leaves the partner webhook secret unset by default and rejects short values without exposing them", async () => {
+  vi.stubEnv("PORT", "3001");
+  expect((await import("./env.js")).env.PARTNER_WEBHOOK_SECRET).toBeUndefined();
+  vi.resetModules();
+  vi.stubEnv("PARTNER_WEBHOOK_SECRET", "short-secret");
+  await expect(import("./env.js")).rejects.toThrow("PARTNER_WEBHOOK_SECRET");
+  await expect(import("./env.js")).rejects.not.toThrow("short-secret");
+  vi.resetModules();
+  const sampleSecret = "0".repeat(32);
+  vi.stubEnv("PARTNER_WEBHOOK_SECRET", sampleSecret);
+  expect((await import("./env.js")).env.PARTNER_WEBHOOK_SECRET).toBe(sampleSecret);
 });
 
 it.each([

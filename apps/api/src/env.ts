@@ -13,6 +13,7 @@ const schema = z
     DATABASE_URL: z.string().optional(),
     EVIDENCE_STORAGE_DIR: z.string().min(1).optional(),
     OTP_HASH_KEY: z.string().min(32).optional(),
+    PARTNER_WEBHOOK_SECRET: z.string().min(32).optional(),
     YEN_ALLOW_MEMORY_STORES: z.enum(["true", "false"]).optional(),
     READINESS_CACHE_MS: z.coerce.number().int().min(0).max(60000).default(1000),
     TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
