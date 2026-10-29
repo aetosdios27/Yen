@@ -44,6 +44,18 @@ device-bound fingerprint/biometric authenticator is out of scope; YEN-71 owns
 that extension. It should be a device-local activation factor and must not
 send biometric data to Yen.
 
+For a pilot where OTP delivery is unavailable, a fund owner may issue a
+single-use invite bound to the phone number they enter. The invite code is
+shown once for an in-person QR/code handoff, stored only as a SHA-256 hash,
+and expires after five minutes. A wrong phone number is refused. The member
+redeems the code with their name and number; the owner sees the pending name
+and last four digits and confirms it. The member then submits the same code
+again to complete sign-in. The created user record carries
+`assurance = 'owner_vouched'`, and the membership is `member` only. The API
+blocks owner-vouched principals from approving expenses. If a code expires or
+is lost, the owner issues another invite. These accounts cannot be described
+as OTP-verified.
+
 The `trusted_devices` table stores session and user identifiers, timestamps,
 and revocation state only. Session tokens remain hashed in `sessions`; the PIN
 and biometric secrets are not stored in the trusted-device record.

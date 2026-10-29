@@ -42,6 +42,7 @@ import {
   parseDeviceInfo,
   verifyOtp,
 } from "./auth/index.js";
+import { registerOwnerInviteRoutes } from "./auth/invite-routes.js";
 import { buildInfo } from "./build-info.js";
 import {
   ALLOWED_EVIDENCE_MIME_TYPES,
@@ -804,6 +805,9 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   ) => {
     const principal = c.get("principal");
     if (!principal) throw new ApiError("unauthenticated");
+    if (principal.assurance === "owner_vouched" && action === "expense:approve") {
+      throw new ApiError("forbidden");
+    }
     if (!deps.policy.can(principal, action, resource)) {
       throw new ApiError(action === "expense:read" ? "not_found" : "forbidden");
     }
@@ -1166,6 +1170,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     if (!entry) throw new ApiError("not_found");
     return { id: id.value, resource: { kind: "fund", fund: entry } as const };
   };
+
+  registerOwnerInviteRoutes(app, deps, getFundOrNotFound, authorizedFund);
 
   app.openapi(setupPinRoute, async (c) => {
     const principal = c.get("principal");

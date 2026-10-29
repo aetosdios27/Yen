@@ -37,6 +37,7 @@ import { UnconfiguredVirusScannerAdapter, type VirusScannerAdapter } from "./vir
 
 export interface Principal {
   readonly id: string;
+  readonly assurance?: "otp_verified" | "owner_vouched" | undefined;
   readonly role?: FundRole | undefined;
   readonly roles?: readonly string[];
   readonly capabilities?: readonly string[];

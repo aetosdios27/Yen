@@ -73,6 +73,7 @@ export {
   notificationOutboxRowSchema,
   type OrgRow,
   orgRowSchema,
+  ownerInviteRowSchema,
   type PseudonymRow,
   pseudonymRowSchema,
   type RateLimitRow,

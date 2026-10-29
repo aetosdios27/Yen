@@ -23,6 +23,21 @@ export const userRowSchema = z.object({
   display_name: z.string(),
   locale: z.string(),
   created_at: z.date(),
+  assurance: z.enum(["otp_verified", "owner_vouched"]),
+});
+
+export const ownerInviteRowSchema = z.object({
+  id: z.uuid(),
+  fund_id: fundId,
+  owner_id: userId,
+  phone: phoneE164,
+  member_name: z.string().nullable(),
+  secret_hash: z.string().regex(/^[0-9a-f]{64}$/),
+  expires_at: z.date(),
+  redeemed_at: z.date().nullable(),
+  confirmed_at: z.date().nullable(),
+  completed_at: z.date().nullable(),
+  created_at: z.date(),
 });
 
 export const orgRowSchema = z.object({
