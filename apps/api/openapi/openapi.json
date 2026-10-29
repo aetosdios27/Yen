@@ -5654,7 +5654,7 @@
       "post": {
         "tags": ["expenses", "evidence"],
         "operationId": "uploadEvidence",
-        "description": "Uploads bill or receipt evidence. Computes SHA-256 server-side, validates GSTIN and MIME type, enforces the 10MB limit, and detects duplicates within the fund.",
+        "description": "Uploads bill or receipt evidence after malware scanning. Computes SHA-256 server-side, validates GSTIN and MIME type, enforces the 10MB limit, and detects duplicates within the fund. Scanner errors and infected files fail closed.",
         "security": [{ "bearerAuth": [] }],
         "parameters": [
           {
@@ -5737,6 +5737,16 @@
                     "gstin": { "type": "string" },
                     "invoiceNumber": { "type": "string" },
                     "invoiceDate": { "type": "string" },
+                    "scan": {
+                      "type": "object",
+                      "properties": {
+                        "scannerName": { "type": "string" },
+                        "signatureVersion": { "type": "string" },
+                        "result": { "type": "string", "enum": ["clean"] }
+                      },
+                      "required": ["scannerName", "signatureVersion", "result"],
+                      "additionalProperties": false
+                    },
                     "createdAt": { "type": "string", "format": "date-time" }
                   },
                   "required": [
@@ -5749,6 +5759,7 @@
                     "fileName",
                     "duplicateDetected",
                     "isDuplicate",
+                    "scan",
                     "createdAt"
                   ],
                   "additionalProperties": false
@@ -5981,6 +5992,16 @@
                           "gstin": { "type": "string" },
                           "invoiceNumber": { "type": "string" },
                           "invoiceDate": { "type": "string" },
+                          "scan": {
+                            "type": "object",
+                            "properties": {
+                              "scannerName": { "type": "string" },
+                              "signatureVersion": { "type": "string" },
+                              "result": { "type": "string", "enum": ["clean"] }
+                            },
+                            "required": ["scannerName", "signatureVersion", "result"],
+                            "additionalProperties": false
+                          },
                           "createdAt": { "type": "string", "format": "date-time" }
                         },
                         "required": [
@@ -5993,6 +6014,7 @@
                           "fileName",
                           "duplicateDetected",
                           "isDuplicate",
+                          "scan",
                           "createdAt"
                         ],
                         "additionalProperties": false

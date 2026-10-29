@@ -10,7 +10,10 @@ import {
 export interface ExpenseStore {
   get(expenseId: string): Promise<ExpenseRequest | null>;
   list(fundId: string): Promise<ExpenseRequest[]>;
-  save(expense: ExpenseRequest): Promise<void>;
+  save(
+    expense: ExpenseRequest,
+    context?: { readonly actorId?: string; readonly policy?: FundPolicy },
+  ): Promise<ExpenseRequest | undefined>;
   atomicApprove(
     expenseId: string,
     approval: SignedApproval,
@@ -60,8 +63,9 @@ export class InMemoryExpenseStore implements ExpenseStore {
     return results;
   }
 
-  async save(expense: ExpenseRequest): Promise<void> {
+  async save(expense: ExpenseRequest): Promise<ExpenseRequest> {
     this.items.set(expense.id, { ...expense });
+    return { ...expense };
   }
 
   async atomicApprove(

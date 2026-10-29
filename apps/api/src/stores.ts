@@ -282,6 +282,11 @@ export interface StoredEvidence {
   readonly invoiceNumber?: string | undefined;
   readonly invoiceDate?: string | undefined;
   readonly createdAt: string;
+  readonly scan: {
+    readonly scannerName: string;
+    readonly signatureVersion: string;
+    readonly result: "clean";
+  };
 }
 
 export interface EvidenceStore {

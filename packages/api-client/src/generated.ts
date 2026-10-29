@@ -570,7 +570,7 @@ export interface paths {
     /** @description Retrieves evidence attached to an expense after verifying stored bytes against their pinned SHA-256 hashes. */
     get: operations["getEvidence"];
     put?: never;
-    /** @description Uploads bill or receipt evidence. Computes SHA-256 server-side, validates GSTIN and MIME type, enforces the 10MB limit, and detects duplicates within the fund. */
+    /** @description Uploads bill or receipt evidence after malware scanning. Computes SHA-256 server-side, validates GSTIN and MIME type, enforces the 10MB limit, and detects duplicates within the fund. Scanner errors and infected files fail closed. */
     post: operations["uploadEvidence"];
     delete?: never;
     options?: never;
@@ -4802,6 +4802,12 @@ export interface operations {
               gstin?: string;
               invoiceNumber?: string;
               invoiceDate?: string;
+              scan: {
+                scannerName: string;
+                signatureVersion: string;
+                /** @enum {string} */
+                result: "clean";
+              };
               /** Format: date-time */
               createdAt: string;
             }[];
@@ -4971,6 +4977,12 @@ export interface operations {
             gstin?: string;
             invoiceNumber?: string;
             invoiceDate?: string;
+            scan: {
+              scannerName: string;
+              signatureVersion: string;
+              /** @enum {string} */
+              result: "clean";
+            };
             /** Format: date-time */
             createdAt: string;
           };

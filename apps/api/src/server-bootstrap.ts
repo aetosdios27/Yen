@@ -9,6 +9,7 @@ import { rateLimits } from "./config.js";
 import { createDatabaseReady } from "./database-ready.js";
 import { DefaultInFlightTracker } from "./dependencies.js";
 import { PostgresDonationPledgeStore } from "./donation-store.js";
+import { PostgresExpenseStore } from "./expense-store.js";
 import { createServerLifecycle, type ServerLifecycle, shutdownOnSignal } from "./lifecycle.js";
 import { PostgresPinStore } from "./pin/index.js";
 import { useMemoryStore } from "./server-config.js";
@@ -17,11 +18,16 @@ import {
   PostgresIdempotencyStore,
   PostgresRateLimitStore,
 } from "./stores.js";
+import { ClamAvVirusScannerAdapter } from "./virus-scanner.js";
 import { PostgresWaitlistStore } from "./waitlist-store.js";
 
 export interface ServerConfig {
   readonly NODE_ENV: "development" | "test" | "production";
   readonly PORT: number;
+  readonly CLAMAV_HOST?: string | undefined;
+  readonly CLAMAV_PORT?: number | undefined;
+  readonly CLAMAV_TIMEOUT_MS?: number | undefined;
+  readonly CLAMAV_MAX_SIZE_BYTES?: number | undefined;
   readonly DATABASE_URL?: string | undefined;
   readonly OTP_HASH_KEY?: string | undefined;
   readonly YEN_ALLOW_MEMORY_STORES?: "true" | "false" | undefined;
@@ -134,8 +140,19 @@ export async function startServer(
     : undefined;
 
   const app = createApp({
+    ...(resolvedConfig.CLAMAV_HOST
+      ? {
+          virusScanner: new ClamAvVirusScannerAdapter({
+            host: resolvedConfig.CLAMAV_HOST,
+            port: resolvedConfig.CLAMAV_PORT ?? 3310,
+            timeoutMs: resolvedConfig.CLAMAV_TIMEOUT_MS ?? 10000,
+            maxSizeBytes: resolvedConfig.CLAMAV_MAX_SIZE_BYTES ?? 10 * 1024 * 1024,
+          }),
+        }
+      : {}),
     isShuttingDown: () => lifecycleInstance?.isShuttingDown ?? false,
     ...(sql ? { donationPledgeStore: new PostgresDonationPledgeStore(sql) } : {}),
+    ...(sql ? { expenseStore: new PostgresExpenseStore(sql) } : {}),
     pledgeLimit: {
       capacity: resolvedConfig.PLEDGE_RATE_LIMIT_CAPACITY ?? 10,
       refillMs: resolvedConfig.PLEDGE_RATE_LIMIT_REFILL_MS ?? 3_600_000,

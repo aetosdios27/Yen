@@ -219,6 +219,20 @@ const INITIAL_HOT_PATH_QUERIES: RegisteredHotPathQuery[] = [
       maxCost: 15.0,
     },
   },
+  {
+    id: "expenses_list_by_fund",
+    name: "Expense list by fund",
+    category: "expense_lists",
+    sqlTemplate: "SELECT * FROM expenses WHERE fund_id = $1 ORDER BY created_at DESC",
+    explain: (sql, ctx) =>
+      sql`EXPLAIN (FORMAT JSON, VERBOSE) SELECT * FROM expenses WHERE fund_id = ${ctx.fundId} ORDER BY created_at DESC`,
+    expectedPlan: {
+      targetTable: "expenses",
+      expectedIndex: "expenses_fund_id_created_at_idx",
+      disallowSeqScan: true,
+      maxCost: 260.0,
+    },
+  },
 ];
 
 const dynamicRegistry: RegisteredHotPathQuery[] = [...INITIAL_HOT_PATH_QUERIES];

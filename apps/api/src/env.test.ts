@@ -3,6 +3,10 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 beforeEach(() => {
   vi.resetModules();
   vi.stubEnv("NODE_ENV", "test");
+  vi.stubEnv("CLAMAV_HOST", undefined);
+  vi.stubEnv("CLAMAV_PORT", undefined);
+  vi.stubEnv("CLAMAV_TIMEOUT_MS", undefined);
+  vi.stubEnv("CLAMAV_MAX_SIZE_BYTES", undefined);
   vi.stubEnv("PORT", undefined);
   vi.stubEnv("RATE_LIMIT_IP_CAPACITY", undefined);
   vi.stubEnv("RATE_LIMIT_PRINCIPAL_CAPACITY", undefined);
@@ -97,10 +101,19 @@ it("requires a valid database URL in production", async () => {
   await expect(import("./env.js")).rejects.toThrow("DATABASE_URL");
 });
 
+it("requires a ClamAV host in production", async () => {
+  vi.stubEnv("PORT", "3001");
+  vi.stubEnv("NODE_ENV", "production");
+  vi.stubEnv("OTP_HASH_KEY", "test-production-secret-with-at-least-32-characters");
+  vi.stubEnv("DATABASE_URL", "postgres://postgres:pw@localhost:55432/postgres");
+  await expect(import("./env.js")).rejects.toThrow("CLAMAV_HOST");
+});
+
 it("accepts a PostgreSQL URL in production and rejects invalid URLs without exposing them", async () => {
   vi.stubEnv("PORT", "3001");
   vi.stubEnv("NODE_ENV", "production");
   vi.stubEnv("OTP_HASH_KEY", "test-production-secret-with-at-least-32-characters");
+  vi.stubEnv("CLAMAV_HOST", "clamav.internal");
   vi.stubEnv("DATABASE_URL", "postgres://postgres:pw@localhost:55432/postgres");
   expect((await import("./env.js")).env.DATABASE_URL).toBe(
     "postgres://postgres:pw@localhost:55432/postgres",
