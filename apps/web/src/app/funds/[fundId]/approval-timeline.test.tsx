@@ -49,7 +49,7 @@ describe("Approval Timeline Integration & Privacy Verification", () => {
       }
       if (path.includes("/submit")) {
         return Promise.resolve({
-          response: { status: 200 },
+          response: { status: 200, headers: new Headers() },
           data: {
             id: "exp-audio-992",
             fundId,
@@ -68,7 +68,7 @@ describe("Approval Timeline Integration & Privacy Verification", () => {
         const body = options?.body as { pin: string; actionHash: string };
         expect(body.pin).toBe("123456");
         return Promise.resolve({
-          response: { status: 200 },
+          response: { status: 200, headers: new Headers() },
           data: {
             approvalToken: "proof-token-valid-abc-123",
             expiresAt: "2026-10-30T12:00:00Z",
@@ -77,7 +77,7 @@ describe("Approval Timeline Integration & Privacy Verification", () => {
       }
       if (path.includes("/approve")) {
         return Promise.resolve({
-          response: { status: 200 },
+          response: { status: 200, headers: new Headers() },
           data: {
             id: "exp-audio-992",
             fundId,
@@ -91,7 +91,7 @@ describe("Approval Timeline Integration & Privacy Verification", () => {
           },
         });
       }
-      return Promise.resolve({ response: { status: 200 }, data: {} });
+      return Promise.resolve({ response: { status: 200, headers: new Headers() }, data: {} });
     });
 
     vi.spyOn(apiClientModule, "getApiClient").mockReturnValue({
@@ -99,7 +99,7 @@ describe("Approval Timeline Integration & Privacy Verification", () => {
       GET: vi.fn().mockImplementation((path: string) => {
         if (path.includes("/expenses/{expenseId}") || path.includes("/expenses/exp-audio-992")) {
           return Promise.resolve({
-            response: { status: 200 },
+            response: { status: 200, headers: new Headers() },
             data: {
               id: "exp-audio-992",
               fundId,
@@ -152,7 +152,7 @@ describe("Approval Timeline Integration & Privacy Verification", () => {
       GET: vi.fn().mockImplementation((path: string) => {
         if (path.includes("/public/summary")) {
           return Promise.resolve({
-            response: { status: 200 },
+            response: { status: 200, headers: new Headers() },
             data: {
               fundId,
               name: "Cultural Festival Fund",
@@ -166,7 +166,7 @@ describe("Approval Timeline Integration & Privacy Verification", () => {
         }
         if (path.includes("/public/breakdown")) {
           return Promise.resolve({
-            response: { status: 200 },
+            response: { status: 200, headers: new Headers() },
             data: {
               fundId,
               categories: [{ category: "equipment", spentPaise: "75000", percentage: 100 }],
@@ -175,7 +175,7 @@ describe("Approval Timeline Integration & Privacy Verification", () => {
         }
         if (path.includes("/public/timeline")) {
           return Promise.resolve({
-            response: { status: 200 },
+            response: { status: 200, headers: new Headers() },
             data: {
               fundId,
               items: [
