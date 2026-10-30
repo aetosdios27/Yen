@@ -247,8 +247,3 @@ export const rootRegistryAbi = [
 export type RootRegistryAddress = `0x${string}`;
 // No deployment exists yet. Resolve a verified deployment manifest before use.
 export const rootRegistryAddress: RootRegistryAddress | null = null;
-
-// Commit identifier embedded in the ABI so released artifacts and the ABI agree.
-export const rootRegistryAbiCommit = "09e8442720789d35dbb257b70591587fb8f39f13";
-export const rootRegistryAbiGitSha = "09e8442720789d35dbb257b70591587fb8f39f13";
-export const rootRegistryBuildSha = "09e8442720789d35dbb257b70591587fb8f39f13";
