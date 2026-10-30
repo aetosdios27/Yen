@@ -203,7 +203,7 @@ export class PostgresPrivacyStore implements PrivacyStore {
           (SELECT count(*)::int FROM owner_invites WHERE owner_id = ${userId} OR phone = ${phone}) AS invites,
           (SELECT count(*)::int FROM notification_outbox WHERE user_id = ${userId}) AS notifications,
           (SELECT count(*)::int FROM notification_dead_letter WHERE user_id = ${userId}) AS dead_letters,
-          (SELECT count(*)::int FROM donation_pledges WHERE donor_contact = ${phone} OR donor_display_name = ${displayName}) AS donation_contacts,
+          (SELECT count(*)::int FROM donation_pledges WHERE donor_contact = ${phone}) AS donation_contacts,
           (SELECT count(*)::int FROM user_notification_preferences WHERE user_id = ${userId}) AS notification_preferences,
           (SELECT count(*)::int FROM bank_transactions WHERE counterparty_name = ${displayName}
              OR counterparty_vpa = ${phone}
@@ -289,7 +289,7 @@ export class PostgresPrivacyStore implements PrivacyStore {
       await tx`DELETE FROM waitlist_entries WHERE contact = ${phone}`;
       await tx`DELETE FROM rate_limits WHERE position(${userId} in key) > 0`;
       await tx`UPDATE donation_pledges SET donor_contact = NULL, donor_display_name = NULL
-        WHERE donor_contact = ${phone} OR donor_display_name = ${displayName}`;
+        WHERE donor_contact = ${phone}`;
       for (const pseudonym of publicPseudonyms) {
         await tx`UPDATE expenses SET expense_data = jsonb_set(
             jsonb_set(jsonb_set(jsonb_set(jsonb_set(expense_data, '{requesterId}', to_jsonb('psn_00000000-0000-7000-8000-000000000000'::text)),
@@ -299,13 +299,6 @@ export class PostgresPrivacyStore implements PrivacyStore {
             '{payeeFingerprint}', 'null'::jsonb), updated_at = ${new Date(now)}
           WHERE expense_data->>'requesterId' = ${pseudonym}`;
       }
-      await tx`UPDATE expenses SET expense_data = jsonb_set(
-          jsonb_set(expense_data, '{payee}', 'null'::jsonb),
-          '{payeeFingerprint}', 'null'::jsonb), updated_at = ${new Date(now)}
-        WHERE expense_data->'payee' IS NOT NULL
-          AND (expense_data->'payee'->>'name' = ${displayName}
-            OR expense_data->'payee'->>'name' = ${phone}
-            OR expense_data->'payee'->'identity'->>'vpa' LIKE '%' || ${phone} || '%')`;
       await tx`UPDATE bank_transactions SET
         narration = CASE WHEN narration LIKE '%' || ${phone} || '%'
           OR narration LIKE '%' || ${displayName} || '%' THEN NULL ELSE narration END,

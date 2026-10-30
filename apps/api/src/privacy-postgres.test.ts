@@ -76,6 +76,9 @@ databaseSuite("privacy erasure operations", (sql) => {
 
   it("dry-runs and erases mutable identity while preserving event bytes and verification", async () => {
     const { userId, fundId, phone, head } = await seedFund(sql);
+    const otherDonorPledgeId = uuidv7();
+    await sql`INSERT INTO donation_pledges (id, fund_id, amount_paise, utr, donor_display_name, donor_contact, status, created_at)
+      VALUES (${otherDonorPledgeId}, ${fundId}, 2000, ${String(Math.floor(100000000000 + Math.random() * 899999999999))}, 'Sensitive Person Name', '+919999900000', 'pledged', now())`;
     const store = new PostgresPrivacyStore(sql);
     const app = createApp({
       principal: { id: userId },
@@ -173,9 +176,13 @@ databaseSuite("privacy erasure operations", (sql) => {
       payeeFingerprint: null,
     });
     const [pledge] =
-      await sql`SELECT donor_contact, donor_display_name FROM donation_pledges WHERE fund_id = ${fundId}`;
+      await sql`SELECT donor_contact, donor_display_name FROM donation_pledges WHERE fund_id = ${fundId} AND id <> ${otherDonorPledgeId}`;
     expect(pledge?.donor_contact).toBeNull();
     expect(pledge?.donor_display_name).toBeNull();
+    // A different donor who happens to share the display name keeps their pledge.
+    expect(
+      await sql`SELECT donor_contact, donor_display_name FROM donation_pledges WHERE id = ${otherDonorPledgeId}`,
+    ).toEqual([{ donor_contact: "+919999900000", donor_display_name: "Sensitive Person Name" }]);
     expect(await sql`SELECT revoked_at FROM sessions WHERE user_id = ${userId}`).toMatchObject([
       { revoked_at: expect.any(Date) },
     ]);
