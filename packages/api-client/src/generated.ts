@@ -520,6 +520,57 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/funds/{fundId}/alerts": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Lists alerts for a fund, newest first. Fund members only. */
+    get: operations["listFundAlerts"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/funds/{fundId}/alerts/{alertId}/acknowledge": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Acknowledges an open alert with a required note. Fund owners and approvers only. */
+    post: operations["acknowledgeAlert"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/funds/{fundId}/alerts/{alertId}/resolve": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Resolves an open or acknowledged alert with a required note. Resolved alerts cannot be reopened. Fund owners and approvers only. */
+    post: operations["resolveAlert"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/funds/{fundId}/donation-details": {
     parameters: {
       query?: never;
@@ -1760,6 +1811,37 @@ export interface components {
     ReconcileExpenseInput: {
       /** Format: uuid */
       bankTransactionId: string;
+    };
+    FundAlert: {
+      /** Format: uuid */
+      id: string;
+      /** @enum {string} */
+      alertType:
+        | "unapproved_debit"
+        | "balance_drift"
+        | "chain_verification_failure"
+        | "anchor_missing"
+        | "anchor_mismatch"
+        | "repeated_rejected_requests"
+        | "spend_rate_spike"
+        | "integrity_check_failure";
+      /** @enum {string} */
+      severity: "info" | "warning" | "critical";
+      /** @enum {string} */
+      status: "open" | "acknowledged" | "resolved";
+      title: string;
+      details: string;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      acknowledgedAt: string | null;
+      /** Format: date-time */
+      resolvedAt: string | null;
+      /** Format: date-time */
+      escalatedAt: string | null;
+    };
+    AlertNoteInput: {
+      note: string;
     };
     DonationDetails: {
       /** Format: uuid */
@@ -4282,6 +4364,19 @@ export interface operations {
               /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
               amountPaise?: string;
               /** @enum {string} */
+              alertType?:
+                | "unapproved_debit"
+                | "balance_drift"
+                | "chain_verification_failure"
+                | "anchor_missing"
+                | "anchor_mismatch"
+                | "repeated_rejected_requests"
+                | "spend_rate_spike"
+                | "integrity_check_failure";
+              /** @enum {string} */
+              severity?: "info" | "warning" | "critical";
+              title?: string;
+              /** @enum {string} */
               verified: "bank-matched" | "anchored" | "unverified";
             }[];
             dataGaps: string[];
@@ -5739,6 +5834,470 @@ export interface operations {
           "x-trace-id": string;
           /** @description Seconds until retry */
           "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  listFundAlerts: {
+    parameters: {
+      query?: {
+        /** @description Page size, 1 to 100 */
+        limit?: number;
+        /** @description Exclusive created_at cursor: return alerts older than this */
+        before?: string;
+      };
+      header?: never;
+      path: {
+        fundId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Fund alerts, newest first */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FundAlert"][];
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource conflict, changed idempotency input, or request in progress */
+      409: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Gateway timeout */
+      504: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  acknowledgeAlert: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path: {
+        fundId: string;
+        alertId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AlertNoteInput"];
+      };
+    };
+    responses: {
+      /** @description Alert acknowledged */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FundAlert"];
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource conflict, changed idempotency input, or request in progress */
+      409: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Gateway timeout */
+      504: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  resolveAlert: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path: {
+        fundId: string;
+        alertId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AlertNoteInput"];
+      };
+    };
+    responses: {
+      /** @description Alert resolved */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Present on replay */
+          "idempotent-replayed"?: "true";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FundAlert"];
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource conflict, changed idempotency input, or request in progress */
+      409: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Gateway timeout */
+      504: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
           [name: string]: unknown;
         };
         content: {

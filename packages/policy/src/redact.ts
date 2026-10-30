@@ -1,6 +1,6 @@
 import { type Paise, type PseudonymId, paiseWire, parsePseudonymId } from "@yen/shared";
 import { isValidPaiseAmount } from "./policy.js";
-import { type Actor, type FundRole, isStaffRole, isValidRole } from "./roles.js";
+import { type Actor, type FundRole, isMemberRole, isStaffRole, isValidRole } from "./roles.js";
 
 declare const RedactedSymbol: unique symbol;
 
@@ -134,6 +134,11 @@ export interface FundTimelineRecord {
     readonly actorDisplayName?: string | undefined;
     readonly actorNameChoice?: "full" | "initials" | undefined;
     readonly amountPaise?: string | undefined;
+    /** Fund alert items only. */
+    readonly alertType?: string | undefined;
+    readonly severity?: "info" | "warning" | "critical" | undefined;
+    /** Fund alert title. Kept only for member-tier viewers. */
+    readonly title?: string | undefined;
     readonly verified: FundVerificationState;
   }[];
   readonly dataGaps: readonly string[];
@@ -486,7 +491,7 @@ export function redact(
 
 /** Allowlist redaction for the public fund read API's aggregate projections. */
 export function redactFundReadModel<T extends FundReadRecord>(
-  _viewer: Actor | ViewerContext,
+  viewer: Actor | ViewerContext,
   record: T,
 ): Redacted<Omit<T, "kind">> {
   if (!record || typeof record !== "object" || typeof record.fundId !== "string") {
@@ -536,6 +541,11 @@ export function redactFundReadModel<T extends FundReadRecord>(
                   : maskNameToInitials(str(item.actorDisplayName)),
             }),
         ...(item.amountPaise === undefined ? {} : { amountPaise: paiseString(item.amountPaise) }),
+        ...(item.alertType === undefined ? {} : { alertType: safeText(item.alertType) }),
+        ...(item.severity === undefined ? {} : { severity: alertSeverity(item.severity) }),
+        ...(item.title === undefined || !isMemberRole(viewerRole(viewer))
+          ? {}
+          : { title: publicText(str(item.title)) }),
         verified: verificationState(item.verified),
       })),
       dataGaps,
@@ -680,6 +690,11 @@ function safeText(value: unknown): string {
     )
     .replace(/\+?\d[\d\s().-]{8,}\d/g, "[redacted]")
     .replace(/\b\d{9,18}\b/g, "[redacted]");
+}
+
+function alertSeverity(value: unknown): "info" | "warning" | "critical" {
+  if (value === "info" || value === "warning" || value === "critical") return value;
+  throw new RedactionError("Invalid alert severity");
 }
 
 function verificationState(value: unknown): FundVerificationState {
