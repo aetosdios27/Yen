@@ -1,4 +1,4 @@
-import { type Sql, uuidv7 } from "@yen/db";
+import { raiseAlertWithNotification, type Sql, type SqlClient, uuidv7 } from "@yen/db";
 import { parsePseudonymId } from "@yen/eventlog";
 import {
   appendFundEventInTx,
@@ -35,6 +35,21 @@ export async function checkBankBalance(
         ledgerBalancePaise: ledgerBalancePaise.toString(),
         reportedBalancePaise: reportedBalancePaise.toString(),
       }),
+    });
+    await sql.begin(async (tx) => {
+      await raiseAlertWithNotification(tx, {
+        fundId,
+        alertType: "balance_drift",
+        severity: "critical",
+        title: "Ledger-vs-bank balance drift",
+        details: JSON.stringify({
+          ledgerBalancePaise: ledgerBalancePaise.toString(),
+          reportedBalancePaise: reportedBalancePaise.toString(),
+        }),
+        entityType: "fund",
+        entityId: fundId,
+        dedupKey: fundId,
+      });
     });
   }
   return { matches, ledgerBalancePaise };
@@ -76,6 +91,16 @@ export async function matchDebitInTx(
   if (!match) {
     await tx`INSERT INTO unapproved_debits (bank_transaction_id, fund_id)
       VALUES (${bankTransactionId}, ${debit.fundId}) ON CONFLICT (bank_transaction_id) DO NOTHING`;
+    await raiseAlertWithNotification(tx as unknown as SqlClient, {
+      fundId: debit.fundId,
+      alertType: "unapproved_debit",
+      severity: "warning",
+      title: "Unapproved debit detected",
+      details: JSON.stringify({ bankTransactionId, amountPaise: String(debit.amountPaise) }),
+      entityType: "bank_transaction",
+      entityId: bankTransactionId,
+      dedupKey: bankTransactionId,
+    });
     return { kind: "unapproved" };
   }
   if (!match.hold_id) throw new Error(`Approved expense ${match.id} has no ledger hold`);

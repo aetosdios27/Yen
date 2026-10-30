@@ -9,6 +9,7 @@ import {
   parseWhatsAppTemplates,
   WhatsAppCloudProvider,
 } from "@yen/notifications";
+import { PostgresAlertStore } from "./alert-store.js";
 import { createApp } from "./app.js";
 import { createOtpDeliveryProvider, PostgresAuthStore } from "./auth/index.js";
 import { type CleanupScheduler, startCleanupScheduler } from "./cleanup-scheduler.js";
@@ -337,6 +338,7 @@ export async function startServer(
     ...(sql ? { displayNameStore: new PostgresDisplayNameStore(sql) } : {}),
     ...(sql ? { expenseStore: new PostgresExpenseStore(sql) } : {}),
     ...(sql ? { fundStore: new PostgresFundStore(sql) } : {}),
+    ...(sql ? { alertStore: new PostgresAlertStore(sql) } : {}),
     ...(sql && evidenceStorage
       ? {
           evidenceStore: new PostgresEvidenceStore(sql),

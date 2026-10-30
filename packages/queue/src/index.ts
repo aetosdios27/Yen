@@ -1,4 +1,9 @@
 export {
+  registerAlertEscalation,
+  registerChainVerification,
+  verifyFundChains,
+} from "./alerts.js";
+export {
   ANCHOR_RPC_RESILIENCE_OPTIONS,
   type AnchorAlert,
   type AnchorAlertSink,
@@ -18,6 +23,7 @@ export {
 } from "./anchoring.js";
 export { createPgBoss, ensureQueueSchema } from "./boss.js";
 export { DEFAULT_QUEUES, DEFAULT_SCHEMA } from "./config.js";
+export { escalateDueAlerts } from "./escalation.js";
 export {
   DEFAULT_EXIT_CRITERIA,
   type EvaluationResult,

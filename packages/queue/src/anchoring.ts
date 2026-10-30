@@ -5,7 +5,7 @@ import {
   type KMSClientConfig,
   SignCommand,
 } from "@aws-sdk/client-kms";
-import { createSql, type Sql } from "@yen/db";
+import { createSql, raiseAlertWithNotification, type Sql } from "@yen/db";
 import {
   buildIntervalTree,
   hash32,
@@ -257,6 +257,12 @@ async function chainCall<T>(
   }
 }
 
+/**
+ * How long fund events may stay unanchored (and no anchor may land) before an
+ * `anchor_missing` alert is raised. Publishing is failing when this elapses.
+ */
+export const ANCHOR_MISSING_LAG_MS = 60 * 60 * 1000;
+
 export async function reconcileAnchors(
   sql: Sql,
   chain: RootChain,
@@ -287,12 +293,25 @@ export async function reconcileAnchors(
   for (const row of stale) {
     const lastLanding = row.last_landed ? new Date(row.last_landed).getTime() : null;
     const staleSince = lastLanding ?? new Date(row.pending_since).getTime();
-    if (now.getTime() - staleSince >= 60 * 60 * 1000)
+    if (now.getTime() - staleSince >= ANCHOR_MISSING_LAG_MS) {
+      const details = "Events remain unanchored and no anchor has landed for at least one hour";
       await alerts.emit({
         type: "anchor.stale",
         fundId: row.fund_id,
-        details: "Events remain unanchored and no anchor has landed for at least one hour",
+        details,
       });
+      await raiseAlertWithNotification(sql, {
+        fundId: row.fund_id,
+        alertType: "anchor_missing",
+        severity: "critical",
+        title: "Anchor missing",
+        details,
+        entityType: "fund",
+        entityId: row.fund_id,
+        dedupKey: row.fund_id,
+        now,
+      });
+    }
   }
   const anchors = await sql<
     {
@@ -331,7 +350,8 @@ export async function reconcileAnchors(
           })),
         },
       ]);
-      computedRoot = toHex(tree.root);
+      // Chain roots are 0x-prefixed; toHex is not, so add the prefix for comparison.
+      computedRoot = `0x${toHex(tree.root)}`;
     }
     const actual = await chainCall(
       resilience,
@@ -344,13 +364,25 @@ export async function reconcileAnchors(
       computedRoot === null ||
       computedRoot.toLowerCase() !== actual.toLowerCase() ||
       computedRoot.toLowerCase() !== `0x${anchor.root}`.toLowerCase()
-    )
+    ) {
       await alerts.emit({
         type: "anchor.root_mismatch",
         fundId: anchor.fund_id,
         sequence: anchor.chain_sequence,
         details: `On-chain, persisted, and recomputed roots differ for anchor ${anchor.chain_sequence}`,
       });
+      await raiseAlertWithNotification(sql, {
+        fundId: anchor.fund_id,
+        alertType: "anchor_mismatch",
+        severity: "critical",
+        title: "Anchor root mismatch",
+        details: `On-chain, persisted, and recomputed roots differ for anchor ${anchor.chain_sequence}`,
+        entityType: "anchor",
+        entityId: anchor.id,
+        dedupKey: anchor.id,
+        now,
+      });
+    }
   }
 }
 

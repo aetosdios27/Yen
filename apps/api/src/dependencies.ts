@@ -8,6 +8,7 @@ import { failClosedPayeeVerifier, type PayeeVerifier } from "@yen/policy";
 import type { DeliveryProvider } from "@yen/shared";
 import { paise } from "@yen/shared";
 import type { Context } from "hono";
+import { type AlertStore, MemoryAlertStore } from "./alert-store.js";
 import {
   type AuthStore,
   createOtpDeliveryProvider,
@@ -361,6 +362,7 @@ export interface AppDependencies {
   readonly objectionStore?: PostgresExpenseObjectionStore | undefined;
   readonly actorForUser: (userId: string, fundId: string) => Promise<PseudonymId>;
   readonly fundStore?: FundStore | undefined;
+  readonly alertStore?: AlertStore | undefined;
   readonly approvalProofVerifier: ApprovalProofVerifier;
   readonly donationPledgeStore: DonationPledgeStore;
   readonly publicFundReadStore: PublicFundReadStore;
@@ -490,6 +492,7 @@ export function defaultDependencies(
       }
       return actor;
     },
+    alertStore: new MemoryAlertStore(),
     approvalProofVerifier: (signature) => signature.credentialId === "pin-proof",
     donationPledgeStore: new MemoryDonationPledgeStore(),
     publicFundReadStore: new MemoryPublicFundReadStore(),

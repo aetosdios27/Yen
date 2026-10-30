@@ -23,6 +23,7 @@ export const notificationTemplateIdSchema = z.enum([
   "donation_received",
   "objection_raised",
   "weekly_summary",
+  "fund_alert",
 ]);
 export type NotificationTemplateId = z.infer<typeof notificationTemplateIdSchema>;
 
@@ -74,12 +75,22 @@ export const weeklySummaryDataSchema = z.object({
 });
 export type WeeklySummaryData = z.infer<typeof weeklySummaryDataSchema>;
 
+export const fundAlertDataSchema = z.object({
+  fund_title: z.string().min(1),
+  alert_type: z.string().min(1),
+  severity: z.enum(["info", "warning", "critical"]),
+  title: z.string().min(1),
+  variant: z.enum(["raised", "escalation"]).default("raised"),
+});
+export type FundAlertData = z.infer<typeof fundAlertDataSchema>;
+
 export const templateDataSchemas = {
   approval_needed: approvalNeededDataSchema,
   approved_rejected: approvedRejectedDataSchema,
   donation_received: donationReceivedDataSchema,
   objection_raised: objectionRaisedDataSchema,
   weekly_summary: weeklySummaryDataSchema,
+  fund_alert: fundAlertDataSchema,
 } as const;
 
 export type TemplateDataMap = {
@@ -88,6 +99,7 @@ export type TemplateDataMap = {
   donation_received: DonationReceivedData;
   objection_raised: ObjectionRaisedData;
   weekly_summary: WeeklySummaryData;
+  fund_alert: FundAlertData;
 };
 
 export const enqueueNotificationInputSchema = z.object({

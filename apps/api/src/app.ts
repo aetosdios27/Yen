@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { OpenAPIHono, type z } from "@hono/zod-openapi";
-import { normalizeWaitlistContact } from "@yen/db";
+import { type AlertRow, normalizeWaitlistContact } from "@yen/db";
 import { payloadSchemas } from "@yen/eventlog";
 import {
   BankTransactionMismatchError,
@@ -34,6 +34,7 @@ import { deleteCookie, setCookie } from "hono/cookie";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import { routePath } from "hono/route";
+import { type AlertStore, MemoryAlertStore } from "./alert-store.js";
 import {
   AuthPinOtpVerifier,
   generateOtpCode,
@@ -49,6 +50,7 @@ import { registerOwnerInviteRoutes } from "./auth/invite-routes.js";
 import { buildInfo } from "./build-info.js";
 import {
   ALLOWED_EVIDENCE_MIME_TYPES,
+  acknowledgeAlertRoute,
   addMemberRoute,
   approveExpenseRoute,
   changePayeeRoute,
@@ -67,6 +69,7 @@ import {
   getSessionsRoute,
   healthRoute,
   listExpensesRoute,
+  listFundAlertsRoute,
   lockTrustedDeviceRoute,
   logoutAllRoute,
   logoutRoute,
@@ -89,6 +92,7 @@ import {
   removeMemberRoute,
   requestErasureRoute,
   requestPinResetRoute,
+  resolveAlertRoute,
   revokeSessionRoute,
   rotateSessionRoute,
   sendOtpRoute,
@@ -214,6 +218,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       clock: baseDeps.clock,
     });
   const deps = { ...baseDeps, pinService, deviceSignatureService };
+  const alertStore: AlertStore = baseDeps.alertStore ?? new MemoryAlertStore();
   const actorFor = (principal: Principal, fundId: string) =>
     deps.actorForUser(principal.id, fundId);
   const app = new OpenAPIHono<ApiEnv>({
@@ -990,7 +995,16 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       amountPaise: String(donation.amountPaise),
       verified: "bank-matched" as const,
     }));
-    const items = [...expenseItems, ...donationItems].sort((left, right) =>
+    const alertItems = (await alertStore.listForTimeline(fundId)).map((alert) => ({
+      id: alert.id,
+      occurredAt: alert.created_at.toISOString(),
+      message: "A fund alert was raised.",
+      alertType: alert.alert_type,
+      severity: alert.severity,
+      title: alert.title,
+      verified: "unverified" as const,
+    }));
+    const items = [...expenseItems, ...donationItems, ...alertItems].sort((left, right) =>
       left.occurredAt.localeCompare(right.occurredAt),
     );
     const body = redactFundReadModel(actor, {
@@ -1441,6 +1455,9 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       }),
     );
     const finalExpense = persisted ?? updated;
+    await runAlertHook(c, "/v1/funds/{fundId}/expenses/{expenseId}/reject", () =>
+      alertStore.onExpenseRejected(fundIdResult.value, new Date(deps.clock())),
+    );
     await deps.pinNotificationService.notify({
       kind: "approval_executed",
       approverUserId: principal.id,
@@ -1511,6 +1528,9 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       ),
     );
     const finalExpense = persisted ?? updated;
+    await runAlertHook(c, "/v1/funds/{fundId}/expenses/{expenseId}/pay", () =>
+      alertStore.onExpensePaid(fundIdResult.value, new Date(deps.clock())),
+    );
     const updatedView = toExpenseView(finalExpense);
     return c.json(
       redactExpense(principal, {
@@ -1574,6 +1594,75 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     if (!fund) throw new ApiError("not_found");
     return { kind: "fund", fund } as const;
   };
+  const alertView = (alert: AlertRow) => ({
+    id: alert.id,
+    alertType: alert.alert_type,
+    severity: alert.severity,
+    status: alert.status,
+    title: alert.title,
+    details: alert.details,
+    createdAt: alert.created_at.toISOString(),
+    acknowledgedAt: alert.acknowledged_at?.toISOString() ?? null,
+    resolvedAt: alert.resolved_at?.toISOString() ?? null,
+    escalatedAt: alert.escalated_at?.toISOString() ?? null,
+  });
+  // Alert hooks run after a money action has committed. A failure here is logged and must
+  // never turn a successful reject or pay into an error response.
+  const runAlertHook = async (c: Context<ApiEnv>, route: string, hook: () => Promise<void>) => {
+    try {
+      await hook();
+    } catch (error) {
+      deps.logger.log({
+        event: "http_failure",
+        requestId: c.get("requestId"),
+        method: logMethod(c.req.method),
+        route,
+        errorKind: "store",
+        errorName: error instanceof Error ? error.constructor.name : "Unknown",
+      });
+    }
+  };
+  const fundAlertOrNotFound = async (alertId: string, fundId: string) => {
+    const alert = await alertStore.get(alertId);
+    if (!alert || alert.fund_id !== fundId) throw new ApiError("not_found");
+    return alert;
+  };
+  app.openapi(listFundAlertsRoute, async (c) => {
+    const { fundId } = c.req.valid("param");
+    const query = c.req.valid("query");
+    const fund = await getFundOrNotFound(fundId);
+    authorizedFund(c, "fund:alert:read", fund.resource);
+    const alerts = await alertStore.list(fund.id, query.limit, query.before ?? null);
+    return c.json(
+      alerts.map((alert) => redactReceipt("fund:alert:list", alertView(alert))),
+      200,
+    );
+  });
+  app.openapi(acknowledgeAlertRoute, async (c) => {
+    const { fundId, alertId } = c.req.valid("param");
+    const { note } = c.req.valid("json");
+    const fund = await getFundOrNotFound(fundId);
+    const principal = authorizedFund(c, "fund:alert:manage", fund.resource);
+    const alert = await fundAlertOrNotFound(alertId, fund.id);
+    if (alert.status !== "open") throw new ApiError("conflict");
+    const actor = await actorFor(principal, fund.id);
+    const updated = await alertStore.acknowledge(alertId, actor, note, new Date(deps.clock()));
+    if (!updated) throw new ApiError("conflict");
+    return c.json(redactReceipt("fund:alert:acknowledge", alertView(updated)), 200);
+  });
+  app.openapi(resolveAlertRoute, async (c) => {
+    const { fundId, alertId } = c.req.valid("param");
+    const { note } = c.req.valid("json");
+    const fund = await getFundOrNotFound(fundId);
+    const principal = authorizedFund(c, "fund:alert:manage", fund.resource);
+    const alert = await fundAlertOrNotFound(alertId, fund.id);
+    // An open or acknowledged alert can be resolved; resolved alerts are final.
+    if (alert.status === "resolved") throw new ApiError("conflict");
+    const actor = await actorFor(principal, fund.id);
+    const updated = await alertStore.resolve(alertId, actor, note, new Date(deps.clock()));
+    if (!updated) throw new ApiError("conflict");
+    return c.json(redactReceipt("fund:alert:resolve", alertView(updated)), 200);
+  });
   app.openapi(donationDetailsRoute, async (c) => {
     const id = parseFundId(c.req.valid("param").fundId);
     if (!id.ok) throw new ApiError("not_found");

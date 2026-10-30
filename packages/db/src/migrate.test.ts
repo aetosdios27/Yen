@@ -51,6 +51,8 @@ databaseSuite("migration runner", (sql, url) => {
         await sql`SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename`,
       );
     expect(tables.map((row) => row.tablename)).toEqual([
+      "alert_events",
+      "alerts",
       "anchor_event_salts",
       "anchors",
       "auth_otp_attempt_limits",
@@ -130,6 +132,11 @@ databaseSuite("migration runner", (sql, url) => {
     const objectionsSource = await readFile(join(defaultDir, "0026_objections.sql"));
     const deviceCredentialsSource = await readFile(join(defaultDir, "0027_device_credentials.sql"));
     const deliveryStatusSource = await readFile(join(defaultDir, "0028_delivery_status.sql"));
+    const alertsSource = await readFile(join(defaultDir, "0029_alerts.sql"));
+    const alertEventsSource = await readFile(join(defaultDir, "0030_alert_events.sql"));
+    const alertNotificationsSource = await readFile(
+      join(defaultDir, "0031_alert_notifications.sql"),
+    );
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -300,6 +307,24 @@ databaseSuite("migration runner", (sql, url) => {
         checksum: createHash("sha256").update(deliveryStatusSource).digest("hex"),
         applied_at: expect.any(Date),
       },
+      {
+        version: 29,
+        name: "0029_alerts.sql",
+        checksum: createHash("sha256").update(alertsSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
+      {
+        version: 30,
+        name: "0030_alert_events.sql",
+        checksum: createHash("sha256").update(alertEventsSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
+      {
+        version: 31,
+        name: "0031_alert_notifications.sql",
+        checksum: createHash("sha256").update(alertNotificationsSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
     ]);
   });
 
@@ -459,7 +484,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(28);
+    expect(before).toHaveLength(31);
   });
 
   it("rejects an edited applied file and names it", async () => {
