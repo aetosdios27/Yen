@@ -20,8 +20,10 @@ import {
 import { rateLimitEnv, rateLimits } from "./config.js";
 import { type DeviceSignatureConfig, DeviceSignatureService } from "./device-signature/service.js";
 import { type DeviceSignatureStore, MemoryDeviceSignatureStore } from "./device-signature/store.js";
+import { createErrorReporter, type ErrorReporter } from "./error-reporter.js";
 import { PostgresEvidenceStore } from "./evidence-store-postgres.js";
 import type { PostgresExpenseObjectionStore } from "./expense-objections.js";
+import type { HealthReport } from "./health.js";
 import { jsonLogger, type Logger } from "./logging.js";
 import { MemoryPayeeProfileStore, type PayeeProfileStore } from "./payee-rules/profile-store.js";
 import {
@@ -421,6 +423,9 @@ export interface AppDependencies {
   readonly clientIp: (context: Context<ApiEnv>) => string;
   readonly corsOrigins: string[];
   readonly readiness: () => Promise<boolean>;
+  readonly health?: (() => Promise<HealthReport>) | undefined;
+  readonly runtimeFault?: (() => string | null) | undefined;
+  readonly errorReporter?: ErrorReporter | undefined;
   readonly rateLimits: { readonly ip: RateLimit; readonly principal: RateLimit };
   readonly pinStore: PinStore;
   readonly actionTokenStore: ActionTokenStore;
@@ -556,6 +561,11 @@ export function defaultDependencies(
     clientIp: () => "unknown",
     corsOrigins: [],
     readiness: async () => true,
+    errorReporter: createErrorReporter({
+      dsn: process.env.SENTRY_DSN,
+      release: process.env.RELEASE_SHA,
+      environment: process.env.NODE_ENV,
+    }),
     rateLimits: rateLimits(rateLimitEnv.parse({})),
     pinStore,
     actionTokenStore,

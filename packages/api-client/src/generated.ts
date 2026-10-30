@@ -2492,11 +2492,30 @@ export interface operations {
           "application/json": {
             /** @enum {string} */
             status: "ok";
+            /** @description One entry per probed dependency, so a degraded dependency is named */
+            checks: {
+              name: string;
+              /** @enum {string} */
+              status: "ok" | "fail" | "skipped";
+            }[];
           };
         };
       };
       /** @description Internal failure; no private error information */
       500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description A recorded runtime fault or a shutdown in progress */
+      503: {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
@@ -2556,6 +2575,12 @@ export interface operations {
           "application/json": {
             /** @enum {string} */
             status: "ok";
+            /** @description One entry per probed dependency, so a degraded dependency is named */
+            checks: {
+              name: string;
+              /** @enum {string} */
+              status: "ok" | "fail" | "skipped";
+            }[];
           };
         };
       };

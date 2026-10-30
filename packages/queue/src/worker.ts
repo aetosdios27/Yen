@@ -2,6 +2,7 @@ import { createSql, type Sql } from "@yen/db";
 import { type JobResult, PgBoss, type Queue, type WorkOptions } from "pg-boss";
 import { observePgBossErrors } from "./boss.js";
 import { DEFAULT_QUEUES, DEFAULT_SCHEMA } from "./config.js";
+import { createJobContext, withJobContext, writeJobLog } from "./job-context.js";
 import type { DeadLetterJob, Job, JobHandler, QueuePolicy, WorkerRuntimeOptions } from "./types.js";
 
 interface HandlerRegistration {
@@ -122,10 +123,25 @@ export class WorkerRuntime {
               retryCount: rawJob.retryCount,
               expireInSeconds: rawJob.expireInSeconds,
             };
+            const context = createJobContext({ jobId: job.id, queue: queueName });
+            const startedAt = Date.now();
             try {
-              await handler(job);
+              await withJobContext(context, () => handler(job));
+              writeJobLog(
+                { event: "queue_job", outcome: "completed", durationMs: Date.now() - startedAt },
+                context,
+              );
               results.push({ id: rawJob.id, status: "completed" });
             } catch (err) {
+              writeJobLog(
+                {
+                  event: "queue_job",
+                  outcome: "failed",
+                  durationMs: Date.now() - startedAt,
+                  ...(err instanceof Error ? { errorName: err.name } : {}),
+                },
+                context,
+              );
               results.push({
                 id: rawJob.id,
                 status: "failed",

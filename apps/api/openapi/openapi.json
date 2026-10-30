@@ -1494,14 +1494,46 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "properties": { "status": { "type": "string", "enum": ["ok"] } },
-                  "required": ["status"]
+                  "properties": {
+                    "status": { "type": "string", "enum": ["ok"] },
+                    "checks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": { "type": "string", "maxLength": 64 },
+                          "status": { "type": "string", "enum": ["ok", "fail", "skipped"] }
+                        },
+                        "required": ["name", "status"]
+                      },
+                      "description": "One entry per probed dependency, so a degraded dependency is named"
+                    }
+                  },
+                  "required": ["status", "checks"]
                 }
               }
             }
           },
           "500": {
             "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "A recorded runtime fault or a shutdown in progress",
             "headers": {
               "x-request-id": {
                 "schema": { "type": "string", "format": "uuid" },
@@ -1570,8 +1602,22 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "properties": { "status": { "type": "string", "enum": ["ok"] } },
-                  "required": ["status"]
+                  "properties": {
+                    "status": { "type": "string", "enum": ["ok"] },
+                    "checks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": { "type": "string", "maxLength": 64 },
+                          "status": { "type": "string", "enum": ["ok", "fail", "skipped"] }
+                        },
+                        "required": ["name", "status"]
+                      },
+                      "description": "One entry per probed dependency, so a degraded dependency is named"
+                    }
+                  },
+                  "required": ["status", "checks"]
                 }
               }
             }

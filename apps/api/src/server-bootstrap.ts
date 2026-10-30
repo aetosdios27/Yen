@@ -27,6 +27,7 @@ import { PostgresExpenseObjectionStore } from "./expense-objections.js";
 import { PostgresExpenseStore } from "./expense-store.js";
 import { FileSystemStorageAdapter } from "./filesystem-storage.js";
 import { PostgresFundStore } from "./fund-store.js";
+import { collectHealth } from "./health.js";
 import { createServerLifecycle, type ServerLifecycle, shutdownOnSignal } from "./lifecycle.js";
 import { startObservability } from "./observability.js";
 import { PostgresPayeeProfileStore } from "./payee-rules/profile-store.js";
@@ -35,6 +36,7 @@ import { PostgresPrivacyStore } from "./privacy-store.js";
 import { PostgresPublicFundReadStore } from "./public-fund-store.js";
 import { PostgresReceiptStore } from "./receipt-store.js";
 import { PostgresReconciliationStore } from "./reconciliation/postgres-store.js";
+import { createFaultTracker } from "./runtime-faults.js";
 import { useMemoryStore } from "./server-config.js";
 import {
   MemoryRateLimitStore,
@@ -235,6 +237,8 @@ export async function startServer(
     throw new Error("DATABASE_URL connection failed or waitlist_entries table is unavailable");
   }
   const telemetrySdk = await startObservability();
+  const runtimeFaults = createFaultTracker();
+  const uninstallFaultHandlers = runtimeFaults.install();
 
   const inFlightTracker = new DefaultInFlightTracker();
   let lifecycleInstance: ServerLifecycle | undefined;
@@ -388,6 +392,8 @@ export async function startServer(
       refillMs: resolvedConfig.WAITLIST_RATE_LIMIT_REFILL_MS,
     },
     readiness,
+    runtimeFault: runtimeFaults.current,
+    health: () => collectHealth([{ name: "database", run: readiness }], runtimeFaults.current),
     waitlistMinResponseMs: resolvedConfig.WAITLIST_MIN_RESPONSE_MS,
     waitlistBodyLimit: resolvedConfig.WAITLIST_BODY_LIMIT_BYTES,
     concurrencyLimit: resolvedConfig.CONCURRENCY_LIMIT,
@@ -459,6 +465,7 @@ export async function startServer(
       try {
         await baseLifecycle.shutdown(signal);
       } finally {
+        uninstallFaultHandlers();
         await telemetrySdk?.shutdown();
       }
     },

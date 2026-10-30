@@ -37,6 +37,14 @@ export {
   queueThresholdsSchema,
 } from "./evaluator.js";
 export {
+  createJobContext,
+  currentJobContext,
+  type JobContext,
+  type JobLogEntry,
+  withJobContext,
+  writeJobLog,
+} from "./job-context.js";
+export {
   buildIdempotencyKey,
   createPostgresAdapter,
   transactionalEnqueue,
