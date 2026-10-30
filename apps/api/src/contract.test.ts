@@ -605,16 +605,21 @@ it("validates every documented status and sent header against the committed Open
             method,
             path === "/ready"
               ? await createApp({ ...base, readiness: async () => false }).request("/ready")
-              : await createApp({
-                  ...base,
-                  rateLimitStore: {
-                    consume: async () => ({
-                      allowed: false,
-                      overloaded: true,
-                      retryAfterSeconds: 1,
-                    }),
-                  },
-                }).request("/v1/me"),
+              : path === "/health"
+                ? await createApp({
+                    ...base,
+                    runtimeFault: () => "unhandled_rejection",
+                  }).request("/health")
+                : await createApp({
+                    ...base,
+                    rateLimitStore: {
+                      consume: async () => ({
+                        allowed: false,
+                        overloaded: true,
+                        retryAfterSeconds: 1,
+                      }),
+                    },
+                  }).request("/v1/me"),
           );
         } else if (status === "429") {
           await check(path, method, await rateLimited.request("/v1/me"));
