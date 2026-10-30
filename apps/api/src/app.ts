@@ -150,8 +150,7 @@ import type {
   FundAction,
   FundResource,
 } from "./policy.js";
-import { redactActionReceipt as redactReceipt } from "./policy.js";
-import { DEFAULT_OBJECTION_WINDOW_HOURS } from "./policy.js";
+import { DEFAULT_OBJECTION_WINDOW_HOURS, redactActionReceipt as redactReceipt } from "./policy.js";
 import {
   type ErasureReport,
   PrivacyForbiddenError,

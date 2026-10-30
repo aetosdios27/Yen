@@ -173,15 +173,26 @@ export class PostgresExpenseStore implements ExpenseStore {
       } else if (current.status === "approved" && expense.status === "paid") {
         const transactionId = expense.bankTransactionId;
         if (!transactionId) throw new ApiError("validation_failed");
-        const existing = await tx<{ id: string; fund_id: string; type: string; amount_paise: string | number; reconciliation_status: string; matched_expense_id: string | null }[]>`
+        const existing = await tx<
+          {
+            id: string;
+            fund_id: string;
+            type: string;
+            amount_paise: string | number;
+            reconciliation_status: string;
+            matched_expense_id: string | null;
+          }[]
+        >`
           SELECT id, fund_id, type, amount_paise, reconciliation_status, matched_expense_id
           FROM bank_transactions WHERE id = ${transactionId}
         `;
-        if (!existing[0]) throw new ApiError("not_found");
         const bankTransaction = existing[0];
+        // Another fund's transaction must look the same as a missing one.
+        if (!bankTransaction || bankTransaction.fund_id !== expense.fundId) {
+          throw new ApiError("not_found");
+        }
         const usable =
           bankTransaction.type === "debit" &&
-          bankTransaction.fund_id === expense.fundId &&
           String(bankTransaction.amount_paise) === String(expense.amountPaise) &&
           bankTransaction.reconciliation_status === "unmatched" &&
           bankTransaction.matched_expense_id === null;

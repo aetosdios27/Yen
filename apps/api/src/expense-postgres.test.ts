@@ -615,7 +615,34 @@ databaseSuite("Postgres expense store", (sql, url) => {
           actorUserId: userIds[0],
           policy: QUORUM_TWO,
         }),
-      ).rejects.toThrow("Resource not found");
+      ).rejects.toMatchObject({ code: "not_found" });
+      const insertDebit = async (id: string, debitFundId: string, amount: string) => sql`
+        INSERT INTO bank_transactions (
+          id, fund_id, bank_reference, amount_paise, type, posted_at, source, raw_payload
+        ) VALUES (
+          ${id}, ${debitFundId}, ${`unusable-${id}`}, ${amount}, 'debit',
+          ${now}, 'statement_upload', '{}'::jsonb
+        )
+      `;
+      const otherFundDebit = uuidv7();
+      await insertDebit(otherFundDebit, uuidv7(), "5000");
+      const wrongAmountDebit = uuidv7();
+      await insertDebit(wrongAmountDebit, fundId, "4999");
+      for (const [debitId, code] of [
+        [otherFundDebit, "not_found"],
+        [wrongAmountDebit, "conflict"],
+      ] as const) {
+        await expect(
+          expenseStore.save(payExpense(approved, debitId, new Date(Date.now() + 9).toISOString()), {
+            actorUserId: userIds[0],
+            policy: QUORUM_TWO,
+          }),
+        ).rejects.toMatchObject({ code });
+      }
+      expect((await expenseStore.get(draftExpense.id))?.status).toBe("approved");
+      expect(
+        await sql`SELECT count(*)::int AS count FROM fund_events WHERE fund_id = ${fundId} AND type = 'expense.paid'`,
+      ).toEqual([{ count: 0 }]);
       const bankTransactionId = uuidv7();
       await sql`
         INSERT INTO bank_transactions (
