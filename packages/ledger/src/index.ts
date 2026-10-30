@@ -60,6 +60,20 @@ export {
   settleExpense,
 } from "./operations.js";
 export {
+  InMemoryPayoutKillSwitch,
+  MakerCheckerViolationError,
+  type PartnerPayoutAdapter,
+  type PartnerPayoutRequest,
+  type PartnerPayoutResult,
+  PayoutIdempotencyConflictError,
+  PayoutNotApprovedError,
+  PayoutOrchestrator,
+  type PayoutOutcome,
+  type PayoutRecord,
+  PayoutsDisabledError,
+  payoutIdempotencyKey,
+} from "./payout.js";
+export {
   type FundBalances,
   replayFundEvents,
 } from "./replay.js";
