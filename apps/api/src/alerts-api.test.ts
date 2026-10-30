@@ -15,7 +15,7 @@ import {
   MemoryPinStore,
   PinService,
 } from "./pin/index.js";
-import { devPolicy } from "./policy.js";
+import { DEFAULT_OBJECTION_WINDOW_HOURS, devPolicy } from "./policy.js";
 
 const PIN = "482915";
 const HOUR_MS = 3_600_000;
@@ -150,8 +150,8 @@ databaseSuite("Postgres fund alerts API", (sql) => {
   async function paidExpense(ownerId: string, fundId: string, amountPaise: string): Promise<void> {
     const owner = appAs({ id: ownerId, role: "owner" });
     const expenseId = await submittedExpense(owner, fundId, amountPaise);
-    // The default fund objection window is 24h; approvals only reach quorum after it closes.
-    offsetMs += 25 * HOUR_MS;
+    // Approvals only reach quorum after the default objection window closes.
+    offsetMs += (DEFAULT_OBJECTION_WINDOW_HOURS + 1) * HOUR_MS;
     for (const approverId of [await user("Approver One"), await user("Approver Two")]) {
       const response = await appAs({ id: approverId, role: "approver" }).request(
         `/v1/funds/${fundId}/expenses/${expenseId}/approve`,
