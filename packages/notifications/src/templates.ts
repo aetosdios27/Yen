@@ -137,11 +137,26 @@ export function renderNotificationTemplate<T extends NotificationTemplateId>(
     case "fund_alert": {
       const data = parsed as FundAlertData;
       const severity = data.severity.toUpperCase();
+      const escalated = data.variant === "escalation";
       if (locale === "hi") {
+        if (escalated) {
+          return {
+            subject: `सूचना बढ़ाई गई (${severity}): ${data.fund_title}`,
+            body: `${data.fund_title} के लिए ${data.title} की समीक्षा नहीं हुई है। कृपया तुरंत समीक्षा करें।`,
+            locale: "hi",
+          };
+        }
         return {
           subject: `सूचना (${severity}): ${data.fund_title}`,
           body: `${data.fund_title} के लिए ${data.title}। कृपया समीक्षा करें।`,
           locale: "hi",
+        };
+      }
+      if (escalated) {
+        return {
+          subject: `Escalated alert (${severity}): ${data.fund_title}`,
+          body: `Escalated: ${data.title} for ${data.fund_title} has not been acknowledged. Please review urgently.`,
+          locale: "en",
         };
       }
       return {

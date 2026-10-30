@@ -159,6 +159,8 @@ export interface EnqueueAlertNotificationsInput {
   readonly title: string;
   /** Distinguishes raise vs escalation notifications in the idempotency key. */
   readonly suffix: string;
+  /** Selects the fund_alert template variant. Defaults to "raised". */
+  readonly variant?: "raised" | "escalation";
   readonly recipientRoles?: readonly ("owner" | "approver")[];
   readonly now?: Date;
 }
@@ -186,6 +188,7 @@ export async function enqueueAlertNotifications(
     alert_type: input.alertType,
     severity: input.severity,
     title: input.title,
+    variant: input.variant ?? "raised",
   };
   let enqueued = 0;
   for (const userId of recipients) {

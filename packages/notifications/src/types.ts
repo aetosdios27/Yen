@@ -80,6 +80,7 @@ export const fundAlertDataSchema = z.object({
   alert_type: z.string().min(1),
   severity: z.enum(["info", "warning", "critical"]),
   title: z.string().min(1),
+  variant: z.enum(["raised", "escalation"]).default("raised"),
 });
 export type FundAlertData = z.infer<typeof fundAlertDataSchema>;
 
