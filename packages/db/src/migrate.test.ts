@@ -134,6 +134,9 @@ databaseSuite("migration runner", (sql, url) => {
     const deliveryStatusSource = await readFile(join(defaultDir, "0028_delivery_status.sql"));
     const alertsSource = await readFile(join(defaultDir, "0029_alerts.sql"));
     const alertEventsSource = await readFile(join(defaultDir, "0030_alert_events.sql"));
+    const alertNotificationsSource = await readFile(
+      join(defaultDir, "0031_alert_notifications.sql"),
+    );
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -316,6 +319,12 @@ databaseSuite("migration runner", (sql, url) => {
         checksum: createHash("sha256").update(alertEventsSource).digest("hex"),
         applied_at: expect.any(Date),
       },
+      {
+        version: 31,
+        name: "0031_alert_notifications.sql",
+        checksum: createHash("sha256").update(alertNotificationsSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
     ]);
   });
 
@@ -475,7 +484,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(30);
+    expect(before).toHaveLength(31);
   });
 
   it("rejects an edited applied file and names it", async () => {

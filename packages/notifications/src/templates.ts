@@ -3,6 +3,7 @@ import {
   type ApprovalNeededData,
   type ApprovedRejectedData,
   type DonationReceivedData,
+  type FundAlertData,
   type NotificationLocale,
   type NotificationTemplateId,
   type ObjectionRaisedData,
@@ -129,6 +130,23 @@ export function renderNotificationTemplate<T extends NotificationTemplateId>(
       return {
         subject: `Weekly summary: ${data.fund_title}`,
         body: `Weekly summary for ${data.fund_title}: ${data.donations_count} donations (${donationsTotal}) received, ${data.expenses_count} expenses (${expensesTotal}) spent.`,
+        locale: "en",
+      };
+    }
+
+    case "fund_alert": {
+      const data = parsed as FundAlertData;
+      const severity = data.severity.toUpperCase();
+      if (locale === "hi") {
+        return {
+          subject: `सूचना (${severity}): ${data.fund_title}`,
+          body: `${data.fund_title} के लिए ${data.title}। कृपया समीक्षा करें।`,
+          locale: "hi",
+        };
+      }
+      return {
+        subject: `Alert (${severity}): ${data.fund_title}`,
+        body: `${data.title} for ${data.fund_title}. Please review.`,
         locale: "en",
       };
     }

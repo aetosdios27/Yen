@@ -171,6 +171,7 @@ export const notificationOutboxRowSchema = z.object({
     "donation_received",
     "objection_raised",
     "weekly_summary",
+    "fund_alert",
   ]),
   template_data: z.json(),
   preferred_channel: z.enum(["whatsapp", "sms", "email"]),

@@ -1,4 +1,9 @@
 export {
+  registerAlertEscalation,
+  registerChainVerification,
+  verifyFundChains,
+} from "./alerts.js";
+export {
   ANCHOR_RPC_RESILIENCE_OPTIONS,
   type AnchorAlert,
   type AnchorAlertSink,

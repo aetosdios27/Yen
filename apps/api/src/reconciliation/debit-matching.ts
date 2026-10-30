@@ -1,4 +1,4 @@
-import { type Sql, uuidv7 } from "@yen/db";
+import { raiseAlertWithNotification, type Sql, type SqlClient, uuidv7 } from "@yen/db";
 import { parsePseudonymId } from "@yen/eventlog";
 import {
   appendFundEventInTx,
@@ -37,13 +37,19 @@ export async function checkBankBalance(
       }),
     });
     await sql.begin(async (tx) => {
-      await tx`
-        INSERT INTO alerts (id, fund_id, alert_type, severity, title, details, entity_type, entity_id, dedup_key)
-        VALUES (${uuidv7()}, ${fundId}, 'balance_drift', 'critical', 'Ledger-vs-bank balance drift',
-                ${JSON.stringify({ ledgerBalancePaise: ledgerBalancePaise.toString(), reportedBalancePaise: reportedBalancePaise.toString() })},
-                'fund', ${fundId}, ${fundId})
-        ON CONFLICT DO NOTHING
-      `;
+      await raiseAlertWithNotification(tx, {
+        fundId,
+        alertType: "balance_drift",
+        severity: "critical",
+        title: "Ledger-vs-bank balance drift",
+        details: JSON.stringify({
+          ledgerBalancePaise: ledgerBalancePaise.toString(),
+          reportedBalancePaise: reportedBalancePaise.toString(),
+        }),
+        entityType: "fund",
+        entityId: fundId,
+        dedupKey: fundId,
+      });
     });
   }
   return { matches, ledgerBalancePaise };
@@ -85,12 +91,16 @@ export async function matchDebitInTx(
   if (!match) {
     await tx`INSERT INTO unapproved_debits (bank_transaction_id, fund_id)
       VALUES (${bankTransactionId}, ${debit.fundId}) ON CONFLICT (bank_transaction_id) DO NOTHING`;
-    await tx`
-      INSERT INTO alerts (id, fund_id, alert_type, severity, title, details, entity_type, entity_id, dedup_key, escalation_due_at)
-      VALUES (${uuidv7()}, ${debit.fundId}, 'unapproved_debit', 'warning', 'Unapproved debit detected',
-              ${JSON.stringify({ bankTransactionId, amountPaise: String(debit.amountPaise) })}, 'bank_transaction', ${bankTransactionId}, ${bankTransactionId}, NULL)
-      ON CONFLICT DO NOTHING
-    `;
+    await raiseAlertWithNotification(tx as unknown as SqlClient, {
+      fundId: debit.fundId,
+      alertType: "unapproved_debit",
+      severity: "warning",
+      title: "Unapproved debit detected",
+      details: JSON.stringify({ bankTransactionId, amountPaise: String(debit.amountPaise) }),
+      entityType: "bank_transaction",
+      entityId: bankTransactionId,
+      dedupKey: bankTransactionId,
+    });
     return { kind: "unapproved" };
   }
   if (!match.hold_id) throw new Error(`Approved expense ${match.id} has no ledger hold`);

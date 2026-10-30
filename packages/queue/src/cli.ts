@@ -1,4 +1,5 @@
 import { startObservability } from "@yen/shared/observability";
+import { registerAlertEscalation, registerChainVerification } from "./alerts.js";
 import {
   AnchoringWorker,
   createAnchorRpcResilience,
@@ -113,6 +114,18 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
 }
 
 process.stdout.write("Worker runtime started and listening for jobs.\n");
+void registerAlertEscalation(worker.getBoss(), worker.getSql()).catch((error) => {
+  process.stderr.write(
+    `Alert escalation failed to start: ${error instanceof Error ? error.message : String(error)}\n`,
+  );
+  process.exitCode = 1;
+});
+void registerChainVerification(worker.getBoss(), worker.getSql()).catch((error) => {
+  process.stderr.write(
+    `Chain verification failed to start: ${error instanceof Error ? error.message : String(error)}\n`,
+  );
+  process.exitCode = 1;
+});
 if (anchorConfigured && anchorChain && anchorResilience) {
   void registerAnchoringDiscovery(worker.getBoss(), worker.getSql()).catch((error) => {
     process.stderr.write(

@@ -39,6 +39,8 @@ export interface FundRecord {
 export type FundAction =
   | "fund:create"
   | "fund:read"
+  | "fund:alert:read"
+  | "fund:alert:manage"
   | "fund:expense:approve"
   | "fund:expense:reject"
   | "fund:payee:change"
@@ -266,6 +268,20 @@ export const devPolicy: Policy = {
       );
     }
     if (resource.kind === "fund" && action === "fund:create") return true;
+    if (
+      resource.kind === "fund" &&
+      (action === "fund:alert:read" || action === "fund:alert:manage")
+    ) {
+      const roles = (principal.roles ?? []).filter(isValidRole);
+      const role = principal.role ?? roles[0];
+      if (!role || !resource.fund) return false;
+      const fundId = parseFundId(resource.fund.fund.id);
+      if (!fundId.ok) return false;
+      return policyCan({ id: principal.id, role, roles }, action, {
+        kind: "fund",
+        fund: { fundId: fundId.value, ownerId: resource.fund.owner, policy: DEFAULT_FUND_POLICY },
+      });
+    }
     if (resource.kind === "fund" && action !== "fund:read") {
       return resource.fund?.owner === principal.id;
     }
