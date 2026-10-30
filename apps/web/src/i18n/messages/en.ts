@@ -120,7 +120,7 @@ export const en = {
   legal: {
     terms: {
       title: "Terms of use",
-      updated: "Last updated 29 October 2026 · Notice version 2026-10-29",
+      updated: "Last updated 26 October 2026",
       intro:
         "These terms explain how Yen works and what you can expect from it. Using Yen means you agree to them.",
       serviceTitle: "Yen is a technology service, not a bank",
@@ -141,27 +141,27 @@ export const en = {
     },
     privacy: {
       title: "Privacy notice",
-      updated: "Last updated 29 October 2026 · Notice version 2026-10-29",
+      updated: "Last updated 26 October 2026",
       intro:
-        "This notice describes personal data Yen stores and the privacy controls available through its authenticated API. It is not legal advice.",
+        "This notice explains what personal data Yen collects, why we collect it, and your rights under India's Digital Personal Data Protection Act (DPDP).",
       collectTitle: "What we collect",
       collectBody:
         "Depending on the feature you use, Yen stores account phone numbers and display names, club membership details, sign-in session and device data, waitlist contact details, donation contact choices, and notification settings. Yen also stores financial and audit records for clubs, including club payee details and invoice metadata retained as club records.",
       whyTitle: "Why we collect it",
       whyBody:
-        "We use this data to sign you in, run club features, show chosen names, deliver requested notifications, prevent abuse, and keep club records. The API records purpose-specific consent and accepts authenticated erasure previews and requests.",
+        "Only to contact you about the Yen pilot and to record that you agreed to be contacted.",
       publicTitle: "What is never public",
       publicBody:
-        "Names, phone numbers, emails, and codes made from contacts stay out of a fund's permanent records and the proof data created from them. Public records use a different code for each fund. Do not put personal details in record descriptions.",
+        "Your name and contact details are never written into public records. Only club activity appears there.",
       storageTitle: "Where it is stored",
       storageBody:
-        "Account and contact data is stored in ordinary database tables. A fund's permanent records and the proof data made from them do not contain names, phone numbers, or emails. An authenticated erasure request removes or anonymizes identity data that can be changed. If a fund owner records that another law requires retention, Yen keeps the minimum account identity and logs the reason.",
+        "Personal data is handled with strict confidentiality and never sold or shared for advertising.",
       trackingTitle: "No tracking",
       trackingBody:
         "Yen uses no third-party tracking cookies, no advertising cookies and no analytics scripts.",
       rightsTitle: "Your choices",
       rightsBody:
-        "For privacy questions, email raypranav718@gmail.com. Use the authenticated API route `/v1/privacy/consents` to grant or withdraw consent and `/v1/privacy/erasure-requests` to preview or request erasure. This page does not submit a request. Withdrawing consent stops queued notifications that have not started delivery; a message already sent to a provider cannot be recalled. This notice does not determine your legal rights; seek qualified advice for legal questions.",
+        "You can ask us to correct or delete your personal data, or withdraw your consent, by writing to raypranav718@gmail.com at any time. You may also raise a complaint with the Data Protection Board of India.",
       changesTitle: "Changes to this notice",
       changesBody:
         "When this notice changes, the updated version appears on this page with a new date.",
@@ -436,6 +436,8 @@ export const en = {
     categoryFood: "Food & Refreshments",
     categoryOther: "Other expenses",
     emptyFilter: "No records match this filter.",
+    checkRecord: "Check this record",
+    checkRecordAria: "Check this record in the verifier",
   },
   treasurer: {
     title: "Treasurer dashboard",
@@ -587,6 +589,47 @@ export const en = {
       invalidGstin: "Invalid GSTIN format or verification code.",
       uploadFailed: "Upload failed. Please check your connection and try again.",
     },
+  },
+  verify: {
+    title: "Verify a record",
+    subtitle: "Check any payment or receipt against its permanent digital seal.",
+    enterRecordIdLabel: "Record identifier",
+    enterRecordIdPlaceholder: "e.g. 00000000-0000-4000-8000-000000000020",
+    fundIdLabel: "Fund identifier (optional)",
+    fundIdPlaceholder: "e.g. 00000000-0000-4000-8000-000000000010",
+    verifyButton: "Check record",
+    checking: "Checking record proof…",
+    uploadBundlePrompt: "Or upload an audit bundle file",
+    uploadBundleButton: "Upload audit bundle (JSON)",
+    dropBundleHere: "Drop audit bundle JSON file here, or click to browse",
+    downloadBundleJson: "Download bundle (JSON)",
+    downloadBundleCsv: "Download bundle (CSV)",
+    downloadVerifierScript: "Download offline verifier script",
+    outcomeVerified: "Verified",
+    outcomeSkipped: "Unverified / Registry skipped",
+    outcomePending: "Pending seal",
+    outcomeFailed: "Verification failed",
+    passHeadline: "This record was written on {date} and has not been changed since",
+    pendingHeadline: "Sealed in account book; awaiting next scheduled public seal",
+    failHeadline: "Verification failed: record was altered or invalid",
+    technicalInspectionTitle: "Technical details (for skeptics and auditors)",
+    technicalInspectionDesc:
+      "Expand to inspect cryptographic proofs, tree paths, and public registry seals.",
+    canonicalHashLabel: "Canonical record fingerprint",
+    declaredHashLabel: "Declared record fingerprint",
+    saltLabel: "Random salt",
+    eventRootLabel: "Record seal root",
+    globalRootLabel: "Global seal root",
+    onChainRootLabel: "Published registry seal",
+    registryAddressLabel: "Registry contract",
+    batchSequenceLabel: "Seal batch sequence",
+    txHashLabel: "Transaction reference",
+    chainIdLabel: "Network ID",
+    merklePathLabel: "Inclusion path steps",
+    offlineNotice:
+      "Verified using in-browser cryptographic checks without relying on server claims.",
+    backToFund: "Back to fund",
+    noRecordSelected: "Enter a record identifier or upload an audit bundle to check its proof.",
   },
 } as const;
 

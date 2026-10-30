@@ -9,6 +9,7 @@ import { VerifiedBadge } from "./verified-badge";
 
 export type FundTimelineProps = {
   readonly timeline: readonly PublicTimelineEntry[];
+  readonly fundId?: string | undefined;
   readonly onOpenExplainer: () => void;
   readonly className?: string | undefined;
 };
@@ -24,7 +25,7 @@ const CATEGORY_MESSAGE_KEYS: Record<SpendingCategoryId, MessageKey> = {
   other: "fund.categoryOther",
 };
 
-export function FundTimeline({ timeline, onOpenExplainer, className }: FundTimelineProps) {
+export function FundTimeline({ timeline, fundId, onOpenExplainer, className }: FundTimelineProps) {
   const { t, locale } = useI18n();
   const [filter, setFilter] = useState<FilterType>("all");
 
@@ -185,6 +186,8 @@ export function FundTimeline({ timeline, onOpenExplainer, className }: FundTimel
                       status={entry.status}
                       evidence={entry.evidence}
                       verification={entry.verification}
+                      recordId={entry.id}
+                      fundId={fundId}
                       onOpenExplainer={onOpenExplainer}
                     />
                   </div>

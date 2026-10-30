@@ -44,7 +44,7 @@ export function isStatementUploadRoute(path: string): boolean {
 }
 
 export function isPublicFundReadRoute(path: string): boolean {
-  return /^\/v1\/funds\/[0-9a-f-]{36}\/public\/(?:summary|breakdown|timeline|expenses\/[0-9a-f-]{36}(?:\/(?:proofs|objections))?)\/?$/.test(
+  return /^\/v1\/funds\/[0-9a-f-]{36}\/(?:public\/(?:summary|breakdown|timeline|expenses\/[0-9a-f-]{36}(?:\/(?:proofs|objections))?)|audit-bundle|records\/[^/]+\/proof)\/?$/.test(
     path,
   );
 }

@@ -1,12 +1,12 @@
 import { randomBytes } from "node:crypto";
-import type { AppendEventInput, StoredFundEvent, WaitlistEntry } from "@yen/db";
+import type { AppendEventInput, Sql, StoredFundEvent, WaitlistEntry } from "@yen/db";
 import { uuidv7 } from "@yen/db";
 import { type PseudonymId, parsePseudonymId } from "@yen/eventlog";
 import { type ApprovalProofVerifier, type ExpenseStore, InMemoryExpenseStore } from "@yen/ledger";
 import { type FundSubscriptionStore, MemoryFundSubscriptionStore } from "@yen/notifications";
 import type { FundRole } from "@yen/policy";
 import { failClosedPayeeVerifier, type PayeeVerifier } from "@yen/policy";
-import type { DeliveryProvider } from "@yen/shared";
+import type { AuditBundle, DeliveryProvider } from "@yen/shared";
 import { paise } from "@yen/shared";
 import type { Context } from "hono";
 import { type AlertStore, MemoryAlertStore } from "./alert-store.js";
@@ -377,8 +377,15 @@ export class MemoryFundStore implements FundStore {
   }
 }
 
+export interface AuditBundleProvider {
+  getAuditBundle(fundId: string): Promise<AuditBundle | null>;
+  getRecordProof(fundId: string, recordId: string): Promise<Record<string, unknown> | null>;
+}
+
 export interface AppDependencies {
   readonly waitlistStore: WaitlistStore;
+  readonly sql?: Sql | undefined;
+  readonly auditBundleProvider?: AuditBundleProvider | undefined;
   readonly expenseStore: ExpenseStore;
   readonly payeeProfileStore: PayeeProfileStore;
   readonly payeeFingerprintSalt: string;

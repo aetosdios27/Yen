@@ -29,6 +29,20 @@ export {
   type UserId,
   userIdSchema,
 } from "./ids.js";
+export {
+  type AuditAnchor,
+  type AuditBundle,
+  type AuditCheck,
+  type AuditEvent,
+  type AuditEventEntry,
+  type AuditProof,
+  AuditReasonCode,
+  type AuditRootRange,
+  canonicalizeJson,
+  computeCanonicalEventHash,
+  exportAuditBundleCsv,
+  verifyAuditBundle,
+} from "./merkle/bundle.js";
 export { fromHex, type Hash32, hash32, type Salt32, salt32, sha256, toHex } from "./merkle/hash.js";
 export {
   buildIntervalTree,
@@ -39,6 +53,7 @@ export {
   verifyEventProof,
 } from "./merkle/interval.js";
 export {
+  createEventProof,
   type EventProof,
   parseEventProof,
   parseEventProofJson,
