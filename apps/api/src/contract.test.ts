@@ -622,6 +622,18 @@ it("validates every documented status and sent header against the committed Open
           await check(path, method, await rateLimited.request("/v1/me"));
         } else if (status === "204") {
           await check(path, method, new Response(null, { status: 204 }));
+        } else if (status === "304") {
+          await check(
+            path,
+            method,
+            new Response(null, {
+              status: 304,
+              headers: {
+                "x-request-id": "00000000-0000-4000-8000-0000000000ff",
+                "x-trace-id": "0".repeat(32),
+              },
+            }),
+          );
         } else if (status === "409" && method === "post") {
           if (path === pledgePath) {
             await check(path, method, await app.request(resolve(path), pledge("pledge-409")));

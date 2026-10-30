@@ -81,8 +81,9 @@ function scanRouteHandlersForRedaction(sourceText: string): string[] {
 
     if (isFundRoute) {
       const redactedVariables = new Set<string>();
+      // fundRead() only ever caches a body that its producer already passed through the policy.
       const redactedAssignment =
-        /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*[^;]*\b(?:redactFundReadModel|redactExpenseDetails|redactExpenseProofs|redactExpense|redactReceipt|redact)\s*\(/g;
+        /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*[^;]*\b(?:redactFundReadModel|redactExpenseDetails|redactExpenseProofs|redactExpense|redactReceipt|redact|fundRead)\s*\(/g;
       let assignmentMatch: RegExpExecArray | null = null;
       while (true) {
         assignmentMatch = redactedAssignment.exec(handlerBody);

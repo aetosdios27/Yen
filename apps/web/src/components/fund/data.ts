@@ -66,6 +66,10 @@ export async function getPublicFund(fundId: string): Promise<PublicFund | null> 
 
     const isFundVerified =
       summary.verification === "bank-matched" || summary.verification === "anchored";
+    const savedCopyAt =
+      summaryRes.response.headers.get("x-yen-data-as-of") ??
+      breakdownRes.response.headers.get("x-yen-data-as-of") ??
+      timelineRes.response.headers.get("x-yen-data-as-of");
 
     const timelineEntries: PublicTimelineEntry[] = (timeline?.items ?? []).map((item) => {
       const isItemVerified = item.verified === "bank-matched" || item.verified === "anchored";
@@ -99,6 +103,7 @@ export async function getPublicFund(fundId: string): Promise<PublicFund | null> 
       },
       spendingBreakdown: spendingCategories,
       timeline: timelineEntries,
+      ...(savedCopyAt === null ? {} : { dataAsOf: savedCopyAt }),
     };
   } catch {
     return null;

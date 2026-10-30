@@ -4342,6 +4342,12 @@ export interface operations {
           etag?: string;
           /** @description Public short shared cache; authenticated tiers are private and no-store */
           "cache-control"?: string;
+          /** @description Separates the public and signed-in representations of one URL */
+          vary?: string;
+          /** @description When the stale copy was refreshed, set only when the origin is unavailable */
+          "x-yen-data-as-of"?: string;
+          /** @description RFC 7234 warning when the response is served stale */
+          warning?: string;
           [name: string]: unknown;
         };
         content: {
@@ -4359,6 +4365,27 @@ export interface operations {
             dataGaps: string[];
           };
         };
+      };
+      /** @description The cached copy still matches the current fund data; no body is returned */
+      304: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Representation validator for public-tier responses */
+          etag?: string;
+          /** @description Public short shared cache; authenticated tiers are private and no-store */
+          "cache-control"?: string;
+          /** @description Separates the public and signed-in representations of one URL */
+          vary?: string;
+          /** @description When the stale copy was refreshed, set only when the origin is unavailable */
+          "x-yen-data-as-of"?: string;
+          /** @description RFC 7234 warning when the response is served stale */
+          warning?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Resource not found */
       404: {
@@ -4441,6 +4468,12 @@ export interface operations {
           etag?: string;
           /** @description Public short shared cache; authenticated tiers are private and no-store */
           "cache-control"?: string;
+          /** @description Separates the public and signed-in representations of one URL */
+          vary?: string;
+          /** @description When the stale copy was refreshed, set only when the origin is unavailable */
+          "x-yen-data-as-of"?: string;
+          /** @description RFC 7234 warning when the response is served stale */
+          warning?: string;
           [name: string]: unknown;
         };
         content: {
@@ -4456,6 +4489,27 @@ export interface operations {
             dataGaps: string[];
           };
         };
+      };
+      /** @description The cached copy still matches the current fund data; no body is returned */
+      304: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Representation validator for public-tier responses */
+          etag?: string;
+          /** @description Public short shared cache; authenticated tiers are private and no-store */
+          "cache-control"?: string;
+          /** @description Separates the public and signed-in representations of one URL */
+          vary?: string;
+          /** @description When the stale copy was refreshed, set only when the origin is unavailable */
+          "x-yen-data-as-of"?: string;
+          /** @description RFC 7234 warning when the response is served stale */
+          warning?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Resource not found */
       404: {
@@ -4538,6 +4592,12 @@ export interface operations {
           etag?: string;
           /** @description Public short shared cache; authenticated tiers are private and no-store */
           "cache-control"?: string;
+          /** @description Separates the public and signed-in representations of one URL */
+          vary?: string;
+          /** @description When the stale copy was refreshed, set only when the origin is unavailable */
+          "x-yen-data-as-of"?: string;
+          /** @description RFC 7234 warning when the response is served stale */
+          warning?: string;
           [name: string]: unknown;
         };
         content: {
@@ -4572,6 +4632,27 @@ export interface operations {
             dataGaps: string[];
           };
         };
+      };
+      /** @description The cached copy still matches the current fund data; no body is returned */
+      304: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Representation validator for public-tier responses */
+          etag?: string;
+          /** @description Public short shared cache; authenticated tiers are private and no-store */
+          "cache-control"?: string;
+          /** @description Separates the public and signed-in representations of one URL */
+          vary?: string;
+          /** @description When the stale copy was refreshed, set only when the origin is unavailable */
+          "x-yen-data-as-of"?: string;
+          /** @description RFC 7234 warning when the response is served stale */
+          warning?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Resource not found */
       404: {
@@ -4882,11 +4963,36 @@ export interface operations {
           etag?: string;
           /** @description Visibility-tier cache policy */
           "cache-control"?: string;
+          /** @description Separates the public and signed-in representations of one URL */
+          vary?: string;
+          /** @description When the stale copy was refreshed, set only when the origin is unavailable */
+          "x-yen-data-as-of"?: string;
+          /** @description RFC 7234 warning when the response is served stale */
+          warning?: string;
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["PublicExpenseDetail"];
         };
+      };
+      /** @description The cached copy still matches the current expense data; no body is returned */
+      304: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Representation validator */
+          etag?: string;
+          /** @description Visibility-tier cache policy */
+          "cache-control"?: string;
+          /** @description Separates the public and signed-in representations of one URL */
+          vary?: string;
+          /** @description When the stale copy was refreshed, set only when the origin is unavailable */
+          "x-yen-data-as-of"?: string;
+          /** @description RFC 7234 warning when the response is served stale */
+          warning?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Invalid fund or expense identifier */
       400: {
@@ -4966,6 +5072,12 @@ export interface operations {
           etag?: string;
           /** @description Visibility-tier cache policy */
           "cache-control"?: string;
+          /** @description Separates the public and signed-in representations of one URL */
+          vary?: string;
+          /** @description When the stale copy was refreshed, set only when the origin is unavailable */
+          "x-yen-data-as-of"?: string;
+          /** @description RFC 7234 warning when the response is served stale */
+          warning?: string;
           /** @description Forces evidence response to download as an attachment */
           "content-disposition"?: string;
           /** @description Disables MIME sniffing */
@@ -4977,6 +5089,25 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["PublicExpenseProofs"];
         };
+      };
+      /** @description The cached copy still matches the current expense data; no body is returned */
+      304: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description Representation validator */
+          etag?: string;
+          /** @description Visibility-tier cache policy */
+          "cache-control"?: string;
+          /** @description Separates the public and signed-in representations of one URL */
+          vary?: string;
+          /** @description When the stale copy was refreshed, set only when the origin is unavailable */
+          "x-yen-data-as-of"?: string;
+          /** @description RFC 7234 warning when the response is served stale */
+          warning?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Invalid fund or expense identifier */
       400: {

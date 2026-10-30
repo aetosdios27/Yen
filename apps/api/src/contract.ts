@@ -42,6 +42,22 @@ const fundReadHeaders = {
     schema: { type: "string" as const },
     description: "Public short shared cache; authenticated tiers are private and no-store",
   },
+  vary: {
+    schema: { type: "string" as const },
+    description: "Separates the public and signed-in representations of one URL",
+  },
+  "x-yen-data-as-of": {
+    schema: { type: "string" as const, format: "date-time" },
+    description: "When the stale copy was refreshed, set only when the origin is unavailable",
+  },
+  warning: {
+    schema: { type: "string" as const },
+    description: "RFC 7234 warning when the response is served stale",
+  },
+};
+const publicNotModified = {
+  description: "The cached copy still matches the current fund data; no body is returned",
+  headers: fundReadHeaders,
 };
 
 const cookieHeader = {
@@ -359,6 +375,7 @@ export const publicFundSummaryRoute = createRoute({
       ...jsonResponse(publicFundSummarySchema, "Visibility-filtered fund summary"),
       headers: fundReadHeaders,
     },
+    304: publicNotModified,
     ...publicFundErrors,
   },
 });
@@ -373,6 +390,7 @@ export const publicFundBreakdownRoute = createRoute({
       ...jsonResponse(publicFundBreakdownSchema, "Visibility-filtered spend breakdown"),
       headers: fundReadHeaders,
     },
+    304: publicNotModified,
     ...publicFundErrors,
   },
 });
@@ -387,6 +405,7 @@ export const publicFundTimelineRoute = createRoute({
       ...jsonResponse(publicFundTimelineSchema, "Visibility-filtered plain language timeline"),
       headers: fundReadHeaders,
     },
+    304: publicNotModified,
     ...publicFundErrors,
   },
 });

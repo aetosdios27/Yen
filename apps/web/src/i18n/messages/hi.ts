@@ -378,6 +378,7 @@ export const hi: Messages = {
   },
   fund: {
     title: "सार्वजनिक फ़ंड",
+    savedCopy: "{time} की सहेजी हुई प्रति दिखाई जा रही है। अभी फंड के रिकॉर्ड ताज़ा नहीं हो सके।",
     donateCta: "UPI से दान करें",
     donateQr: "UPI क्यूआर कोड",
     orgBadge: "पंजीकृत समूह",
