@@ -141,6 +141,7 @@ import { registerDeviceSignatureRoutes } from "./device-signature/routes.js";
 import { DeviceSignatureFailure, DeviceSignatureService } from "./device-signature/service.js";
 import { ApiError, errorBody, errorStatus, ReadinessError, StoreError } from "./errors.js";
 import { registerFundVisibilityRoute } from "./fund-routes.js";
+import { collectHealth, type HealthReport } from "./health.js";
 import { getVerifiedEvidenceObject } from "./integrity-job.js";
 import { logMethod } from "./logging.js";
 import {
@@ -313,13 +314,18 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         : error instanceof HTTPException && error.status === 400
           ? new ApiError("validation_failed")
           : new ApiError("internal");
+    const status = error instanceof ReadinessError ? 503 : errorStatus[failure.code];
+    if (status >= 500) {
+      deps.errorReporter?.capture(error, {
+        requestId: c.get("requestId"),
+        route: routePath(c, -1) || "unmatched",
+        status,
+      });
+    }
     if (error && typeof error === "object" && "retryAfterSeconds" in error) {
       c.header("retry-after", String((error as { retryAfterSeconds: number }).retryAfterSeconds));
     }
-    return c.json(
-      errorBody(failure, c.get("requestId")),
-      error instanceof ReadinessError ? 503 : errorStatus[failure.code],
-    );
+    return c.json(errorBody(failure, c.get("requestId")), status);
   });
   app.notFound((c) =>
     c.json(errorBody(new ApiError("not_found"), c.get("requestId")), errorStatus.not_found),
@@ -425,16 +431,38 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     });
     return c.json({ status: "received" as const }, 201);
   });
-  app.openapi(healthRoute, (c) => c.json({ status: "ok" as const }, 200));
+  // Liveness answers from process state only, so a database outage never restarts
+  // a container that is serving fine. /ready below carries the dependency checks.
+  app.openapi(healthRoute, (c) => {
+    if ((deps.runtimeFault?.() ?? null) !== null) throw new ReadinessError();
+    return c.json(
+      { status: "ok" as const, checks: [{ name: "process", status: "ok" as const }] },
+      200,
+    );
+  });
   app.openapi(versionRoute, (c) => c.json(buildInfo, 200));
   app.openapi(readyRoute, async (c) => {
     if (deps.isShuttingDown()) throw new ReadinessError();
+    let report: HealthReport;
     try {
-      if (!(await deps.readiness()) || deps.isShuttingDown()) throw new ReadinessError();
+      report =
+        deps.health === undefined
+          ? await collectHealth(
+              [{ name: "database", run: deps.readiness }],
+              () => deps.runtimeFault?.() ?? null,
+            )
+          : await deps.health();
     } catch {
       throw new ReadinessError();
     }
-    return c.json({ status: "ok" as const }, 200);
+    if (report.status !== "ok" || deps.isShuttingDown()) throw new ReadinessError();
+    return c.json(
+      {
+        status: "ok" as const,
+        checks: report.checks.map((check) => ({ name: check.name, status: check.status })),
+      },
+      200,
+    );
   });
   app.openapi(meRoute, async (c) => {
     const principal = c.get("principal");
