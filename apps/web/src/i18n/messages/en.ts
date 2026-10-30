@@ -146,7 +146,7 @@ export const en = {
         "This notice describes personal data Yen stores and the privacy controls available through its authenticated API. It is not legal advice.",
       collectTitle: "What we collect",
       collectBody:
-        "Depending on the feature you use, Yen stores account phone numbers and display names, club membership details, sign-in session and device data, waitlist contact details, donation contact choices, and notification settings. Yen also stores financial and audit records for clubs.",
+        "Depending on the feature you use, Yen stores account phone numbers and display names, club membership details, sign-in session and device data, waitlist contact details, donation contact choices, and notification settings. Yen also stores financial and audit records for clubs, including club payee details and invoice metadata retained as club records.",
       whyTitle: "Why we collect it",
       whyBody:
         "We use this data to sign you in, run club features, show chosen names, deliver requested notifications, prevent abuse, and keep club records. The API records purpose-specific consent and accepts authenticated erasure previews and requests.",

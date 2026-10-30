@@ -292,9 +292,11 @@ export class PostgresPrivacyStore implements PrivacyStore {
         WHERE donor_contact = ${phone}`;
       for (const pseudonym of publicPseudonyms) {
         await tx`UPDATE expenses SET expense_data = jsonb_set(
-            jsonb_set(jsonb_set(expense_data, '{requesterId}', to_jsonb('psn_00000000-0000-7000-8000-000000000000'::text)),
+            jsonb_set(jsonb_set(jsonb_set(jsonb_set(expense_data, '{requesterId}', to_jsonb('psn_00000000-0000-7000-8000-000000000000'::text)),
               '{description}', to_jsonb('Removed on erasure'::text)),
-            '{recipientRef}', to_jsonb('Removed on erasure'::text)), updated_at = ${new Date(now)}
+            '{recipientRef}', to_jsonb('Removed on erasure'::text)),
+            '{payee}', 'null'::jsonb),
+            '{payeeFingerprint}', 'null'::jsonb), updated_at = ${new Date(now)}
           WHERE expense_data->>'requesterId' = ${pseudonym}`;
       }
       await tx`UPDATE bank_transactions SET
