@@ -18,6 +18,7 @@ export {
 } from "./anchoring.js";
 export { createPgBoss, ensureQueueSchema } from "./boss.js";
 export { DEFAULT_QUEUES, DEFAULT_SCHEMA } from "./config.js";
+export { escalateDueAlerts } from "./escalation.js";
 export {
   DEFAULT_EXIT_CRITERIA,
   type EvaluationResult,

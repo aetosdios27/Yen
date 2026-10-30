@@ -36,6 +36,15 @@ export async function checkBankBalance(
         reportedBalancePaise: reportedBalancePaise.toString(),
       }),
     });
+    await sql.begin(async (tx) => {
+      await tx`
+        INSERT INTO alerts (id, fund_id, alert_type, severity, title, details, entity_type, entity_id, dedup_key)
+        VALUES (${uuidv7()}, ${fundId}, 'balance_drift', 'critical', 'Ledger-vs-bank balance drift',
+                ${JSON.stringify({ ledgerBalancePaise: ledgerBalancePaise.toString(), reportedBalancePaise: reportedBalancePaise.toString() })},
+                'fund', ${fundId}, ${fundId})
+        ON CONFLICT DO NOTHING
+      `;
+    });
   }
   return { matches, ledgerBalancePaise };
 }
@@ -76,6 +85,12 @@ export async function matchDebitInTx(
   if (!match) {
     await tx`INSERT INTO unapproved_debits (bank_transaction_id, fund_id)
       VALUES (${bankTransactionId}, ${debit.fundId}) ON CONFLICT (bank_transaction_id) DO NOTHING`;
+    await tx`
+      INSERT INTO alerts (id, fund_id, alert_type, severity, title, details, entity_type, entity_id, dedup_key, escalation_due_at)
+      VALUES (${uuidv7()}, ${debit.fundId}, 'unapproved_debit', 'warning', 'Unapproved debit detected',
+              ${JSON.stringify({ bankTransactionId, amountPaise: String(debit.amountPaise) })}, 'bank_transaction', ${bankTransactionId}, ${bankTransactionId}, NULL)
+      ON CONFLICT DO NOTHING
+    `;
     return { kind: "unapproved" };
   }
   if (!match.hold_id) throw new Error(`Approved expense ${match.id} has no ledger hold`);
