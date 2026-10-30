@@ -188,9 +188,23 @@ class FakeChain implements RootChain {
 }
 
 describePostgres("anchoring worker", (adminUrl) => {
-  const sql = createSql(adminUrl);
-  beforeAll(async () => migrate(sql));
-  afterAll(async () => sql.end({ timeout: 5 }));
+  const testDbName = `yen_queue_anchoring_${randomUUID().replaceAll("-", "")}`;
+  const admin = createSql(adminUrl);
+  const targetUrl = new URL(adminUrl);
+  targetUrl.pathname = `/${testDbName}`;
+  const sql = createSql(targetUrl.toString());
+  beforeAll(async () => {
+    await admin`CREATE DATABASE ${admin(testDbName)}`;
+    await migrate(sql);
+  });
+  afterAll(async () => {
+    try {
+      await sql.end({ timeout: 5 });
+      await admin`DROP DATABASE IF EXISTS ${admin(testDbName)}`;
+    } finally {
+      await admin.end({ timeout: 5 });
+    }
+  });
 
   async function seedFund(occurredAt = "2026-01-01T00:00:00.000Z"): Promise<string> {
     const fundId = randomUUID();

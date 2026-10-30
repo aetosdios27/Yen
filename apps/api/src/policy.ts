@@ -32,6 +32,9 @@ import {
 import type { Principal } from "./dependencies.js";
 import type { StoredEvidence } from "./stores.js";
 
+// New funds are created with this window; every fallback uses the same value.
+export const DEFAULT_OBJECTION_WINDOW_HOURS = 48;
+
 export type FundView = z.infer<typeof fundSchema>;
 export interface FundRecord {
   readonly owner: string;

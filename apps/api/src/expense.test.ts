@@ -317,7 +317,7 @@ describe("Expense Requests API Routes (YEN-30)", () => {
 
     // Approver 2 signs: reaches quorum of 2!
     const approver2Setup = setup({ principal: APPROVER_2, expenseStore });
-    approver2Setup.advance(25 * 60 * 60 * 1000);
+    approver2Setup.advance(49 * 60 * 60 * 1000);
     const app2 = approver2Setup.app;
     await approver2Setup.pinService.setupPin(APPROVER_2.id, "482915", {
       userId: APPROVER_2.id,
@@ -337,7 +337,7 @@ describe("Expense Requests API Routes (YEN-30)", () => {
     expect(app2Body.approvalsCount).toBe(2);
 
     // 4. Pay (commits hold)
-    advance(25 * 60 * 60 * 1000);
+    advance(49 * 60 * 60 * 1000);
     const bankTxId = "00000000-0000-4000-8000-000000000077";
     await pinService.setupPin(REQUESTER.id, "482915", { userId: REQUESTER.id });
     const payRes = await app.request(

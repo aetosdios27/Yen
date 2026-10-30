@@ -4,6 +4,7 @@ import { ensureFundAccounts } from "@yen/ledger";
 import { type FundId, paise, parseOrgId } from "@yen/shared";
 import type { FundStore } from "./dependencies.js";
 import type { FundRecord } from "./policy.js";
+import { DEFAULT_OBJECTION_WINDOW_HOURS } from "./policy.js";
 
 interface FundRow {
   id: string;
@@ -70,7 +71,10 @@ export class PostgresFundStore implements FundStore {
     if (value === undefined) return undefined;
     const policy = decodePolicy(value);
     const approvalQuorum = policy.approvalQuorum ?? policy.approval_quorum ?? 2;
-    const objectionWindowHours = policy.objectionWindowHours ?? policy.objection_window_hours ?? 0;
+    const objectionWindowHours =
+      policy.objectionWindowHours ??
+      policy.objection_window_hours ??
+      DEFAULT_OBJECTION_WINDOW_HOURS;
     if (
       typeof approvalQuorum !== "number" ||
       !Number.isSafeInteger(approvalQuorum) ||
@@ -220,7 +224,7 @@ export class PostgresFundStore implements FundStore {
       await tx`
         INSERT INTO funds (id, org_id, title, target_paise, visibility_tier, policy_json, payee_vpa, payee_name, created_at)
         VALUES (${fundId}, ${orgId}, ${fund.name}, ${BigInt(fund.targetPaise)}, ${fund.visibility},
-          ${tx.json({ purpose: fund.purpose ?? null, approvalQuorum: 2, objectionWindowHours: 48, autoExpireHours: 72 })}, ${fund.upiVpa}, ${fund.upiPayeeName}, ${fund.createdAt})
+          ${tx.json({ purpose: fund.purpose ?? null, approvalQuorum: 2, objectionWindowHours: DEFAULT_OBJECTION_WINDOW_HOURS, autoExpireHours: 72 })}, ${fund.upiVpa}, ${fund.upiPayeeName}, ${fund.createdAt})
       `;
       await tx`INSERT INTO memberships (fund_id, user_id, role, status) VALUES (${fundId}, ${ownerUserId}, 'owner', 'active')`;
       const actor = await ensureFundPseudonym(tx, { userId: ownerUserId, fundId });

@@ -34,7 +34,7 @@ import {
   type PinStore,
 } from "./pin/index.js";
 import type { FundRecord } from "./policy.js";
-import { denyAllPolicy, type Policy } from "./policy.js";
+import { DEFAULT_OBJECTION_WINDOW_HOURS, denyAllPolicy, type Policy } from "./policy.js";
 import { MemoryPrivacyStore, type PrivacyStore } from "./privacy-store.js";
 import {
   MemoryReconciliationStore,
@@ -327,7 +327,9 @@ export class MemoryFundStore implements FundStore {
   }) {
     const approvalQuorum = Number(input.policy.approvalQuorum ?? input.policy.approval_quorum ?? 2);
     const objectionWindowHours = Number(
-      input.policy.objectionWindowHours ?? input.policy.objection_window_hours ?? 0,
+      input.policy.objectionWindowHours ??
+        input.policy.objection_window_hours ??
+        DEFAULT_OBJECTION_WINDOW_HOURS,
     );
     const threshold = input.policy.requireDeviceSignatureAbove ?? null;
     this.policies.set(input.fundId, {
