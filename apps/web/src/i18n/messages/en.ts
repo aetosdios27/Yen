@@ -28,6 +28,93 @@ export const en = {
     login: "Sign in",
     build: "Build details",
   },
+  onboarding: {
+    title: "Set up your club fund",
+    intro: "Your progress is saved on this device. Target amounts are entered as whole paise.",
+    progressLabel: "Onboarding progress",
+    stepCounter: "Step {step} of {total}: {name}",
+    currentStep: ", current step",
+    steps: {
+      club: "Club",
+      fund: "Fund",
+      payment: "Payment",
+      approvers: "Approvers",
+      visibility: "Visibility",
+    },
+    back: "Back",
+    continue: "Continue",
+    create: "Create fund",
+    creating: "Creating…",
+    errors: {
+      club: "Enter a club name.",
+      fund: "Enter a purpose and target in whole paise.",
+      payment: "Enter a valid UPI VPA and account name.",
+      approvers:
+        "Nominate at least two approvers with valid phone numbers for WhatsApp/SMS invites.",
+      approverPhone:
+        "Enter the approver's phone number in international format, for example +919876543210.",
+      inviteFailed: "The invite could not be created. Check the phone number and retry.",
+      createFailed: "The fund could not be created. Please retry.",
+    },
+    club: {
+      legend: "Club details",
+      name: "Club or organisation name",
+      type: "Club type",
+      types: {
+        residents: "Residents association",
+        sports: "Sports club",
+        charity: "Charity group",
+        other: "Other community group",
+      },
+    },
+    fund: {
+      legend: "Fund details",
+      purpose: "Fund purpose",
+      description: "Description (optional)",
+      target: "Target amount in paise",
+      targetHint: "For example, 125000 for ₹1,250.00. No decimals.",
+    },
+    payment: {
+      legend: "Payment details",
+      vpa: "UPI VPA",
+      payee: "Bank account or UPI payee name",
+    },
+    approvers: {
+      legend: "Approvers",
+      hint: "Nominate at least two people. A third is optional; two approvals are required.",
+      name: "Approver {index} name",
+      phone: "Approver {index} phone number",
+      addThird: "Add third approver",
+    },
+    visibility: {
+      legend: "Who can see this fund?",
+      public: "Public",
+      publicDetail: "Anyone can view the fund.",
+      donors: "Donors only",
+      donorsDetail: "Visible to people who contribute.",
+      members: "Members only",
+      membersDetail: "Visible to club members.",
+    },
+    done: {
+      title: "Your fund is ready",
+      body: "Fund created. Invite your co-approvers to complete the 2-of-3 setup.",
+      open: "Open fund",
+      share: "Share approver invite {index} on WhatsApp",
+    },
+  },
+
+  invite: {
+    title: "Join as an approver",
+    intro: "Enter your name and the same phone number the invite was sent to.",
+    name: "Name",
+    phone: "Phone number",
+    submit: "Accept invite",
+    missingCode: "This invite link is incomplete.",
+    invalid: "This invite is invalid or has expired.",
+    approved: "You are now an approver.",
+    pending: "Your nomination is awaiting confirmation.",
+  },
+
   buildPage: {
     title: "Build details",
     intro:
