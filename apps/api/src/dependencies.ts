@@ -42,6 +42,7 @@ import {
 import type { FundRecord } from "./policy.js";
 import { DEFAULT_OBJECTION_WINDOW_HOURS, denyAllPolicy, type Policy } from "./policy.js";
 import { MemoryPrivacyStore, type PrivacyStore } from "./privacy-store.js";
+import type { PublicReadCache } from "./public-cache.js";
 import { MemoryReceiptStore, type ReceiptStore } from "./receipt-store.js";
 import {
   MemoryReconciliationStore,
@@ -387,6 +388,7 @@ export interface AppDependencies {
   readonly actorForUser: (userId: string, fundId: string) => Promise<PseudonymId>;
   readonly fundStore?: FundStore | undefined;
   readonly alertStore?: AlertStore | undefined;
+  readonly publicReadCache?: PublicReadCache | undefined;
   readonly approvalProofVerifier: ApprovalProofVerifier;
   readonly donationPledgeStore: DonationPledgeStore;
   readonly publicFundReadStore: PublicFundReadStore;
