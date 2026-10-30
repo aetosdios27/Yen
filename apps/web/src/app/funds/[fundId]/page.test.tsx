@@ -1,5 +1,7 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as fundData from "../../../components/fund/data";
+import { SANITIZED_DEMO_FUND } from "../../../components/fund/fixtures";
 import { LocaleProvider } from "../../../i18n";
 import PublicFundPage, { generateMetadata } from "./page";
 
@@ -7,6 +9,14 @@ describe("PublicFundPage (Server Component)", () => {
   const props = {
     params: Promise.resolve({ fundId: "robocup-2026" }),
   };
+
+  beforeEach(() => {
+    vi.spyOn(fundData, "getPublicFund").mockResolvedValue(SANITIZED_DEMO_FUND);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it("generates complete OpenGraph and Twitter metadata for link previews", async () => {
     const metadata = await generateMetadata(props);
@@ -36,5 +46,12 @@ describe("PublicFundPage (Server Component)", () => {
 
     expect(screen.getByText("Total raised")).not.toBeNull();
     expect(screen.getByText("Live transparency timeline")).not.toBeNull();
+  });
+
+  it("returns fallback metadata when fund is not found", async () => {
+    vi.spyOn(fundData, "getPublicFund").mockResolvedValueOnce(null);
+    const metadata = await generateMetadata({ params: Promise.resolve({ fundId: "nonexistent" }) });
+
+    expect(metadata.title).toBe("Fund Not Found · Yen");
   });
 });

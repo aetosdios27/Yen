@@ -3,12 +3,100 @@ import userEvent from "@testing-library/user-event";
 import { paise } from "@yen/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LocaleProvider } from "../../../../../i18n";
+import * as apiClientModule from "../../../../../lib/api-client";
 import * as expenseService from "../../../../../lib/expense-service";
 import ApproverPage from "./page";
 
 describe("ApproverPage", () => {
   beforeEach(() => {
-    expenseService.resetExpenseStore();
+    const mockGet = vi
+      .fn()
+      .mockImplementation(
+        (path: string, options?: { params?: { path?: { expenseId?: string } } }) => {
+          const expenseId = options?.params?.path?.expenseId;
+          if (expenseId === "exp-101" || path.includes("exp-101")) {
+            return Promise.resolve({
+              response: { status: 200 },
+              data: {
+                id: "exp-101",
+                fundId: "demo-fund",
+                amountPaise: "45000",
+                description: "Replacement water valve and pipe fittings",
+                recipientRef: "Ramesh Hardware (ramesh@upi)",
+                status: "submitted",
+                evidence: [{ evidenceId: "INV-2026-441" }],
+                approvalsCount: 1,
+                approvals: [
+                  {
+                    approverId: "usr-appr-1",
+                    approverName: "Asha Rao",
+                    approvedAt: "2026-10-28 10:15 AM",
+                  },
+                ],
+                createdAt: "2026-10-28 09:30 AM",
+                submittedAt: "2026-10-28 09:35 AM",
+              },
+            });
+          }
+          if (expenseId === "exp-102" || path.includes("exp-102")) {
+            return Promise.resolve({
+              response: { status: 200 },
+              data: {
+                id: "exp-102",
+                fundId: "demo-fund",
+                amountPaise: "120000",
+                description: "Rewiring main courtyard breaker box",
+                recipientRef: "Shakti Electricians (shakti@okhdfcbank)",
+                status: "submitted",
+                evidence: [{ evidenceId: "BILL-8902" }],
+                approvalsCount: 0,
+                approvals: [],
+                createdAt: "2026-10-28 11:00 AM",
+                submittedAt: "2026-10-28 11:05 AM",
+              },
+            });
+          }
+          return Promise.resolve({ response: { status: 404 } });
+        },
+      );
+
+    const mockPost = vi.fn().mockImplementation((path: string) => {
+      if (path === "/v1/auth/pin/verify") {
+        return Promise.resolve({
+          response: { status: 200 },
+          data: { approvalToken: "token_verified_123", expiresAt: "2026-10-29T14:00:00Z" },
+        });
+      }
+      if (path.endsWith("/approve")) {
+        return Promise.resolve({
+          response: { status: 200 },
+          data: {
+            status: "approved",
+            expenseId: "exp-101",
+            approvedAt: "2026-10-29T14:00:00Z",
+          },
+        });
+      }
+      if (path.endsWith("/reject")) {
+        return Promise.resolve({
+          response: { status: 200 },
+          data: {
+            status: "rejected",
+            expenseId: "exp-102",
+            reason: "Not approved by executive committee",
+            rejectedAt: "2026-10-29T14:00:00Z",
+          },
+        });
+      }
+      return Promise.resolve({
+        response: { status: 200 },
+        data: {},
+      });
+    });
+    vi.spyOn(apiClientModule, "getApiClient").mockReturnValue({
+      POST: mockPost,
+      GET: mockGet,
+    } as unknown as apiClientModule.YenClient);
   });
 
   afterEach(() => {
@@ -36,7 +124,7 @@ describe("ApproverPage", () => {
     expect(screen.getByText(/Fast decision:/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Approve" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Reject" })).toBeTruthy();
-    expect(screen.getByText(/Demo data:/)).toBeTruthy();
+    expect(screen.queryByText(/Demo data:/)).toBeNull();
     expect(screen.getByText("Request progress")).toBeTruthy();
   });
 
@@ -145,5 +233,19 @@ describe("ApproverPage", () => {
     expect(screen.getAllByText("खर्च स्वीकृति अनुरोध").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "स्वीकार करें" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "अस्वीकार करें" })).toBeTruthy();
+  });
+
+  it("renders offline banner when client is offline", async () => {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+
+    render(
+      <LocaleProvider initialLocale="en">
+        <ApproverPage params={Promise.resolve({ fundId: "demo-fund", expenseId: "exp-101" })} />
+      </LocaleProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("You are working offline. Displaying cached data.")).toBeTruthy();
+    });
   });
 });

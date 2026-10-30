@@ -28,6 +28,7 @@ export interface ExpenseTimelineProps {
   readonly submittedAt?: string | undefined;
   readonly holdReservedAt?: string | undefined;
   readonly approvals?: readonly ExpenseTimelineApproval[] | undefined;
+  readonly approvalsCount?: number | undefined;
   readonly requiredQuorum?: number | undefined;
   readonly settledAt?: string | undefined;
   readonly rejectedAt?: string | undefined;
@@ -52,6 +53,7 @@ export function ExpenseTimeline({
   submittedAt,
   holdReservedAt,
   approvals = [],
+  approvalsCount,
   requiredQuorum = 2,
   settledAt,
   rejectedAt,
@@ -67,7 +69,7 @@ export function ExpenseTimeline({
   const isSubmitted = status !== "draft" || submittedAt !== undefined;
   const isHoldActive = isSubmitted && (holdReservedAt !== undefined || status !== "draft");
 
-  const approvedCount = approvals.length;
+  const approvedCount = approvalsCount ?? approvals.length;
   const quorumMet = approvedCount >= requiredQuorum;
 
   const steps: StepItem[] = [

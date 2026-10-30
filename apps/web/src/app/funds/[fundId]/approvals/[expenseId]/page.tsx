@@ -35,6 +35,7 @@ export default function ApproverPage({ params }: ApproverPageProps) {
   const [expense, setExpense] = useState<DashboardExpenseItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isOffline, setIsOffline] = useState(false);
 
   const [isPinOpen, setIsPinOpen] = useState(false);
   const [isRejectOpen, setIsRejectOpen] = useState(false);
@@ -47,6 +48,23 @@ export default function ApproverPage({ params }: ApproverPageProps) {
   useEffect(() => {
     Promise.resolve(params).then(setIds);
   }, [params]);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setIsOffline(true);
+    }
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   const loadExpense = useCallback(async (fundId: string, expenseId: string) => {
     setLoading(true);
@@ -71,9 +89,9 @@ export default function ApproverPage({ params }: ApproverPageProps) {
     }
   }, [ids, loadExpense]);
 
-  const handleApproveWithPin = async (pin: string) => {
+  const handleApproveWithPin = async (approvalToken: string) => {
     if (!ids) return;
-    const updated = await submitExpenseApproval(ids.fundId, ids.expenseId, pin);
+    const updated = await submitExpenseApproval(ids.fundId, ids.expenseId, approvalToken);
     setExpense(updated);
     setIsPinOpen(false);
     setToastMessage({
@@ -125,12 +143,28 @@ export default function ApproverPage({ params }: ApproverPageProps) {
         </Link>
       </nav>
 
-      <p
-        role="note"
-        className="rounded-control border border-pending-border bg-pending-bg p-3 text-small font-medium text-pending-ink"
-      >
-        {t("dashboard.demoNotice")}
-      </p>
+      {/* Offline banner */}
+      {isOffline ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center gap-3 rounded-control border-2 border-unmatched-border bg-unmatched-bg p-3 text-small font-medium text-unmatched-ink"
+        >
+          <AlertTriangleIcon className="h-5 w-5 shrink-0" />
+          <div className="flex-1">
+            <p>{t("treasurer.offlineNotice")}</p>
+          </div>
+          {ids ? (
+            <button
+              type="button"
+              onClick={() => loadExpense(ids.fundId, ids.expenseId)}
+              className="tap-target rounded px-2 text-small font-semibold underline underline-offset-4"
+            >
+              {t("treasurer.retry")}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Loading state */}
       {loading ? (
@@ -293,6 +327,9 @@ export default function ApproverPage({ params }: ApproverPageProps) {
             onConfirm={handleApproveWithPin}
             amountPaise={expense.amountPaise}
             payeeName={expense.payeeName}
+            fundId={ids?.fundId}
+            targetId={ids?.expenseId}
+            action="expense:approve"
           />
 
           {/* Rejection Reason Modal */}

@@ -1,8 +1,10 @@
 "use client";
 
+import { computeActionHash } from "@yen/api-client";
 import { formatInr, type Paise } from "@yen/shared";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
+import { getApiClient } from "../lib/api-client";
 import { Button } from "./button";
 import { cn } from "./cn";
 import { Input } from "./input";
@@ -10,9 +12,12 @@ import { Input } from "./input";
 export interface ApprovalPinModalProps {
   readonly isOpen: boolean;
   readonly onClose: () => void;
-  readonly onConfirm: (pin: string) => Promise<void> | void;
+  readonly onConfirm: (approvalToken: string) => Promise<void> | void;
   readonly amountPaise?: Paise | undefined;
   readonly payeeName?: string | undefined;
+  readonly fundId?: string | undefined;
+  readonly targetId?: string | undefined;
+  readonly action?: "expense:approve" | "expense:reject" | undefined;
   readonly className?: string | undefined;
 }
 
@@ -22,6 +27,9 @@ export function ApprovalPinModal({
   onConfirm,
   amountPaise,
   payeeName,
+  fundId,
+  targetId,
+  action,
   className,
 }: ApprovalPinModalProps) {
   const { t } = useI18n();
@@ -35,7 +43,6 @@ export function ApprovalPinModal({
       setPin("");
       setError(undefined);
       setIsSubmitting(false);
-      // Autofocus input
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [isOpen]);
@@ -66,9 +73,66 @@ export function ApprovalPinModal({
     }
 
     setIsSubmitting(true);
+    setError(undefined);
+
     try {
-      await onConfirm(cleanPin);
-    } catch {
+      let approvalToken = cleanPin;
+
+      if (fundId && targetId) {
+        const client = getApiClient();
+        const actionName = action ?? "expense:approve";
+        const actionDetails = {
+          action: actionName,
+          fundId,
+          targetId,
+        };
+        const actionHash = await computeActionHash(actionDetails);
+        const res = await client.POST("/v1/auth/pin/verify", {
+          body: { pin: cleanPin, actionHash },
+        });
+
+        if (res.response?.status === 429) {
+          setError(t("approver.pinLockoutNotice"));
+          setIsSubmitting(false);
+          return;
+        }
+
+        if (res.error) {
+          const detailMsg =
+            res.error.error?.details?.[0]?.message ?? res.error.error?.message ?? "";
+          const lower = detailMsg.toLowerCase();
+
+          if (lower.includes("cooling-off") || lower.includes("cooling off")) {
+            setError(t("approver.pinCoolingOffNotice"));
+          } else if (
+            lower.includes("10 failed attempts") ||
+            (res.response?.status === 403 && lower.includes("locked"))
+          ) {
+            setError(t("approver.pinPermanentLockoutNotice"));
+          } else if (lower.includes("attempt")) {
+            const match = detailMsg.match(/(\d+)\s+attempt/i);
+            const remaining = match && typeof match[1] === "string" ? match[1] : "few";
+            setError(t("approver.pinIncorrectAttemptsRemaining", { remaining }));
+          } else {
+            setError(t("approver.pinError"));
+          }
+          setIsSubmitting(false);
+          return;
+        }
+
+        if (!res.data?.approvalToken) {
+          setError(t("approver.pinError"));
+          setIsSubmitting(false);
+          return;
+        }
+
+        approvalToken = res.data.approvalToken;
+      }
+
+      await onConfirm(approvalToken);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t("approver.pinError");
+      setError(msg);
       setIsSubmitting(false);
     }
   };

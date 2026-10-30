@@ -6,6 +6,7 @@ import {
   type BrowserPublicKeyCredential,
   buildCredentialCreationOptions,
   buildCredentialRequestOptions,
+  computeActionHash,
   createDeviceSignatureApi,
   createYenClient,
   parseAssertionCredential,
@@ -141,4 +142,22 @@ it("serializes registration and assertion credentials to WebAuthn JSON", () => {
     authenticatorData: "CA",
     signature: "CQ",
   });
+});
+
+it("computes canonical action hash invariant to key order", async () => {
+  const hash1 = await computeActionHash({
+    action: "expense:approve",
+    fundId: "fund-123",
+    amountPaise: "500000",
+    payee: "vendor@upi",
+  });
+  const hash2 = await computeActionHash({
+    payee: "vendor@upi",
+    amountPaise: "500000",
+    action: "expense:approve",
+    fundId: "fund-123",
+  });
+
+  expect(hash1).toBe(hash2);
+  expect(hash1).toMatch(/^[0-9a-f]{64}$/);
 });

@@ -4,6 +4,7 @@ import type {
   ExpenseTimelineApproval,
   ExpenseTimelineStatus,
 } from "../components/expense-timeline";
+import { getApiClient } from "./api-client";
 
 export interface DashboardExpenseItem {
   readonly id: string;
@@ -20,6 +21,7 @@ export interface DashboardExpenseItem {
   readonly submittedAt?: string | undefined;
   readonly holdReservedAt?: string | undefined;
   readonly approvals: readonly ExpenseTimelineApproval[];
+  readonly approvalsCount?: number | undefined;
   readonly requiredQuorum: number;
   readonly settledAt?: string | undefined;
   readonly rejectedAt?: string | undefined;
@@ -34,93 +36,107 @@ export interface FundTreasurerData {
   readonly pendingExpenses: readonly DashboardExpenseItem[];
 }
 
-const DEFAULT_DEMO_EXPENSES: Record<string, DashboardExpenseItem[]> = {
-  "demo-fund": [
-    {
-      id: "exp-101",
-      fundId: "demo-fund",
-      amountPaise: paise(45000), // ₹450.00
-      payeeName: "Ramesh Hardware",
-      payeeUpi: "ramesh@upi",
-      purpose: "Replacement water valve and pipe fittings",
-      receiptRef: "INV-2026-441",
-      status: "submitted",
-      requesterId: "usr-treasurer-1",
-      requesterName: "Treasurer Vikram",
-      createdAt: "2026-10-28 09:30 AM",
-      submittedAt: "2026-10-28 09:35 AM",
-      holdReservedAt: "2026-10-28 09:35 AM",
-      approvals: [
-        {
-          approverId: "usr-appr-1",
-          approverName: "Asha Rao",
-          approvedAt: "2026-10-28 10:15 AM",
-        },
-      ],
-      requiredQuorum: 2,
-    },
-    {
-      id: "exp-102",
-      fundId: "demo-fund",
-      amountPaise: paise(120000), // ₹1,200.00
-      payeeName: "Shakti Electricians",
-      payeeUpi: "shakti@okhdfcbank",
-      purpose: "Rewiring main courtyard breaker box",
-      receiptRef: "BILL-8902",
-      status: "submitted",
-      requesterId: "usr-treasurer-1",
-      requesterName: "Treasurer Vikram",
-      createdAt: "2026-10-28 11:00 AM",
-      submittedAt: "2026-10-28 11:05 AM",
-      holdReservedAt: "2026-10-28 11:05 AM",
-      approvals: [],
-      requiredQuorum: 2,
-    },
-  ],
-};
+export function toDashboardExpenseItem(exp: {
+  id: string;
+  fundId: string;
+  amountPaise: string | number | bigint;
+  description?: string;
+  recipientRef?: string;
+  status: string;
+  holdId?: string | null;
+  approvalsCount?: number;
+  approvals?: readonly { approverId: string; approverName?: string; approvedAt: string }[];
+  submittedAt?: string | null;
+  approvedAt?: string | null;
+  rejectedAt?: string | null;
+  rejectionReason?: "quorum" | "objection" | "policy" | string | null;
+  paidAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  requesterId?: string;
+  evidence?: readonly { evidenceId: string }[];
+}): DashboardExpenseItem {
+  let payeeName = exp.recipientRef ?? "Payee";
+  let payeeUpi = "";
+  const match = exp.recipientRef?.match(/^(.*?)\s*\(([^)]+@[^)]+)\)$/);
+  if (match) {
+    payeeName = match[1]?.trim() ?? payeeName;
+    payeeUpi = match[2]?.trim() ?? "";
+  }
 
-const memoryStore = new Map<string, DashboardExpenseItem[]>();
+  const rawStatus = exp.status;
+  let status: ExpenseTimelineStatus = "draft";
+  if (rawStatus === "submitted" || rawStatus === "hold_reserved") {
+    status = "submitted";
+  } else if (rawStatus === "approved") {
+    status = "approved";
+  } else if (rawStatus === "settled" || rawStatus === "paid" || rawStatus === "reconciled") {
+    status = "settled";
+  } else if (rawStatus === "rejected") {
+    status = "rejected";
+  } else if (rawStatus === "expired") {
+    status = "expired";
+  }
 
-function getExpensesForFund(fundId: string): DashboardExpenseItem[] {
-  const existing = memoryStore.get(fundId);
-  if (existing) return existing;
+  const approvals: readonly ExpenseTimelineApproval[] = exp.approvals
+    ? exp.approvals.map((a) => ({
+        approverId: a.approverId,
+        approverName: a.approverName,
+        approvedAt: a.approvedAt,
+      }))
+    : [];
 
-  const initial = DEFAULT_DEMO_EXPENSES[fundId] ?? [
-    {
-      id: "exp-default-1",
-      fundId,
-      amountPaise: paise(50000),
-      payeeName: "Community Supplies",
-      payeeUpi: "supplies@upi",
-      purpose: "Monthly water bottles and emergency supplies",
-      receiptRef: "REC-01",
-      status: "submitted",
-      requesterId: "usr-treasurer-1",
-      requesterName: "Treasurer",
-      createdAt: "2026-10-28 10:00 AM",
-      submittedAt: "2026-10-28 10:05 AM",
-      holdReservedAt: "2026-10-28 10:05 AM",
-      approvals: [],
-      requiredQuorum: 2,
-    },
-  ];
-  memoryStore.set(fundId, [...initial]);
-  return memoryStore.get(fundId) ?? [];
+  return {
+    id: exp.id,
+    fundId: exp.fundId,
+    amountPaise: paise(Number(exp.amountPaise)),
+    payeeName,
+    payeeUpi,
+    purpose: exp.description ?? "",
+    receiptRef: exp.evidence?.[0]?.evidenceId ? exp.evidence[0].evidenceId : undefined,
+    status,
+    requesterId: exp.requesterId ?? "requester",
+    requesterName: "Treasurer",
+    createdAt: exp.createdAt ?? new Date().toISOString(),
+    submittedAt: exp.submittedAt ?? undefined,
+    holdReservedAt: exp.holdId ? (exp.submittedAt ?? undefined) : undefined,
+    approvals,
+    approvalsCount: exp.approvalsCount ?? approvals.length,
+    requiredQuorum: 2,
+    settledAt: exp.paidAt ?? undefined,
+    rejectedAt: exp.rejectedAt ?? undefined,
+    rejectionReason: exp.rejectionReason ?? undefined,
+  };
 }
 
 export async function fetchFundTreasurerData(fundId: string): Promise<FundTreasurerData> {
-  const expenses = getExpensesForFund(fundId);
-  const pending = expenses.filter(
+  const client = getApiClient();
+  const [summaryRes, expensesRes] = await Promise.all([
+    client.GET("/v1/funds/{fundId}/public/summary", { params: { path: { fundId } } }),
+    client.GET("/v1/funds/{fundId}/expenses", { params: { path: { fundId } } }),
+  ]);
+
+  if (summaryRes.error) {
+    throw new Error(summaryRes.error?.error?.message ?? "Could not load fund summary");
+  }
+  if (expensesRes.error) {
+    throw new Error(expensesRes.error?.error?.message ?? "Could not load fund expenses");
+  }
+
+  const allExpenses = (expensesRes.data ?? []).map(toDashboardExpenseItem);
+  const pending = allExpenses.filter(
     (e) => e.status === "draft" || e.status === "submitted" || e.status === "hold_reserved",
   );
 
-  const totalBalancePaise = paise(500000); // ₹5,000.00
+  const totalBalancePaise = summaryRes.data.raisedPaise
+    ? paise(Number(summaryRes.data.raisedPaise))
+    : paise(0);
   const heldPaise = pending.reduce((sum, e) => sum + e.amountPaise, 0);
   const spendableBalancePaise = paise(Math.max(0, totalBalancePaise - heldPaise));
 
   return {
     fundId,
-    fundName: fundId === "demo-fund" ? "Greenwood Residents Fund" : `Community Fund (${fundId})`,
+    fundName: summaryRes.data.name ?? `Community Fund (${fundId})`,
     totalBalancePaise,
     spendableBalancePaise,
     pendingExpenses: pending,
@@ -131,128 +147,125 @@ export async function createExpenseRequest(
   fundId: string,
   submission: ValidatedExpenseSubmission,
 ): Promise<DashboardExpenseItem> {
-  const expenses = getExpensesForFund(fundId);
-  const now = new Date();
-  const formattedTime = now.toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
+  const client = getApiClient();
+  const recipientRef = submission.payeeUpi
+    ? `${submission.payeeName} (${submission.payeeUpi})`
+    : submission.payeeName;
+
+  const createRes = await client.POST("/v1/funds/{fundId}/expenses", {
+    params: {
+      path: { fundId },
+      header: { "Idempotency-Key": crypto.randomUUID() },
+    },
+    body: {
+      amountPaise: String(submission.amountPaise),
+      description: submission.purpose,
+      recipientRef,
+    },
   });
-  const formattedDate = now.toISOString().split("T")[0] ?? "2026-10-28";
-  const timestamp = `${formattedDate} ${formattedTime}`;
 
-  const newItem: DashboardExpenseItem = {
-    id: `exp-${Date.now()}`,
-    fundId,
-    amountPaise: submission.amountPaise,
-    payeeName: submission.payeeName,
-    payeeUpi: submission.payeeUpi,
-    purpose: submission.purpose,
-    receiptRef: submission.receiptRef,
-    status: "submitted",
-    requesterId: "usr-treasurer-1",
-    requesterName: "Treasurer",
-    createdAt: timestamp,
-    submittedAt: timestamp,
-    holdReservedAt: timestamp,
-    approvals: [],
-    requiredQuorum: 2,
-  };
+  if (createRes.error || !createRes.data) {
+    throw new Error(createRes.error?.error?.message ?? "Failed to create expense request");
+  }
 
-  memoryStore.set(fundId, [newItem, ...expenses]);
-  return newItem;
+  const submitRes = await client.POST("/v1/funds/{fundId}/expenses/{expenseId}/submit", {
+    params: {
+      path: { fundId, expenseId: createRes.data.id },
+      header: { "Idempotency-Key": crypto.randomUUID() },
+    },
+  });
+
+  const finalData = submitRes.data ?? createRes.data;
+  return toDashboardExpenseItem(finalData);
 }
 
 export async function fetchExpenseItem(
   fundId: string,
   expenseId: string,
 ): Promise<DashboardExpenseItem | null> {
-  const expenses = getExpensesForFund(fundId);
-  const found = expenses.find((e) => e.id === expenseId);
-  return found ?? null;
+  const client = getApiClient();
+  const res = await client.GET("/v1/funds/{fundId}/expenses/{expenseId}", {
+    params: { path: { fundId, expenseId } },
+  });
+  if (res.data) {
+    return toDashboardExpenseItem(res.data);
+  }
+
+  return null;
 }
 
 export async function submitExpenseApproval(
   fundId: string,
   expenseId: string,
-  pin: string,
+  approvalToken: string,
 ): Promise<DashboardExpenseItem> {
-  const expenses = getExpensesForFund(fundId);
-  const index = expenses.findIndex((e) => e.id === expenseId);
-  if (index === -1) {
-    throw new Error(`Expense ${expenseId} not found`);
-  }
-
-  const existing = expenses[index];
-  if (!existing) {
-    throw new Error(`Expense ${expenseId} not found`);
-  }
-  const now = new Date();
-  const timestamp = `${now.toISOString().split("T")[0]} ${now.toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  })}`;
-
-  const updatedApprovals = [
-    ...existing.approvals,
-    {
-      approverId: `usr-pin-${pin.slice(0, 2)}`,
-      approverName: "Verified Approver",
-      approvedAt: timestamp,
+  const client = getApiClient();
+  const res = await client.POST("/v1/funds/{fundId}/expenses/{expenseId}/approve", {
+    params: {
+      path: { fundId, expenseId },
+      header: {
+        "Idempotency-Key": crypto.randomUUID(),
+        "X-Approval-Token": approvalToken,
+      },
     },
-  ];
+    body: {
+      approvalToken,
+    },
+  });
 
-  const quorumMet = updatedApprovals.length >= existing.requiredQuorum;
-  const newStatus: ExpenseTimelineStatus = quorumMet ? "settled" : "submitted";
+  if (res.error || !res.data) {
+    throw new Error(res.error?.error?.message ?? "Failed to approve expense");
+  }
 
-  const updatedItem: DashboardExpenseItem = {
-    ...existing,
-    approvals: updatedApprovals,
-    status: newStatus,
-    settledAt: quorumMet ? timestamp : undefined,
-  };
+  const updated = await fetchExpenseItem(fundId, expenseId);
+  if (updated) {
+    if (res.data.status === "approved") {
+      return {
+        ...updated,
+        status: "approved",
+        approvalsCount: res.data.approvalsCount ?? updated.approvalsCount,
+      };
+    }
+    return updated;
+  }
 
-  expenses[index] = updatedItem;
-  memoryStore.set(fundId, [...expenses]);
-  return updatedItem;
+  throw new Error(`Expense ${expenseId} could not be retrieved after approval`);
 }
 
 export async function submitExpenseRejection(
   fundId: string,
   expenseId: string,
   reason: string,
+  approvalToken?: string,
 ): Promise<DashboardExpenseItem> {
-  const expenses = getExpensesForFund(fundId);
-  const index = expenses.findIndex((e) => e.id === expenseId);
-  if (index === -1) {
-    throw new Error(`Expense ${expenseId} not found`);
+  const client = getApiClient();
+  const res = await client.POST("/v1/funds/{fundId}/expenses/{expenseId}/reject", {
+    params: {
+      path: { fundId, expenseId },
+      header: {
+        "Idempotency-Key": crypto.randomUUID(),
+        ...(approvalToken ? { "X-Approval-Token": approvalToken } : {}),
+      },
+    },
+    body: {
+      reason: "policy",
+      ...(approvalToken ? { approvalToken } : {}),
+    },
+  });
+
+  if (res.error || !res.data) {
+    throw new Error(res.error?.error?.message ?? "Failed to reject expense");
   }
 
-  const existing = expenses[index];
-  if (!existing) {
-    throw new Error(`Expense ${expenseId} not found`);
+  const updated = await fetchExpenseItem(fundId, expenseId);
+  if (updated) {
+    return {
+      ...updated,
+      status: "rejected",
+      rejectedAt: res.data.rejectedAt,
+      rejectionReason: res.data.reason ?? reason,
+    };
   }
-  const now = new Date();
-  const timestamp = `${now.toISOString().split("T")[0]} ${now.toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  })}`;
 
-  const updatedItem: DashboardExpenseItem = {
-    ...existing,
-    status: "rejected",
-    rejectedAt: timestamp,
-    rejectionReason: reason,
-  };
-
-  expenses[index] = updatedItem;
-  memoryStore.set(fundId, [...expenses]);
-  return updatedItem;
-}
-
-/** Utility to reset store for tests */
-export function resetExpenseStore(): void {
-  memoryStore.clear();
+  throw new Error(`Expense ${expenseId} could not be retrieved after approval`);
 }
