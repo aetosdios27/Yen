@@ -64,6 +64,8 @@ export type PublicFund = {
   readonly money: PublicFundMoney;
   readonly spendingBreakdown: readonly SpendingCategory[];
   readonly timeline: readonly PublicTimelineEntry[];
+  /** Set when the API answered from a saved copy because the fund store was unavailable. */
+  readonly dataAsOf?: string | undefined;
   readonly upiPayee?:
     | {
         readonly vpa: string;
