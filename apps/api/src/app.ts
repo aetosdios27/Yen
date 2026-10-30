@@ -1018,7 +1018,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       category: expense.category ?? "Other",
       status: expense.status,
       ...(payeeName === undefined ? {} : { payeeName }),
-      payeeVerified: false,
+      payeeVerified: payeeName !== undefined,
       description: expense.description,
       createdAt: expense.createdAt,
       updatedAt: expense.updatedAt,
