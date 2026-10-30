@@ -28,6 +28,18 @@ try {
   fail(error instanceof Error ? error.message : "Invalid worker environment");
 }
 
+// Set on the first shutdown signal. A signal that arrives while a job is still being registered stops
+// pg-boss under that registration. The resulting rejection belongs to a clean shutdown, not a failed start.
+let shuttingDown = false;
+
+function reportRegistrationFailure(label: string, error: unknown): void {
+  if (shuttingDown) return;
+  process.stderr.write(
+    `${label} failed to start: ${error instanceof Error ? error.message : String(error)}\n`,
+  );
+  process.exitCode = 1;
+}
+
 const worker = new WorkerRuntime({
   connectionString: env.DATABASE_URL,
   schema: env.QUEUE_SCHEMA,
@@ -93,6 +105,7 @@ try {
 // confirmation line to stdout before exit.
 let stoppedReported = false;
 const handleShutdownSignal = () => {
+  shuttingDown = true;
   void worker
     .stop()
     .then(async () => {
@@ -114,25 +127,16 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
 }
 
 process.stdout.write("Worker runtime started and listening for jobs.\n");
-void registerAlertEscalation(worker.getBoss(), worker.getSql()).catch((error) => {
-  process.stderr.write(
-    `Alert escalation failed to start: ${error instanceof Error ? error.message : String(error)}\n`,
-  );
-  process.exitCode = 1;
-});
-void registerChainVerification(worker.getBoss(), worker.getSql()).catch((error) => {
-  process.stderr.write(
-    `Chain verification failed to start: ${error instanceof Error ? error.message : String(error)}\n`,
-  );
-  process.exitCode = 1;
-});
+void registerAlertEscalation(worker.getBoss(), worker.getSql()).catch((error) =>
+  reportRegistrationFailure("Alert escalation", error),
+);
+void registerChainVerification(worker.getBoss(), worker.getSql()).catch((error) =>
+  reportRegistrationFailure("Chain verification", error),
+);
 if (anchorConfigured && anchorChain && anchorResilience) {
-  void registerAnchoringDiscovery(worker.getBoss(), worker.getSql()).catch((error) => {
-    process.stderr.write(
-      `Anchoring discovery failed to start: ${error instanceof Error ? error.message : String(error)}\n`,
-    );
-    process.exitCode = 1;
-  });
+  void registerAnchoringDiscovery(worker.getBoss(), worker.getSql()).catch((error) =>
+    reportRegistrationFailure("Anchoring discovery", error),
+  );
   void registerAnchorReconciliation(
     worker.getBoss(),
     worker.getSql(),
@@ -140,10 +144,5 @@ if (anchorConfigured && anchorChain && anchorResilience) {
     stderrAnchorAlertSink,
     anchorPublisherAddress,
     anchorResilience,
-  ).catch((error) => {
-    process.stderr.write(
-      `Anchor reconciliation failed to start: ${error instanceof Error ? error.message : String(error)}\n`,
-    );
-    process.exitCode = 1;
-  });
+  ).catch((error) => reportRegistrationFailure("Anchor reconciliation", error));
 }

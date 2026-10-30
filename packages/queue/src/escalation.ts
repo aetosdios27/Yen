@@ -57,6 +57,7 @@ export async function escalateDueAlerts(sql: Sql, now: Date = new Date()): Promi
           severity: alert.severity,
           title: alert.title,
           suffix: "escalation",
+          variant: "escalation",
           recipientRoles: ["owner"],
           now,
         });
