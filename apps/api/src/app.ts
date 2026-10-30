@@ -145,6 +145,7 @@ import { getVerifiedEvidenceObject } from "./integrity-job.js";
 import { logMethod } from "./logging.js";
 import {
   concurrencyLimit,
+  fundCacheInvalidation,
   idempotency,
   isEvidenceRoute,
   isPendingDeviceAuthRoute,
@@ -180,6 +181,13 @@ import {
   PrivacyNotFoundError,
   PrivacyUnavailableError,
 } from "./privacy-store.js";
+import {
+  matchesEtag,
+  PRIVATE_READ_CACHE_CONTROL,
+  PUBLIC_READ_CACHE_CONTROL,
+  PublicReadCache,
+  STALE_WARNING,
+} from "./public-cache.js";
 import { publicExpenseDetailRoute, publicExpenseProofsRoute } from "./public-expense-contract.js";
 import { MemoryReceiptStore } from "./receipt-store.js";
 import { parseBankStatementCsv } from "./reconciliation/csv-parser.js";
@@ -258,7 +266,10 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       }
     },
   });
+  // One cache per process; overrides let tests share it between an owner and an anonymous app.
+  const publicReadCache = deps.publicReadCache ?? new PublicReadCache({ clock: deps.clock });
   app.use("*", requestContext(deps));
+  app.use("*", fundCacheInvalidation(publicReadCache));
   // CORS wraps the timeout and load-shedding middleware so that their 503 and 504 responses
   // carry the same headers as any other response and browsers can read Retry-After.
   if (deps.corsOrigins.length > 0) {
@@ -880,15 +891,30 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const proofs = await deps.evidenceStore.getByExpense(parsedFundId.value, expenseId);
     return { ...fundContext, expense, proofs };
   };
-  const setFundReadCache = (c: Context<ApiEnv>, publicTier: boolean, body: unknown) => {
-    if (!publicTier) {
-      c.header("cache-control", "private, no-store");
-      return;
+  type FundReadOptions = { fundId: string; kind: string; publicTier: boolean };
+  const fundRead = async <T>(
+    c: Context<ApiEnv>,
+    options: FundReadOptions,
+    produce: () => Promise<T>,
+  ): Promise<{ notModified: boolean; body: T }> => {
+    if (!options.publicTier) {
+      const body = await produce();
+      c.header("cache-control", PRIVATE_READ_CACHE_CONTROL);
+      return { notModified: false, body };
     }
-    const serialized = JSON.stringify(body);
-    const etag = `"${crypto.createHash("sha256").update(serialized).digest("hex")}"`;
-    c.header("etag", etag);
-    c.header("cache-control", "public, s-maxage=30, max-age=0, must-revalidate");
+    const hit = await publicReadCache.load(options.fundId, options.kind, produce);
+    c.header("cache-control", PUBLIC_READ_CACHE_CONTROL);
+    c.header("etag", hit.etag);
+    // A signed-in visitor gets the private view at the same URL, so caches must not mix them.
+    c.header("vary", "authorization, cookie");
+    if (hit.stale) {
+      c.header("x-yen-data-as-of", new Date(hit.storedAt).toISOString());
+      c.header("warning", STALE_WARNING);
+    }
+    return {
+      notModified: matchesEtag(c.req.header("if-none-match"), hit.etag),
+      body: hit.body,
+    };
   };
   const publicDataGaps = [
     "The event log and anchoring query are not connected; timeline entries are derived from expense records.",
@@ -920,121 +946,127 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   app.openapi(publicFundSummaryRoute, async (c) => {
     const fundId = c.req.valid("param").fundId;
     const { entry, actor, publicTier } = await publicFundContext(fundId, c.get("principal"));
-    const [expenses, donations] = await Promise.all([
-      listFundExpenses(fundId),
-      deps.publicFundReadStore.donations(fundId),
-    ]);
-    const spentPaise = safePaiseSum(
-      expenses
-        .filter((expense) => expense.status === "paid" || expense.status === "reconciled")
-        .map((expense) => expense.amountPaise),
-    );
-    const body = redactFundReadModel(actor, {
-      kind: "fund_summary",
-      fundId,
-      name: entry.fund.name,
-      purpose: actor.role === "public" ? null : (entry.fund.purpose ?? null),
-      raisedPaise: String(safePaiseSum(donations.map((donation) => donation.amountPaise))),
-      spentPaise: String(spentPaise),
-      verification: donations.length > 0 ? "bank-matched" : "unverified",
-      dataGaps: publicDataGaps,
+    const read = await fundRead(c, { fundId, kind: "summary", publicTier }, async () => {
+      const [expenses, donations] = await Promise.all([
+        listFundExpenses(fundId),
+        deps.publicFundReadStore.donations(fundId),
+      ]);
+      const spentPaise = safePaiseSum(
+        expenses
+          .filter((expense) => expense.status === "paid" || expense.status === "reconciled")
+          .map((expense) => expense.amountPaise),
+      );
+      return redactFundReadModel(actor, {
+        kind: "fund_summary",
+        fundId,
+        name: entry.fund.name,
+        purpose: actor.role === "public" ? null : (entry.fund.purpose ?? null),
+        raisedPaise: String(safePaiseSum(donations.map((donation) => donation.amountPaise))),
+        spentPaise: String(spentPaise),
+        verification: donations.length > 0 ? "bank-matched" : "unverified",
+        dataGaps: publicDataGaps,
+      });
     });
-    setFundReadCache(c, publicTier, body);
-    return c.json(body, 200);
+    if (read.notModified) return c.body(null, 304);
+    return c.json(read.body, 200);
   });
   app.openapi(publicFundBreakdownRoute, async (c) => {
     const fundId = c.req.valid("param").fundId;
     const { actor, publicTier } = await publicFundContext(fundId, c.get("principal"));
-    const expenses = await listFundExpenses(fundId);
-    const body = redactFundReadModel(actor, {
-      kind: "fund_breakdown",
-      fundId,
-      categories: paidExpenseCategories(expenses),
-      dataGaps: publicDataGaps,
+    const read = await fundRead(c, { fundId, kind: "breakdown", publicTier }, async () => {
+      const expenses = await listFundExpenses(fundId);
+      return redactFundReadModel(actor, {
+        kind: "fund_breakdown",
+        fundId,
+        categories: paidExpenseCategories(expenses),
+        dataGaps: publicDataGaps,
+      });
     });
-    setFundReadCache(c, publicTier, body);
-    return c.json(body, 200);
+    if (read.notModified) return c.body(null, 304);
+    return c.json(read.body, 200);
   });
   app.openapi(publicFundTimelineRoute, async (c) => {
     const fundId = c.req.valid("param").fundId;
     const { actor, publicTier } = await publicFundContext(fundId, c.get("principal"));
-    const [expenses, donations] = await Promise.all([
-      listFundExpenses(fundId),
-      deps.publicFundReadStore.donations(fundId),
-    ]);
-    const officeholderNamesShown = await deps.displayNameStore.officeholderNamesShown(fundId);
-    const expenseItems = await Promise.all(
-      expenses
-        .filter((expense) => expense.status !== "draft")
-        .map(async (expense) => {
-          const occurredAt =
-            expense.reconciledAt ??
-            expense.paidAt ??
-            expense.rejectedAt ??
-            expense.approvedAt ??
-            expense.submittedAt ??
-            expense.createdAt;
-          const statusWords: Record<string, string> = {
-            submitted: "A spending request was submitted.",
-            approved: "A spending request was approved.",
-            rejected: "A spending request was rejected.",
-            expired: "A spending request expired.",
-            paid: "An approved expense was marked paid.",
-            reconciled: "An expense was marked reconciled.",
-          };
-          const displayName = await deps.displayNameStore.get(fundId, expense.requesterId);
-          return {
-            id: expense.id,
-            occurredAt,
-            message: statusWords[expense.status] ?? "A fund activity was recorded.",
-            ...(displayName === null
-              ? {}
-              : {
-                  actorDisplayName: displayName,
-                  actorNameChoice: officeholderNamesShown
-                    ? ("full" as const)
-                    : ("initials" as const),
-                }),
-            ...(expense.status === "paid" || expense.status === "reconciled"
-              ? { amountPaise: String(expense.amountPaise) }
-              : {}),
-            verified: "unverified" as const,
-          };
-        }),
-    );
-    const donationItems = donations.map((donation) => ({
-      id: donation.id,
-      occurredAt: donation.occurredAt,
-      message: "A donation was bank matched.",
-      ...(donation.donorDisplayName === null || donation.donorNameChoice === "anonymous"
-        ? {}
-        : {
-            actorDisplayName: donation.donorDisplayName,
-            actorNameChoice: donation.donorNameChoice,
+    const read = await fundRead(c, { fundId, kind: "timeline", publicTier }, async () => {
+      const [expenses, donations] = await Promise.all([
+        listFundExpenses(fundId),
+        deps.publicFundReadStore.donations(fundId),
+      ]);
+      const officeholderNamesShown = await deps.displayNameStore.officeholderNamesShown(fundId);
+      const expenseItems = await Promise.all(
+        expenses
+          .filter((expense) => expense.status !== "draft")
+          .map(async (expense) => {
+            const occurredAt =
+              expense.reconciledAt ??
+              expense.paidAt ??
+              expense.rejectedAt ??
+              expense.approvedAt ??
+              expense.submittedAt ??
+              expense.createdAt;
+            const statusWords: Record<string, string> = {
+              submitted: "A spending request was submitted.",
+              approved: "A spending request was approved.",
+              rejected: "A spending request was rejected.",
+              expired: "A spending request expired.",
+              paid: "An approved expense was marked paid.",
+              reconciled: "An expense was marked reconciled.",
+            };
+            const displayName = await deps.displayNameStore.get(fundId, expense.requesterId);
+            return {
+              id: expense.id,
+              occurredAt,
+              message: statusWords[expense.status] ?? "A fund activity was recorded.",
+              ...(displayName === null
+                ? {}
+                : {
+                    actorDisplayName: displayName,
+                    actorNameChoice: officeholderNamesShown
+                      ? ("full" as const)
+                      : ("initials" as const),
+                  }),
+              ...(expense.status === "paid" || expense.status === "reconciled"
+                ? { amountPaise: String(expense.amountPaise) }
+                : {}),
+              verified: "unverified" as const,
+            };
           }),
-      amountPaise: String(donation.amountPaise),
-      verified: "bank-matched" as const,
-    }));
-    const alertItems = (await alertStore.listForTimeline(fundId)).map((alert) => ({
-      id: alert.id,
-      occurredAt: alert.created_at.toISOString(),
-      message: "A fund alert was raised.",
-      alertType: alert.alert_type,
-      severity: alert.severity,
-      title: alert.title,
-      verified: "unverified" as const,
-    }));
-    const items = [...expenseItems, ...donationItems, ...alertItems].sort((left, right) =>
-      left.occurredAt.localeCompare(right.occurredAt),
-    );
-    const body = redactFundReadModel(actor, {
-      kind: "fund_timeline",
-      fundId,
-      items,
-      dataGaps: publicDataGaps,
+      );
+      const donationItems = donations.map((donation) => ({
+        id: donation.id,
+        occurredAt: donation.occurredAt,
+        message: "A donation was bank matched.",
+        ...(donation.donorDisplayName === null || donation.donorNameChoice === "anonymous"
+          ? {}
+          : {
+              actorDisplayName: donation.donorDisplayName,
+              actorNameChoice: donation.donorNameChoice,
+            }),
+        amountPaise: String(donation.amountPaise),
+        verified: "bank-matched" as const,
+      }));
+      const alertItems = (await alertStore.listForTimeline(fundId)).map((alert) => ({
+        id: alert.id,
+        occurredAt: alert.created_at.toISOString(),
+        message: "A fund alert was raised.",
+        alertType: alert.alert_type,
+        severity: alert.severity,
+        title: alert.title,
+        verified: "unverified" as const,
+      }));
+      const items = [...expenseItems, ...donationItems, ...alertItems].sort((left, right) =>
+        left.occurredAt.localeCompare(right.occurredAt),
+      );
+      return redactFundReadModel(actor, {
+        kind: "fund_timeline",
+        fundId,
+        items,
+        dataGaps: publicDataGaps,
+      });
     });
-    setFundReadCache(c, publicTier, body);
-    return c.json(body, 200);
+    if (read.notModified) return c.body(null, 304);
+    return c.json(read.body, 200);
   });
   app.openapi(publicExpenseDetailRoute, async (c) => {
     const { fundId, expenseId } = c.req.valid("param");
@@ -1043,22 +1075,28 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       expenseId,
       c.get("principal"),
     );
-    const payeeName = proofs.find((proof) => proof.vendorName)?.vendorName;
-    const body = redactExpenseDetails(actor, {
-      kind: "expense_details",
-      expenseId: expense.id,
-      fundId: expense.fundId,
-      amountPaise: paise(expense.amountPaise),
-      category: expense.category ?? "Other",
-      status: expense.status,
-      ...(payeeName === undefined ? {} : { payeeName }),
-      payeeVerified: false,
-      description: expense.description,
-      createdAt: expense.createdAt,
-      updatedAt: expense.updatedAt,
-    });
-    setFundReadCache(c, publicTier, body);
-    return c.json(body, 200);
+    const read = await fundRead(
+      c,
+      { fundId, kind: `expense:${expenseId}`, publicTier },
+      async () => {
+        const payeeName = proofs.find((proof) => proof.vendorName)?.vendorName;
+        return redactExpenseDetails(actor, {
+          kind: "expense_details",
+          expenseId: expense.id,
+          fundId: expense.fundId,
+          amountPaise: paise(expense.amountPaise),
+          category: expense.category ?? "Other",
+          status: expense.status,
+          ...(payeeName === undefined ? {} : { payeeName }),
+          payeeVerified: false,
+          description: expense.description,
+          createdAt: expense.createdAt,
+          updatedAt: expense.updatedAt,
+        });
+      },
+    );
+    if (read.notModified) return c.body(null, 304);
+    return c.json(read.body, 200);
   });
   app.openapi(publicExpenseProofsRoute, async (c) => {
     const { fundId, expenseId } = c.req.valid("param");
@@ -1067,30 +1105,36 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       expenseId,
       c.get("principal"),
     );
-    const proofRecords = await Promise.all(
-      proofs.map(async (proof) => {
-        if (actor.role === "public") {
-          return { sha256: proof.fileSha256, scanStatus: proof.scan.result } as const;
-        }
-        const storedObject = await getVerifiedEvidenceObject(proof, deps.storageAdapter);
-        return {
-          sha256: proof.fileSha256,
-          scanStatus: proof.scan.result,
-          mimeType: proof.mimeType,
-          contentBase64: Buffer.from(storedObject.data).toString("base64"),
-        } as const;
-      }),
+    const read = await fundRead(
+      c,
+      { fundId, kind: `expense-proofs:${expenseId}`, publicTier },
+      async () => {
+        const proofRecords = await Promise.all(
+          proofs.map(async (proof) => {
+            if (actor.role === "public") {
+              return { sha256: proof.fileSha256, scanStatus: proof.scan.result } as const;
+            }
+            const storedObject = await getVerifiedEvidenceObject(proof, deps.storageAdapter);
+            return {
+              sha256: proof.fileSha256,
+              scanStatus: proof.scan.result,
+              mimeType: proof.mimeType,
+              contentBase64: Buffer.from(storedObject.data).toString("base64"),
+            } as const;
+          }),
+        );
+        return redactExpenseProofs(actor, {
+          kind: "expense_proofs",
+          expenseId,
+          proofs: proofRecords,
+        });
+      },
     );
-    const body = redactExpenseProofs(actor, {
-      kind: "expense_proofs",
-      expenseId,
-      proofs: proofRecords,
-    });
-    setFundReadCache(c, publicTier, body);
     c.header("Content-Disposition", 'attachment; filename="expense-proofs.json"');
     c.header("X-Content-Type-Options", "nosniff");
     c.header("Content-Security-Policy", "sandbox; default-src 'none'");
-    return c.json(body, 200);
+    if (read.notModified) return c.body(null, 304);
+    return c.json(read.body, 200);
   });
 
   const defaultFundPolicy: FundPolicy = {
