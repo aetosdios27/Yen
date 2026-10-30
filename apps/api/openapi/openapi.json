@@ -92,9 +92,10 @@
           "gitSha": { "type": "string" },
           "buildId": { "type": "string" },
           "artifactDigest": { "type": "string" },
-          "releaseTag": { "type": "string" }
+          "releaseTag": { "type": "string" },
+          "provenanceUrl": { "type": "string" }
         },
-        "required": ["gitSha", "buildId", "artifactDigest", "releaseTag"],
+        "required": ["gitSha", "buildId", "artifactDigest", "releaseTag", "provenanceUrl"],
         "additionalProperties": false
       },
       "Principal": {

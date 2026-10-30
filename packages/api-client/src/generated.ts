@@ -1427,6 +1427,7 @@ export interface components {
       buildId: string;
       artifactDigest: string;
       releaseTag: string;
+      provenanceUrl: string;
     };
     Principal: {
       /** Format: uuid */

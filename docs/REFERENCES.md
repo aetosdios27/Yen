@@ -628,6 +628,14 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **What we use it for:** Reproducible Builds describes controlling timestamps, time zones, locales, build paths and other variable inputs. Yen sets a fixed build environment and compares release archives from two clean worktrees on one host; that check is not an independent or cross-platform rebuild.
 - **Where in this repo:** scripts/repro-build.sh; docs/verify-release.md
 
+<a id="source-date-epoch"></a>
+### SOURCE_DATE_EPOCH
+
+- **Source:** Reproducible Builds project; SOURCE_DATE_EPOCH specification, undated (accessed 2026).
+- **URL:** https://reproducible-builds.org/docs/source-date-epoch/
+- **What we use it for:** SOURCE_DATE_EPOCH fixes file mtimes and other timestamps so two builds of the same source produce identical archives.
+- **Where in this repo:** scripts/repro-build.sh; scripts/reproduce-release.sh
+
 <a id="sigstore-cosign"></a>
 ### Cosign keyless signing and verification
 

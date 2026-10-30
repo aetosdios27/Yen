@@ -93,6 +93,14 @@ not check that the statement is signed or trusted. CI runs reproducible build, S
 checks in its read-only build job. Signing, attestation and publishing remain
 in separate tag-triggered jobs.
 
+## Rebuild a release
+
+Use the documented rebuild command:
+
+```sh
+bash scripts/reproduce-release.sh "$tag" ./rebuild
+```
+
 ## Rebuild the archive
 
 Use Node `24.21.0`, pnpm `12.6.0`, GNU tar, and a Linux x86-64 environment.

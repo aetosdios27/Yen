@@ -9,6 +9,7 @@ const gitSha = process.env.YEN_BUILD_SHA ?? gitValue("rev-parse", "HEAD");
 const buildId = process.env.YEN_BUILD_ID ?? gitValue("rev-parse", "HEAD^{tree}");
 const artifactDigest = process.env.YEN_ARTIFACT_DIGEST ?? "";
 const releaseTag = process.env.YEN_RELEASE_TAG ?? "";
+const provenanceUrl = process.env.YEN_PROVENANCE_URL ?? "";
 if (artifactDigest !== "" && !/^sha256:[a-f0-9]{64}$/.test(artifactDigest)) {
   throw new Error("YEN_ARTIFACT_DIGEST must be sha256 followed by a full lowercase digest");
 }
@@ -26,5 +27,6 @@ await writeFile(
     .replaceAll("__YEN_BUILD_SHA__", gitSha)
     .replaceAll("__YEN_BUILD_ID__", buildId)
     .replaceAll("__YEN_ARTIFACT_DIGEST__", artifactDigest)
-    .replaceAll("__YEN_RELEASE_TAG__", releaseTag),
+    .replaceAll("__YEN_RELEASE_TAG__", releaseTag)
+    .replaceAll("__YEN_PROVENANCE_URL__", provenanceUrl),
 );

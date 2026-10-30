@@ -1,9 +1,12 @@
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = fileURLToPath(new URL("../../", import.meta.url));
+const gitSha =
+  process.env.YEN_BUILD_SHA ??
+  execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim();
 const artifact = JSON.parse(
   readFileSync(resolve(repo, "contracts/out/RootRegistry.sol/RootRegistry.json"), "utf8"),
 );
@@ -21,6 +24,11 @@ export const rootRegistryAbi = ${JSON.stringify(artifact.abi, null, 2)} as const
 export type RootRegistryAddress = \`0x\${string}\`;
 // No deployment exists yet. Resolve a verified deployment manifest before use.
 export const rootRegistryAddress: RootRegistryAddress | null = null;
+
+// Commit identifier embedded in the ABI so released artifacts and the ABI agree.
+export const rootRegistryAbiCommit = ${JSON.stringify(gitSha)};
+export const rootRegistryAbiGitSha = ${JSON.stringify(gitSha)};
+export const rootRegistryBuildSha = ${JSON.stringify(gitSha)};
 `;
 const formatted = spawnSync(
   resolve(repo, "node_modules/.bin/biome"),
