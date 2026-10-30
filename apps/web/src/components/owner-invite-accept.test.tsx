@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
+import { LocaleProvider } from "../i18n";
 import { OwnerInviteAccept } from "./owner-invite-accept";
 
 const mockGet = vi.fn();
@@ -18,7 +19,11 @@ beforeEach(() => {
 
 it("shows alert message when code param is missing", () => {
   mockGet.mockReturnValue(null);
-  render(<OwnerInviteAccept />);
+  render(
+    <LocaleProvider initialLocale="en">
+      <OwnerInviteAccept />
+    </LocaleProvider>,
+  );
   expect(screen.getByRole("alert").textContent).toContain("incomplete");
 });
 
@@ -30,7 +35,11 @@ it("submits name and phone to redeem invite", async () => {
     json: async () => ({ status: "authenticated" }),
   } as Response);
 
-  render(<OwnerInviteAccept />);
+  render(
+    <LocaleProvider initialLocale="en">
+      <OwnerInviteAccept />
+    </LocaleProvider>,
+  );
   await user.type(screen.getByLabelText("Name"), "Priya Sharma");
   await user.type(screen.getByLabelText("Phone number"), "+919876543210");
   await user.click(screen.getByRole("button", { name: "Accept invite" }));
