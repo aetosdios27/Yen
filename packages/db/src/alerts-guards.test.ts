@@ -31,10 +31,8 @@ databaseSuite("alert guards (append-only store and state machine)", (sql) => {
     return id;
   }
 
-  // Resolving straight from open violates alerts_check4 (status must be open or have an
-  // acknowledgement), so the resolved fixtures go through acknowledgement first.
   async function resolvedAlert(): Promise<string> {
-    const id = await acknowledgedAlert();
+    const id = await openAlert();
     await resolveAlert(sql, { alertId: id, actorPseudonym: ACTOR, note: "Fixed" });
     return id;
   }

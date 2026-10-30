@@ -32,7 +32,7 @@ CREATE TABLE alerts (
   CHECK ((resolved_by IS NULL) = (resolved_at IS NULL)),
   CHECK (acknowledged_at IS NULL OR acknowledgement_note IS NOT NULL AND length(trim(acknowledgement_note)) > 0),
   CHECK (resolved_at IS NULL OR resolution_note IS NOT NULL AND length(trim(resolution_note)) > 0),
-  CHECK (status = 'open' OR acknowledged_at IS NOT NULL),
+  CHECK (status <> 'acknowledged' OR acknowledged_at IS NOT NULL),
   CHECK (status <> 'resolved' OR resolved_at IS NOT NULL)
 );
 

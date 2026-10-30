@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createSql } from "@yen/db";
-import { runPersistedEvidenceIntegrityJob } from "./evidence-integrity-runner.js";
+import { runPersistedEvidenceIntegrityJobWithAlert } from "./evidence-integrity-runner.js";
 import { PostgresEvidenceStore } from "./evidence-store-postgres.js";
 import { FileSystemStorageAdapter } from "./filesystem-storage.js";
 
@@ -16,7 +16,7 @@ async function main(): Promise<void> {
   try {
     const storage = await FileSystemStorageAdapter.open(storageDirectory);
     const store = new PostgresEvidenceStore(sql);
-    const summary = await runPersistedEvidenceIntegrityJob(store, storage);
+    const summary = await runPersistedEvidenceIntegrityJobWithAlert(sql, store, storage);
     process.stdout.write(`${JSON.stringify(summary)}\n`);
     if (summary.tamperedCount > 0 || summary.missingCount > 0) process.exitCode = 1;
   } finally {

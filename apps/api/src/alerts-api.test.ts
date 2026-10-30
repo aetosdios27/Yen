@@ -326,8 +326,7 @@ databaseSuite("Postgres fund alerts API", (sql) => {
         body: JSON.stringify({ note: "Handled" }),
       });
 
-    expect((await act("resolve")).status).toBe(409);
-    expect((await act("acknowledge")).status).toBe(200);
+    // An open alert can be resolved without a separate acknowledgement.
     expect((await act("resolve")).status).toBe(200);
     expect((await act("acknowledge")).status).toBe(409);
     expect((await act("resolve")).status).toBe(409);

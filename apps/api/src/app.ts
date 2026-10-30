@@ -1656,8 +1656,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const fund = await getFundOrNotFound(fundId);
     const principal = authorizedFund(c, "fund:alert:manage", fund.resource);
     const alert = await fundAlertOrNotFound(alertId, fund.id);
-    // Resolution requires a prior acknowledgement (alerts_check4); resolved alerts are final.
-    if (alert.status !== "acknowledged") throw new ApiError("conflict");
+    // An open or acknowledged alert can be resolved; resolved alerts are final.
+    if (alert.status === "resolved") throw new ApiError("conflict");
     const actor = await actorFor(principal, fund.id);
     const updated = await alertStore.resolve(alertId, actor, note, new Date(deps.clock()));
     if (!updated) throw new ApiError("conflict");

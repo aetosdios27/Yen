@@ -208,7 +208,6 @@ describePostgres("critical alert escalation", (adminUrl) => {
   it("never escalates a resolved critical alert", async () => {
     const { fundId } = await seedFund();
     const alertId = (await raiseCritical(fundId, T0))?.id ?? "";
-    // The schema only allows resolving an acknowledged alert (alerts_check4), so acknowledge first.
     await acknowledgeAlert(sql, {
       alertId,
       actorPseudonym: ACTOR,
