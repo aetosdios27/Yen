@@ -50,6 +50,10 @@ describe("formatInr", () => {
     [100, "₹1.00"],
     [123_456_789, "₹12,34,567.89"],
     [-250_050, "-₹2,500.50"],
+    // Indian grouping: the first comma after three digits, then every two (lakh, crore).
+    [10_000_000, "₹1,00,000.00"],
+    [1_000_000_000, "₹1,00,00,000.00"],
+    [10_000_000_000, "₹10,00,00,000.00"],
   ])("formats %i as %s", (value, expected) => {
     expect(formatInr(paise(value))).toBe(expected);
   });
