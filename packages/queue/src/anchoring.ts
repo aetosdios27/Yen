@@ -257,6 +257,12 @@ async function chainCall<T>(
   }
 }
 
+/**
+ * How long fund events may stay unanchored (and no anchor may land) before an
+ * `anchor_missing` alert is raised. Publishing is failing when this elapses.
+ */
+export const ANCHOR_MISSING_LAG_MS = 60 * 60 * 1000;
+
 export async function reconcileAnchors(
   sql: Sql,
   chain: RootChain,
@@ -287,18 +293,19 @@ export async function reconcileAnchors(
   for (const row of stale) {
     const lastLanding = row.last_landed ? new Date(row.last_landed).getTime() : null;
     const staleSince = lastLanding ?? new Date(row.pending_since).getTime();
-    if (now.getTime() - staleSince >= 60 * 60 * 1000) {
+    if (now.getTime() - staleSince >= ANCHOR_MISSING_LAG_MS) {
+      const details = "Events remain unanchored and no anchor has landed for at least one hour";
       await alerts.emit({
         type: "anchor.stale",
         fundId: row.fund_id,
-        details: "Events remain unanchored and no anchor has landed for at least one hour",
+        details,
       });
       await raiseAlertWithNotification(sql, {
         fundId: row.fund_id,
         alertType: "anchor_missing",
         severity: "critical",
         title: "Anchor missing",
-        details: "Events remain unanchored and no anchor has landed for at least one hour",
+        details,
         entityType: "fund",
         entityId: row.fund_id,
         dedupKey: row.fund_id,
@@ -343,7 +350,8 @@ export async function reconcileAnchors(
           })),
         },
       ]);
-      computedRoot = toHex(tree.root);
+      // Chain roots are 0x-prefixed; toHex is not, so add the prefix for comparison.
+      computedRoot = `0x${toHex(tree.root)}`;
     }
     const actual = await chainCall(
       resilience,
