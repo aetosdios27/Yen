@@ -695,8 +695,7 @@ export class PostgresNotificationStore implements NotificationStore {
       `WITH recorded AS (
          INSERT INTO notification_delivery_events (
            provider, provider_message_id, provider_status, event_key, provider_occurred_at, received_at
-         ) SELECT $1, $2, $3, $4, $6, $7
-         WHERE EXISTS (SELECT 1 FROM notification_outbox WHERE provider_message_id = $2)
+         ) VALUES ($1, $2, $3, $4, $6, $7)
          ON CONFLICT (provider, event_key) DO NOTHING
          RETURNING provider_status, provider_occurred_at, received_at, event_key
        ), candidate_events AS (

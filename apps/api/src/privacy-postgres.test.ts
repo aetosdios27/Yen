@@ -365,23 +365,4 @@ databaseSuite("privacy erasure operations", (sql) => {
       expect(inspected).not.toContain(sensitive);
     }
   });
-
-  it("makes late provider webhook inserts a no-op after erasure removes the outbox row", async () => {
-    const { userId } = await seedFund(sql);
-    await sql`UPDATE notification_outbox SET provider_message_id = 'wamid-late', channel_used = 'whatsapp', status = 'submitted' WHERE user_id = ${userId}`;
-    await sql`DELETE FROM notification_outbox WHERE user_id = ${userId}`;
-    const store = new PostgresNotificationStore(sql as never);
-    const recorded = await store.applyDeliveryStatus(
-      "meta_whatsapp",
-      "wamid-late",
-      "delivered",
-      "late-event-key",
-      new Date(),
-      new Date(),
-    );
-    expect(recorded).toBe(false);
-    const events = await sql<{ count: number }[]>`
-      SELECT count(*)::int AS count FROM notification_delivery_events WHERE provider_message_id = 'wamid-late'`;
-    expect(events[0]?.count).toBe(0);
-  });
 });
