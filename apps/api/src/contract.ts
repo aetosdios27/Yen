@@ -142,6 +142,7 @@ const versionSchema = z
     buildId: z.string(),
     artifactDigest: z.string(),
     releaseTag: z.string(),
+    provenanceUrl: z.string(),
   })
   .strict()
   .openapi("Version");

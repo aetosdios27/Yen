@@ -70,6 +70,7 @@ it("serves build identity without auth", async () => {
     buildId: expect.any(String),
     artifactDigest: expect.any(String),
     releaseTag: expect.any(String),
+    provenanceUrl: expect.any(String),
   });
   expect(response.headers.get("x-request-id")).toBeTruthy();
 });

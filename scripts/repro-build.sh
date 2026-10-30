@@ -53,12 +53,13 @@ build_once() {
     export YEN_BUILD_SHA="$source_commit"
     export YEN_BUILD_ID="$source_tree"
     export YEN_RELEASE_TAG="$release_tag"
+    export YEN_PROVENANCE_URL="${YEN_PROVENANCE_URL:-}"
     export NEXT_TELEMETRY_DISABLED=1
     export TURBO_CACHE_DIR="$directory/.turbo"
     pnpm install --frozen-lockfile
-    pnpm turbo run build --filter=@yen/api --filter=@yen/web
+    pnpm turbo run build --filter=@yen/api --filter=@yen/web --filter=@yen/verifier
     if rg --hidden --text --files-with-matches --fixed-strings "$directory" \
-      apps/api/dist apps/web/.next \
+      apps/api/dist apps/web/.next packages/verifier/dist \
       --glob '!**/cache/**' --glob '!**/trace' --glob '!**/trace-build'; then
       echo "Build artifacts contain the checkout's absolute path." >&2
       exit 1
@@ -67,7 +68,7 @@ build_once() {
       --exclude=apps/web/.next/cache \
       --exclude=apps/web/.next/trace \
       --exclude=apps/web/.next/trace-build -cf "$artifact" \
-      apps/api/dist apps/api/openapi/openapi.json apps/web/.next
+      apps/api/dist apps/api/openapi/openapi.json apps/web/.next packages/verifier/dist
   )
 }
 

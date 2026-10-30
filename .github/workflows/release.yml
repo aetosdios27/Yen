@@ -21,6 +21,7 @@ jobs:
     env:
       ARTIFACT_DIR: ${{ runner.temp }}/yen-release
       YEN_RELEASE_TAG: ${{ github.ref_name }}
+      YEN_PROVENANCE_URL: https://github.com/${{ github.repository }}/attestations
       NEXT_TELEMETRY_DISABLED: "1"
       TZ: UTC
       LC_ALL: C
