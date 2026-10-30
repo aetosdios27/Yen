@@ -20,6 +20,7 @@ import {
   type expenseRejectionResponse,
   expenseRejectionResponse as expenseRejectionResponseSchema,
   type expenseSchema,
+  fundAlertSchema,
   type fundSchema,
   type payeeChangeResponse,
   payeeChangeResponse as payeeChangeResponseSchema,
@@ -86,6 +87,14 @@ export type ActionReceiptAction =
   | "fund:member:add"
   | "fund:member:remove";
 
+/** Alert projections share the receipt allowlist machinery but are not policy-engine actions. */
+export type AlertReceiptAction =
+  | "fund:alert:list"
+  | "fund:alert:acknowledge"
+  | "fund:alert:resolve";
+
+export type FundAlertView = z.infer<typeof fundAlertSchema>;
+
 export type ActionReceiptMap = {
   "fund:expense:approve": ExpenseApprovalReceipt;
   "fund:expense:reject": ExpenseRejectionReceipt;
@@ -93,6 +102,9 @@ export type ActionReceiptMap = {
   "fund:policy:change": PolicyChangeReceipt;
   "fund:member:add": AddMemberReceipt;
   "fund:member:remove": RemoveMemberReceipt;
+  "fund:alert:list": FundAlertView;
+  "fund:alert:acknowledge": FundAlertView;
+  "fund:alert:resolve": FundAlertView;
 };
 
 const ACTION_RECEIPT_SCHEMAS = {
@@ -102,7 +114,23 @@ const ACTION_RECEIPT_SCHEMAS = {
   "fund:policy:change": policyChangeResponseSchema,
   "fund:member:add": addMemberResponseSchema,
   "fund:member:remove": removeMemberResponseSchema,
+  "fund:alert:list": fundAlertSchema,
+  "fund:alert:acknowledge": fundAlertSchema,
+  "fund:alert:resolve": fundAlertSchema,
 } as const;
+
+const FUND_ALERT_FIELDS = [
+  "id",
+  "alertType",
+  "severity",
+  "status",
+  "title",
+  "details",
+  "createdAt",
+  "acknowledgedAt",
+  "resolvedAt",
+  "escalatedAt",
+] as const;
 
 const ACTION_RECEIPT_ALLOWLIST = {
   "fund:expense:approve": ["status", "expenseId", "approvedAt", "approvalsCount"],
@@ -111,6 +139,9 @@ const ACTION_RECEIPT_ALLOWLIST = {
   "fund:policy:change": ["status", "policyJson"],
   "fund:member:add": ["status", "memberId", "role"],
   "fund:member:remove": ["status", "memberId"],
+  "fund:alert:list": FUND_ALERT_FIELDS,
+  "fund:alert:acknowledge": FUND_ALERT_FIELDS,
+  "fund:alert:resolve": FUND_ALERT_FIELDS,
 } as const;
 
 /**
@@ -123,7 +154,7 @@ const ACTION_RECEIPT_ALLOWLIST = {
  * persistent banking operations or transaction execution, which belong to the separate
  * ledger/bank reconciliation scope.
  */
-export function redactActionReceipt<A extends ActionReceiptAction>(
+export function redactActionReceipt<A extends ActionReceiptAction | AlertReceiptAction>(
   action: A,
   receipt: unknown,
 ): Redacted<ActionReceiptMap[A]> {
@@ -145,13 +176,16 @@ export function redactActionReceipt<A extends ActionReceiptAction>(
     }
   }
 
-  const actionNames: Record<ActionReceiptAction, string> = {
+  const actionNames: Record<ActionReceiptAction | AlertReceiptAction, string> = {
     "fund:expense:approve": "expense approval",
     "fund:expense:reject": "expense rejection",
     "fund:payee:change": "payee change",
     "fund:policy:change": "policy change",
     "fund:member:add": "member add",
     "fund:member:remove": "member remove",
+    "fund:alert:list": "alert",
+    "fund:alert:acknowledge": "alert acknowledgement",
+    "fund:alert:resolve": "alert resolution",
   };
 
   const parseResult = schema.safeParse(filtered);

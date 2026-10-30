@@ -286,12 +286,27 @@ const publicFundIdParams = z.object({
     }),
 });
 const verificationState = z.enum(["bank-matched", "anchored", "unverified"]);
+const alertSeverity = z.enum(["info", "warning", "critical"]);
+const alertTypeWire = z.enum([
+  "unapproved_debit",
+  "balance_drift",
+  "chain_verification_failure",
+  "anchor_missing",
+  "anchor_mismatch",
+  "repeated_rejected_requests",
+  "spend_rate_spike",
+  "integrity_check_failure",
+]);
 const publicTimelineItem = z.object({
   id: z.string().uuid(),
   occurredAt: z.iso.datetime(),
   message: z.string(),
   actorDisplayName: z.string().optional(),
   amountPaise: paiseWire.optional(),
+  alertType: alertTypeWire.optional(),
+  severity: alertSeverity.optional(),
+  /** Alert title; present only for member-tier viewers. */
+  title: z.string().optional(),
   verified: verificationState,
 });
 export const publicFundSummarySchema = z
@@ -1872,6 +1887,102 @@ export const reconcileExpenseRoute = createRoute({
     503: protectedErrors[503],
   },
 });
+
+const alertIdParams = z.object({
+  fundId: z
+    .string()
+    .uuid()
+    .openapi({ param: { name: "fundId", in: "path" } }),
+  alertId: z
+    .string()
+    .uuid()
+    .openapi({ param: { name: "alertId", in: "path" } }),
+});
+export const fundAlertSchema = z
+  .object({
+    id: z.string().uuid(),
+    alertType: alertTypeWire,
+    severity: alertSeverity,
+    status: z.enum(["open", "acknowledged", "resolved"]),
+    title: z.string(),
+    details: z.string(),
+    createdAt: z.iso.datetime(),
+    acknowledgedAt: z.iso.datetime().nullable(),
+    resolvedAt: z.iso.datetime().nullable(),
+    escalatedAt: z.iso.datetime().nullable(),
+  })
+  .strict()
+  .openapi("FundAlert");
+export const alertNoteInput = z
+  .object({
+    note: z.string().trim().min(1).max(1000),
+  })
+  .strict()
+  .openapi("AlertNoteInput");
+const alertListQuery = z.object({
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .default(50)
+    .openapi({ description: "Page size, 1 to 100" }),
+  before: z.iso
+    .datetime()
+    .optional()
+    .openapi({ description: "Exclusive created_at cursor: return alerts older than this" }),
+});
+
+export const listFundAlertsRoute = createRoute({
+  method: "get",
+  path: "/v1/funds/{fundId}/alerts",
+  tags: ["alerts"],
+  operationId: "listFundAlerts",
+  security,
+  description: "Lists alerts for a fund, newest first. Fund members only.",
+  request: {
+    params: z.object({
+      fundId: z
+        .string()
+        .uuid()
+        .openapi({ param: { name: "fundId", in: "path" } }),
+    }),
+    query: alertListQuery,
+  },
+  responses: {
+    200: jsonResponse(z.array(fundAlertSchema), "Fund alerts, newest first"),
+    ...protectedErrors,
+  },
+});
+
+function alertActionRoute(action: "acknowledge" | "resolve", description: string) {
+  return createRoute({
+    method: "post",
+    path: `/v1/funds/{fundId}/alerts/{alertId}/${action}`,
+    tags: ["alerts"],
+    operationId: `${action}Alert`,
+    security,
+    description,
+    request: {
+      params: alertIdParams,
+      headers: z.object({ "Idempotency-Key": idempotencyKey }),
+      body: { required: true, content: { "application/json": { schema: alertNoteInput } } },
+    },
+    responses: {
+      200: withReplay(jsonResponse(fundAlertSchema, `Alert ${action}d`)),
+      ...protectedErrors,
+    },
+  });
+}
+
+export const acknowledgeAlertRoute = alertActionRoute(
+  "acknowledge",
+  "Acknowledges an open alert with a required note. Fund owners and approvers only.",
+);
+export const resolveAlertRoute = alertActionRoute(
+  "resolve",
+  "Resolves an open or acknowledged alert with a required note. Resolved alerts cannot be reopened. Fund owners and approvers only.",
+);
 
 export const ALLOWED_EVIDENCE_MIME_TYPES = [
   "image/jpeg",
