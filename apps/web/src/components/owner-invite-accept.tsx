@@ -2,15 +2,17 @@
 
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { type MessageKey, useI18n } from "../i18n";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 export function OwnerInviteAccept() {
+  const { t } = useI18n();
   const params = useSearchParams();
   const code = params.get("code") ?? "";
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<MessageKey | null>(null);
 
   const redeem = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -25,21 +27,17 @@ export function OwnerInviteAccept() {
         displayName: name.trim(),
       }),
     });
-    if (!response.ok) return setMessage("This invite is invalid or has expired.");
+    if (!response.ok) return setMessage("invite.invalid");
     const result = (await response.json()) as {
       status: "pending_owner_confirmation" | "authenticated";
     };
-    setMessage(
-      result.status === "authenticated"
-        ? "You are now an approver."
-        : "Your nomination is awaiting confirmation.",
-    );
+    setMessage(result.status === "authenticated" ? "invite.approved" : "invite.pending");
   };
 
   if (!code)
     return (
       <p role="alert" className="py-8 text-body text-ink">
-        This invite link is incomplete.
+        {t("invite.missingCode")}
       </p>
     );
 
@@ -48,12 +46,10 @@ export function OwnerInviteAccept() {
       className="mx-auto flex max-w-md flex-col gap-4 py-8"
       onSubmit={(event) => void redeem(event)}
     >
-      <h1 className="text-display font-bold text-ink">Join as an approver</h1>
-      <p className="text-body text-ink-muted">
-        अनुमोदक बनने के लिए अपना नाम और वही फोन नंबर दें जिस पर निमंत्रण भेजा गया था।
-      </p>
+      <h1 className="text-display font-bold text-ink">{t("invite.title")}</h1>
+      <p className="text-body text-ink-muted">{t("invite.intro")}</p>
       <div className="flex flex-col gap-2 font-semibold">
-        <label htmlFor="invite-name">Name</label>
+        <label htmlFor="invite-name">{t("invite.name")}</label>
         <input
           id="invite-name"
           required
@@ -63,7 +59,7 @@ export function OwnerInviteAccept() {
         />
       </div>
       <div className="flex flex-col gap-2 font-semibold">
-        <label htmlFor="invite-phone">Phone number</label>
+        <label htmlFor="invite-phone">{t("invite.phone")}</label>
         <input
           id="invite-phone"
           required
@@ -73,12 +69,12 @@ export function OwnerInviteAccept() {
           onChange={(event) => setPhone(event.target.value)}
         />
       </div>
-      {message ? <p role="status">{message}</p> : null}
+      {message ? <p role="status">{t(message)}</p> : null}
       <button
         className="tap-target rounded-control bg-primary px-4 font-semibold text-on-solid"
         type="submit"
       >
-        Accept invite
+        {t("invite.submit")}
       </button>
     </form>
   );
