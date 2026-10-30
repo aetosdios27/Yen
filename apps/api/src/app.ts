@@ -20,6 +20,7 @@ import {
   submitExpense,
   UnacknowledgedFraudFlagsError,
 } from "@yen/ledger";
+import { MemoryFundSubscriptionStore } from "@yen/notifications";
 import {
   DEFAULT_FUND_POLICY,
   isStaffRole,
@@ -29,7 +30,17 @@ import {
   redactExpenseProofs,
   redactFundReadModel,
 } from "@yen/policy";
-import { PRIVACY_NOTICE_VERSION, paise, parseFundId, parseGstin } from "@yen/shared";
+import {
+  type DonorReceiptData,
+  generateReceiptPdf,
+  generateReceiptSvg,
+  PRIVACY_NOTICE_VERSION,
+  paise,
+  parseFundId,
+  parseGstin,
+  RECEIPT_DISCLAIMER_EN,
+  RECEIPT_DISCLAIMER_HI,
+} from "@yen/shared";
 import type { Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, setCookie } from "hono/cookie";
@@ -61,6 +72,7 @@ import {
   confirmPinResetRoute,
   createExpenseRoute,
   createFundRoute,
+  createSubscriptionRoute,
   donationDetailsRoute,
   type expenseSchema,
   getEvidenceRoute,
@@ -68,6 +80,9 @@ import {
   getFundRoute,
   getPinStatusRoute,
   getPrivacyConsentsRoute,
+  getReceiptPdfRoute,
+  getReceiptRoute,
+  getReceiptSvgRoute,
   getSessionsRoute,
   healthRoute,
   listExpensesRoute,
@@ -104,6 +119,8 @@ import {
   unlockPinRoute,
   unlockTrustedDeviceRoute,
   unmatchedCreditsRoute,
+  unsubscribeGetRoute,
+  unsubscribeRoute,
   updatePrivacyConsentRoute,
   uploadEvidenceRoute,
   verifyOtpRoute,
@@ -164,6 +181,7 @@ import {
   PrivacyUnavailableError,
 } from "./privacy-store.js";
 import { publicExpenseDetailRoute, publicExpenseProofsRoute } from "./public-expense-contract.js";
+import { MemoryReceiptStore } from "./receipt-store.js";
 import { parseBankStatementCsv } from "./reconciliation/csv-parser.js";
 import { registerDebitReviewRoutes } from "./reconciliation/debit-review-routes.js";
 import { normalizePartnerWebhook } from "./reconciliation/partner-schema.js";
@@ -1734,6 +1752,175 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         amountPaise: input.amountPaise,
       },
       201,
+    );
+  });
+
+  app.openapi(getReceiptRoute, async (c) => {
+    const { receiptId } = c.req.valid("param");
+    const receiptStore = deps.receiptStore ?? new MemoryReceiptStore();
+    const receipt = await receiptStore.getReceipt(receiptId);
+    if (!receipt) throw new ApiError("not_found");
+
+    return c.json(
+      {
+        donationId: receipt.donationId,
+        fundId: receipt.fundId,
+        fundName: receipt.fundTitle,
+        amountPaise: String(receipt.amountPaise),
+        utr: receipt.utr,
+        ...(receipt.donorDisplayName ? { donorDisplayName: receipt.donorDisplayName } : {}),
+        ...(receipt.donorNameChoice ? { donorNameChoice: receipt.donorNameChoice } : {}),
+        status: receipt.status,
+        createdAt: receipt.createdAt,
+        ...(receipt.verifiedAt ? { verifiedAt: receipt.verifiedAt } : {}),
+        proofUrl:
+          receipt.proofUrl ?? `/verify?donationId=${encodeURIComponent(receipt.donationId)}`,
+        ...(receipt.onChainRoot ? { onChainRoot: receipt.onChainRoot } : {}),
+        ...(receipt.onChainTxHash ? { onChainTxHash: receipt.onChainTxHash } : {}),
+        isTaxReceipt: false as const,
+        disclaimerEn: RECEIPT_DISCLAIMER_EN,
+        disclaimerHi: RECEIPT_DISCLAIMER_HI,
+      },
+      200,
+    );
+  });
+
+  app.openapi(getReceiptPdfRoute, async (c) => {
+    const { receiptId } = c.req.valid("param");
+    const receiptStore = deps.receiptStore ?? new MemoryReceiptStore();
+    const receipt = await receiptStore.getReceipt(receiptId);
+    if (!receipt) throw new ApiError("not_found");
+
+    const receiptData: DonorReceiptData = {
+      donationId: receipt.donationId,
+      fundId: receipt.fundId,
+      fundTitle: receipt.fundTitle,
+      amountPaise: paise(receipt.amountPaise),
+      utr: receipt.utr,
+      donorDisplayName: receipt.donorDisplayName,
+      donorNameChoice: receipt.donorNameChoice,
+      status: receipt.status,
+      createdAt: receipt.createdAt,
+      verifiedAt: receipt.verifiedAt,
+      proofUrl:
+        receipt.proofUrl ??
+        `https://yen.org.in/verify?donationId=${encodeURIComponent(receipt.donationId)}`,
+      onChainRoot: receipt.onChainRoot,
+      onChainTxHash: receipt.onChainTxHash,
+      isTaxReceipt: false,
+      disclaimerEn: RECEIPT_DISCLAIMER_EN,
+      disclaimerHi: RECEIPT_DISCLAIMER_HI,
+    };
+
+    const pdfBuffer = generateReceiptPdf(receiptData);
+    return new Response(pdfBuffer, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="receipt-${receipt.donationId}.pdf"`,
+      },
+    });
+  });
+
+  app.openapi(getReceiptSvgRoute, async (c) => {
+    const { receiptId } = c.req.valid("param");
+    const receiptStore = deps.receiptStore ?? new MemoryReceiptStore();
+    const receipt = await receiptStore.getReceipt(receiptId);
+    if (!receipt) throw new ApiError("not_found");
+
+    const receiptData: DonorReceiptData = {
+      donationId: receipt.donationId,
+      fundId: receipt.fundId,
+      fundTitle: receipt.fundTitle,
+      amountPaise: paise(receipt.amountPaise),
+      utr: receipt.utr,
+      donorDisplayName: receipt.donorDisplayName,
+      donorNameChoice: receipt.donorNameChoice,
+      status: receipt.status,
+      createdAt: receipt.createdAt,
+      verifiedAt: receipt.verifiedAt,
+      proofUrl:
+        receipt.proofUrl ??
+        `https://yen.org.in/verify?donationId=${encodeURIComponent(receipt.donationId)}`,
+      onChainRoot: receipt.onChainRoot,
+      onChainTxHash: receipt.onChainTxHash,
+      isTaxReceipt: false,
+      disclaimerEn: RECEIPT_DISCLAIMER_EN,
+      disclaimerHi: RECEIPT_DISCLAIMER_HI,
+    };
+
+    const svgString = generateReceiptSvg(receiptData);
+    return new Response(svgString, {
+      status: 200,
+      headers: {
+        "Content-Type": "image/svg+xml",
+        "Content-Disposition": `inline; filename="receipt-${receipt.donationId}.svg"`,
+      },
+    });
+  });
+
+  app.openapi(createSubscriptionRoute, async (c) => {
+    const id = parseFundId(c.req.valid("param").fundId);
+    if (!id.ok) throw new ApiError("not_found");
+    const resource = await donationResource(id.value);
+    if (!deps.policy.canDonate(resource)) throw new ApiError("not_found");
+
+    const input = c.req.valid("json");
+    const subStore = deps.fundSubscriptionStore ?? new MemoryFundSubscriptionStore();
+    const sub = await subStore.subscribe({
+      fundId: id.value,
+      contact: input.contact,
+      channel: input.channel,
+      weeklySummary: input.weeklySummary,
+      instantAlerts: input.instantAlerts,
+    });
+
+    return c.json(
+      {
+        id: sub.id,
+        fundId: sub.fundId,
+        channel: sub.channel,
+        weeklySummary: sub.weeklySummary,
+        instantAlerts: sub.instantAlerts,
+        status: sub.status,
+        createdAt: sub.createdAt.toISOString(),
+      },
+      201,
+    );
+  });
+
+  app.openapi(unsubscribeRoute, async (c) => {
+    const { token } = c.req.valid("json");
+    const subStore = deps.fundSubscriptionStore ?? new MemoryFundSubscriptionStore();
+    const existing = await subStore.getByToken(token);
+    if (!existing) throw new ApiError("not_found");
+    await subStore.unsubscribe(token);
+
+    return c.json(
+      {
+        success: true,
+        fundId: existing.fundId,
+        status: "unsubscribed" as const,
+        unsubscribedAt: new Date().toISOString(),
+      },
+      200,
+    );
+  });
+
+  app.openapi(unsubscribeGetRoute, async (c) => {
+    const { token } = c.req.valid("query");
+    const subStore = deps.fundSubscriptionStore ?? new MemoryFundSubscriptionStore();
+    const existing = await subStore.getByToken(token);
+    if (!existing) throw new ApiError("not_found");
+
+    return c.json(
+      {
+        success: true,
+        fundId: existing.fundId,
+        status: existing.status,
+        requiresConfirmation: true as const,
+      },
+      200,
     );
   });
 

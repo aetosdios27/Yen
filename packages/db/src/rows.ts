@@ -172,6 +172,7 @@ export const notificationOutboxRowSchema = z.object({
     "objection_raised",
     "weekly_summary",
     "fund_alert",
+    "large_expense_alert",
   ]),
   template_data: z.json(),
   preferred_channel: z.enum(["whatsapp", "sms", "email"]),
@@ -282,10 +283,26 @@ export const bankTransactionRowSchema = z.object({
   created_at: z.date(),
 });
 
+export const fundSubscriptionRowSchema = z.object({
+  id: z.string().uuid(),
+  fund_id: fundId,
+  contact: z.string(),
+  contact_type: z.enum(["email", "phone"]),
+  channel: z.enum(["whatsapp", "email", "sms"]),
+  weekly_summary: z.boolean(),
+  instant_alerts: z.boolean(),
+  status: z.enum(["active", "unsubscribed"]),
+  unsubscribe_token: z.string(),
+  created_at: z.date(),
+  updated_at: z.date(),
+  unsubscribed_at: z.date().nullable(),
+});
+
 export type NotificationOutboxRow = z.infer<typeof notificationOutboxRowSchema>;
 export type UserNotificationPreferencesRow = z.infer<typeof userNotificationPreferencesRowSchema>;
 export type FundNotificationDailyUsageRow = z.infer<typeof fundNotificationDailyUsageRowSchema>;
 export type NotificationDeadLetterRow = z.infer<typeof notificationDeadLetterRowSchema>;
+export type FundSubscriptionRow = z.infer<typeof fundSubscriptionRowSchema>;
 export type FundEventRow = z.infer<typeof fundEventRowSchema>;
 export type UserApprovalPinRow = z.infer<typeof userApprovalPinRowSchema>;
 export type AuthOtpRow = z.infer<typeof authOtpRowSchema>;

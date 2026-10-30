@@ -2339,3 +2339,200 @@ export const manualMatchRoute = createRoute({
     503: overloadedResponse,
   },
 });
+
+const receiptParams = z.object({
+  receiptId: z.string().openapi({
+    description: "Donation pledge UUID or 12-digit UTR reference",
+    param: { name: "receiptId", in: "path" },
+  }),
+});
+
+export const donorReceiptSchema = z
+  .object({
+    donationId: z.string().uuid(),
+    fundId: z.string().uuid(),
+    fundName: z.string(),
+    amountPaise: paiseWire,
+    utr: z.string().regex(/^[0-9]{12}$/),
+    donorDisplayName: z.string().optional(),
+    donorNameChoice: z.enum(["full", "initials", "anonymous"]).optional(),
+    status: z.enum(["pledged", "verified", "rejected"]),
+    createdAt: z.string(),
+    verifiedAt: z.string().optional(),
+    proofUrl: z.string().optional(),
+    onChainRoot: z.string().optional(),
+    onChainTxHash: z.string().optional(),
+    isTaxReceipt: z.literal(false),
+    disclaimerEn: z.string(),
+    disclaimerHi: z.string(),
+  })
+  .strict()
+  .openapi("DonorReceipt");
+
+export const getReceiptRoute = createRoute({
+  method: "get",
+  path: "/v1/receipts/{receiptId}",
+  tags: ["receipts"],
+  operationId: "getReceipt",
+  description:
+    "Retrieves public verified donation certificate and receipt details for a donor by either donation pledge UUID or 12-digit UTR. Works without login and reveals only that donor's own donation.",
+  request: { params: receiptParams },
+  responses: {
+    200: jsonResponse(donorReceiptSchema, "Donor donation receipt details"),
+    ...publicErrors,
+  },
+});
+
+export const getReceiptPdfRoute = createRoute({
+  method: "get",
+  path: "/v1/receipts/{receiptId}/pdf",
+  tags: ["receipts"],
+  operationId: "getReceiptPdf",
+  description:
+    "Downloads printable PDF-1.4 donor donation receipt with QR code, bilingual non-80G disclaimers, and verification link.",
+  request: { params: receiptParams },
+  responses: {
+    200: {
+      description: "Binary PDF receipt file",
+      headers: {
+        ...responseHeaders,
+        "content-type": { schema: { type: "string", example: "application/pdf" } },
+        "content-disposition": { schema: { type: "string" } },
+      },
+      content: { "application/pdf": { schema: { type: "string", format: "binary" } } },
+    },
+    ...publicErrors,
+  },
+});
+
+export const getReceiptSvgRoute = createRoute({
+  method: "get",
+  path: "/v1/receipts/{receiptId}/svg",
+  tags: ["receipts"],
+  operationId: "getReceiptSvg",
+  description:
+    "Retrieves vector SVG donor donation receipt certificate with QR code and bilingual non-80G disclaimers.",
+  request: { params: receiptParams },
+  responses: {
+    200: {
+      description: "Vector SVG receipt image",
+      headers: {
+        ...responseHeaders,
+        "content-type": { schema: { type: "string", example: "image/svg+xml" } },
+        "content-disposition": { schema: { type: "string" } },
+      },
+      content: { "image/svg+xml": { schema: { type: "string" } } },
+    },
+    ...publicErrors,
+  },
+});
+
+export const createFundSubscriptionInput = z
+  .object({
+    contact: z.string().trim().min(3).max(120).openapi({
+      description: "Phone number (E.164 or 10-digit Indian mobile) or email address",
+    }),
+    contactType: z.enum(["email", "phone"]),
+    channel: z.enum(["email", "whatsapp", "sms"]).default("whatsapp"),
+    weeklySummary: z.boolean().default(true),
+    instantAlerts: z.boolean().default(true),
+  })
+  .strict()
+  .openapi("CreateFundSubscriptionInput");
+
+export const fundSubscriptionSchema = z
+  .object({
+    id: z.string().uuid(),
+    fundId: z.string().uuid(),
+    channel: z.enum(["email", "whatsapp", "sms"]),
+    weeklySummary: z.boolean(),
+    instantAlerts: z.boolean(),
+    status: z.enum(["active", "unsubscribed"]),
+    createdAt: z.string(),
+  })
+  .strict()
+  .openapi("FundSubscription");
+
+export const createSubscriptionRoute = createRoute({
+  method: "post",
+  path: "/v1/funds/{fundId}/subscriptions",
+  tags: ["subscriptions"],
+  operationId: "createSubscription",
+  description:
+    "Subscribes a donor or supporter to periodic fund updates (weekly summary from events, instant alerts for objections or large expenses). Protected against PII leakage in responses.",
+  request: {
+    params: fundIdParam,
+    body: {
+      required: true,
+      content: { "application/json": { schema: createFundSubscriptionInput } },
+    },
+  },
+  responses: {
+    201: jsonResponse(fundSubscriptionSchema, "Subscription created or updated"),
+    400: protectedErrors[400],
+    ...publicErrors,
+  },
+});
+
+export const unsubscribeInput = z
+  .object({
+    token: z.string().regex(/^[0-9a-f]{64}$/, "Valid 64-character unsubscribe token required"),
+  })
+  .strict()
+  .openapi("UnsubscribeInput");
+
+export const unsubscribeResultSchema = z
+  .object({
+    success: z.boolean(),
+    fundId: z.string().uuid(),
+    status: z.literal("unsubscribed"),
+    unsubscribedAt: z.string(),
+  })
+  .strict()
+  .openapi("UnsubscribeResult");
+
+export const unsubscribeRoute = createRoute({
+  method: "post",
+  path: "/v1/subscriptions/unsubscribe",
+  tags: ["subscriptions"],
+  operationId: "unsubscribe",
+  description:
+    "Honors one-tap unsubscribe immediately using the 64-character unguessable token included in every notification.",
+  request: {
+    body: { required: true, content: { "application/json": { schema: unsubscribeInput } } },
+  },
+  responses: {
+    200: jsonResponse(unsubscribeResultSchema, "Successfully unsubscribed"),
+    400: protectedErrors[400],
+    ...publicErrors,
+  },
+});
+
+export const unsubscribeStatusSchema = z
+  .object({
+    success: z.boolean(),
+    fundId: z.string().uuid(),
+    status: z.enum(["active", "unsubscribed"]),
+    requiresConfirmation: z.literal(true),
+  })
+  .strict()
+  .openapi("UnsubscribeStatusResult");
+
+export const unsubscribeGetRoute = createRoute({
+  method: "get",
+  path: "/v1/subscriptions/unsubscribe",
+  tags: ["subscriptions"],
+  operationId: "unsubscribeGet",
+  description:
+    "Validates an unsubscribe token without mutating subscription state, preventing accidental unsubscribe by mail scanner prefetchers. Requires confirmation via POST to complete unsubscribe.",
+  request: {
+    query: z.object({
+      token: z.string().regex(/^[0-9a-f]{64}$/, "Valid 64-character unsubscribe token required"),
+    }),
+  },
+  responses: {
+    200: jsonResponse(unsubscribeStatusSchema, "Valid unsubscribe token; confirmation required"),
+    400: protectedErrors[400],
+    ...publicErrors,
+  },
+});

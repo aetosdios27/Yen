@@ -4,6 +4,7 @@ import { serve } from "@hono/node-server";
 import { createSql, ensureFundPseudonym, type Sql } from "@yen/db";
 import {
   ExotelSmsProvider,
+  PostgresFundSubscriptionStore,
   PostgresNotificationStore,
   parseExotelSmsTemplates,
   parseWhatsAppTemplates,
@@ -32,6 +33,7 @@ import { PostgresPayeeProfileStore } from "./payee-rules/profile-store.js";
 import { PostgresPinStore } from "./pin/index.js";
 import { PostgresPrivacyStore } from "./privacy-store.js";
 import { PostgresPublicFundReadStore } from "./public-fund-store.js";
+import { PostgresReceiptStore } from "./receipt-store.js";
 import { PostgresReconciliationStore } from "./reconciliation/postgres-store.js";
 import { useMemoryStore } from "./server-config.js";
 import {
@@ -334,6 +336,8 @@ export async function startServer(
     isShuttingDown: () => lifecycleInstance?.isShuttingDown ?? false,
     ...(sql ? { donationPledgeStore: new PostgresDonationPledgeStore(sql) } : {}),
     ...(sql ? { publicFundReadStore: new PostgresPublicFundReadStore(sql) } : {}),
+    ...(sql ? { receiptStore: new PostgresReceiptStore(sql) } : {}),
+    ...(sql ? { fundSubscriptionStore: new PostgresFundSubscriptionStore(sql) } : {}),
     ...(sql ? { reconciliationStore: new PostgresReconciliationStore(sql) } : {}),
     ...(sql ? { displayNameStore: new PostgresDisplayNameStore(sql) } : {}),
     ...(sql ? { expenseStore: new PostgresExpenseStore(sql) } : {}),

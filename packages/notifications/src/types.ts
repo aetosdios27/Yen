@@ -24,6 +24,7 @@ export const notificationTemplateIdSchema = z.enum([
   "objection_raised",
   "weekly_summary",
   "fund_alert",
+  "large_expense_alert",
 ]);
 export type NotificationTemplateId = z.infer<typeof notificationTemplateIdSchema>;
 
@@ -61,8 +62,15 @@ export const objectionRaisedDataSchema = z.object({
   expense_id: z.string().min(1),
   objection_id: z.string().min(1),
   reason: z.string().optional(),
+  unsubscribe_url: z.string().optional(),
 });
 export type ObjectionRaisedData = z.infer<typeof objectionRaisedDataSchema>;
+
+export const spendingCategoryItemSchema = z.object({
+  category: z.string().min(1),
+  amount_paise: z.union([z.number().int().nonnegative(), z.bigint().nonnegative()]),
+});
+export type SpendingCategoryItem = z.infer<typeof spendingCategoryItemSchema>;
 
 export const weeklySummaryDataSchema = z.object({
   fund_title: z.string().min(1),
@@ -72,6 +80,8 @@ export const weeklySummaryDataSchema = z.object({
   total_donations_paise: z.union([z.number().int().nonnegative(), z.bigint().nonnegative()]),
   expenses_count: z.number().int().nonnegative(),
   total_expenses_paise: z.union([z.number().int().nonnegative(), z.bigint().nonnegative()]),
+  breakdown: z.array(spendingCategoryItemSchema).optional(),
+  unsubscribe_url: z.string().optional(),
 });
 export type WeeklySummaryData = z.infer<typeof weeklySummaryDataSchema>;
 
@@ -84,6 +94,15 @@ export const fundAlertDataSchema = z.object({
 });
 export type FundAlertData = z.infer<typeof fundAlertDataSchema>;
 
+export const largeExpenseAlertDataSchema = z.object({
+  fund_title: z.string().min(1),
+  expense_id: z.string().min(1),
+  amount_paise: z.union([z.number().int().nonnegative(), z.bigint().nonnegative()]),
+  description: z.string().optional(),
+  unsubscribe_url: z.string().optional(),
+});
+export type LargeExpenseAlertData = z.infer<typeof largeExpenseAlertDataSchema>;
+
 export const templateDataSchemas = {
   approval_needed: approvalNeededDataSchema,
   approved_rejected: approvedRejectedDataSchema,
@@ -91,6 +110,7 @@ export const templateDataSchemas = {
   objection_raised: objectionRaisedDataSchema,
   weekly_summary: weeklySummaryDataSchema,
   fund_alert: fundAlertDataSchema,
+  large_expense_alert: largeExpenseAlertDataSchema,
 } as const;
 
 export type TemplateDataMap = {
@@ -100,6 +120,7 @@ export type TemplateDataMap = {
   objection_raised: ObjectionRaisedData;
   weekly_summary: WeeklySummaryData;
   fund_alert: FundAlertData;
+  large_expense_alert: LargeExpenseAlertData;
 };
 
 export const enqueueNotificationInputSchema = z.object({

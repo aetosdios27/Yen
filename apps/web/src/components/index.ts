@@ -36,6 +36,11 @@ export { InstallPrompt, type InstallPromptProps } from "./install-prompt";
 export { LocaleSwitcher, type LocaleSwitcherProps } from "./locale-switcher";
 export { Money, type MoneyProps } from "./money";
 export { QrCode, type QrCodeProps } from "./qr-code";
+export {
+  type ReceiptData,
+  ReceiptView,
+  type ReceiptViewProps,
+} from "./receipt-view";
 export { RejectionModal, type RejectionModalProps } from "./rejection-modal";
 export { ServiceWorkerRegistration } from "./service-worker-registration";
 export { type Status, StatusBadge, type StatusBadgeProps } from "./status-badge";

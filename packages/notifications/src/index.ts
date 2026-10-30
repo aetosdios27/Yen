@@ -1,3 +1,10 @@
+export {
+  type AlertTriggerCheck,
+  type AlertTriggerKind,
+  checkAlertTrigger,
+  createAlertsForEvent,
+  DEFAULT_LARGE_EXPENSE_THRESHOLD_PAISE,
+} from "./alerts.js";
 export { DeliveryChannelBridge } from "./channels/delivery-bridge.js";
 export {
   EMAIL_MESSAGE_COST_PAISE,
@@ -71,6 +78,16 @@ export {
   PostgresNotificationStore,
   type RecipientContactInfo,
 } from "./store.js";
+export {
+  buildUnsubscribeUrl,
+  determineContactType,
+  type FundSubscription,
+  type FundSubscriptionStore,
+  generateUnsubscribeToken,
+  MemoryFundSubscriptionStore,
+  PostgresFundSubscriptionStore,
+  type SubscribeInput,
+} from "./subscriptions.js";
 export { renderNotificationTemplate } from "./templates.js";
 export {
   type ApprovalNeededData,
@@ -100,6 +117,10 @@ export {
   type WeeklySummaryData,
   weeklySummaryDataSchema,
 } from "./types.js";
+export {
+  generateWeeklySummaryFromEvents,
+  type WeeklySummaryResult,
+} from "./weekly-summary.js";
 export {
   type BatchProcessingSummary,
   NotificationsWorker,

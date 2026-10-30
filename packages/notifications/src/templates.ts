@@ -102,16 +102,22 @@ export function renderNotificationTemplate<T extends NotificationTemplateId>(
       const data = parsed as ObjectionRaisedData;
       const reasonStr = data.reason ? ` Details: ${data.reason}.` : "";
       const hiReasonStr = data.reason ? ` विवरण: ${data.reason}।` : "";
+      const unsubEn = data.unsubscribe_url
+        ? `\n\nUnsubscribe with one tap: ${data.unsubscribe_url}`
+        : "";
+      const unsubHi = data.unsubscribe_url
+        ? `\n\nसदस्यता समाप्त करने के लिए एक बार टैप करें: ${data.unsubscribe_url}`
+        : "";
       if (locale === "hi") {
         return {
           subject: `आपत्ति दर्ज की गई: ${data.fund_title}`,
-          body: `आपत्ति दर्ज की गई: ${data.fund_title} में खर्च पर एक आपत्ति दर्ज की गई है।${hiReasonStr}`,
+          body: `आपत्ति दर्ज की गई: ${data.fund_title} में खर्च पर एक आपत्ति दर्ज की गई है।${hiReasonStr}${unsubHi}`,
           locale: "hi",
         };
       }
       return {
         subject: `Objection raised: ${data.fund_title}`,
-        body: `Objection raised: An objection was raised on an expense in ${data.fund_title}.${reasonStr}`,
+        body: `Objection raised: An objection was raised on an expense in ${data.fund_title}.${reasonStr}${unsubEn}`,
         locale: "en",
       };
     }
@@ -120,16 +126,66 @@ export function renderNotificationTemplate<T extends NotificationTemplateId>(
       const data = parsed as WeeklySummaryData;
       const donationsTotal = formatInr(toPaise(data.total_donations_paise));
       const expensesTotal = formatInr(toPaise(data.total_expenses_paise));
+      const unsubEn = data.unsubscribe_url
+        ? `\n\nUnsubscribe with one tap: ${data.unsubscribe_url}`
+        : "";
+      const unsubHi = data.unsubscribe_url
+        ? `\n\nसदस्यता समाप्त करने के लिए एक बार टैप करें: ${data.unsubscribe_url}`
+        : "";
+
+      if (data.breakdown && data.breakdown.length > 0) {
+        const breakdownStr = data.breakdown
+          .map((item) => `${item.category} ${formatInr(toPaise(item.amount_paise))}`)
+          .join(", ");
+        if (locale === "hi") {
+          return {
+            subject: `साप्ताहिक विवरण: ${data.fund_title}`,
+            body: `साप्ताहिक विवरण (${data.fund_title}): इस सप्ताह ${expensesTotal} खर्च हुए: ${breakdownStr}${unsubHi}`,
+            locale: "hi",
+          };
+        }
+        return {
+          subject: `Weekly summary: ${data.fund_title}`,
+          body: `Weekly summary for ${data.fund_title}: ${expensesTotal} spent this week: ${breakdownStr}${unsubEn}`,
+          locale: "en",
+        };
+      }
+
       if (locale === "hi") {
         return {
           subject: `साप्ताहिक विवरण: ${data.fund_title}`,
-          body: `साप्ताहिक विवरण (${data.fund_title}): ${data.donations_count} दान (${donationsTotal}) प्राप्त, ${data.expenses_count} खर्च (${expensesTotal}) किए गए।`,
+          body: `साप्ताहिक विवरण (${data.fund_title}): ${data.donations_count} दान (${donationsTotal}) प्राप्त, ${data.expenses_count} खर्च (${expensesTotal}) किए गए।${unsubHi}`,
           locale: "hi",
         };
       }
       return {
         subject: `Weekly summary: ${data.fund_title}`,
-        body: `Weekly summary for ${data.fund_title}: ${data.donations_count} donations (${donationsTotal}) received, ${data.expenses_count} expenses (${expensesTotal}) spent.`,
+        body: `Weekly summary for ${data.fund_title}: ${data.donations_count} donations (${donationsTotal}) received, ${data.expenses_count} expenses (${expensesTotal}) spent.${unsubEn}`,
+        locale: "en",
+      };
+    }
+
+    case "large_expense_alert": {
+      const data = parsed as import("./types.js").LargeExpenseAlertData;
+      const amountStr = formatInr(toPaise(data.amount_paise));
+      const descStr = data.description ? ` for ${data.description}` : "";
+      const hiDescStr = data.description ? ` (${data.description})` : "";
+      const unsubEn = data.unsubscribe_url
+        ? `\n\nUnsubscribe with one tap: ${data.unsubscribe_url}`
+        : "";
+      const unsubHi = data.unsubscribe_url
+        ? `\n\nसदस्यता समाप्त करने के लिए एक बार टैप करें: ${data.unsubscribe_url}`
+        : "";
+      if (locale === "hi") {
+        return {
+          subject: `बड़ा खर्च सूचना: ${data.fund_title}`,
+          body: `बड़ा खर्च सूचना: ${data.fund_title} में${hiDescStr} ${amountStr} का खर्च दर्ज हुआ।${unsubHi}`,
+          locale: "hi",
+        };
+      }
+      return {
+        subject: `Large expense alert: ${data.fund_title}`,
+        body: `Large expense alert: An expense of ${amountStr}${descStr} was recorded for ${data.fund_title}.${unsubEn}`,
         locale: "en",
       };
     }
