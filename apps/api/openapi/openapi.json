@@ -4127,6 +4127,18 @@
               "cache-control": {
                 "schema": { "type": "string" },
                 "description": "Public short shared cache; authenticated tiers are private and no-store"
+              },
+              "vary": {
+                "schema": { "type": "string" },
+                "description": "Separates the public and signed-in representations of one URL"
+              },
+              "x-yen-data-as-of": {
+                "schema": { "type": "string", "format": "date-time" },
+                "description": "When the stale copy was refreshed, set only when the origin is unavailable"
+              },
+              "warning": {
+                "schema": { "type": "string" },
+                "description": "RFC 7234 warning when the response is served stale"
               }
             },
             "content": {
@@ -4164,6 +4176,41 @@
                   ],
                   "additionalProperties": false
                 }
+              }
+            }
+          },
+          "304": {
+            "description": "The cached copy still matches the current fund data; no body is returned",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              },
+              "etag": {
+                "schema": { "type": "string" },
+                "description": "Representation validator for public-tier responses"
+              },
+              "cache-control": {
+                "schema": { "type": "string" },
+                "description": "Public short shared cache; authenticated tiers are private and no-store"
+              },
+              "vary": {
+                "schema": { "type": "string" },
+                "description": "Separates the public and signed-in representations of one URL"
+              },
+              "x-yen-data-as-of": {
+                "schema": { "type": "string", "format": "date-time" },
+                "description": "When the stale copy was refreshed, set only when the origin is unavailable"
+              },
+              "warning": {
+                "schema": { "type": "string" },
+                "description": "RFC 7234 warning when the response is served stale"
               }
             }
           },
@@ -4290,6 +4337,18 @@
               "cache-control": {
                 "schema": { "type": "string" },
                 "description": "Public short shared cache; authenticated tiers are private and no-store"
+              },
+              "vary": {
+                "schema": { "type": "string" },
+                "description": "Separates the public and signed-in representations of one URL"
+              },
+              "x-yen-data-as-of": {
+                "schema": { "type": "string", "format": "date-time" },
+                "description": "When the stale copy was refreshed, set only when the origin is unavailable"
+              },
+              "warning": {
+                "schema": { "type": "string" },
+                "description": "RFC 7234 warning when the response is served stale"
               }
             },
             "content": {
@@ -4320,6 +4379,41 @@
                   "required": ["fundId", "categories", "dataGaps"],
                   "additionalProperties": false
                 }
+              }
+            }
+          },
+          "304": {
+            "description": "The cached copy still matches the current fund data; no body is returned",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              },
+              "etag": {
+                "schema": { "type": "string" },
+                "description": "Representation validator for public-tier responses"
+              },
+              "cache-control": {
+                "schema": { "type": "string" },
+                "description": "Public short shared cache; authenticated tiers are private and no-store"
+              },
+              "vary": {
+                "schema": { "type": "string" },
+                "description": "Separates the public and signed-in representations of one URL"
+              },
+              "x-yen-data-as-of": {
+                "schema": { "type": "string", "format": "date-time" },
+                "description": "When the stale copy was refreshed, set only when the origin is unavailable"
+              },
+              "warning": {
+                "schema": { "type": "string" },
+                "description": "RFC 7234 warning when the response is served stale"
               }
             }
           },
@@ -4446,6 +4540,18 @@
               "cache-control": {
                 "schema": { "type": "string" },
                 "description": "Public short shared cache; authenticated tiers are private and no-store"
+              },
+              "vary": {
+                "schema": { "type": "string" },
+                "description": "Separates the public and signed-in representations of one URL"
+              },
+              "x-yen-data-as-of": {
+                "schema": { "type": "string", "format": "date-time" },
+                "description": "When the stale copy was refreshed, set only when the origin is unavailable"
+              },
+              "warning": {
+                "schema": { "type": "string" },
+                "description": "RFC 7234 warning when the response is served stale"
               }
             },
             "content": {
@@ -4496,6 +4602,41 @@
                   "required": ["fundId", "items", "dataGaps"],
                   "additionalProperties": false
                 }
+              }
+            }
+          },
+          "304": {
+            "description": "The cached copy still matches the current fund data; no body is returned",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              },
+              "etag": {
+                "schema": { "type": "string" },
+                "description": "Representation validator for public-tier responses"
+              },
+              "cache-control": {
+                "schema": { "type": "string" },
+                "description": "Public short shared cache; authenticated tiers are private and no-store"
+              },
+              "vary": {
+                "schema": { "type": "string" },
+                "description": "Separates the public and signed-in representations of one URL"
+              },
+              "x-yen-data-as-of": {
+                "schema": { "type": "string", "format": "date-time" },
+                "description": "When the stale copy was refreshed, set only when the origin is unavailable"
+              },
+              "warning": {
+                "schema": { "type": "string" },
+                "description": "RFC 7234 warning when the response is served stale"
               }
             }
           },
@@ -4616,11 +4757,50 @@
               "cache-control": {
                 "schema": { "type": "string" },
                 "description": "Visibility-tier cache policy"
+              },
+              "vary": {
+                "schema": { "type": "string" },
+                "description": "Separates the public and signed-in representations of one URL"
+              },
+              "x-yen-data-as-of": {
+                "schema": { "type": "string", "format": "date-time" },
+                "description": "When the stale copy was refreshed, set only when the origin is unavailable"
+              },
+              "warning": {
+                "schema": { "type": "string" },
+                "description": "RFC 7234 warning when the response is served stale"
               }
             },
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/PublicExpenseDetail" }
+              }
+            }
+          },
+          "304": {
+            "description": "The cached copy still matches the current expense data; no body is returned",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "etag": { "schema": { "type": "string" }, "description": "Representation validator" },
+              "cache-control": {
+                "schema": { "type": "string" },
+                "description": "Visibility-tier cache policy"
+              },
+              "vary": {
+                "schema": { "type": "string" },
+                "description": "Separates the public and signed-in representations of one URL"
+              },
+              "x-yen-data-as-of": {
+                "schema": { "type": "string", "format": "date-time" },
+                "description": "When the stale copy was refreshed, set only when the origin is unavailable"
+              },
+              "warning": {
+                "schema": { "type": "string" },
+                "description": "RFC 7234 warning when the response is served stale"
               }
             }
           },
@@ -4725,6 +4905,18 @@
                 "schema": { "type": "string" },
                 "description": "Visibility-tier cache policy"
               },
+              "vary": {
+                "schema": { "type": "string" },
+                "description": "Separates the public and signed-in representations of one URL"
+              },
+              "x-yen-data-as-of": {
+                "schema": { "type": "string", "format": "date-time" },
+                "description": "When the stale copy was refreshed, set only when the origin is unavailable"
+              },
+              "warning": {
+                "schema": { "type": "string" },
+                "description": "RFC 7234 warning when the response is served stale"
+              },
               "content-disposition": {
                 "schema": { "type": "string" },
                 "description": "Forces evidence response to download as an attachment"
@@ -4741,6 +4933,33 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/PublicExpenseProofs" }
+              }
+            }
+          },
+          "304": {
+            "description": "The cached copy still matches the current expense data; no body is returned",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "etag": { "schema": { "type": "string" }, "description": "Representation validator" },
+              "cache-control": {
+                "schema": { "type": "string" },
+                "description": "Visibility-tier cache policy"
+              },
+              "vary": {
+                "schema": { "type": "string" },
+                "description": "Separates the public and signed-in representations of one URL"
+              },
+              "x-yen-data-as-of": {
+                "schema": { "type": "string", "format": "date-time" },
+                "description": "When the stale copy was refreshed, set only when the origin is unavailable"
+              },
+              "warning": {
+                "schema": { "type": "string" },
+                "description": "RFC 7234 warning when the response is served stale"
               }
             }
           },
