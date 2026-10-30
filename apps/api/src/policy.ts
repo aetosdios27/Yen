@@ -11,6 +11,8 @@ import {
   unsafeMarkRedactedForDevPolicy,
 } from "@yen/policy";
 import { type FundId, type Paise, paise, parseFundId } from "@yen/shared";
+
+export const DEFAULT_OBJECTION_WINDOW_HOURS = 48;
 import {
   type addMemberResponse,
   addMemberResponse as addMemberResponseSchema,

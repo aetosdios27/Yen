@@ -16,6 +16,8 @@ import {
   submitExpenseInTx,
 } from "@yen/ledger";
 import type { FraudPolicy } from "@yen/policy";
+import { ApiError } from "./errors.js";
+import { DEFAULT_OBJECTION_WINDOW_HOURS } from "./policy.js";
 
 type ExpenseRow = { expense_data: ExpenseRequest | string };
 
@@ -90,7 +92,7 @@ async function persist(tx: TransactionSql, expense: ExpenseRequest): Promise<voi
 
 const DEFAULT_EXPENSE_POLICY: FundPolicy = {
   approvalQuorum: 2,
-  objectionWindowHours: 24,
+  objectionWindowHours: DEFAULT_OBJECTION_WINDOW_HOURS,
   autoExpireHours: 72,
 };
 
@@ -170,7 +172,20 @@ export class PostgresExpenseStore implements ExpenseStore {
         updated = result.updatedExpense;
       } else if (current.status === "approved" && expense.status === "paid") {
         const transactionId = expense.bankTransactionId;
-        if (!transactionId) throw new Error("Paid expense is missing its bank transaction ID");
+        if (!transactionId) throw new ApiError("validation_failed");
+        const existing = await tx<{ id: string; fund_id: string; type: string; amount_paise: string | number; reconciliation_status: string; matched_expense_id: string | null }[]>`
+          SELECT id, fund_id, type, amount_paise, reconciliation_status, matched_expense_id
+          FROM bank_transactions WHERE id = ${transactionId}
+        `;
+        if (!existing[0]) throw new ApiError("not_found");
+        const bankTransaction = existing[0];
+        const usable =
+          bankTransaction.type === "debit" &&
+          bankTransaction.fund_id === expense.fundId &&
+          String(bankTransaction.amount_paise) === String(expense.amountPaise) &&
+          bankTransaction.reconciliation_status === "unmatched" &&
+          bankTransaction.matched_expense_id === null;
+        if (!usable) throw new ApiError("conflict");
         const linked = await tx<{ id: string }[]>`
           UPDATE bank_transactions SET matched_expense_id = ${expense.id}, reconciliation_status = 'matched'
           WHERE id = ${transactionId} AND fund_id = ${expense.fundId} AND type = 'debit'
@@ -178,8 +193,7 @@ export class PostgresExpenseStore implements ExpenseStore {
             AND matched_expense_id IS NULL
           RETURNING id
         `;
-        if (!linked[0])
-          throw new Error("Bank transaction is not an unmatched ingested debit for this expense");
+        if (!linked[0]) throw new ApiError("conflict");
         const result = await payExpenseInTx({
           tx,
           expense: current,

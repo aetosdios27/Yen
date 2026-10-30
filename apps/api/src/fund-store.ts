@@ -4,6 +4,7 @@ import { ensureFundAccounts } from "@yen/ledger";
 import { type FundId, paise, parseOrgId } from "@yen/shared";
 import type { FundStore } from "./dependencies.js";
 import type { FundRecord } from "./policy.js";
+import { DEFAULT_OBJECTION_WINDOW_HOURS } from "./policy.js";
 
 interface FundRow {
   id: string;
@@ -70,7 +71,7 @@ export class PostgresFundStore implements FundStore {
     if (value === undefined) return undefined;
     const policy = decodePolicy(value);
     const approvalQuorum = policy.approvalQuorum ?? policy.approval_quorum ?? 2;
-    const objectionWindowHours = policy.objectionWindowHours ?? policy.objection_window_hours ?? 0;
+    const objectionWindowHours = policy.objectionWindowHours ?? policy.objection_window_hours ?? DEFAULT_OBJECTION_WINDOW_HOURS;
     if (
       typeof approvalQuorum !== "number" ||
       !Number.isSafeInteger(approvalQuorum) ||

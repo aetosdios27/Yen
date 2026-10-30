@@ -1,3 +1,4 @@
+import { DEFAULT_OBJECTION_WINDOW_HOURS } from "./policy.js";
 import { randomBytes } from "node:crypto";
 import type { AppendEventInput, StoredFundEvent, WaitlistEntry } from "@yen/db";
 import { uuidv7 } from "@yen/db";
@@ -326,7 +327,7 @@ export class MemoryFundStore implements FundStore {
   }) {
     const approvalQuorum = Number(input.policy.approvalQuorum ?? input.policy.approval_quorum ?? 2);
     const objectionWindowHours = Number(
-      input.policy.objectionWindowHours ?? input.policy.objection_window_hours ?? 0,
+      input.policy.objectionWindowHours ?? input.policy.objection_window_hours ?? DEFAULT_OBJECTION_WINDOW_HOURS,
     );
     const threshold = input.policy.requireDeviceSignatureAbove ?? null;
     this.policies.set(input.fundId, {

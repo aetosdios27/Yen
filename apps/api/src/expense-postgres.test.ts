@@ -615,7 +615,7 @@ databaseSuite("Postgres expense store", (sql, url) => {
           actorUserId: userIds[0],
           policy: QUORUM_TWO,
         }),
-      ).rejects.toThrow("unmatched ingested debit");
+      ).rejects.toThrow("Resource not found");
       const bankTransactionId = uuidv7();
       await sql`
         INSERT INTO bank_transactions (
@@ -851,7 +851,7 @@ databaseSuite("Postgres expense store", (sql, url) => {
       { method: "POST", headers: { "idempotency-key": "trace-submit" } },
     );
     expect(submitResponse.status).toBe(200);
-    nowMs += 25 * 3_600_000;
+    nowMs += 49 * 3_600_000;
 
     for (const approverId of approverIds) {
       await pinService.setupPin(approverId, "482915", { userId: approverId });

@@ -151,6 +151,7 @@ import type {
   FundResource,
 } from "./policy.js";
 import { redactActionReceipt as redactReceipt } from "./policy.js";
+import { DEFAULT_OBJECTION_WINDOW_HOURS } from "./policy.js";
 import {
   type ErasureReport,
   PrivacyForbiddenError,
@@ -1061,7 +1062,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
   const defaultFundPolicy: FundPolicy = {
     approvalQuorum: 2,
-    objectionWindowHours: 24,
+    objectionWindowHours: DEFAULT_OBJECTION_WINDOW_HOURS,
     autoExpireHours: 72,
     requireDeviceSignatureAbove: null,
   };
