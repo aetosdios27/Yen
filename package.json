@@ -24,8 +24,8 @@
     "verify": "pnpm check && turbo run typecheck test build"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.6.3",
-    "@types/node": "^26.6.5",
+    "@biomejs/biome": "^2.6.4",
+    "@types/node": "^26.6.6",
     "@yen/db": "workspace:*",
     "@yen/shared": "workspace:*",
     "tsx": "4.23.15",
