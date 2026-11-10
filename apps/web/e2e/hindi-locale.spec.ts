@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { fundId } from "./support/backend";
+import { hostCanDispatchInput } from "./support/host";
 
 /**
  * Hindi QA: the app ships an explicit locale switcher (the browser locale
@@ -17,7 +18,11 @@ test.describe("hi-IN locale journey", () => {
     await expect(page.getByRole("heading", { level: 1 })).toContainText("जाँच");
   });
 
-  test("donation flow completes in Hindi", async ({ page }) => {
+  test("donation flow completes in Hindi", async ({ browserName, page }) => {
+    test.skip(
+      browserName === "webkit" && !(await hostCanDispatchInput(page)),
+      "this host cannot dispatch WebKit pointer input",
+    );
     const utr = `${(Date.now() % 900_000_000_000) + 100_000_000_000}`;
     await page.goto(`/funds/${fundId}/donate`);
     await page.getByLabel("Language").selectOption("hi");
