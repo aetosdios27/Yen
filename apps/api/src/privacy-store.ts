@@ -100,6 +100,8 @@ export class PostgresPrivacyStore implements PrivacyStore {
            SET ${column} = false, updated_at = EXCLUDED.updated_at`,
           [userId, new Date(now)],
         );
+        await tx`UPDATE fund_subscriptions s SET status = 'unsubscribed', unsubscribed_at = ${new Date(now)}, updated_at = ${new Date(now)}
+          FROM users u WHERE u.id = ${userId} AND s.contact = u.phone AND s.channel = ${channel} AND s.status = 'active'`;
         await tx`UPDATE notification_outbox SET status = 'skipped', last_error = 'Consent withdrawn',
           claim_token = NULL, lease_expires_at = NULL, updated_at = ${new Date(now)}
           WHERE user_id = ${userId} AND preferred_channel = ${channel}
@@ -200,6 +202,7 @@ export class PostgresPrivacyStore implements PrivacyStore {
           (SELECT count(*)::int FROM sessions WHERE user_id = ${userId} AND revoked_at IS NULL) AS sessions,
           (SELECT count(*)::int FROM sessions WHERE user_id = ${userId}) AS all_sessions,
           (SELECT count(*)::int FROM trusted_devices WHERE user_id = ${userId} AND revoked_at IS NULL) AS trusted_devices,
+          (SELECT count(*)::int FROM fund_subscriptions WHERE contact = ${phone}) AS subscriptions,
           (SELECT count(*)::int FROM owner_invites WHERE owner_id = ${userId} OR phone = ${phone}) AS invites,
           (SELECT count(*)::int FROM notification_outbox WHERE user_id = ${userId}) AS notifications,
           (SELECT count(*)::int FROM notification_dead_letter WHERE user_id = ${userId}) AS dead_letters,
@@ -230,6 +233,7 @@ export class PostgresPrivacyStore implements PrivacyStore {
         sessions: Number(counts[0]?.sessions ?? 0),
         trusted_devices: Number(counts[0]?.trusted_devices ?? 0),
         invites: Number(counts[0]?.invites ?? 0),
+        subscriptions: Number(counts[0]?.subscriptions ?? 0),
         notification_outbox: Number(counts[0]?.notifications ?? 0),
         notification_preferences: Number(counts[0]?.notification_preferences ?? 0),
         donation_contacts: Number(counts[0]?.donation_contacts ?? 0),
@@ -277,6 +281,7 @@ export class PostgresPrivacyStore implements PrivacyStore {
       await tx`DELETE FROM notification_dead_letter WHERE user_id = ${userId}`;
       await tx`DELETE FROM notification_outbox WHERE user_id = ${userId}`;
       await tx`DELETE FROM user_notification_preferences WHERE user_id = ${userId}`;
+      await tx`DELETE FROM fund_subscriptions WHERE contact = ${phone}`;
       await tx`DELETE FROM owner_invites WHERE owner_id = ${userId} OR phone = ${phone}`;
       await tx`DELETE FROM user_approval_pins WHERE user_id = ${userId}`;
       // Device credentials are access material. Erasure keeps the users row (it is anonymized,

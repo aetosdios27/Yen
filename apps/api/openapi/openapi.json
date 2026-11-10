@@ -808,10 +808,12 @@
             "enum": ["email", "whatsapp", "sms"],
             "default": "whatsapp"
           },
+          "consent": { "type": "boolean", "enum": [true] },
+          "whatsappConsent": { "type": "boolean", "default": false },
           "weeklySummary": { "type": "boolean", "default": true },
           "instantAlerts": { "type": "boolean", "default": true }
         },
-        "required": ["contact", "contactType"],
+        "required": ["contact", "contactType", "consent"],
         "additionalProperties": false
       },
       "UnsubscribeResult": {

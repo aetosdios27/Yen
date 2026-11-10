@@ -81,6 +81,7 @@ export {
   verifyAllMigrationsForeignKeys,
 } from "./foreign-keys.js";
 export { migrate } from "./migrate.js";
+export { eraseVerifiedGuestContact } from "./privacy-contact.js";
 export {
   type EnsureFundPseudonymParams,
   ensureFundPseudonym,
