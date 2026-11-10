@@ -10,9 +10,12 @@
 # 2. yen-staging-chain-publication: signing key for chain publication.
 #    Its key policy is deliberately restrictive: the ONLY principal that
 #    can perform signing operations is the queue anchoring worker role.
-#    Even an account administrator must assume that role to sign a
-#    publication, which makes silent re-signing or key exfiltration from
-#    any other identity impossible at the policy level.
+#    An explicit Deny on kms:Sign excludes every other principal in the
+#    account, including the account root and any administrator role,
+#    because explicit Deny overrides Allow in the same or any attached
+#    IAM policy. An administrator who wants to sign would have to first
+#    edit the key policy itself, which is a CloudTrail-auditable mutation
+#    and leaves no silent path to re-signing or key exfiltration.
 # -----------------------------------------------------------------------------
 
 resource "aws_kms_key" "yen_staging_infra" {
@@ -91,6 +94,22 @@ resource "aws_kms_key" "yen_staging_chain_publication" {
           "kms:DescribeKey",
         ]
         Resource = "*"
+      },
+      {
+        # Explicit Deny beats every Allow, including the root admin
+        # statement above and any IAM policy attached anywhere in the
+        # account. Signing is therefore physically unreachable for any
+        # principal other than the anchoring worker role.
+        Sid       = "DenySignToEveryoneElse"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "kms:Sign"
+        Resource  = "*"
+        Condition = {
+          StringNotEquals = {
+            "aws:PrincipalArn" = aws_iam_role.yen_staging_anchoring_worker.arn
+          }
+        }
       },
     ]
   })
