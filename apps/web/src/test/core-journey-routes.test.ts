@@ -404,3 +404,152 @@ describe("journey 4: co-approver reviews and authorizes", () => {
     expect(screen.getByRole("button", { name: "Reject" })).toBeDefined();
   });
 });
+
+/**
+ * Every rendered journey screen is walked for internal anchors. A link is
+ * valid only if it points at a route the app router actually serves, or at
+ * an in-page anchor target that exists in the rendered document.
+ */
+function assertInternalAnchors(container: HTMLElement, patterns: readonly string[]) {
+  for (const anchor of Array.from(container.querySelectorAll("a[href]"))) {
+    const href = anchor.getAttribute("href") ?? "";
+    if (href.startsWith("#")) {
+      expect(
+        document.getElementById(href.slice(1)),
+        `in-page anchor target for ${href}`,
+      ).not.toBeNull();
+      continue;
+    }
+    if (!href.startsWith("/") || href.startsWith("//")) {
+      // External, scheme-relative or non-HTTP links (upi:// intents) are out of scope.
+      continue;
+    }
+    const [pathname] = href.split(/[?#]/);
+    expect(
+      patterns.some((pattern) => matchesRoutePattern(pathname ?? "", pattern)),
+      `internal link ${href} resolves to an app route`,
+    ).toBe(true);
+  }
+}
+
+interface JourneyScreen {
+  readonly label: string;
+  readonly render: () => Promise<HTMLElement>;
+}
+
+const JOURNEY_SCREENS: readonly JourneyScreen[] = [
+  {
+    label: "/onboarding",
+    render: async () => (await renderJourneyScreen(createElement(OnboardingPage))).container,
+  },
+  {
+    label: "/invites/accept",
+    render: async () => {
+      searchParams.current = new URLSearchParams({ code: "invite-code" });
+      return (await renderJourneyScreen(createElement(InviteAcceptPage))).container;
+    },
+  },
+  {
+    label: "/funds/[fundId]",
+    render: async () => {
+      const ui = await FundPage({ params: Promise.resolve({ fundId: FUND_ID }) });
+      return (await renderJourneyScreen(ui)).container;
+    },
+  },
+  {
+    label: "/funds/[fundId]/donate",
+    render: async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            fundId: FUND_ID,
+            title: "RoboCup 2026 Asia Fund",
+            upiVpa: "robotics@yenbank",
+            upiPayeeName: "Robotics Club",
+          }),
+        }),
+      );
+      try {
+        const ui = await DonatePage({ params: Promise.resolve({ fundId: FUND_ID }) });
+        return (await renderJourneyScreen(ui)).container;
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    },
+  },
+  {
+    label: "/receipts/[id]",
+    render: async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            donationId: RECEIPT_ID,
+            fundId: FUND_ID,
+            fundName: "RoboCup 2026 Asia Fund",
+            amountPaise: "500000",
+            status: "verified",
+            utr: "123456789012",
+            createdAt: "2026-10-25T10:30:00Z",
+            donorDisplayName: "Priya Sharma",
+            disclaimerEn: "This contribution is not eligible for tax deductions.",
+            disclaimerHi: "यह अंशदान कर कटौती के लिए पात्र नहीं है।",
+          }),
+        }),
+      );
+      try {
+        const ui = await ReceiptPage({ params: Promise.resolve({ id: RECEIPT_ID }) });
+        return (await renderJourneyScreen(ui)).container;
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    },
+  },
+  {
+    label: "/verify",
+    render: async () => (await renderJourneyScreen(createElement(VerifyPage))).container,
+  },
+  {
+    label: "/funds/[fundId]/treasurer",
+    render: async () =>
+      (
+        await renderJourneyScreen(
+          createElement(TreasurerPage, { params: Promise.resolve({ fundId: FUND_ID }) }),
+        )
+      ).container,
+  },
+  {
+    label: "/funds/[fundId]/expenses/new",
+    render: async () =>
+      (
+        await renderJourneyScreen(
+          createElement(NewExpensePage, { params: Promise.resolve({ fundId: FUND_ID }) }),
+        )
+      ).container,
+  },
+  {
+    label: "/funds/[fundId]/approvals/[expenseId]",
+    render: async () =>
+      (
+        await renderJourneyScreen(
+          createElement(ApproverPage, {
+            params: Promise.resolve({ fundId: FUND_ID, expenseId: EXPENSE_ID }),
+          }),
+        )
+      ).container,
+  },
+];
+
+describe("core journey screens contain no broken internal anchors", () => {
+  for (const journeyScreen of JOURNEY_SCREENS) {
+    it(`every internal anchor on ${journeyScreen.label} resolves`, async () => {
+      const container = await journeyScreen.render();
+      assertInternalAnchors(container, collectAppRoutePatterns());
+    });
+  }
+});
