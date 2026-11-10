@@ -11,7 +11,7 @@ import {
   recordDonation,
   submitExpense,
 } from "@yen/ledger";
-import { transactionalEnqueue, WorkerRuntime } from "@yen/queue";
+import { type Job, transactionalEnqueue, WorkerRuntime } from "@yen/queue";
 import { paise, salt32, toHex } from "@yen/shared";
 import { browserApiFetch } from "@yen/shared/browser-tracing";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -885,7 +885,7 @@ databaseSuite("Postgres expense store", (sql, url) => {
 
     const worker = new WorkerRuntime({ connectionString: url, migrate: true, schema: "tracejobs" });
     let processed = 0;
-    worker.registerHandler("approval-notify", async (job) => {
+    worker.registerHandler("approval-notify", async (job: Job) => {
       expect(job.data).toEqual({});
       processed++;
     });
