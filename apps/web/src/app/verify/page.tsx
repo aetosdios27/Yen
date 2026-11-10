@@ -416,7 +416,7 @@ function VerifyPageContent() {
 
                     <div className="grid grid-cols-1 gap-2 border-t border-border pt-2 font-mono">
                       <div>
-                        <span className="text-ink-muted block text-[11px]">
+                        <span className="text-ink-muted block text-[0.6875rem]">
                           {t("verify.canonicalHashLabel")}
                         </span>
                         <span className="break-all text-ink select-all">
@@ -425,7 +425,7 @@ function VerifyPageContent() {
                       </div>
 
                       <div>
-                        <span className="text-ink-muted block text-[11px]">
+                        <span className="text-ink-muted block text-[0.6875rem]">
                           {t("verify.declaredHashLabel")}
                         </span>
                         <span className="break-all text-ink select-all">
@@ -435,7 +435,7 @@ function VerifyPageContent() {
 
                       {state.report.technical.salt && (
                         <div>
-                          <span className="text-ink-muted block text-[11px]">
+                          <span className="text-ink-muted block text-[0.6875rem]">
                             {t("verify.saltLabel")}
                           </span>
                           <span className="break-all text-ink select-all">
@@ -446,7 +446,7 @@ function VerifyPageContent() {
 
                       {state.report.technical.expectedRoot && (
                         <div>
-                          <span className="text-ink-muted block text-[11px]">
+                          <span className="text-ink-muted block text-[0.6875rem]">
                             {t("verify.globalRootLabel")}
                           </span>
                           <span className="break-all text-ink select-all">
@@ -457,7 +457,7 @@ function VerifyPageContent() {
 
                       {state.report.technical.onChainRoot && (
                         <div>
-                          <span className="text-ink-muted block text-[11px]">
+                          <span className="text-ink-muted block text-[0.6875rem]">
                             {t("verify.onChainRootLabel")}
                           </span>
                           <span className="break-all text-ink select-all">
@@ -468,7 +468,7 @@ function VerifyPageContent() {
 
                       {state.report.technical.contractAddress && (
                         <div>
-                          <span className="text-ink-muted block text-[11px]">
+                          <span className="text-ink-muted block text-[0.6875rem]">
                             {t("verify.registryAddressLabel")}
                           </span>
                           <span className="break-all text-ink select-all">
@@ -479,7 +479,7 @@ function VerifyPageContent() {
 
                       {state.report.technical.batchSequence !== undefined && (
                         <div>
-                          <span className="text-ink-muted block text-[11px]">
+                          <span className="text-ink-muted block text-[0.6875rem]">
                             {t("verify.batchSequenceLabel")}
                           </span>
                           <span className="text-ink">{state.report.technical.batchSequence}</span>
@@ -488,7 +488,7 @@ function VerifyPageContent() {
 
                       {state.report.technical.txHash && (
                         <div>
-                          <span className="text-ink-muted block text-[11px]">
+                          <span className="text-ink-muted block text-[0.6875rem]">
                             {t("verify.txHashLabel")}
                           </span>
                           <span className="break-all text-ink select-all">
@@ -499,10 +499,10 @@ function VerifyPageContent() {
                     </div>
 
                     <div className="border-t border-border pt-2">
-                      <span className="text-ink-muted block text-[11px] mb-1 font-mono">
+                      <span className="text-ink-muted block text-[0.6875rem] mb-1 font-mono">
                         {t("verify.rawEventLabel")}
                       </span>
-                      <pre className="max-h-48 overflow-auto rounded bg-canvas p-2 text-[11px] text-ink font-mono">
+                      <pre className="max-h-48 overflow-auto rounded bg-canvas p-2 text-[0.6875rem] text-ink font-mono">
                         {JSON.stringify(state.report.rawEvent, null, 2)}
                       </pre>
                     </div>
