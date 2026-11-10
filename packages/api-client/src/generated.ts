@@ -2005,9 +2005,10 @@ export interface components {
       /** @enum {string} */
       donorNameChoice?: "full" | "initials" | "anonymous";
       /** @enum {string} */
-      status: "pledged" | "verified" | "rejected";
+      status: "pledged" | "verified" | "rejected" | "refunded";
       createdAt: string;
       verifiedAt?: string;
+      refundedAt?: string;
       proofUrl?: string;
       onChainRoot?: string;
       onChainTxHash?: string;
@@ -2039,6 +2040,10 @@ export interface components {
        * @enum {string}
        */
       channel: "email" | "whatsapp" | "sms";
+      /** @enum {boolean} */
+      consent: true;
+      /** @default false */
+      whatsappConsent: boolean;
       /** @default true */
       weeklySummary: boolean;
       /** @default true */
@@ -4353,6 +4358,8 @@ export interface operations {
             /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
             raisedPaise: string | null;
             /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
+            pledgedPaise: string;
+            /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
             spentPaise: string;
             /** @enum {string} */
             verification: "bank-matched" | "anchored" | "unverified";
@@ -4545,6 +4552,8 @@ export interface operations {
             /** Format: uuid */
             fundId: string;
             items: {
+              /** @enum {string} */
+              itemType?: "donation" | "refund" | "expense" | "alert";
               /** Format: uuid */
               id: string;
               /** Format: date-time */

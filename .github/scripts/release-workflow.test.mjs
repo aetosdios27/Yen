@@ -4,7 +4,6 @@ import { test } from "node:test";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const workflow = read("workflows/release.yml");
-const settings = read("scripts/apply-repo-settings.sh");
 const prepare = read("../scripts/prepare-release-assets.sh");
 
 test("release workflow is tag-only and does not deploy", () => {
@@ -17,12 +16,12 @@ test("release build exercises reproducibility and verification without publishin
   assert.match(build, /scripts\/repro-build\.sh/);
   assert.match(build, /scripts\/prepare-release-assets\.sh/);
   assert.match(prepare, /scripts\/test-tampered-artifact\.mjs/);
-  assert.match(build, /permissions:\n      contents: read/);
+  assert.match(build, /permissions:\n {6}contents: read/);
 });
 
 test("every release action is pinned to a full SHA and names its upstream tag", () => {
   const usesLines = workflow.split("\n").filter((line) => /^\s*(?:-\s*)?uses:/.test(line));
-  assert.equal(usesLines.length, 10);
+  assert.equal(usesLines.length, 14);
   for (const line of usesLines) {
     assert.match(
       line,
@@ -46,7 +45,21 @@ test("build, signing and release publishing use separate minimal permissions", (
   assert.doesNotMatch(publish, /id-token: write|attestations: write/);
 });
 
-test("new external release actions are in the repository allow-list", () => {
-  assert.match(settings, /patterns_allowed\[\]=anchore\/sbom-action@\*/);
-  assert.match(settings, /patterns_allowed\[\]=sigstore\/cosign-installer@\*/);
+test("release signing waits for a build on a separate runner and compares bytes", () => {
+  assert.match(workflow, /independent-build:/);
+  assert.match(workflow, /needs: \[build, independent-build\]/);
+  assert.match(workflow, /cmp .*SHA256SUMS/);
+});
+
+test("release build metadata survives Turbo's strict environment", () => {
+  const config = JSON.parse(read("../turbo.json"));
+  for (const name of [
+    "YEN_BUILD_SHA",
+    "YEN_BUILD_ID",
+    "YEN_RELEASE_TAG",
+    "YEN_PROVENANCE_URL",
+    "SOURCE_DATE_EPOCH",
+  ]) {
+    assert.ok(config.tasks.build.env.includes(name), name);
+  }
 });

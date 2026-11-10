@@ -7,7 +7,10 @@ import { payloadSchemas } from "@yen/eventlog";
 import { parseFundId } from "@yen/shared";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { databaseSuite } from "../../../packages/db/src/test/database.js";
-import { runPersistedEvidenceIntegrityJob } from "./evidence-integrity-runner.js";
+import {
+  runPersistedEvidenceIntegrityJob,
+  runPersistedEvidenceIntegrityJobWithAlert,
+} from "./evidence-integrity-runner.js";
 import { PostgresEvidenceStore } from "./evidence-store-postgres.js";
 import { FileSystemStorageAdapter } from "./filesystem-storage.js";
 import { buildOpaqueEvidenceKey } from "./storage.js";
@@ -144,6 +147,51 @@ databaseSuite("Postgres evidence persistence", (sql, url) => {
     expect(report.missingItems).toMatchObject([
       { evidenceId: second.evidenceId, objectKey: second.objectKey },
     ]);
+  });
+
+  it("alerts on replaced and missing files, deduplicates repeat scans, and leaves healthy files alone", async () => {
+    const { fundId, expenseIds } = await fundWithExpenses();
+    const expenseId = expenseIds[0];
+    if (!expenseId) throw new Error("Test expense is required");
+    const replaced = await evidence(fundId, expenseId);
+    const missing = await evidence(fundId, expenseId);
+    const healthy = await evidence(fundId, expenseId);
+    const store = new PostgresEvidenceStore(sql);
+    for (const record of [replaced, missing, healthy]) await store.save(record);
+    await writeFile(join(storageRoot, replaced.objectKey), new Uint8Array([9, 8, 7]));
+    await rm(join(storageRoot, missing.objectKey));
+
+    for (let run = 0; run < 2; run++) {
+      const summary = await runPersistedEvidenceIntegrityJobWithAlert(
+        sql,
+        store,
+        storage,
+        1,
+        fundId,
+      );
+      expect(summary).toMatchObject({
+        totalChecked: 3,
+        tamperedCount: 1,
+        missingCount: 1,
+        validCount: 1,
+      });
+      const alerts = await sql`
+        SELECT fund_id, alert_type, severity, entity_type, entity_id, escalation_due_at
+        FROM alerts WHERE fund_id = ${fundId} ORDER BY entity_id
+      `;
+      expect(alerts).toEqual(
+        [replaced, missing]
+          .sort((a, b) => a.evidenceId.localeCompare(b.evidenceId))
+          .map((record) => ({
+            fund_id: fundId,
+            alert_type: "integrity_check_failure",
+            severity: "critical",
+            entity_type: "evidence",
+            entity_id: record.evidenceId,
+            escalation_due_at: expect.any(Date),
+          })),
+      );
+    }
   });
 
   it("flags concurrent same-hash uploads on different expenses and later reads", async () => {

@@ -86,7 +86,7 @@ export class PostgresStateVerifier implements StateVerifier {
         utr text NOT NULL CHECK (utr ~ '^[0-9]{12}$'),
         donor_display_name text CHECK (char_length(donor_display_name) BETWEEN 1 AND 60),
         donor_contact text CHECK (char_length(donor_contact) BETWEEN 3 AND 254),
-        status text NOT NULL DEFAULT 'pledged' CHECK (status IN ('pledged', 'verified', 'rejected')),
+        status text NOT NULL DEFAULT 'pledged' CHECK (status IN ('pledged', 'verified', 'rejected', 'refunded')),
         created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
         verified_at timestamptz,
         CONSTRAINT donation_pledges_utr_key UNIQUE (utr)

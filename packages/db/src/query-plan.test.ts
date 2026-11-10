@@ -14,6 +14,7 @@ import {
 } from "./query-registry.js";
 import { type SeedStats, seedRealisticDataset } from "./seed.js";
 import { databaseSuite } from "./test/database.js";
+import { seedPublicFundPlanFixture } from "./test/public-fund-plan-fixture.js";
 
 databaseSuite("query-plan discipline and EXPLAIN budgets", (sql) => {
   let seedStats: SeedStats;
@@ -25,7 +26,8 @@ databaseSuite("query-plan discipline and EXPLAIN budgets", (sql) => {
     const seeded = await seedRealisticDataset(sql);
     seedStats = seeded.stats;
     queryContext = seeded.context;
-    tableRowCounts = seeded.tableRowCounts;
+    await seedPublicFundPlanFixture(sql, queryContext.fundId);
+    tableRowCounts = await getTableEstimatedRowCounts(sql);
   }, 60000);
 
   it("seeds a realistic dataset with thousands of funds and large tables exceeding 100k rows", () => {
@@ -44,6 +46,55 @@ databaseSuite("query-plan discipline and EXPLAIN budgets", (sql) => {
       expect(res.passed).toBe(true);
       expect(res.violations).toEqual([]);
       expect(res.actualCost).toBeLessThanOrEqual(res.maxCostBudget);
+    }
+  });
+
+  it("rejects the old public text-join plan and a missing outstanding-pledge index", async () => {
+    const anchor = getRegisteredHotPathQueries().find(
+      (query) => query.id === "public_fund_anchored_items",
+    );
+    const pledged = getRegisteredHotPathQueries().find(
+      (query) => query.id === "public_fund_pledged_paise",
+    );
+    if (!anchor || !pledged) throw new Error("Missing public query registration");
+    const oldSql = `SELECT DISTINCT CASE WHEN e.type = 'donation.verified' THEN bt.id::text
+        ELSE ex.id::text END AS id
+      FROM fund_events e
+      JOIN bank_transactions bt ON bt.id::text = e.payload->>'bank_transaction_id'
+        AND bt.fund_id = e.fund_id
+      LEFT JOIN expenses ex ON ex.fund_id = e.fund_id AND ex.status = 'reconciled'
+        AND ex.expense_data->>'bankTransactionId' = bt.id::text
+      JOIN anchors a ON a.fund_id = e.fund_id AND e.seq BETWEEN a.from_seq AND a.to_seq
+      WHERE e.fund_id = $1 AND a.status = 'confirmed' AND a.tx_hash IS NOT NULL
+        AND (
+          (e.type = 'donation.verified' AND bt.type = 'credit'
+            AND bt.reconciliation_status IN ('matched', 'manually_matched')
+            AND bt.matched_pledge_id::text = e.payload->>'donation_id'
+            AND EXISTS (SELECT 1 FROM donation_pledges dp
+              WHERE dp.id = bt.matched_pledge_id AND dp.fund_id = bt.fund_id AND dp.status = 'verified'))
+          OR (e.type = 'bank.debit_seen' AND bt.type = 'debit' AND ex.id IS NOT NULL
+            AND ex.expense_data->>'amountPaise' = bt.amount_paise::text)
+        );
+`;
+    const oldQuery = {
+      ...anchor,
+      explain: (client: typeof sql) =>
+        client.unsafe(`EXPLAIN (FORMAT JSON, VERBOSE) ${oldSql}`, [queryContext.fundId]),
+    };
+    const oldResult = verifyPlanNode(
+      await explainQuery(sql, oldQuery, queryContext),
+      tableRowCounts,
+    );
+    expect(oldResult.passed).toBe(false);
+    expect(oldResult.violations.map((v) => v.kind)).toContain("cost_budget");
+    await sql`DROP INDEX donation_pledges_outstanding_fund_idx`;
+    try {
+      const result = verifyPlanNode(await explainQuery(sql, pledged, queryContext), tableRowCounts);
+      expect(result.passed).toBe(false);
+      expect(result.violations.map((v) => v.kind)).toContain("missing_expected_index");
+    } finally {
+      await sql`CREATE INDEX donation_pledges_outstanding_fund_idx ON donation_pledges (fund_id) INCLUDE (amount_paise) WHERE status = 'pledged'`;
+      await sql`ANALYZE donation_pledges`;
     }
   });
 

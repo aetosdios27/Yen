@@ -2,13 +2,17 @@
 
 Yen's version-tag workflow publishes a deterministic build archive, a CycloneDX
 SBOM, SHA-256 checksums, GitHub build-provenance attestations and Cosign keyless
-signature bundles. The workflow builds the API and web app twice in separate
-clean worktrees before publishing the archive.
+signature bundles. The workflow builds the API, verifier and web app twice in separate
+clean worktrees with distinct HOME and TMPDIR directories. A second hosted
+runner independently repeats the build; signing requires matching archive
+checksums from both jobs. This is configured for the next release tag and is
+not evidence that a two-machine release build has already succeeded.
 
 Before the first tag after this change merges, a repository administrator must
 apply the updated Actions allow-list with
-`.github/scripts/apply-repo-settings.sh aetosdios27/Yen`. It adds the pinned
-Anchore SBOM and Sigstore Cosign installer actions used by the release workflow.
+`.github/scripts/apply-repo-settings.sh aetosdios27/Yen`. The release workflow uses the pinned Sigstore Cosign installer; Syft is
+downloaded directly with a pinned checksum. See the
+[workflow and Dependabot audit](release-supply-chain-audit.md).
 
 ## Download and check the release
 
@@ -60,10 +64,24 @@ cosign verify-blob \
 ```
 
 The public build page at `/about/build` shows the version reported by the
-running API. It does not verify files in the browser. The API's optional
-`artifactDigest` is populated only when `YEN_ARTIFACT_DIGEST` is explicitly
-supplied at build time; ordinary builds leave it empty because embedding an
-archive's own digest in that archive would change the digest.
+running API. It does not verify files in the browser. Deployment supplies `YEN_ARTIFACT_DIGEST` at runtime from the verified archive's
+SHA256SUMS (format `sha256:<64 lowercase hex characters>`). This avoids embedding
+an archive's own digest in itself. For example, after verifying and extracting
+the release archive, set:
+
+```sh
+export YEN_ARTIFACT_DIGEST="sha256:$(sha256sum "yen-${tag}.tar" | cut -d ' ' -f1)"
+```
+
+Start the API from that extracted archive, preserving its embedded commit, tree,
+tag and provenance URL. `/version` and `/about/build` then report that digest.
+An ordinary source deployment still reports no archive digest. This is an
+operator assertion about the deployed archive, not runtime remote attestation.
+
+The archive's `release.json` names the source commit, tree, release tag and the
+SHA-256 of the packaged `packages/shared/src/registry/abi.ts`. The manifest,
+API, verifier and ABI are covered by the same archive digest and provenance.
+The ABI is the committed generated ABI; Foundry CI checks it against the contract.
 
 ## Local release rehearsal and tamper check
 
@@ -118,7 +136,7 @@ The script builds each app in two clean Git worktrees, sets the timezone, locale
 and `SOURCE_DATE_EPOCH`, excludes Next.js' disposable cache and timing traces,
 normalizes Next.js' source-root metadata, creates a normalized tar archive and
 fails if the two SHA-256 digests differ. The archive contains `apps/api/dist`,
-the committed API OpenAPI document and `apps/web/.next`.
+the committed API OpenAPI document `apps/web/.next`, `packages/verifier/dist`, `release.json` and the contract ABI.
 
 Next.js normally writes random preview keys and a server action encryption key
 into its output. The web build derives these values from the Git tree so two
@@ -155,15 +173,21 @@ they contain host-specific or time-dependent data and are not runtime files.
   not assessed all platform requirements for Yen. See the [SLSA v1.2 Build
   requirements](https://slsa.dev/spec/v1.2/build-requirements), especially the
   [level table](https://slsa.dev/spec/v1.2/build-requirements#build-levels).
-- The two builds run on one host. A matching digest is not an independent
-  rebuild and does not establish reproducibility across operating systems,
+- Each job runs two builds on one host; the release workflow additionally gates
+  signing on a separate runner matching the archive checksum. Until a real tag
+  succeeds, this remains a configured check, not measured two-machine evidence.
+  Matching digests do not establish reproducibility across operating systems,
   CPU architectures or future runner images. The release job pins Ubuntu
   24.04 and the Node and pnpm versions; system libraries and the full runner
   image are not content-addressed here.
 - The archive is a build output, not proof of what a separate deployment host
   is serving. The API `/version` endpoint reports the commit, Git tree ID,
-  release tag and any build-time archive digest embedded during the API build;
+  release tag and the archive digest supplied by the deployment operator;
   an operator can still replace the running service or its response.
 - The SBOM records dependencies found by Syft from the source checkout and
   lockfile. Its generation timestamp can differ between releases and it is not
   part of the reproducibility archive.
+
+Dependency installation uses pnpm's content-addressed store for download reuse;
+each build installs a fresh node_modules tree, forces compilation and has its
+own Turbo cache, HOME and TMPDIR. Package bytes remain fixed by pnpm-lock.yaml.

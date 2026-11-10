@@ -1,6 +1,6 @@
 import qrcode from "qrcode-generator";
 import { formatInr } from "../paise.js";
-import type { DonorReceiptData } from "./types.js";
+import { type DonorReceiptData, receiptStatusLabels } from "./types.js";
 
 function escapeXml(unsafe: string): string {
   return unsafe
@@ -47,15 +47,15 @@ export function generateReceiptSvg(data: DonorReceiptData): string {
         : "Community Contributor",
   );
 
-  const isVerified = data.status === "verified";
+  const isVerified = receiptStatusLabels(data.status).verified;
   const statusColor = isVerified ? "#15803d" : "#b45309";
   const statusBg = isVerified ? "#dcfce7" : "#fef3c7";
   const statusBorder = isVerified ? "#86efac" : "#fde68a";
-  const statusTextEn = isVerified ? "VERIFIED CONTRIBUTION" : "RECORDED (WAITING FOR BANK)";
-  const statusTextHi = isVerified ? "सत्यापित योगदान" : "दर्ज (बैंक मिलान प्रतीक्षारत)";
+  const statusTextEn = receiptStatusLabels(data.status).en;
+  const statusTextHi = receiptStatusLabels(data.status).hi;
 
   const dateStr = escapeXml(
-    `${new Date(data.createdAt).toISOString().replace("T", " ").slice(0, 19)} UTC`,
+    `${new Date(data.refundedAt ?? data.createdAt).toISOString().replace("T", " ").slice(0, 19)} UTC`,
   );
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1120" width="800" height="1120" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
@@ -117,7 +117,7 @@ export function generateReceiptSvg(data: DonorReceiptData): string {
     <text x="380" y="108" fill="#334155" font-size="13" font-family="monospace">${donationId}</text>
 
     <text x="380" y="150" fill="#64748b" font-size="12" font-weight="600" text-transform="uppercase" letter-spacing="1">Proof Verification · प्रमाण स्थिति</text>
-    <text x="380" y="172" fill="#0284c7" font-size="14" font-weight="600">${isVerified ? "Tamper-evident cryptographic record" : "Awaiting statement reconciliation"}</text>
+    <text x="380" y="172" fill="#0284c7" font-size="14" font-weight="600">${receiptStatusLabels(data.status).proof}</text>
   </g>
 
   <!-- Divider -->

@@ -18,6 +18,8 @@ function fixtureApp(
   displayNameStore: DisplayNameStore = new MemoryDisplayNameStore(),
   principalValue: AppDependencies["principal"] = owner,
   publicFundReadStore = new MemoryPublicFundReadStore(),
+  category?: ExpenseRequest["category"],
+  includeExpense = true,
 ) {
   const expenses = new InMemoryExpenseStore();
   const expense = {
@@ -26,6 +28,7 @@ function fixtureApp(
     requesterId: "psn_00000000-0000-4000-8000-000000000021" as ExpenseRequest["requesterId"],
     amountPaise: paise(2500),
     description: "fixture expense",
+    category,
     recipientRef: "private payee account 1234567890123456",
     status: "paid",
     holdId: null,
@@ -60,7 +63,7 @@ function fixtureApp(
     expenseStore: {
       ...expenses,
       get: expenses.get.bind(expenses),
-      list: async (id: string) => (id === fundId ? [expense] : []),
+      list: async (id: string) => (id === fundId && includeExpense ? [expense] : []),
       save: expenses.save.bind(expenses),
       atomicApprove: expenses.atomicApprove.bind(expenses),
     } as AppDependencies["expenseStore"],
@@ -123,6 +126,84 @@ describe("public fund read API", () => {
     ]) {
       expect(allResponses).not.toContain(secret);
     }
+  });
+
+  it("only labels bank-matched items anchored when a confirmed anchor covers their financial event", async () => {
+    class AnchoredReadStore extends MemoryPublicFundReadStore {
+      override async anchoredItems() {
+        return new Set(["00000000-0000-4000-8000-000000000051"]);
+      }
+      override async pledgedPaise() {
+        return 9000n;
+      }
+    }
+    const donations = new AnchoredReadStore();
+    donations.set(fundId, [
+      {
+        id: "00000000-0000-4000-8000-000000000051",
+        occurredAt: "2026-10-28T01:00:00.000Z",
+        amountPaise: 1500n,
+        donorDisplayName: null,
+        donorNameChoice: "anonymous",
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000052",
+        occurredAt: "2026-10-28T02:00:00.000Z",
+        amountPaise: 2500n,
+        donorDisplayName: null,
+        donorNameChoice: "initials",
+      },
+    ]);
+    const app = fixtureApp(new MemoryDisplayNameStore(), owner, donations);
+    await createPublicFund(app);
+    const summary = await (await app.request(`/v1/funds/${fundId}/public/summary`)).json();
+    expect(summary).toMatchObject({ raisedPaise: "4000", pledgedPaise: "9000" });
+    const timeline = await (await app.request(`/v1/funds/${fundId}/public/timeline`)).json();
+    expect(timeline).toMatchObject({
+      items: [{ verified: "unverified" }, { verified: "anchored" }, { verified: "bank-matched" }],
+    });
+  });
+
+  it.each(["unverified", "bank-matched", "anchored"] as const)(
+    "reports fund verification as %s from coverage of every matched item",
+    async (state) => {
+      const id = "00000000-0000-4000-8000-000000000051";
+      class ReadStore extends MemoryPublicFundReadStore {
+        override async anchoredItems() {
+          return new Set(state === "anchored" ? [id] : []);
+        }
+      }
+      const store = new ReadStore();
+      if (state !== "unverified")
+        store.set(fundId, [
+          {
+            id,
+            occurredAt: "2026-10-28T01:00:00.000Z",
+            amountPaise: 100n,
+            donorDisplayName: null,
+            donorNameChoice: "anonymous",
+          },
+        ]);
+      const app = fixtureApp(new MemoryDisplayNameStore(), owner, store, undefined, false);
+      await createPublicFund(app);
+      expect(await (await app.request(`/v1/funds/${fundId}/public/summary`)).json()).toMatchObject({
+        verification: state,
+      });
+    },
+  );
+
+  it("carries the requested expense category into the public breakdown", async () => {
+    const app = fixtureApp(
+      new MemoryDisplayNameStore(),
+      owner,
+      new MemoryPublicFundReadStore(),
+      "Equipment",
+    );
+    await createPublicFund(app);
+    const response = await app.request(`/v1/funds/${fundId}/public/breakdown`);
+    expect(await response.json()).toMatchObject({
+      categories: [{ category: "Equipment", spentPaise: "2500", transactionCount: 1 }],
+    });
   });
 
   it("returns zero rather than a stub when a fund has no verified donations", async () => {
@@ -243,6 +324,7 @@ describe("public fund read API", () => {
       purpose:
         "Phone +919876543210; UTR ABCDEF123456789; account number 1234567890123456; https://files.example/secret.pdf",
       raisedPaise: null,
+      pledgedPaise: "0",
       spentPaise: "0",
       verification: "unverified",
       dataGaps: [],

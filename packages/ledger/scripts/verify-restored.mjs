@@ -1,15 +1,15 @@
+import { readFile } from "node:fs/promises";
 import { createSql } from "@yen/db";
-import { verifyFundState } from "../dist/chaos.js";
+import { verifyRestoredDatabase } from "../dist/restore.js";
 
 const url = process.env.YEN_TEST_DATABASE_URL;
-const fundId = process.env.YEN_RESTORE_FUND_ID;
-if (!url || !fundId) throw new Error("YEN_TEST_DATABASE_URL and YEN_RESTORE_FUND_ID are required");
+const manifest = process.env.YEN_RESTORE_MANIFEST;
+if (!url || !manifest)
+  throw new Error("YEN_TEST_DATABASE_URL and YEN_RESTORE_MANIFEST are required");
 const sql = createSql(url);
 try {
-  const result = await verifyFundState(sql, fundId);
-  console.log(
-    `Restored fund verified: events=${result.events.length} bankPaise=${result.balances.bankPaise}`,
-  );
+  const result = await verifyRestoredDatabase(sql, JSON.parse(await readFile(manifest, "utf8")));
+  console.log(`Restored database verified: funds=${result.funds} anchors=${result.anchors}`);
 } finally {
   await sql.end();
 }

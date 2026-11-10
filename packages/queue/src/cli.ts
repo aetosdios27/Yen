@@ -12,6 +12,7 @@ import {
 } from "./anchoring.js";
 import { DEFAULT_QUEUES } from "./config.js";
 import { anchoringSignerMode, parseWorkerEnv } from "./env.js";
+import { registerRetention } from "./retention.js";
 import { WorkerRuntime } from "./worker.js";
 
 function fail(message: string): never {
@@ -146,3 +147,7 @@ if (anchorConfigured && anchorChain && anchorResilience) {
     anchorResilience,
   ).catch((error) => reportRegistrationFailure("Anchor reconciliation", error));
 }
+
+void registerRetention(worker.getBoss(), worker.getSql()).catch((error) =>
+  reportRegistrationFailure("Privacy retention", error),
+);

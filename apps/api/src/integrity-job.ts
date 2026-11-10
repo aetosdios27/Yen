@@ -104,6 +104,10 @@ export async function checkEvidenceIntegrity(
 export async function runEvidenceIntegrityJob(
   evidenceList: Iterable<StoredEvidence> | AsyncIterable<StoredEvidence>,
   storage: StorageAdapter,
+  onFailure?: (
+    evidence: StoredEvidence,
+    result: Exclude<IntegrityCheckResult, { status: "valid" }>,
+  ) => Promise<void>,
 ): Promise<IntegrityJobSummary> {
   let validCount = 0;
   let tamperedCount = 0;
@@ -119,6 +123,7 @@ export async function runEvidenceIntegrityJob(
   for await (const item of evidenceList) {
     totalChecked++;
     const result = await checkEvidenceIntegrity(item, storage);
+    if (result.status !== "valid") await onFailure?.(item, result);
     if (result.status === "valid") {
       validCount++;
     } else if (result.status === "tampered") {
