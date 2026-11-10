@@ -73,3 +73,147 @@ Journey coverage summary:
 Each journey section below gives: the route flow, screen-by-screen specs (primary action,
 secondary action, states) and the state machine for the money record the journey creates.
 Bilingual copy tables follow in a dedicated section.
+
+## Journey 1: Create a fund and nominate co-approvers
+
+Actor: treasurer, often setting this up on a phone at a club meeting.
+
+Goal: end the session with a fund that accepts UPI donations and has at least two confirmed
+co-approvers who each received a WhatsApp invite.
+
+Route flow:
+
+```
+/onboarding (step 1 to 5, one wizard, draft saved on device)
+  -> done screen (still /onboarding, "Your fund is ready")
+     -> share invite links on WhatsApp (outside the app)
+/invites/accept?code=... (each co-approver, on their own phone)
+```
+
+### J1-S1 Club details
+
+Route: `/onboarding`, step 1 of 5.
+
+The screen shows the wizard title, a progress indicator announced as "Onboarding progress"
+with the current step spoken as "Step 1 of 5: Club", and two fields.
+
+- Primary action: `onboarding.continue` ("Continue"), full width in the thumb zone, disabled
+  appearance is never used for validation; tapping it with empty fields shows the inline error.
+- Secondary action: none on step 1. The draft is saved on the device automatically
+  (`onboarding.intro` says so), so there is no save action and no cancel that could lose work.
+- Empty state: not applicable; the wizard always starts at step 1 with blank fields unless a
+  saved draft exists, in which case the saved values are restored and the wizard reopens on the
+  saved step.
+- Loading: no network call on this step, so no skeleton. The only busy state is the final
+  create action on step 5.
+- Error state: `onboarding.errors.club` inline under the missing field ("Enter a club name."),
+  announced politely. The club type radio group shows the same pattern.
+- Offline: creating the fund is the only network step. Offline is surfaced there (J1-S5), not
+  here.
+
+### J1-S2 Fund details
+
+Route: `/onboarding`, step 2 of 5.
+
+Fields: purpose (required), description (optional), target amount.
+
+- Primary action: "Continue".
+- Secondary action: `onboarding.back` ("Back"), text button beside the primary action, always
+  available from step 2 onward.
+- Amount entry rule: the target is entered in whole paise with the hint
+  `onboarding.fund.targetHint` ("For example, 125000 for Rs 1,250.00. No decimals."). This is a
+  known plain-language risk: pilot users are expected to misread paise as rupees. The usability
+  protocol (see `usability-interview-protocol.md`, task T4) tests this field unaided; if more
+  than 2 of 5 pilot participants hesitate, file a follow-up to accept rupees with automatic
+  conversion.
+- Error state: `onboarding.errors.fund` on missing purpose or malformed target.
+- Loading and offline: none on this step.
+
+### J1-S3 Payment details
+
+Route: `/onboarding`, step 3 of 5.
+
+Fields: UPI VPA, bank account or UPI payee name.
+
+- Primary action: "Continue". Secondary action: "Back".
+- Plain-language guard: "UPI VPA" is the one term this journey cannot avoid because it is
+  printed on the club's bank paperwork. The hint must always give an example
+  (`onboarding.payment.vpa` keeps the example as a shared string across locales).
+- Error state: `onboarding.errors.payment` when either field fails format checks.
+- Loading and offline: none on this step.
+
+### J1-S4 Approvers
+
+Route: `/onboarding`, step 4 of 5.
+
+Fields: approver 1 name and phone, approver 2 name and phone, optional third approver
+("Add third approver").
+
+- Primary action: "Continue". Secondary action: "Back".
+- The screen states the rule in one line: two approvals are required, the third person is
+  optional (`onboarding.approvers.hint`). This is the screen that encodes the 2-of-3 quorum,
+  so the copy must never say "optional approvers" without the required count.
+- Empty state: not applicable.
+- Error state: `onboarding.errors.approvers` when fewer than two complete contacts, and
+  `onboarding.errors.approverPhone` per field for a malformed number.
+- Loading and offline: none on this step. Invite creation failures surface on the done screen.
+
+### J1-S5 Visibility and create
+
+Route: `/onboarding`, step 5 of 5.
+
+Radio group: Public / Donors only / Members only, each with a one-line consequence
+(`onboarding.visibility.*`).
+
+- Primary action: `onboarding.create` ("Create fund"), full width, replaced by
+  `onboarding.creating` ("Creating...") while the request is in flight. This is the only busy
+  state in the journey; the button stays disabled for the duration and no other control can
+  trigger a second request.
+- Secondary action: "Back" is still available before the request starts; once it is in flight
+  the wizard blocks navigation to avoid a half-created fund.
+- Loading: the creating label is the skeleton. No separate spinner screen.
+- Error state: `onboarding.errors.createFailed` in an alert region with the "Create fund"
+  button re-enabled for retry. Draft data is never cleared on failure.
+- Offline: same failure copy covers offline; the retry succeeds once connectivity returns.
+
+### J1-S6 Fund ready, share invites
+
+Route: `/onboarding` (done step, same URL).
+
+Success screen: `onboarding.done.title` ("Your fund is ready") as an h1, body
+`onboarding.done.body` explaining that invites complete the 2-of-3 setup.
+
+- Primary action: `onboarding.done.share` ("Share approver invite {index} on WhatsApp"), one
+  button per nominated approver, each opening a prefilled WhatsApp message with the invite link
+  that points to `/invites/accept?code=...`.
+- Secondary action: `onboarding.done.open` ("Open fund"), link to the public fund page
+  `/funds/[fundId]`.
+- Empty state: not applicable; at least two invite buttons always exist.
+- Loading: none; invites are created together with the fund.
+- Error state: per-invite failure shows `onboarding.errors.inviteFailed` next to the failed
+  share button; the other buttons stay usable. Retry regenerates only the failed invite.
+
+### J1-S7 Co-approver accepts invite
+
+Route: `/invites/accept?code=...`.
+
+The co-approver lands here from WhatsApp. The screen must work before any sign-in.
+
+- Primary action: `invite.submit` ("Accept invite"), submitting name plus the phone number the
+  invite was sent to (`invite.intro`).
+- Secondary action: none. If the code is missing the form is replaced by
+  `invite.missingCode` ("This invite link is incomplete."), the only content on screen; there
+  is nothing to retry without a new link.
+- Empty state: the missing-code case above is the empty state for this route.
+- Loading: none on mount; submission shows the submitting state of the accept button.
+- Error state: `invite.invalid` ("This invite is invalid or has expired.") in an alert region.
+  A pending nomination shows `invite.pending`; a confirmed one shows `invite.approved`
+  ("You are now an approver.") and the journey ends.
+- Offline: submit fails with the same alert copy and the form keeps its values.
+
+### Journey 1 record state machine
+
+The fund record moves `none -> created`. Each nomination moves
+`invited -> pending -> accepted` (or stays `invalid/expired` and can be re-shared from the
+done screen). The fund becomes donation-capable immediately after creation; the 2-of-3 quorum
+only gates expenses (journey 4), not donations.
