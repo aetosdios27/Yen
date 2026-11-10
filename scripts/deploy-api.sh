@@ -366,6 +366,257 @@ smoke() {
   done
 }
 
+# Offline selftest. Exercises the real migrate, deploy, rollback and smoke
+# code paths without any cloud or network access:
+#   - a fake aws CLI on PATH returns canned responses for every call the
+#     script makes, with FAKE_AWS_TASK_EXIT_CODE controlling the migration
+#     container exit code and FAKE_AWS_UNSTABLE forcing the service stability
+#     wait to time out
+#   - a fake curl returns a GitHub OIDC token envelope
+#   - smoke probes run against loopback HTTP servers started on the fly
+# The migration failure case is the negative test proving that a failed
+# migration halts the rollout before any container is replaced.
+
+selftest() {
+  local root
+  root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  local script="$root/scripts/deploy-api.sh"
+  local tmp
+  tmp="$(mktemp -d)"
+  # The path is baked into the trap because locals are gone by the time the
+  # EXIT trap runs.
+  trap "rm -rf '$tmp'" EXIT
+
+  command -v jq >/dev/null || fail "selftest requires jq"
+  command -v node >/dev/null || fail "selftest requires node"
+
+  local failures=0
+
+  expect_ok() {
+    local desc=$1
+    shift
+    if "$@" >"$tmp/last.out" 2>&1; then
+      log "ok   $desc"
+    else
+      log "FAIL $desc: expected exit 0, got $?"
+      sed 's/^/     /' "$tmp/last.out"
+      failures=$((failures + 1))
+    fi
+  }
+
+  expect_fail() {
+    local desc=$1 pattern=$2
+    shift 2
+    local status=0
+    "$@" >"$tmp/last.out" 2>&1 || status=$?
+    if [[ "$status" -eq 0 ]]; then
+      log "FAIL $desc: expected nonzero exit"
+      failures=$((failures + 1))
+    elif ! grep -F -q "$pattern" "$tmp/last.out"; then
+      log "FAIL $desc: output did not contain: $pattern"
+      sed 's/^/     /' "$tmp/last.out"
+      failures=$((failures + 1))
+    else
+      log "ok   $desc"
+    fi
+  }
+
+  expect_output() {
+    local desc=$1 pattern=$2
+    if grep -F -q "$pattern" "$tmp/last.out"; then
+      log "ok   $desc"
+    else
+      log "FAIL $desc: last output did not contain: $pattern"
+      sed 's/^/     /' "$tmp/last.out"
+      failures=$((failures + 1))
+    fi
+  }
+
+  mkdir -p "$tmp/bin"
+
+  cat >"$tmp/bin/aws" <<'EOF'
+#!/usr/bin/env bash
+# Offline test double for the aws CLI used by the deploy-api.sh selftest.
+case "$1 $2" in
+  "sts assume-role-with-web-identity") printf 'AKIDEXAMPLE\tsecret\ttoken' ;;
+  "sts get-caller-identity") printf '123456789012' ;;
+  "ecs describe-task-definition")
+    printf '%s' '{"containerDefinitions":[{"name":"api","image":"old"}],"family":"yen-api"}'
+    ;;
+  "ecs register-task-definition") printf '43' ;;
+  "secretsmanager get-secret-value") printf 'postgres://selftest' ;;
+  "ecs run-task") printf 'arn:aws:ecs:us-east-1:123456789012:task/yen-selftest' ;;
+  "ecs wait")
+    case "$3" in
+      tasks-stopped) exit 0 ;;
+      services-stable)
+        if [[ -n "${FAKE_AWS_UNSTABLE:-}" ]]; then
+          exit 1
+        fi
+        exit 0
+        ;;
+      *) exit 254 ;;
+    esac
+    ;;
+  "ecs describe-tasks") printf '%s' "${FAKE_AWS_TASK_EXIT_CODE:-0}" ;;
+  "ecs describe-services")
+    printf '%s' 'arn:aws:ecs:us-east-1:123456789012:task-definition/yen-api:42'
+    ;;
+  "ecs update-service") printf '{}' ;;
+  *)
+    printf 'selftest aws shim: unexpected call: %s\n' "$*" >&2
+    exit 254
+    ;;
+esac
+EOF
+
+  cat >"$tmp/bin/curl" <<'EOF'
+#!/usr/bin/env bash
+# Offline test double for curl: returns a GitHub OIDC token envelope.
+printf '{"value":"selftest-oidc-token"}'
+EOF
+
+  chmod +x "$tmp/bin/aws" "$tmp/bin/curl"
+
+  local shim_env=(
+    PATH="$tmp/bin:$PATH"
+    AWS_REGION=us-east-1
+    ECR_REPOSITORY=yen-api
+    OIDC_ROLE_ARN=arn:aws:iam::123456789012:role/yen-selftest
+    ACTIONS_ID_TOKEN_REQUEST_TOKEN=selftest
+    ACTIONS_ID_TOKEN_REQUEST_URL=https://token.actions.githubusercontent.com
+    ECS_CLUSTER=yen-cluster
+    ECS_SERVICE=yen-api
+    ECS_CONTAINER_NAME=api
+    ECS_MIGRATION_TASK_DEFINITION=yen-api-migrate
+    ECS_SUBNETS=subnet-selftest
+    ECS_SECURITY_GROUPS=sg-selftest
+    MIGRATION_SECRET_ID=yen-migration-db
+  )
+
+  local digest
+  digest="sha256:$(printf 'a%.0s' {1..64})"
+
+  # Negative test: the migration container exits nonzero, so the migrate
+  # command fails and the workflow's deploy job (which needs the migration
+  # job) never starts. No container is replaced.
+  expect_fail \
+    "a failed migration halts the rollout before any container is replaced" \
+    "rollout halted before any container was replaced" \
+    env "${shim_env[@]}" FAKE_AWS_TASK_EXIT_CODE=7 bash "$script" migrate staging "$digest"
+
+  expect_ok \
+    "a healthy migration task completes and unblocks the rollout" \
+    env "${shim_env[@]}" bash "$script" migrate staging "$digest"
+
+  expect_fail \
+    "migrate refuses to run without a content addressed image digest" \
+    "refusing to migrate without a content addressed image digest" \
+    env "${shim_env[@]}" bash "$script" migrate staging latest
+
+  expect_fail \
+    "an unstable service fails the deploy with a rollback hint" \
+    "rollout did not stabilize" \
+    env "${shim_env[@]}" FAKE_AWS_UNSTABLE=1 bash "$script" deploy staging "$digest"
+
+  expect_ok \
+    "a healthy service deploys the pinned image digest" \
+    env "${shim_env[@]}" bash "$script" deploy staging "$digest"
+
+  expect_ok \
+    "rollback routes traffic to the previous task definition revision" \
+    env "${shim_env[@]}" bash "$script" rollback staging
+
+  expect_fail \
+    "rollback refuses to target the current revision" \
+    "must be older than the current revision" \
+    env "${shim_env[@]}" bash "$script" rollback staging 42
+
+  expect_ok \
+    "dry run prints the deployment plan without touching the cloud" \
+    env DRY_RUN=1 AWS_REGION=us-east-1 ECR_REPOSITORY=yen-api \
+      OIDC_ROLE_ARN=arn:aws:iam::123456789012:role/yen-selftest \
+      ECS_CLUSTER=yen-cluster ECS_SERVICE=yen-api \
+      bash "$script" deploy staging "$digest"
+  expect_output \
+    "dry run plan includes the ecs service update" \
+    "[dry-run] aws ecs update-service"
+
+  selftest_smoke "$script" "$tmp" || true
+  failures=$((failures + SELFTEST_SMOKE_FAILURES))
+
+  if [[ "$failures" -gt 0 ]]; then
+    fail "selftest failed $failures check(s)"
+  fi
+  log "selftest passed: migration failure halts the rollout, smoke probes and rollback behave as documented"
+}
+
+# Smoke probe checks against throwaway loopback servers. Writes the number of
+# failed checks to SELFTEST_SMOKE_FAILURES and returns nonzero on failure.
+selftest_smoke() {
+  local script=$1
+  local tmp=$2
+  local server_pid=""
+  SELFTEST_SMOKE_FAILURES=0
+
+  local sha
+  sha="$(git rev-parse HEAD)"
+
+  cat >"$tmp/server.mjs" <<'EOF'
+import http from "node:http";
+const server = http.createServer((req, res) => {
+  if (req.url === "/health") {
+    res.writeHead(200);
+    res.end("ok");
+    return;
+  }
+  if (req.url === "/ready") {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ status: "ok" }));
+    return;
+  }
+  if (req.url === "/version") {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ gitSha: process.env.EXPECTED_SHA }));
+    return;
+  }
+  res.writeHead(404);
+  res.end();
+});
+server.listen(Number(process.env.SELFTEST_PORT), "127.0.0.1");
+EOF
+
+  local port
+  port="$(node -e 'const s = require("net").createServer(); s.listen(0, "127.0.0.1", () => { console.log(s.address().port); s.close(); })')"
+  SELFTEST_PORT="$port" EXPECTED_SHA="$sha" node "$tmp/server.mjs" &
+  server_pid=$!
+  trap "kill '$server_pid' 2>/dev/null; rm -rf '$tmp'" EXIT
+  sleep 1
+
+  expect_ok \
+    "smoke probes pass on a healthy server serving the expected commit" \
+    env SMOKE_TIMEOUT_SECS=10 bash "$script" smoke "http://127.0.0.1:$port" "$sha"
+
+  expect_fail \
+    "smoke probes fail when the deployed commit does not match" \
+    "but expected" \
+    env SMOKE_TIMEOUT_SECS=2 bash "$script" smoke "http://127.0.0.1:$port" "0000000000000000000000000000000000000000"
+
+  expect_fail \
+    "smoke probes fail when the endpoint is unreachable" \
+    "unreachable" \
+    env SMOKE_TIMEOUT_SECS=2 bash "$script" smoke "http://127.0.0.1:1" "$sha"
+
+  expect_fail \
+    "smoke probes refuse plain http on non loopback hosts" \
+    "base url must use HTTPS" \
+    env SMOKE_TIMEOUT_SECS=2 bash "$script" smoke "http://yen.example.com" "$sha"
+
+  kill "$server_pid" 2>/dev/null
+  wait "$server_pid" 2>/dev/null
+  trap "rm -rf '$tmp'" EXIT
+}
+
 main() {
   local cmd=${1:-}
   [[ -n "$cmd" ]] || { usage; exit 1; }
