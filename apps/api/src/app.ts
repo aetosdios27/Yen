@@ -2884,6 +2884,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     }
 
     const result = await deps.reconciliationStore.ingest(transactions);
+    // Ingest can append fund events and this path bypasses fundCacheInvalidation.
+    publicReadCache.invalidateFund(id.value);
     const wireTransactions = result.transactions.map((t) => ({
       ...t,
       amountPaise: String(t.amountPaise),
@@ -2908,6 +2910,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const raw = c.req.valid("json");
     const parsed = normalizePartnerWebhook(raw);
     const result = await deps.reconciliationStore.ingest([parsed]);
+    publicReadCache.invalidateFund(parsed.fundId);
     const summary = result.transactions[0];
 
     return c.json(
