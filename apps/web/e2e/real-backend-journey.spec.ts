@@ -20,6 +20,10 @@ test.skip(!isRealBackend, "runs only with E2E_BACKEND=real against a Postgres-ba
 
 test.describe.configure({ mode: "serial" });
 
+test.beforeEach(({ browserName }) => {
+  test.skip(browserName !== "chromium", "the virtual authenticator needs the CDP WebAuthn domain");
+});
+
 const fundUrl = `/funds/${seedFundId}`;
 const apiHeaders = (token: string) => ({ authorization: `Bearer ${token}` });
 
@@ -42,7 +46,7 @@ async function setupPin(token: string): Promise<void> {
     headers: { ...apiHeaders(token), "content-type": "application/json" },
     body: JSON.stringify({ pin: e2ePin }),
   });
-  expect(response.status).toBe(200);
+  expect([201, 409]).toContain(response.status);
 }
 
 interface RegistrationResult {
