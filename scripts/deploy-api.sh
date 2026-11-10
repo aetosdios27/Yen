@@ -156,6 +156,73 @@ image() {
   log "Pushed $registry_uri:sha-$git_sha as $digest"
 }
 
+# Builds the ECR image uri for a digest that the image job pushed in this run.
+image_uri_for_digest() {
+  local image_digest=$1
+  local account_id
+  account_id="$(run_capture aws sts get-caller-identity --query 'Account' --output text)"
+  printf '%s\n' "${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}@${image_digest}"
+}
+
+# Registers a new task definition revision for the given family with the image
+# pinned to a digest, so containers can never run bytes other than the ones
+# the pipeline built and tested.
+register_revision() {
+  local family=$1
+  local image_uri=$2
+  local body
+  body="$(run_capture aws ecs describe-task-definition --task-definition "$family" --query 'taskDefinition' --output json)"
+  body="$(printf '%s' "$body" | jq \
+    'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)
+     | .containerDefinitions[0].image = $image' \
+    --arg image "$image_uri")"
+  run_capture aws ecs register-task-definition --cli-input-json "$body" --query 'taskDefinition.revision' --output text
+}
+
+# ECS run-task overrides cannot pin the image, so the migration task
+# definition family is re-registered with the digest first, then run.
+migrate() {
+  local env_name=${1:?usage: migrate <env> <image-digest>}
+  local image_digest=${2:?usage: migrate <env> <image-digest>}
+  [[ "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
+    || fail "refusing to migrate without a content addressed image digest, got: $image_digest"
+  if [[ "${FAILPOINT:-}" == "migrate" ]]; then
+    fail "FAILPOINT=migrate: simulating a failed migration (selftest)"
+  fi
+  require_vars AWS_REGION ECR_REPOSITORY OIDC_ROLE_ARN ECS_CLUSTER \
+    ECS_MIGRATION_TASK_DEFINITION ECS_CONTAINER_NAME ECS_SUBNETS ECS_SECURITY_GROUPS \
+    MIGRATION_SECRET_ID
+  assume_role "migrate-$env_name"
+
+  local image_uri new_revision db_url task_arn exit_code
+  image_uri="$(image_uri_for_digest "$image_digest")"
+  new_revision="$(register_revision "$ECS_MIGRATION_TASK_DEFINITION" "$image_uri")"
+  log "Migration task definition: $new_revision"
+  db_url="$(run_capture aws secretsmanager get-secret-value --secret-id "$MIGRATION_SECRET_ID" --query 'SecretString' --output text)"
+  task_arn="$(run_capture aws ecs run-task \
+    --cluster "$ECS_CLUSTER" \
+    --task-definition "$new_revision" \
+    --launch-type FARGATE \
+    --network-configuration "awsvpcConfiguration={subnets=[${ECS_SUBNETS}],securityGroups=[${ECS_SECURITY_GROUPS}],assignPublicIp=DISABLED}" \
+    --overrides "$(jq -n \
+      --arg container "$ECS_CONTAINER_NAME" \
+      --arg db_url "$db_url" \
+      '{containerOverrides: [{name: $container, command: ["node", "packages/db/dist/cli.js"],
+        environment: [{name: "DATABASE_URL", value: $db_url}]}]}')" \
+    --query 'tasks[0].taskArn' --output text)"
+  log "Migration task started: $task_arn"
+  if [[ -n "${DRY_RUN:-}" ]]; then
+    return 0
+  fi
+  aws ecs wait tasks-stopped --cluster "$ECS_CLUSTER" --tasks "$task_arn"
+  exit_code="$(aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$task_arn" \
+    --query 'tasks[0].containers[0].exitCode' --output text)"
+  if [[ "$exit_code" != "0" ]]; then
+    fail "migration task exited with code $exit_code; rollout halted before any container was replaced"
+  fi
+  log "Migrations applied for $env_name; traffic may now be routed to $image_digest"
+}
+
 main() {
   local cmd=${1:-}
   [[ -n "$cmd" ]] || { usage; exit 1; }
