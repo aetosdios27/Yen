@@ -1,4 +1,6 @@
-import { formatInr, type Paise } from "@yen/shared";
+import { type Paise } from "@yen/shared";
+import { useI18n } from "../i18n";
+import { formatMoney } from "../lib/format";
 import { cn } from "./cn";
 
 export type MoneyProps = {
@@ -8,17 +10,19 @@ export type MoneyProps = {
 };
 
 /**
- * Renders integer paise through `formatInr`, never through floating-point
+ * Renders integer paise in the active locale, never through floating-point
  * arithmetic, so large and fractional rupee values stay exact.
  */
 export function Money({ amount, label, className }: MoneyProps) {
+  const { locale } = useI18n();
+
   return (
     <p className={cn("flex flex-col gap-0.5", className)}>
       {label === undefined ? null : (
         <span className="text-small font-medium text-ink-muted">{label}</span>
       )}
       <data value={String(amount)} className="block text-title font-semibold tabular-nums text-ink">
-        {formatInr(amount)}
+        {formatMoney(amount, locale)}
       </data>
     </p>
   );
