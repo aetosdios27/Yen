@@ -112,6 +112,13 @@ export {
 } from "./registry/abi.js";
 export { type ResilienceOptions, ResilientCall } from "./resilience.js";
 export {
+  buildSentryEnvelope,
+  parseSentryDsn,
+  type SentryDsn,
+  type SentryEvent,
+  sentryEnvelopeHeaders,
+} from "./sentry.js";
+export {
   BURN_ALERT_THRESHOLDS,
   type BurnRate,
   calculateBurnRate,
