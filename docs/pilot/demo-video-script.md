@@ -137,3 +137,73 @@ capturing the paper bill, review, submit. End on the pending list with "Submitte
 - HI narration: "खजांची खर्च दर्ज करता है: रकम, पाने वाला, उद्देश्य, और कागज़ी बिल की तस्वीर,
   अधिकतम 10 मेगाबाइट। प्रस्तुत होते ही खर्च योग्य शेष उतना घट जाता है। यही रोक है। [honesty]
   दो स्वीकृतियों से जारी होने तक यह पैसा रोका रहता है।"
+
+### Shot 7: The bill is hashed and pinned (01:56 to 02:10)
+
+On-screen: split view: the upload API response on the right terminal (`fileSha256`,
+`duplicateDetected: false`, clean `scan`), the approval screen on the left.
+
+- EN narration: "Before any approver sees the bill, the server computes its fingerprint and
+  pins it. The exact bytes the approver sees are the bytes the treasurer uploaded."
+- HI narration: "किसी स्वीकर्ता को बिल दिखने से पहले ही सर्वर उसका फ़िंगरप्रिंट बनाकर पिन कर
+  देता है। स्वीकर्ता जो बाइट देखता है, वही बाइट खजांची ने अपलोड किए थे।"
+
+### Shot 8: Co-approver approves with the PIN (02:10 to 02:34)
+
+On-screen: Rohan's profile, hi locale: the approval screen for the new expense, amount largest
+on screen, bill photo visible, then the PIN modal, `482613`, success toast, timeline at
+1 of 2.
+
+- EN narration: "The co-approver opens the WhatsApp link, checks the amount, the payee and the
+  bill, and approves with a 6-digit PIN. A wrong PIN would lock after five tries; the screen
+  says so."
+- HI narration: "सह-स्वीकर्ता WhatsApp लिंक खोलकर रकम, पाने वाले और बिल जाँचता है, और 6 अंकों
+  के पिन से स्वीकृति देता है। गलत पिन पाँच बार पर बंद हो जाता है; स्क्रीन यह बताती है।"
+
+### Shot 9: Quorum (02:34 to 02:46)
+
+On-screen: Priya's profile approving the same expense; status flips to approved; treasurer
+dashboard balance updates.
+
+- EN narration: "A single approver can never release money. The second approval reaches
+  quorum, and the balance updates without anyone asking."
+- HI narration: "अकेला स्वीकर्ता कभी पैसा जारी नहीं कर सकता। दूसरी स्वीकृति से पूर्ण संख्या पूरी
+  होती है, और शेष बिना किसी कहे बदल जाता है।"
+
+### Shot 10: Anyone can check the record (02:46 to 03:06, cut to fit)
+
+On-screen: signed-out browser: public fund page, timeline badge tap, `/verify` running the
+check, "Verified" outcome with the pass headline. If the local chain was configured, show the
+on-chain registry line too.
+
+- EN narration: "No sign-in, anyone with the link can open the fund, tap any record, and see
+  whether it has been changed since it was written. The check runs in the browser."
+- HI narration: "बिना साइन इन, लिंक रखने वाला कोई भी फ़ंड खोलकर कोई भी रिकॉर्ड जाँच सकता है कि
+  वह लिखे जाने के बाद बदला या नहीं। यह जांच ब्राउज़र में ही चलती है।"
+- (cut to fit) Trim the scroll on the fund page; hold the verification outcome for 4 seconds.
+
+### Shot 11: Closer (03:06 to 03:20, edit ends at 03:00)
+
+On-screen: plain card, three lines: "Yen never holds the money", "Two approvals before any
+payout", "Every record can be checked by anyone". Last line: the pilot support contact and
+locale note.
+
+- EN narration: "During the pilot, the club's treasurer and approvers get WhatsApp support
+  with a 30-minute response target during the fest. Part of the stack is simulated locally in
+  this recording: SMS delivery, the virus scan and the on-chain anchor. The list is in the
+  demo recording runbook."
+- HI narration: "पायलट के दौरान क्लब के खजांची और स्वीकर्ताओं को WhatsApp सपोर्ट मिलता है,
+  उत्सव के दिनों में 30 मिनट के भीतर जवाब के लक्ष्य के साथ। इस रिकॉर्डिंग में स्टैक के कुछ हिस्से
+  लोकल रूप से सिमुलेटेड हैं: SMS डिलीवरी, वायरस स्कैन और ऑन-चेन एंकर। सूची डेमो रिकॉर्डिंग
+  रनबुक में है।"
+
+## Retake rules
+
+- Reset between retakes: `pnpm demo:reset`, restart `pnpm dev:full`, repeat the pre-roll
+  cookie and PIN steps, then re-record only the affected shot.
+- If the Journey 1 retakes pile up, approve the seeded backup pending expense
+  `01940000-0000-7000-8000-000000000062` in shots 8 and 9 instead; it starts every reset in
+  `submitted` state with zero approvals.
+- The verify page shows "Pending seal" until an anchor lands. Either wait for the 5-minute
+  discovery tick with the local chain, or record the pending state and keep the narration
+  neutral about on-chain status.
