@@ -73,3 +73,35 @@ jobs:
           ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
           GIT_SHA: ${{ github.sha }}
         run: bash scripts/deploy-api.sh image "$GIT_SHA"
+
+  # Runs database migrations as a one-off ECS task against the new image
+  # digest. This job runs BEFORE deploy-staging, and deploy-staging cannot
+  # start unless it succeeds, so a failed migration halts the rollout before
+  # any container is replaced.
+  migrate-staging:
+    name: Migrate staging database
+    needs: image
+    if: needs.image.outputs.ready == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run database migrations before any container is replaced
+        env:
+          OIDC_ROLE_ARN: ${{ vars.OIDC_ROLE_ARN }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+          ECS_MIGRATION_TASK_DEFINITION: ${{ vars.ECS_MIGRATION_TASK_DEFINITION }}
+          ECS_CONTAINER_NAME: ${{ vars.ECS_CONTAINER_NAME }}
+          ECS_SUBNETS: ${{ vars.ECS_SUBNETS }}
+          ECS_SECURITY_GROUPS: ${{ vars.ECS_SECURITY_GROUPS }}
+          MIGRATION_SECRET_ID: ${{ secrets.MIGRATION_SECRET_ID }}
+          IMAGE_DIGEST: ${{ needs.image.outputs.digest }}
+        run: bash scripts/deploy-api.sh migrate staging "$IMAGE_DIGEST"
