@@ -29,3 +29,36 @@ export interface ComplianceResult {
   compliant: boolean;
   violations: ComplianceViolation[];
 }
+
+/**
+ * A DLT-registered SMS template. The registered body uses DLT variable
+ * placeholders of the form `{#name#}` and must match the approved text exactly.
+ * `dlt_template_id` stays empty until the telecom DLT registry issues the ID;
+ * validation fails closed while it is empty.
+ */
+export interface SmsDltTemplateRegistration {
+  template_key: string;
+  dlt_template_id: string;
+  registered_body: string;
+  /** Variable names in the order their placeholders appear in the body. */
+  variables: readonly string[];
+  communication_type: typeof DLT_COMMUNICATION_TYPE;
+}
+
+/**
+ * Registered DLT SMS templates. This track registers the login OTP template;
+ * other notifications are delivered on WhatsApp only. Template IDs are filled
+ * in after DLT approval, see docs/compliance/dlt-whatsapp-templates.md.
+ */
+export const SMS_DLT_TEMPLATE_REGISTRY: Readonly<
+  Record<string, SmsDltTemplateRegistration>
+> = {
+  otp: {
+    template_key: "otp",
+    dlt_template_id: "",
+    registered_body:
+      "Your Yen club treasury login code is {#code#}. It is valid for 10 minutes. Do not share this code.",
+    variables: ["code"],
+    communication_type: DLT_COMMUNICATION_TYPE,
+  },
+};
