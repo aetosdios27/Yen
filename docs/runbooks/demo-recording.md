@@ -129,3 +129,81 @@ Seeded expenses:
 - Passkeys (WebAuthn) are optional in the product and are not used in this
   recording; approvals are authorized with the PIN, which is the default
   flow in the approval modal.
+
+## 4. Signing in for each take
+
+The API reads the session from the `yen_session` cookie or an
+`Authorization: Bearer` header (`apps/api/src/middleware.ts`). Because cookies
+are not port-scoped, a cookie set on any `localhost` page is sent to the API on
+`localhost:3001`. Sign in per persona as follows.
+
+1. Seed the session cookie in the browser. Open http://localhost:3001/health
+   in a tab, open the browser console and run:
+
+   ```js
+   document.cookie = "yen_session=yen_mock_session_treasurer_token; path=/; max-age=86400";
+   ```
+
+   Substitute the matching token from the table in section 3 for each persona.
+
+2. Trust the device once per persona (before recording, not on camera). A
+   session only becomes a trusted device after PIN setup
+   (`isPendingDeviceAuthRoute` in `apps/api/src/middleware.ts` allows
+   `/v1/auth/pin/setup` through), which is also what unlocks all
+   authenticated routes:
+
+   ```sh
+   curl -s -X POST http://localhost:3001/v1/auth/pin/setup \
+     -H 'Content-Type: application/json' \
+     -b 'yen_session=yen_mock_session_treasurer_token' \
+     -d '{"pin":"482613"}'
+   # {"status":"created","isSet":true}
+   ```
+
+   Repeat with `yen_mock_session_approver2_token` for Rohan Iyer and any other
+   persona that appears on camera. The trusted device then has a 7-day idle
+   timeout and a 30-day absolute lifetime, so a full recording session fits
+   comfortably.
+
+3. Confirm authentication works before rolling:
+
+   ```sh
+   curl -s http://localhost:3001/v1/me \
+     -b 'yen_session=yen_mock_session_treasurer_token'
+   ```
+
+## 5. Sample files
+
+Uploads are accepted at `POST /v1/funds/{fundId}/expenses/{expenseId}/evidence`
+with `multipart/form-data` field `file`. The API allows exactly these MIME
+types (`ALLOWED_EVIDENCE_MIME_TYPES` in `apps/api/src/contract.ts`):
+`image/jpeg`, `image/png`, `image/webp`, `application/pdf`. The binary magic
+bytes must match the declared type (`apps/api/src/mime-signature.ts`), the
+limit is 10 MB, and the server computes the SHA-256 itself.
+
+Create a fixtures folder for the shoot:
+
+```sh
+mkdir -p assets/demo-fixtures
+# copy a real phone photo of a paper invoice or a vendor PDF bill, for example:
+cp ~/Downloads/robu-invoice-1042.jpg assets/demo-fixtures/bill.jpg
+```
+
+If you have no real bill image at hand, generate a small valid PNG so the
+upload still passes the MIME signature check:
+
+```sh
+base64 -d > assets/demo-fixtures/bill.png <<'EOF'
+iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAF0lEQVR4nGP8
+z8DwnwEKmBhQMcOw/xcAqR0H95bG2k0AAAAASUVORK5CYII=
+EOF
+```
+
+Keep the fixture under a few hundred KB so the upload progress bar is visible
+but the upload completes quickly on camera.
+
+The seeded expenses reference evidence only as metadata (`motors_invoice.pdf`,
+`registration_receipt.pdf`); the seed inserts no stored bytes for them. For a
+working bill inspection on camera, upload a fixture to the expense created in
+Journey 1 and inspect that expense in Journey 2.
+
