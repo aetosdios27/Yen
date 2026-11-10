@@ -97,7 +97,7 @@ jobs:
           fi
 
       - name: Accessibility (axe, zero violations)
-        run: pnpm --filter @yen/web test:a11y
+        run: pnpm turbo run test:a11y --filter=@yen/web
 
   secrets:
     name: Secret scan
