@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode, useEffect, useId, useState } from "react";
+import { z } from "zod";
 import {
   EMPTY_ONBOARDING_DRAFT,
   isApproverContact,
@@ -39,6 +40,42 @@ function stepError(step: number, draft: OnboardingDraft): string | null {
   return null;
 }
 
+type PersistableDraft = Pick<
+  OnboardingDraft,
+  "clubName" | "clubType" | "purpose" | "description" | "targetPaise" | "visibility"
+>;
+const persistableFields = {
+  clubName: z.string(),
+  clubType: z.string(),
+  purpose: z.string(),
+  description: z.string(),
+  targetPaise: z.string(),
+  visibility: z.enum(["public", "donors", "members"]),
+} satisfies { [K in keyof PersistableDraft]: z.ZodType<PersistableDraft[K]> };
+const persistableSchema = z.object(persistableFields);
+const savedSchema = persistableSchema
+  .partial()
+  .extend({ step: z.number().int().min(0).max(4).default(0) });
+
+function restoreDraft() {
+  const empty = { draft: EMPTY_ONBOARDING_DRAFT, step: 0 };
+  try {
+    const saved = savedSchema.safeParse(
+      JSON.parse(window.localStorage.getItem(DRAFT_KEY) ?? "null"),
+    );
+    if (!saved.success) return empty;
+    const { step, ...fields } = saved.data;
+    const draft: OnboardingDraft = {
+      ...EMPTY_ONBOARDING_DRAFT,
+      ...persistableSchema.parse({ ...EMPTY_ONBOARDING_DRAFT, ...fields }),
+    };
+    const firstMissing = [0, 1, 2, 3, 4].find((index) => stepError(index, draft));
+    return { draft, step: Math.min(step, firstMissing ?? 4) };
+  } catch {
+    return empty;
+  }
+}
+
 export function OnboardingWizard() {
   const [draft, setDraft] = useState<OnboardingDraft>(EMPTY_ONBOARDING_DRAFT);
   const [step, setStep] = useState(0);
@@ -49,9 +86,26 @@ export function OnboardingWizard() {
   );
   const descriptionId = useId();
 
+  const [restored, setRestored] = useState(false);
   useEffect(() => {
-    window.localStorage.removeItem(DRAFT_KEY);
+    const saved = restoreDraft();
+    setDraft(saved.draft);
+    setStep(saved.step);
+    setRestored(true);
   }, []);
+  useEffect(() => {
+    if (!restored) return;
+    try {
+      if (completed) window.localStorage.removeItem(DRAFT_KEY);
+      else
+        window.localStorage.setItem(
+          DRAFT_KEY,
+          JSON.stringify({ ...persistableSchema.parse(draft), step }),
+        );
+    } catch {
+      /* Storage may be unavailable in private browsing. */
+    }
+  }, [draft, step, restored, completed]);
 
   const next = () => {
     const message = stepError(step, draft);

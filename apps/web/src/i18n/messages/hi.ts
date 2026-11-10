@@ -200,6 +200,10 @@ export const hi: Messages = {
     viewReceipt: "रसीद प्रमाणपत्र देखें",
   },
   receipt: {
+    consentUpdates: "मैं {notice} के अनुसार फंड की अपडेट पाने के लिए सहमति देता/देती हूँ।",
+    privacyNotice: "गोपनीयता सूचना",
+    consentWhatsapp: "मैं WhatsApp संदेशों के लिए अलग से सहमति देता/देती हूँ।",
+
     documentTitle: "दान रसीद · Yen",
     title: "दान रसीद",
     verifiedTitle: "प्रमाणित दान प्रमाणपत्र",

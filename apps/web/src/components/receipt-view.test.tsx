@@ -172,3 +172,16 @@ describe("ReceiptView", () => {
     expect(alert.textContent).toContain("Could not save your subscription");
   });
 });
+
+it("renders consent labels and the linked privacy notice in Hindi", () => {
+  render(
+    <LocaleProvider initialLocale="hi">
+      <ReceiptView receipt={mockVerifiedReceipt} />
+    </LocaleProvider>,
+  );
+  expect(screen.getByRole("checkbox", { name: /गोपनीयता सूचना/ })).toBeDefined();
+  expect(screen.getByRole("link", { name: "गोपनीयता सूचना" }).getAttribute("href")).toBe("/privacy");
+  expect(
+    screen.getByRole("checkbox", { name: "मैं WhatsApp संदेशों के लिए अलग से सहमति देता/देती हूँ।" }),
+  ).toBeDefined();
+});
