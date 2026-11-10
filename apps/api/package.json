@@ -15,8 +15,8 @@
     "openapi:generate": "pnpm --filter @yen/shared build && tsx scripts/openapi.ts",
     "openapi:check": "tsx scripts/openapi.ts --check",
     "evidence:integrity": "node dist/evidence-integrity-cli.js",
-    "dev": "pnpm --filter @yen/shared build && PORT=${PORT:-3001} tsx --watch --env-file-if-exists=.env src/server.ts",
-    "dev:mock": "pnpm --filter @yen/shared build && PORT=${PORT:-3001} tsx --env-file-if-exists=.env src/mock-server.ts"
+    "dev": "pnpm --filter @yen/shared build && PORT=${API_PORT:-3001} tsx --watch --env-file-if-exists=.env src/server.ts",
+    "dev:mock": "pnpm --filter @yen/shared build && PORT=${API_PORT:-3001} tsx --env-file-if-exists=.env src/mock-server.ts"
   },
   "dependencies": {
     "@hono/node-server": "2.1.6",
