@@ -66,7 +66,8 @@ describe("scrubText tokens and credentials", () => {
   });
 
   it("redacts JWT session tokens", () => {
-    const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+    const jwt =
+      "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
     const scrubbed = scrubText(`session expired for ${jwt}`);
     expect(scrubbed).not.toContain("eyJhbGciOiJIUzI1NiJ9");
     expect(scrubbed).toContain(REDACTED_TOKEN);
@@ -192,10 +193,12 @@ describe("scrubValue", () => {
   });
 
   it("scrubs Map and Set entries", () => {
-    const scrubbed = scrubValue(new Map([["phone", "9876543210"], ["note", "vpa shop@paytm"]])) as Record<
-      string,
-      unknown
-    >;
+    const scrubbed = scrubValue(
+      new Map([
+        ["phone", "9876543210"],
+        ["note", "vpa shop@paytm"],
+      ]),
+    ) as Record<string, unknown>;
     expect(scrubbed.phone).toBe(REDACTED);
     expect(scrubbed.note).toContain(REDACTED_VPA);
     expect(scrubValue(new Set(["9876543210"]))).toEqual([REDACTED_PHONE]);

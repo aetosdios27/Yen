@@ -41,7 +41,7 @@ const KEY_VALUE_PATTERN =
 // Space separated credential mentions ("otp 530912"); a digit keeps words
 // like "policy" from matching.
 const SPACED_CREDENTIAL_PATTERN =
-  /\b(password|passwd|otp|api[_-]?key|authorization|access[_-]?token|session[_-]?token)\s+(?=[^\s]*\d)[\w.\/+=-]{6,}/gi;
+  /\b(password|passwd|otp|api[_-]?key|authorization|access[_-]?token|session[_-]?token)\s+(?=[^\s]*\d)[\w./+=-]{6,}/gi;
 
 const KEY_VALUE_REPLACEMENT = "$1[redacted]";
 
@@ -88,7 +88,10 @@ const SENSITIVE_KEY_FRAGMENT =
 
 export function isSensitiveKey(key: string): boolean {
   const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, "");
-  return normalized !== "" && (SENSITIVE_KEY_EXACT.has(normalized) || SENSITIVE_KEY_FRAGMENT.test(normalized));
+  return (
+    normalized !== "" &&
+    (SENSITIVE_KEY_EXACT.has(normalized) || SENSITIVE_KEY_FRAGMENT.test(normalized))
+  );
 }
 
 /** Scrubs credentials and personal identifiers out of a free text string. */
