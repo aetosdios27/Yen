@@ -1,0 +1,231 @@
+name: API deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - "packages/db/**"
+      - "Dockerfile"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print infrastructure commands instead of running them"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+# All cloud authentication is OpenID Connect only. Every job that touches
+# infrastructure declares id-token: write and exchanges the short-lived GitHub
+# OIDC token for temporary credentials through scripts/deploy-api.sh. No
+# long-lived cloud credentials are stored in GitHub Secrets.
+env:
+  DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true && '1' || '' }}
+
+jobs:
+  # Builds the API container image once per run and pushes it to ECR under an
+  # immutable digest tag. Every later job promotes this exact digest; nothing
+  # is rebuilt between environments.
+  image:
+    name: Build and push API image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+      ready: ${{ steps.guard.outputs.ready }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The root Dockerfile lands with the API image work. Until then the
+      # pipeline stays green and dormant instead of failing every merge.
+      - name: Require the API image build
+        id: guard
+        run: |
+          if [[ -f Dockerfile ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No root Dockerfile exists yet; skipping the pipeline until the image build lands." >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build, push and record the image digest
+        if: steps.guard.outputs.ready == 'true'
+        id: push
+        env:
+          OIDC_ROLE_ARN: ${{ vars.OIDC_ROLE_ARN }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          GIT_SHA: ${{ github.sha }}
+        run: bash scripts/deploy-api.sh image "$GIT_SHA"
+
+  # Runs database migrations as a one-off ECS task against the new image
+  # digest. This job runs BEFORE deploy-staging, and deploy-staging cannot
+  # start unless it succeeds, so a failed migration halts the rollout before
+  # any container is replaced.
+  migrate-staging:
+    name: Migrate staging database
+    needs: image
+    if: needs.image.outputs.ready == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run database migrations before any container is replaced
+        env:
+          OIDC_ROLE_ARN: ${{ vars.OIDC_ROLE_ARN }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+          ECS_MIGRATION_TASK_DEFINITION: ${{ vars.ECS_MIGRATION_TASK_DEFINITION }}
+          ECS_CONTAINER_NAME: ${{ vars.ECS_CONTAINER_NAME }}
+          ECS_SUBNETS: ${{ vars.ECS_SUBNETS }}
+          ECS_SECURITY_GROUPS: ${{ vars.ECS_SECURITY_GROUPS }}
+          MIGRATION_SECRET_ID: ${{ secrets.MIGRATION_SECRET_ID }}
+          IMAGE_DIGEST: ${{ needs.image.outputs.digest }}
+        run: bash scripts/deploy-api.sh migrate staging "$IMAGE_DIGEST"
+
+  # Staging deploys automatically on every merge to main that touches the API
+  # surface. The digest is the one built by the image job in this run.
+  deploy-staging:
+    name: Deploy API to staging
+    needs: [image, migrate-staging]
+    if: needs.image.outputs.ready == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Roll out the new image digest to staging
+        env:
+          OIDC_ROLE_ARN: ${{ vars.OIDC_ROLE_ARN }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+          ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+          IMAGE_DIGEST: ${{ needs.image.outputs.digest }}
+        run: bash scripts/deploy-api.sh deploy staging "$IMAGE_DIGEST"
+
+  smoke-staging:
+    name: Smoke-test staging
+    needs: [image, deploy-staging]
+    if: needs.image.outputs.ready == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: staging
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # A dry run never deployed anything, so there is nothing to probe.
+      - name: Probe staging readiness and deployed commit
+        if: env.DRY_RUN == ''
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          GIT_SHA: ${{ github.sha }}
+        run: bash scripts/deploy-api.sh smoke "$API_BASE_URL" "$GIT_SHA"
+
+  # Production promotion runs the same migration and rollout mechanics against
+  # the exact same image digest that passed staging. The "production" GitHub
+  # Environment is configured with required reviewers, so both jobs below sit
+  # behind manual approval and run only after a maintainer approves the run.
+  migrate-production:
+    name: Migrate production database
+    needs: [image, smoke-staging]
+    if: needs.image.outputs.ready == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run database migrations before any container is replaced
+        env:
+          OIDC_ROLE_ARN: ${{ vars.OIDC_ROLE_ARN }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+          ECS_MIGRATION_TASK_DEFINITION: ${{ vars.ECS_MIGRATION_TASK_DEFINITION }}
+          ECS_CONTAINER_NAME: ${{ vars.ECS_CONTAINER_NAME }}
+          ECS_SUBNETS: ${{ vars.ECS_SUBNETS }}
+          ECS_SECURITY_GROUPS: ${{ vars.ECS_SECURITY_GROUPS }}
+          MIGRATION_SECRET_ID: ${{ secrets.MIGRATION_SECRET_ID }}
+          IMAGE_DIGEST: ${{ needs.image.outputs.digest }}
+        run: bash scripts/deploy-api.sh migrate production "$IMAGE_DIGEST"
+
+  deploy-production:
+    name: Deploy API to production
+    needs: [image, migrate-production]
+    if: needs.image.outputs.ready == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Roll out the promoted image digest to production
+        env:
+          OIDC_ROLE_ARN: ${{ vars.OIDC_ROLE_ARN }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+          ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+          IMAGE_DIGEST: ${{ needs.image.outputs.digest }}
+        run: bash scripts/deploy-api.sh deploy production "$IMAGE_DIGEST"
+
+  smoke-production:
+    name: Smoke-test production
+    needs: deploy-production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Probe production readiness and deployed commit
+        if: env.DRY_RUN == ''
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          GIT_SHA: ${{ github.sha }}
+        run: bash scripts/deploy-api.sh smoke "$API_BASE_URL" "$GIT_SHA"
