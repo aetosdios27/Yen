@@ -153,3 +153,69 @@ need for heroics over items that add manual steps.
 | Action | Type (prevent/detect/mitigate) | Owner | Issue |
 | ------ | ------------------------------ | ----- | ----- |
 ```
+## Scenario: API down or unhandled crash loop
+
+Symptoms: `scripts/check-status.ts` reports `api_liveness` or `api_readiness`
+failing, the public fund page shows stale or error content, container restarts
+repeat, or club members report the app not loading.
+
+Roll back or restart first, diagnose afterwards. Do not debug a live SEV-1 in
+production before restoring service.
+
+1. Confirm the scope from outside the service network:
+
+   ```sh
+   curl -sS -o /dev/null -w '%{http_code}\n' https://<api-host>/health
+   curl -sS -o /dev/null -w '%{http_code}\n' https://<api-host>/ready
+   pnpm exec tsx scripts/check-status.ts
+   ```
+
+   `/health` is liveness and answers from process state only; `/ready` runs the
+   dependency checks with a 2 second deadline. If `/health` answers but `/ready`
+   fails, treat it as a database or dependency incident, not an API crash: jump
+   to the database scenario below before restarting anything.
+
+2. If the API process is down or restarting, look at the last crash before the
+   first restart so the cause is not lost:
+
+   ```sh
+   docker compose ps
+   docker compose logs --tail 200 api
+   ```
+
+   Capture the panic or unhandled rejection stack trace into the incident
+   thread. A crash loop that follows a deploy is treated as a bad deploy.
+
+3. Restore service, in order of preference:
+   - Bad deploy: roll back the API to the last known good release. Follow
+     [web-rollback.md](web-rollback.md) for the web tier; for the API, redeploy
+     the previous release tag or image digest that passed
+     [release verification](../verify-release.md).
+   - Environment or dependency failure (for example database credentials
+     rotated underneath the process): fix the specific dependency; restarting
+     alone does not help.
+   - Unknown crash with a healthy database: restart the service once.
+
+   ```sh
+   docker compose up -d --force-recreate api
+   ```
+
+4. If the process crashes again within 10 minutes, treat it as a crash loop:
+   keep the incident SEV-1, run the process with the previous working image,
+   and file the stack trace as the primary artifact. Do not add retries,
+   restart loops, or watchdog scripts around a crash loop; they hide the signal.
+
+5. After recovery, verify from the outside and record in the thread:
+
+   ```sh
+   pnpm exec tsx scripts/check-status.ts
+   ```
+
+   The probe must report `api_liveness` and `api_readiness` as `ok`. The
+   readiness endpoint result is cached for up to 1 second
+   (`READINESS_CACHE_MS`), so probe twice a few seconds apart before declaring
+   recovery.
+
+6. Downgrade to SEV-2 only when both endpoints answer `ok` for 30 consecutive
+   minutes and the club update has been posted. Post-mortem within 5 business
+   days for any SEV-1, including restart-only recoveries.
