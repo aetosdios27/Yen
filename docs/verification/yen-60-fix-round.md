@@ -4,17 +4,17 @@ The inherited PR already instruments the API/ledger money routes, burn arithmeti
 trace propagation, public probe and exporter privacy. This round closes the
 verifier's nine implementation gaps without claiming hosted alert delivery.
 
-| Item | Status | Behavior and regression test |
-| --- | --- | --- |
-| 1 | fixed | `sampler-plans.test.ts`: four registered sampler statements pass the existing YEN-57 `verifyPlanNode` cost/scan/index gate on realistic fixtures; `sampler-singleton.test.ts`: two runtimes share one serial cron schedule |
-| 2 | fixed | `sampler-failure.test.ts`: fail each of four statements, export the failure counter, preserve the other objectives, log safe diagnostics |
-| 3 | fixed | `envelope.test.ts`: dead-letter reader gets original payload; handler decoding uses the same unwrap function |
-| 4 | fixed | `boss.test.ts`: ECONNREFUSED name/code survive, personal error message does not |
-| 5 | fixed | `telemetry.test.ts`: exported name is database.client_connections, matching pg_stat_activity scope |
-| 6 | fixed | `append-objective.test.ts`: invalid caller input and unknown fund are good responses, corrupt stored head is bad; shared telemetry test checks both classifier outcomes |
-| 7 | fixed | `browser-tracing.test.ts`: valid request/trace ids and <1500-byte minified browser helper; expense-postgres test preserves the single trace |
-| 8 | fixed | merged origin/main (through #152) cleanly; inspected #135 without editing its branch |
-| 9 | fixed | separate SLO counter, trace propagation, redaction and event-loop tests; injected histogram + fake timer checks interval/reset/final flush |
+| Item | Status | Behavior and regression test                                                                                                                                                                                               |
+| ---- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | fixed  | `sampler-plans.test.ts`: four registered sampler statements pass the existing YEN-57 `verifyPlanNode` cost/scan/index gate on realistic fixtures; `sampler-singleton.test.ts`: two runtimes share one serial cron schedule |
+| 2    | fixed  | `sampler-failure.test.ts`: fail each of four statements, export the failure counter, preserve the other objectives, log safe diagnostics                                                                                   |
+| 3    | fixed  | `envelope.test.ts`: dead-letter reader gets original payload; handler decoding uses the same unwrap function                                                                                                               |
+| 4    | fixed  | `boss.test.ts`: ECONNREFUSED name/code survive, personal error message does not                                                                                                                                            |
+| 5    | fixed  | `telemetry.test.ts`: exported name is database.client_connections, matching pg_stat_activity scope                                                                                                                         |
+| 6    | fixed  | `append-objective.test.ts`: invalid caller input and unknown fund are good responses, corrupt stored head is bad; shared telemetry test checks both classifier outcomes                                                    |
+| 7    | fixed  | `browser-tracing.test.ts`: valid request/trace ids and <1500-byte minified browser helper; expense-postgres test preserves the single trace                                                                                |
+| 8    | fixed  | merged origin/main (through #152) cleanly; inspected #135 without editing its branch                                                                                                                                       |
+| 9    | fixed  | separate SLO counter, trace propagation, redaction and event-loop tests; injected histogram + fake timer checks interval/reset/final flush                                                                                 |
 
 Red runs were executed before the corresponding implementation (or with that
 specific implementation restored to the inherited version). Local logs:
