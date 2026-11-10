@@ -16,6 +16,7 @@ interface FundRow {
   created_at: Date | string;
   policy_json: Record<string, unknown> | string;
   owner_id: string;
+  org_id: string;
   version: number;
 }
 
@@ -33,7 +34,7 @@ export class PostgresFundStore implements FundStore {
   async get(fundId: string): Promise<FundRecord | undefined> {
     const rows = await this.sql<FundRow[]>`
       SELECT f.id, f.title, f.target_paise, f.visibility_tier, f.payee_vpa,
-        f.payee_name, f.created_at, f.policy_json, o.owner_id, f.version
+        f.payee_name, f.created_at, f.policy_json, o.owner_id, o.id AS org_id, f.version
       FROM funds f JOIN orgs o ON o.id = f.org_id WHERE f.id = ${fundId}
     `;
     const row = rows[0];
@@ -41,6 +42,7 @@ export class PostgresFundStore implements FundStore {
     const policy = decodePolicy(row.policy_json);
     return {
       owner: row.owner_id,
+      orgId: row.org_id,
       fund: {
         id: row.id,
         name: row.title,
@@ -287,7 +289,7 @@ export class PostgresFundStore implements FundStore {
       });
       const result = await tx<FundRow[]>`
         SELECT f.id, f.title, f.target_paise, f.visibility_tier, f.payee_vpa,
-          f.payee_name, f.created_at, f.policy_json, o.owner_id, f.version
+          f.payee_name, f.created_at, f.policy_json, o.owner_id, o.id AS org_id, f.version
         FROM funds f JOIN orgs o ON o.id = f.org_id WHERE f.id = ${input.fundId}
       `;
       const row = result[0];
@@ -295,6 +297,7 @@ export class PostgresFundStore implements FundStore {
       const policy = decodePolicy(row.policy_json);
       return {
         owner: row.owner_id,
+        orgId: row.org_id,
         fund: {
           id: row.id,
           name: row.title,
