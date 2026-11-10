@@ -4,5 +4,5 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["src", "vitest.config.ts"]
+  "include": ["src", "sandbox", "vitest.config.ts", "vitest.sandbox.config.ts"]
 }

@@ -112,6 +112,11 @@ export interface DonationPledgeStore {
 }
 
 export interface PublicFundDonation {
+  readonly refund?: {
+    readonly id: string;
+    readonly occurredAt: string;
+    readonly anchored: boolean;
+  };
   readonly id: string;
   readonly occurredAt: string;
   readonly amountPaise: bigint;
@@ -122,6 +127,8 @@ export interface PublicFundDonation {
 export interface PublicFundReadStore {
   /** Confirmed credits only. Pledges are deliberately excluded until bank matched. */
   donations(fundId: string): Promise<readonly PublicFundDonation[]>;
+  pledgedPaise(fundId: string): Promise<bigint>;
+  anchoredItems(fundId: string): Promise<ReadonlySet<string>>;
 }
 
 export class MemoryPublicFundReadStore implements PublicFundReadStore {
@@ -129,6 +136,14 @@ export class MemoryPublicFundReadStore implements PublicFundReadStore {
 
   async donations(fundId: string) {
     return this.values.get(fundId) ?? [];
+  }
+
+  async pledgedPaise(_fundId: string) {
+    return 0n;
+  }
+
+  async anchoredItems(_fundId: string): Promise<ReadonlySet<string>> {
+    return new Set();
   }
 
   set(fundId: string, donations: readonly PublicFundDonation[]) {
