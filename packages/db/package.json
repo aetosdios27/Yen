@@ -21,8 +21,7 @@
     "verify-chain": "node src/verify-cli.ts",
     "export-audit-bundle": "node src/export-audit-cli.ts",
     "check:fk-indexes": "node src/check-fk-indexes-cli.ts",
-    "retention": "node src/retention-cli.ts",
-    "privacy:erase-contact": "node src/privacy-contact-cli.ts"
+    "retention": "node src/retention-cli.ts"
   },
   "dependencies": {
     "@yen/eventlog": "workspace:*",

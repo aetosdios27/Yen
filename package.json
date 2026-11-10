@@ -10,6 +10,7 @@
     "dev": "turbo run dev",
     "dev:full": "tsx scripts/dev-full.ts",
     "db:migrate": "pnpm --filter @yen/db migrate",
+    "privacy:erase-contact": "tsx packages/db/src/privacy-contact-cli.ts",
     "db:seed": "tsx scripts/seed.ts",
     "db:reset": "tsx scripts/db-reset.ts",
     "docker:up": "docker compose up -d",

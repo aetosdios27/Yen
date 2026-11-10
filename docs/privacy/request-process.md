@@ -17,7 +17,7 @@ and record that review; shipping tests does not constitute approval.
    readable only by the operator and run against the app database:
 
    ```sh
-   pnpm --filter @yen/db privacy:erase-contact --verified-contact-file /private/contact.txt
+   pnpm privacy:erase-contact --verified-contact-file /private/contact.txt
    ```
 
    This atomically deletes subscriptions, waitlist entries and guest labels, and
