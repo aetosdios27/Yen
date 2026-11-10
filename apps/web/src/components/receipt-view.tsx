@@ -1,6 +1,6 @@
 "use client";
 
-import { paise } from "@yen/shared";
+import { type DonationStatus, paise } from "@yen/shared";
 import Link from "next/link";
 import { type FormEvent, useState } from "react";
 import { useI18n } from "../i18n";
@@ -15,7 +15,7 @@ export interface ReceiptData {
   fundId: string;
   fundName: string;
   amountPaise: string;
-  status: "verified" | "pledged" | "rejected" | "failed" | "refunded";
+  status: DonationStatus;
   utr: string;
   occurredAt: string;
   refundedAt?: string | undefined;
@@ -64,7 +64,6 @@ export function ReceiptView({ receipt, apiUrl = "", onSubscribe }: ReceiptViewPr
         return { badge: "verified", title: "receipt.verifiedTitle" } as const;
       case "pledged":
         return { badge: "pending", title: "receipt.pendingTitle" } as const;
-      case "failed":
       case "rejected":
         return { badge: "rejected", title: "receipt.rejectedTitle" } as const;
       case "refunded":
