@@ -103,3 +103,34 @@ agrees to before the first session. The rules the club relies on:
 - Tasks use the sandbox with fictional data. No real phone numbers, bank details or UPI
   references are captured during tasks.
 - The club receives the anonymized findings; quotes are used in reports only with permission.
+
+## 5. Exit criteria and exit process / बाहर निकलने की शर्तें
+
+The pilot ends, for a club, when any of these holds:
+
+1. The pilot period ends, and the club and the pilot team agree whether to continue on the
+   production deployment or stop.
+2. The club asks to exit, at any time, for any reason, by writing to the pilot contact.
+3. An unremediated SEV-1 incident, as classified in `docs/runbooks/incident-response.md`,
+   affected the club's fund.
+
+On exit, the club chooses one of:
+
+- **Export and stop.** The pilot team exports the fund's audit bundle (the offline verifier
+  bundle from the `/verify` page) to the club's representative, and the fund is closed. The
+  club's financial records remain as stated in section 2.3; personal data is processed per the
+  erasure process in `docs/privacy/request-process.md`.
+- **Continue.** The fund moves off the pilot deployment under the deployment process of
+  `docs/deployment/web.md`; the data handling commitments of this agreement carry over.
+
+Personal data removal on exit follows the same process as a data-principal request: verify,
+dry-run, execute, confirm, record the case ID. The club may name its own deadline for
+completing the removal; the pilot team commits to completing it within 30 days.
+
+## 6. Sign-off / हस्ताक्षर
+
+| Role                                                     | Name | Signature | Date |
+| -------------------------------------------------------- | ---- | --------- | ---- |
+| Club representative (secretary or treasurer)             |      |           |      |
+| Pilot coordinator                                        |      |           |      |
+| Faculty advisor (optional, if the institute requires it) |      |           |      |
