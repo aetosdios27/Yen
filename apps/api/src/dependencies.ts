@@ -64,7 +64,11 @@ import {
   type RateLimit,
   type RateLimitStore,
 } from "./stores.js";
-import { UnconfiguredVirusScannerAdapter, type VirusScannerAdapter } from "./virus-scanner.js";
+import {
+  ClamAvVirusScannerAdapter,
+  LocalDemoVirusScannerAdapter,
+  type VirusScannerAdapter,
+} from "./virus-scanner.js";
 
 export interface Principal {
   readonly id: string;
@@ -473,6 +477,31 @@ export interface AppDependencies {
   readonly isShuttingDown: () => boolean;
 }
 
+/**
+ * Picks the malware scanner from the environment. ClamAV wins whenever
+ * CLAMAV_HOST is configured; outside production the explicit local demo
+ * scanner is the fallback so receipt uploads work end to end locally.
+ * Production without CLAMAV_HOST is refused outright.
+ */
+export function selectVirusScanner(env: NodeJS.ProcessEnv = process.env): VirusScannerAdapter {
+  if (env.CLAMAV_HOST) {
+    return new ClamAvVirusScannerAdapter({
+      host: env.CLAMAV_HOST,
+      port: env.CLAMAV_PORT ? Number(env.CLAMAV_PORT) : 3310,
+      timeoutMs: env.CLAMAV_TIMEOUT_MS ? Number(env.CLAMAV_TIMEOUT_MS) : 10000,
+      maxSizeBytes: env.CLAMAV_MAX_SIZE_BYTES
+        ? Number(env.CLAMAV_MAX_SIZE_BYTES)
+        : 10 * 1024 * 1024,
+    });
+  }
+  if (env.NODE_ENV === "production") {
+    throw new Error(
+      "Production requires CLAMAV_HOST; the local demo malware scanner is not a production scanner",
+    );
+  }
+  return new LocalDemoVirusScannerAdapter();
+}
+
 export function defaultDependencies(
   clock: () => number = Date.now,
   expenseStore?: ExpenseStore,
@@ -565,7 +594,7 @@ export function defaultDependencies(
     waitlistBodyLimit: 8192,
     evidenceStore: resolvedEvidenceStore,
     storageAdapter: resolvedStorageAdapter,
-    virusScanner: new UnconfiguredVirusScannerAdapter(),
+    virusScanner: selectVirusScanner(process.env),
     clock,
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     waitlistMinResponseMs: 75,
