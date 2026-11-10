@@ -1,0 +1,149 @@
+# Pilot onboarding guide: Yen for treasurers and co-approvers
+
+Status: pilot kit, YEN-51.
+
+Audience: the treasurer and the two (or three) co-approvers of a student club taking part in
+the Yen pilot. This guide is two pages on paper. Every screen name, route and limit below was
+checked against the app itself (`apps/web/src/app`) and against
+`docs/ux/five-core-journeys.md`. Nothing here is invented.
+
+| English                                                                               | हिन्दी                                                            |
+| ------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Keep this guide next to you during setup. Every screen names exactly one next action. | सेटअप के दौरान यह गाइड पास रखें। हर स्क्रीन पर ठीक एक अगला कदम होता है। |
+
+## 1. Before you start / शुरू करने से पहले
+
+| You need (English)                                                                               | आपको चाहिए (हिन्दी)                                                        |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| Your phone with the SIM that receives SMS.                                                       | आपका फ़ोन, जिसमें SMS आने वाला सिम हो।                                        |
+| A UPI app on the same phone (GPay, PhonePe, Paytm or your bank app).                             | उसी फ़ोन पर कोई UPI ऐप (GPay, PhonePe, Paytm या बैंक का ऐप)।                 |
+| The club's UPI ID (for example `club@sbi`) and the account name printed on the bank passbook.    | क्लब की UPI ID (जैसे `club@sbi`) और बैंक पासबुक पर छपा खाता नाम।                |
+| Names and phone numbers of two co-approvers. They must not be you. A third approver is optional. | दो सह-स्वीकर्ताओं के नाम और फ़ोन नंबर। वे आप नहीं हो सकते। तीसरा स्वीकर्ता वैकल्पिक है। |
+| The purpose of the fund and the target amount, decided by the club.                              | फ़ंड का उद्देश्य और लक्ष्य राशि, जो क्लब ने तय की है।                               |
+
+| Rule to remember                                                                                     | याद रखने वाला नियम                                                                  |
+| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Yen never holds the money. Donations go straight to the club's UPI. Yen only keeps the records.      | येन पैसा अपने पास नहीं रखता। दान सीधे क्लब के UPI में जाता है। येन सिर्फ रिकॉर्ड रखता है।        |
+| Two approvals are required before any expense is released. One person alone can never release money. | कोई भी खर्च जारी होने से पहले दो स्वीकृतियाँ ज़रूरी हैं। अकेला व्यक्ति कभी पैसा जारी नहीं कर सकता। |
+
+## 2. Account setup / खाता सेटअप
+
+| English                                                                                                                                                                                | हिन्दी                                                                                                                          |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 1. Open the app link the pilot team gave you and tap Sign in. This is the `/login` screen.                                                                                             | 1. पायलट टीम का दिया ऐप लिंक खोलें और साइन इन पर टैप करें। यह `/login` स्क्रीन है।                                                      |
+| 2. Enter your phone number and tap the button to receive a 6-digit code (OTP) by SMS or WhatsApp.                                                                                      | 2. अपना फ़ोन नंबर डालें और SMS या WhatsApp पर 6 अंकों का कोड (OTP) पाने के बटन पर टैप करें।                                               |
+| 3. Type the 6-digit code within its validity window. The code expires after a short time; ask the pilot team to resend it if it does not arrive (see `docs/pilot/support-runbook.md`). | 3. 6 अंकों का कोड डालें। कोड थोड़ी देर में समाप्त हो जाता है; न आए तो पायलट टीम से दोबारा भेजने को कहें (`docs/pilot/support-runbook.md` देखें)। |
+| 4. That is the whole sign-in. There is no password to remember.                                                                                                                        | 4. साइन इन बस इतना ही है। कोई पासवर्ड याद रखना नहीं है।                                                                            |
+
+## 3. Create a fund / फ़ंड बनाना
+
+Open `/onboarding` (the pilot team links it from the landing page). The wizard has 5 steps and
+your progress is saved on the device, so you can close it and come back.
+
+| Step   | Screen asks           | What to enter (EN)                                                                                                                                | क्या भरें (HI)                                                                                               |
+| ------ | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| 1 of 5 | Club details          | Club name and club type.                                                                                                                          | क्लब का नाम और क्लब का प्रकार।                                                                               |
+| 2 of 5 | Fund details          | Purpose (required), description (optional), target amount. The target is entered in **whole paise**: for Rs 1,250.00 enter `125000`. No decimals. | उद्देश्य (ज़रूरी), विवरण (वैकल्पिक), लक्ष्य राशि। लक्ष्य **पूरे पैसों में** भरें: 1,250.00 रुपये के लिए `125000` भरें। दशमलव नहीं। |
+| 3 of 5 | Payment details       | The club's UPI VPA (example `club@sbi`) and the payee name as the bank prints it.                                                                 | क्लब का UPI VPA (जैसे `club@sbi`) और बैंक में दर्ज पाने वाले का नाम।                                                |
+| 4 of 5 | Approvers             | Two approvers (name + phone). The third is optional. Two approvals are always required.                                                           | दो स्वीकर्ता (नाम + फ़ोन)। तीसरा वैकल्पिक। दो स्वीकृतियाँ हमेशा ज़रूरी हैं।                                            |
+| 5 of 5 | Visibility and create | Who can see this fund: Public, Donors only, or Members only. Then tap Create fund.                                                                | यह फ़ंड कौन देख सकता है: सार्वजनिक, केवल दानदाता, या केवल सदस्य। फिर फ़ंड बनाएँ पर टैप करें।                            |
+
+When the screen says "Your fund is ready":
+
+1. Tap **Share approver invite 1 on WhatsApp** and send it to approver 1. Repeat for approver 2
+   (and 3 if nominated). Each invite opens WhatsApp with a link of the form
+   `/invites/accept?code=...`.
+2. Tap **Open fund** to see the public fund page `/funds/[fundId]` that donors will visit.
+
+| English                                                                                                                                                                                                                                                                                                                           | हिन्दी                                                                                                                                                                                                                                                                        |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| When the screen says "Your fund is ready", tap Share approver invite 1 on WhatsApp and send it to approver 1. Repeat for approver 2 (and 3 if nominated). Each invite opens WhatsApp with a link of the form `/invites/accept?code=...`. Then tap Open fund to see the public fund page `/funds/[fundId]` that donors will visit. | जब स्क्रीन कहे "आपका फ़ंड तैयार है", तो स्वीकर्ता निमंत्रण 1 WhatsApp पर साझा करें पर टैप करके पहले स्वीकर्ता को भेजें। दूसरे (और नामित तीसरे) के लिए दोहराएँ। हर निमंत्रण `/invites/accept?code=...` रूप का लिंक खोलता है। फिर फ़ंड खोलें पर टैप करके वह सार्वजनिक फ़ंड पेज `/funds/[fundId]` देखें जिस पर दानदाता आएँगे। |
+
+### The co-approver accepts the invite / सह-स्वीकर्ता निमंत्रण स्वीकार करता है
+
+| English                                                                                                                                                                                                | हिन्दी                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Each nominated person, on their own phone, opens the WhatsApp link and lands on `/invites/accept`. They enter their name and **the same phone number the invite was sent to**, then tap Accept invite. | हर नामित व्यक्ति अपने फ़ोन पर WhatsApp लिंक खोलकर `/invites/accept` पर पहुँचता है। वह अपना नाम और **वही फ़ोन नंबर जिस पर निमंत्रण आया** डालकर निमंत्रण स्वीकार करें दबाता है। |
+| When the screen says "You are now an approver.", they are done. The invite link can be re-shared from the fund-ready screen if it expired.                                                             | स्क्रीन पर "अब आप अनुमोदक हैं।" दिखे तो काम पूरा। निमंत्रण की अवधि बीत गई हो तो फ़ंड-तैयार स्क्रीन से लिंक फिर भेजा जा सकता है।                                               |
+
+## 4. Filing an expense with bill photos / बिल की तस्वीर के साथ खर्च दर्ज करना
+
+Treasurer, on the treasurer dashboard `/funds/[fundId]/treasurer`:
+
+| English                                                                                                                                                                                                                                         | हिन्दी                                                                                                                                                                                         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Check **Spendable balance** first. It is the amount you can actually request against; the difference from the total balance is money already held for pending expenses.                                                                      | 1. पहले **खर्च योग्य शेष** देखें। यही राशि आप आगे के खर्च के लिए माँग सकते हैं; कुल शेष और इसका अंतर लंबित खर्चों के लिए रोका गया पैसा है।                                                                            |
+| 2. Tap **New Expense**. On `/funds/[fundId]/expenses/new` fill: Amount (Rs) in rupees, for example `250.00`; Payee name; Payee UPI VPA (example `shop@ybl`); Purpose; optionally a receipt or bill reference such as `Invoice #1042`.           | 2. **नया खर्च** पर टैप करें। `/funds/[fundId]/expenses/new` पर भरें: रकम (₹) रुपयों में, जैसे `250.00`; पाने वाले का नाम; पाने वाले का UPI VPA (जैसे `shop@ybl`); उद्देश्य; और चाहें तो बिल संदर्भ जैसे `Invoice #1042`। |
+| 3. Under Upload bill or receipt, tap **Take photo** for a paper bill or **Choose file** for a gallery image or PDF. Limits: JPEG, PNG, WebP or PDF, up to 10 MB. Uploading shows a percentage; on slow networks let it finish before moving on. | 3. बिल या रसीद अपलोड करें के नीचे कागज़ी बिल के लिए **फ़ोटो लें** या गैलरी/PDF के लिए **फ़ाइल चुनें** दबाएँ। सीमा: JPEG, PNG, WebP या PDF, अधिकतम 10 MB। अपलोड प्रतिशत दिखाता है; धीमे नेटवर्क पर पूरा होने दें।       |
+| 4. Tap **Review expense**, check every field on the summary, then tap **Submit expense**.                                                                                                                                                       | 4. **खर्च की समीक्षा करें** दबाएँ, सारांश पर हर विवरण जाँचें, फिर **खर्च प्रस्तुत करें** दबाएँ।                                                                                                               |
+| 5. You return to the treasurer dashboard. The request sits in the pending list with status "Submitted", and the spendable balance already shows the hold.                                                                                       | 5. आप खजांची डैशबोर्ड पर लौट आएँगे। अनुरोध लंबित सूची में "प्रस्तुत" स्थिति में दिखेगा और खर्च योग्य शेष में रोक तुरंत दिख जाएगी।                                                                                     |
+
+## 5. Approving with the PIN / पिन से स्वीकृति
+
+Co-approver, on your own phone:
+
+| English                                                                                                                                                                                                                      | हिन्दी                                                                                                                                                                                       |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Open the WhatsApp link the treasurer's request produced. It lands on `/funds/[fundId]/approvals/[expenseId]`.                                                                                                             | 1. खजांची के अनुरोध का WhatsApp लिंक खोलें। वह `/funds/[fundId]/approvals/[expenseId]` पर ले जाता है।                                                                                               |
+| 2. Read the amount (the largest thing on the screen), payee name, payee UPI VPA, purpose and the bill photo under Receipts. The timeline shows how many approvals have landed.                                               | 2. रकम (स्क्रीन पर सबसे बड़ा अंक), पाने वाले का नाम, UPI VPA, उद्देश्य और **रसीदें** के नीचे बिल की तस्वीर पढ़ें। टाइमलाइन दिखाती है कि कितनी स्वीकृतियाँ आ गईं।                                                   |
+| 3. Tap **Approve**. In the dialog, enter your **6-digit approval PIN** and tap Confirm approval. On devices that support passkeys, the phone may additionally confirm it is really you; no setup is needed for the PIN flow. | 3. **स्वीकार करें** दबाएँ। डायलॉग में अपना **6 अंकों का स्वीकृति पिन** डालकर स्वीकृति की पुष्टि करें दबाएँ। पासकी सपोर्ट वाले फ़ोन पर फ़ोन आपकी पहचान अतिरिक्त पुष्टि कर सकता है; पिन प्रवाह के लिए कोई सेटअप ज़रूरी नहीं। |
+| 4. The second approver repeats steps 1 to 3. When the quorum (2) is reached, the request is approved and the treasurer sees the balance change without doing anything.                                                       | 4. दूसरा स्वीकर्ता वही कदम दोहराता है। पूर्ण संख्या (2) पर अनुरोध स्वीकृत हो जाता है और खजांची को शेष बदलाव बिना किसी काम के दिख जाता है।                                                                   |
+
+| If something goes wrong  | What happens                                                                                      | अगर समस्या आए          | क्या होगा                                                                               |
+| ------------------------ | ------------------------------------------------------------------------------------------------- | --------------------- | -------------------------------------------------------------------------------------- |
+| You typed the wrong PIN  | You see how many attempts remain. Five wrong attempts lock approvals for 30 minutes.              | गलत पिन डाला          | बचे हुए प्रयास दिखते हैं। पाँच गलत प्रयासों पर 30 मिनट के लिए स्वीकृति बंद।                         |
+| PIN was reset by support | A 24 hour cooling-off applies before the next approval.                                           | पिन सपोर्ट ने रीसेट किया | अगली स्वीकृति से पहले 24 घंटे का कूलिंग-ऑफ।                                                    |
+| You want to say no       | Tap Reject. A reason of at least 5 characters is mandatory and becomes part of the public record. | मना करना है            | अस्वीकार करें दबाएँ। कम से कम 5 अक्षरों का कारण अनिवार्य है और सार्वजनिक रिकॉर्ड का हिस्सा बनता है। |
+
+## 6. Reading the public fund page / सार्वजनिक फ़ंड पेज पढ़ना
+
+Anyone with the link, no sign-in, visits `/funds/[fundId]`. Show donors and club members the
+four things below.
+
+| English                                                                                                                                                                                                                                                                               | हिन्दी                                                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Money summary: total raised, total spent, current balance, in Indian digit grouping.                                                                                                                                                                                               | 1. पैसों का विवरण: कुल जुटाया, कुल खर्च, वर्तमान शेष, भारतीय अंकों में।                                                                                                                                                                             |
+| 2. Live transparency timeline: every donation and expense confirmed so far, with filters for donations and expenses. Each entry carries a badge; tapping Check this record opens `/verify?recordId=...&fundId=...` and tells you whether the record has changed since it was written. | 2. सीधा पारदर्शिता विवरण: अब तक की हर पुष्ट दान और खर्च, फ़िल्टर सहित। हर प्रविष्टि पर बैज है; इस रिकॉर्ड की जांच करें दबाने पर `/verify?recordId=...&fundId=...` खुलता है जो बताता है कि रिकॉर्ड लिखे जाने के बाद बदला या नहीं।                               |
+| 3. How do I know? opens a four-point explainer: bank verification, approvals, evidence and the tamper-evident account book.                                                                                                                                                           | 3. मुझे कैसे पता चलेगा? चार बिंदुओं का समझाना खोलता है: बैंक पुष्टि, स्वीकृतियाँ, बिल का सबूत और बदलाव-दिखाने वाला खाता बही।                                                                                                                              |
+| 4. Donors tap Donate via UPI, pay the club's UPI ID (QR or their UPI app), then record the 12-digit UPI reference from their app on `/funds/[fundId]/donate`. Until the bank statement match, the donation shows as waiting; the receipt at `/receipts/[id]` says so plainly.         | 4. दानदाता UPI से दान करें दबाकर क्लब की UPI ID पर (QR या अपना UPI ऐप) पैसे भेजता है, फिर `/funds/[fundId]/donate` पर अपने ऐप का 12 अंकों का UPI संदर्भ दर्ज करता है। बैंक विवरण मिलान तक दान प्रतीक्षारत दिखता है; `/receipts/[id]` की रसीद यह साफ कहती है। |
+
+## 7. Screen map / स्क्रीन नक्शा
+
+| What                   | Route                                   | Who                      |
+| ---------------------- | --------------------------------------- | ------------------------ |
+| Sign in with OTP       | `/login`                                | Everyone with an account |
+| Create fund (5 steps)  | `/onboarding`                           | Treasurer                |
+| Accept approver invite | `/invites/accept?code=...`              | Co-approver              |
+| Public fund page       | `/funds/[fundId]`                       | Anyone, no sign-in       |
+| Donate                 | `/funds/[fundId]/donate`                | Donor, no sign-in        |
+| Receipt certificate    | `/receipts/[id]`                        | Donor                    |
+| Treasurer dashboard    | `/funds/[fundId]/treasurer`             | Treasurer                |
+| New expense            | `/funds/[fundId]/expenses/new`          | Treasurer                |
+| Approve or reject      | `/funds/[fundId]/approvals/[expenseId]` | Co-approver              |
+| Verify one record      | `/verify?recordId=...&fundId=...`       | Anyone, no sign-in       |
+| Privacy notice         | `/privacy`                              | Everyone                 |
+
+| क्या                     | रूट                                      | कौन                    |
+| ----------------------- | --------------------------------------- | ---------------------- |
+| OTP से साइन इन           | `/login`                                | खाता रखने वाला हर व्यक्ति |
+| फ़ंड बनाना (5 कदम)        | `/onboarding`                           | खजांची                  |
+| स्वीकर्ता निमंत्रण स्वीकारना | `/invites/accept?code=...`              | सह-स्वीकर्ता             |
+| सार्वजनिक फ़ंड पेज          | `/funds/[fundId]`                       | कोई भी, बिना साइन इन   |
+| दान करना                | `/funds/[fundId]/donate`                | दानदाता, बिना साइन इन  |
+| रसीद प्रमाणपत्र           | `/receipts/[id]`                        | दानदाता                |
+| खजांची डैशबोर्ड            | `/funds/[fundId]/treasurer`             | खजांची                  |
+| नया खर्च                 | `/funds/[fundId]/expenses/new`          | खजांची                  |
+| स्वीकृति या अस्वीकृति       | `/funds/[fundId]/approvals/[expenseId]` | सह-स्वीकर्ता             |
+| एक रिकॉर्ड की जांच        | `/verify?recordId=...&fundId=...`       | कोई भी, बिना साइन इन   |
+| गोपनीयता सूचना           | `/privacy`                              | सभी                    |
+
+## 8. Who to contact / किससे संपर्क करें
+
+Problems go to the pilot WhatsApp support channel. Response target during the fest is under
+30 minutes. The channel runbook, with the question templates and the escalation path, is
+`docs/pilot/support-runbook.md`. Do not share your approval PIN with anyone, including
+support: support can reset the PIN, it never needs the PIN itself.
+
+| English                                                                                                                                                                                                                                                                                  | हिन्दी                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Problems go to the pilot WhatsApp support channel. Response target during the fest is under 30 minutes. The channel runbook is `docs/pilot/support-runbook.md`. Do not share your approval PIN with anyone, including support: support can reset the PIN, it never needs the PIN itself. | समस्याएँ पायलट WhatsApp सपोर्ट चैनल में भेजें। उत्सव के दिनों में जवाब का लक्ष्य 30 मिनट से कम है। चैनल रनबुक `docs/pilot/support-runbook.md` में है। अपना स्वीकृति पिन किसी को न दें, सपोर्ट को भी नहीं: सपोर्ट पिन रीसेट कर सकता है, पिन माँगने की ज़रूरत कभी नहीं होती। |
