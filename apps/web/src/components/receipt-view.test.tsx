@@ -172,3 +172,41 @@ describe("ReceiptView", () => {
     expect(alert.textContent).toContain("Could not save your subscription");
   });
 });
+
+it.each([
+  ["en", "Donation refunded"],
+  ["hi", "दान वापस किया गया"],
+] as const)("shows a refunded receipt in %s", (locale, title) => {
+  const { getByRole, container } = render(
+    <LocaleProvider initialLocale={locale}>
+      <ReceiptView
+        receipt={{
+          ...mockVerifiedReceipt,
+          status: "refunded",
+          refundedAt: "2026-11-01T12:34:56.000Z",
+        }}
+      />
+    </LocaleProvider>,
+  );
+  expect(getByRole("heading", { level: 1 }).textContent).toBe(title);
+  expect(container.textContent).not.toContain("Waiting for bank");
+  expect(container.textContent).toContain("2026");
+});
+it.each([
+  ["en", "Privacy notice", "I separately agree to WhatsApp messages."],
+  ["hi", "गोपनीयता सूचना", "WhatsApp संदेशों के लिए मेरी अलग से सहमति है।"],
+] as const)(
+  "renders both consent labels with the privacy link inside the %s sentence",
+  (locale, notice, whatsapp) => {
+    render(
+      <LocaleProvider initialLocale={locale}>
+        <ReceiptView receipt={mockVerifiedReceipt} />
+      </LocaleProvider>,
+    );
+    const link = screen.getByRole("link", { name: notice });
+    expect(link.getAttribute("href")).toBe("/privacy");
+    expect(link.closest("label")?.querySelector('input[type="checkbox"]')).not.toBeNull();
+    expect(screen.getAllByRole("checkbox")).toHaveLength(4);
+    expect(screen.getByRole("checkbox", { name: whatsapp })).toBeDefined();
+  },
+);

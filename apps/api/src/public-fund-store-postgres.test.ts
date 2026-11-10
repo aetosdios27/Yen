@@ -237,6 +237,7 @@ databaseSuite("Postgres public fund read store", (sql) => {
     await sql`UPDATE anchors SET status = 'confirmed', confirmed_at = now() WHERE id = ${anchorId}`;
     expect(await store().anchoredItems(fundId)).toEqual(new Set([creditId]));
     await sql`UPDATE expenses SET status = 'reconciled' WHERE id = ${expenseId}`;
+    await sql`UPDATE bank_transactions SET matched_expense_id = ${expenseId} WHERE id = ${debitId}`;
     expect(await store().anchoredItems(fundId)).toEqual(new Set([creditId, expenseId]));
     await sql`UPDATE bank_transactions SET reconciliation_status = 'unmatched' WHERE id = ${creditId}`;
     expect(await store().anchoredItems(fundId)).toEqual(new Set([expenseId]));

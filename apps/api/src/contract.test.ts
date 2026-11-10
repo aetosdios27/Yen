@@ -1,9 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { z } from "@hono/zod-openapi";
+import { normalizePhone } from "@yen/shared";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { expect, it } from "vitest";
 import { createApp } from "./app.js";
-import { DevStubOtpDeliveryProvider, normalizePhone } from "./auth/index.js";
+import { DevStubOtpDeliveryProvider } from "./auth/index.js";
 import { rotateSessionResponse, verifyOtpResponse } from "./contract.js";
 import { ApiError, errorCode, errorStatus } from "./errors.js";
 import { devPolicy } from "./policy.js";

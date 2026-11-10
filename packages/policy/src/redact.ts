@@ -1,3 +1,4 @@
+import type { FundVerificationState } from "@yen/shared";
 import { type Paise, type PseudonymId, paiseWire, parsePseudonymId } from "@yen/shared";
 import { isValidPaiseAmount } from "./policy.js";
 import { type Actor, type FundRole, isMemberRole, isStaffRole, isValidRole } from "./roles.js";
@@ -103,7 +104,7 @@ function selectedDonationName(record: DonationRecord): string | undefined {
   return record.donorNameChoice === "full" ? name : maskNameToInitials(name) || "A donor";
 }
 
-export type FundVerificationState = "bank-matched" | "anchored" | "unverified";
+export type { FundVerificationState } from "@yen/shared";
 export interface FundSummaryRecord {
   readonly kind: "fund_summary";
   readonly fundId: string;
@@ -133,6 +134,7 @@ export interface FundTimelineRecord {
     readonly occurredAt: string;
     readonly message: string;
     readonly actorDisplayName?: string | undefined;
+    readonly itemType?: "donation" | "refund" | "expense" | "alert" | undefined;
     readonly actorNameChoice?: "full" | "initials" | undefined;
     readonly amountPaise?: string | undefined;
     /** Fund alert items only. */
@@ -532,6 +534,7 @@ export function redactFundReadModel<T extends FundReadRecord>(
       fundId: str(record.fundId),
       items: record.items.map((item) => ({
         id: str(item.id),
+        ...(item.itemType ? { itemType: item.itemType } : {}),
         occurredAt: str(item.occurredAt),
         message: publicText(item.message),
         ...(item.actorDisplayName === undefined

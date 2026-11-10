@@ -18,7 +18,7 @@ it.each(["unverified", "bank-matched", "anchored"])(
             raisedPaise: "7000",
             pledgedPaise: "9000",
             spentPaise: "2500",
-            verification: "bank-matched",
+            verification,
           }
         : path.endsWith("breakdown")
           ? { categories: [{ category: "Equipment", spentPaise: "2500" }] }
@@ -36,6 +36,7 @@ it.each(["unverified", "bank-matched", "anchored"])(
             },
     }));
     const fund = await getPublicFund("fund");
+    expect(fund?.org.verification).toBe(verification);
     expect(fund?.money).toEqual({ totalRaised: 7000, totalSpent: 2500, currentBalance: 4500 });
     expect(fund?.spendingBreakdown).toEqual([{ id: "equipment", amount: 2500, percentage: 100 }]);
     expect(fund?.timeline[0]).toMatchObject({

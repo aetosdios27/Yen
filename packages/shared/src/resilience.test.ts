@@ -55,3 +55,28 @@ describe("ResilientCall", () => {
     await expect(client.run(async () => true)).resolves.toBe(true);
   });
 });
+
+it("uses capped exponential backoff with full jitter between attempts", async () => {
+  const delays: number[] = [];
+  const samples = [0, 0.5, 0.99];
+  const client = new ResilientCall(
+    options({
+      maxAttempts: 4,
+      baseDelayMs: 100,
+      maxDelayMs: 150,
+      random: () => samples.shift() ?? 0,
+      sleep: async (ms) => {
+        delays.push(ms);
+      },
+    }),
+  );
+  let calls = 0;
+  await expect(
+    client.run(async () => {
+      calls++;
+      throw new Error("unavailable");
+    }),
+  ).rejects.toThrow("unavailable");
+  expect(calls).toBe(4);
+  expect(delays).toEqual([0, 75, 148]);
+});
