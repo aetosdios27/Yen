@@ -55,12 +55,10 @@ it("removes the saved non-personal draft when onboarding completes", async () =>
   );
   vi.stubGlobal(
     "fetch",
-    vi
-      .fn()
-      .mockResolvedValue({
-        ok: true,
-        json: async () => ({ id: "fund-created", code: "invite-created" }),
-      }),
+    vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "fund-created", code: "invite-created" }),
+    }),
   );
   try {
     render(<OnboardingWizard />);
