@@ -31,6 +31,8 @@
 #   MIGRATION_SECRET_ID             Secrets Manager id holding the migration
 #                                   DATABASE_URL; read at deploy time only and
 #                                   never stored in GitHub
+#   SMOKE_TIMEOUT_SECS              seconds the smoke probes retry before
+#                                   failing (default 120)
 
 set -euo pipefail
 
@@ -44,7 +46,13 @@ fail() {
 }
 
 usage() {
-  sed -n '2,40p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  local line
+  while IFS= read -r line; do
+    [[ "$line" == "#"* ]] || break
+    line="${line#\#}"
+    line="${line# }"
+    printf '%s\n' "$line"
+  done < <(tail -n +2 "${BASH_SOURCE[0]}")
 }
 
 # Runs a command, or prints it when DRY_RUN is set. Value-producing
@@ -297,8 +305,9 @@ rollback() {
 #   1. HTTPS reachability of /health
 #   2. /ready reports every dependency ok
 #   3. /version reports the deployed commit SHA
-# Retries for two minutes so a slow rollout does not fail the probe, then
-# fails hard so the workflow stops before production promotion.
+# Retries for two minutes (SMOKE_TIMEOUT_SECS overrides) so a slow rollout
+# does not fail the probe, then fails hard so the workflow stops before
+# production promotion.
 probe_url() {
   local url=$1
   curl --silent --show-error --connect-timeout 5 --max-time 10 \
@@ -316,7 +325,7 @@ smoke() {
     fail "base url must use HTTPS, got: $base_url"
   fi
 
-  local deadline=$((SECONDS + 120))
+  local deadline=$((SECONDS + ${SMOKE_TIMEOUT_SECS:-120}))
   local http_code
   while :; do
     http_code="$(probe_url "$base_url/health" || true)"
