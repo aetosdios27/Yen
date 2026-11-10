@@ -241,3 +241,22 @@ it("captures server failures from a route through the transport", async () => {
   expect(event.release).toBe(COMMIT_SHA);
   expect(event.message).toMatchObject({ formatted: "handler exploded" });
 });
+
+it("tags reports with the request trace id end to end", async () => {
+  const captured: CapturedDispatch[] = [];
+  const app = createApp({
+    errorReporter: createErrorReporter({
+      dsn: DSN,
+      release: COMMIT_SHA,
+      environment: "staging",
+      transport: recordingTransport(captured),
+    }),
+  });
+  app.get("/boom-trace", () => {
+    throw new Error("handler exploded");
+  });
+  const response = await app.request("/boom-trace");
+  expect(response.status).toBe(500);
+  const { event } = parseEnvelope(captured[0]?.body ?? "");
+  expect(event.tags).toMatchObject({ trace_id: response.headers.get("x-trace-id") });
+});
