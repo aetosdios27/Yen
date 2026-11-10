@@ -4,16 +4,16 @@ Pilot targets below apply over a rolling 30 days. They are proposals, not claims
 about production performance. Tune them against pilot traffic before adopting
 commitments. `packages/shared/src/slo.ts` is the typed target registry.
 
-| Objective id | Target | Measurement |
-| --- | --- | --- |
-| approval_api_availability | 99.5% | Approval route responses below HTTP 500 |
-| approve_p95_latency | 95% | Approval response below 500 and duration <= 1,000 ms |
-| pay_p95_latency | 95% | Pay response below 500 and duration <= 1,500 ms |
-| donation_recording | 99.5% | Donation pledge recording responses below 500 |
-| event_append | 99.9% | Database event append attempts complete without error |
-| reconciliation_lag | 99% | Samples with no unverified pledge older than 15 minutes |
-| anchor_lag | 99% | Samples with no event beyond the last confirmed anchor older than 60 minutes |
-| public_page_availability | 99.5% | External page probe returns HTTP 2xx within 10 seconds |
+| Objective id              | Target | Measurement                                                                  |
+| ------------------------- | ------ | ---------------------------------------------------------------------------- |
+| approval_api_availability | 99.5%  | Approval route responses below HTTP 500                                      |
+| approve_p95_latency       | 95%    | Approval response below 500 and duration <= 1,000 ms                         |
+| pay_p95_latency           | 95%    | Pay response below 500 and duration <= 1,500 ms                              |
+| donation_recording        | 99.5%  | Donation pledge recording responses below 500                                |
+| event_append              | 99.9%  | Database event append attempts complete without error                        |
+| reconciliation_lag        | 99%    | Samples with no unverified pledge older than 15 minutes                      |
+| anchor_lag                | 99%    | Samples with no event beyond the last confirmed anchor older than 60 minutes |
+| public_page_availability  | 99.5%  | External page probe returns HTTP 2xx within 10 seconds                       |
 
 All objectives emit `yen.slo.observations` with `yen.slo.id` and boolean
 `yen.slo.good` labels. Availability treats validation and authorization failures
@@ -89,3 +89,16 @@ YEN-20 / PR #135 owns additional free-text log redaction and error reporting.
 The operator must deploy collectors, configure browser export/CORS, provision
 these dashboards and alert routes, and schedule the supplied public page probe. Tests use
 in-memory exporters and real Postgres; they do not prove hosted alert delivery.
+
+## Approval trace acceptance boundary
+
+The Postgres journey test exercises the browser fetch wrapper, real HTTP handler,
+committed approval/event, transactional queue enqueue, and a running worker in
+one trace. Its notification adapter enqueues a real pg-boss job. Production
+bootstrap currently leaves PIN notifications on `MemoryPinNotificationService`;
+a durable production notification adapter is still required before claiming
+production approval-to-worker delivery. This work instruments the queue boundary
+without inventing a new approval side effect. Also, the ledger reservation is
+posted on submission; approval persists approval state and an event, not a second
+money journal entry. The literal approval-to-new-journal acceptance criterion
+needs clarification against that existing money model.
