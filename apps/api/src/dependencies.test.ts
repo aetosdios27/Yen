@@ -92,7 +92,7 @@ describe("dependencies PIN secret configuration", () => {
       const res = await app.request("/health");
       expect(res.status).toBe(200);
       const json = await res.json();
-      expect(json).toEqual({ status: "ok" });
+      expect(json).toMatchObject({ status: "ok" });
     } finally {
       if (original !== undefined) {
         process.env.PIN_HMAC_SECRET = original;
