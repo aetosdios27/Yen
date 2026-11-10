@@ -885,7 +885,8 @@ databaseSuite("Postgres expense store", (sql, url) => {
 
     const worker = new WorkerRuntime({ connectionString: url, migrate: true, schema: "tracejobs" });
     let processed = 0;
-    worker.registerHandler("approval-notify", async () => {
+    worker.registerHandler("approval-notify", async (job) => {
+      expect(job.data).toEqual({});
       processed++;
     });
     await worker.start();

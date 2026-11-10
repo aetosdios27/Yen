@@ -133,6 +133,10 @@ export class WorkerRuntime {
                 typeof data === "object" && data !== null && "__yenTelemetry" in data
                   ? data.__yenTelemetry
                   : {};
+              if (typeof data === "object" && data !== null && "__yenTelemetry" in data) {
+                const { __yenTelemetry: _telemetry, ...payload } = data;
+                job.data = payload;
+              }
               await traceJob(carrier, () => handler(job));
               results.push({ id: rawJob.id, status: "completed" });
             } catch (err) {
