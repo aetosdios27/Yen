@@ -28,6 +28,22 @@ const publicReadHeaders = {
     schema: { type: "string" as const },
     description: "Visibility-tier cache policy",
   },
+  vary: {
+    schema: { type: "string" as const },
+    description: "Separates the public and signed-in representations of one URL",
+  },
+  "x-yen-data-as-of": {
+    schema: { type: "string" as const, format: "date-time" },
+    description: "When the stale copy was refreshed, set only when the origin is unavailable",
+  },
+  warning: {
+    schema: { type: "string" as const },
+    description: "RFC 7234 warning when the response is served stale",
+  },
+};
+const publicNotModified = {
+  description: "The cached copy still matches the current expense data; no body is returned",
+  headers: publicReadHeaders,
 };
 
 const evidenceDownloadHeaders = {
@@ -108,6 +124,7 @@ export const publicExpenseDetailRoute = createRoute({
       ...jsonResponse(publicExpenseDetailSchema, "Tier-filtered expense details"),
       headers: publicReadHeaders,
     },
+    304: publicNotModified,
     ...publicExpenseErrors,
   },
 });
@@ -125,6 +142,7 @@ export const publicExpenseProofsRoute = createRoute({
       ...jsonResponse(publicExpenseProofsSchema, "Tier-filtered proof metadata and allowed files"),
       headers: evidenceDownloadHeaders,
     },
+    304: publicNotModified,
     ...publicExpenseErrors,
   },
 });

@@ -485,6 +485,8 @@ export const en = {
     refundItem: "Refund",
     refundDetail: "Donation refunded",
     title: "Public fund",
+    savedCopy:
+      "This is a saved copy from {time}. The fund records could not be refreshed just now.",
     donateCta: "Donate via UPI",
     donateQr: "UPI QR code",
     orgBadge: "Registered group",

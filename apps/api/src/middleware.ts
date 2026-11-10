@@ -104,6 +104,22 @@ const requestId = z
   .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
 const method = z.enum(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]);
 
+/**
+ * Drops a fund's cached public reads after any successful write to that fund.
+ * Events on one fund never touch another fund's cached pages.
+ */
+export function fundCacheInvalidation(cache: {
+  invalidateFund: (fundId: string) => void;
+}): MiddlewareHandler<ApiEnv> {
+  return async (c, next) => {
+    await next();
+    if (c.req.method !== "POST" && c.req.method !== "PUT" && c.req.method !== "PATCH") return;
+    if (c.res.status >= 400) return;
+    const fundId = /^\/v1\/funds\/([0-9a-f-]{36})(?:\/|$)/.exec(c.req.path)?.[1];
+    if (fundId !== undefined) cache.invalidateFund(fundId);
+  };
+}
+
 export function requestContext(deps: AppDependencies): MiddlewareHandler<ApiEnv> {
   return async (c, next) => {
     const inbound = requestId.safeParse(c.req.header("x-request-id"));

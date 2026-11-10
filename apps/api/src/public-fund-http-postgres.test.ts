@@ -79,7 +79,9 @@ databaseSuite("public HTTP financial proof with Postgres stores", (sql) => {
     }
     async function read(route: "summary" | "timeline" | "breakdown") {
       await comparePlans();
-      const response = await app.request(`/v1/funds/${fundId}/public/${route}`);
+      const response = await app.request(`/v1/funds/${fundId}/public/${route}`, {
+        headers: { "cache-control": "no-cache" },
+      });
       expect(response.status).toBe(200);
       return response;
     }

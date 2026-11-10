@@ -252,5 +252,27 @@ describe("Public Fund Components", () => {
       expect(screen.queryByText("Live transparency timeline")).toBeNull();
       expect(screen.queryByText("Donate via UPI")).toBeNull();
     });
+
+    it("names the saved copy time when the API served a stale read", () => {
+      render(
+        <LocaleProvider initialLocale="en">
+          <PublicFundView fund={{ ...SANITIZED_DEMO_FUND, dataAsOf: "2026-10-30T06:15:00.000Z" }} />
+        </LocaleProvider>,
+      );
+
+      const notice = screen.getByRole("status");
+      expect(notice.textContent).toContain("saved copy");
+      expect(screen.queryByRole("status")?.textContent).toContain("2026");
+    });
+
+    it("hides the saved copy notice for a fresh read", () => {
+      render(
+        <LocaleProvider initialLocale="en">
+          <PublicFundView fund={SANITIZED_DEMO_FUND} />
+        </LocaleProvider>,
+      );
+
+      expect(screen.queryByRole("status")).toBeNull();
+    });
   });
 });
