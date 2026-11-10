@@ -36,7 +36,7 @@ CDNs that support tag based invalidation (for example Cloudflare `Cache-Tag` or 
 2. Issue the provider's purge call with that tag after a mutation that bypasses the fund's event log (anchor confirmation, officeholder display flag) or when an immediate flip is required instead of waiting out `s-maxage`.
 3. Org level purges use `org-<orgId>` when a tenant wide change makes every fund page suspect at once.
 
-The per fund cache in the API invalidates itself automatically after every successful `POST`/`PUT`/`PATCH` under `/v1/funds/<fundId>`, so within one origin instance only the non event mutations above need an explicit purge.
+The per fund cache in the API invalidates itself automatically after every successful `POST`/`PUT`/`PATCH` under `/v1/funds/<fundId>` and after reconciliation ingests (statement uploads and partner webhooks), which append fund events from paths the fund middleware cannot see. Within one origin instance only the non event mutations above need an explicit purge.
 
 ## Origin Protection Boundaries
 
