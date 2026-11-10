@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { scrubText, scrubValue } from "@yen/shared";
+import {
+  buildSentryEnvelope,
+  parseSentryDsn,
+  scrubText,
+  scrubValue,
+  sentryEnvelopeHeaders,
+} from "@yen/shared";
 import { redactLogText } from "./logging.js";
 
 export type ErrorReportContext = {
@@ -31,51 +37,12 @@ export type ErrorReporterOptions = {
 
 const noopReporter: ErrorReporter = { capture: () => undefined };
 
-export type ParsedSentryDsn = {
-  readonly envelopeUrl: string;
-  readonly publicKey: string;
-};
-
-/**
- * Extracts the envelope endpoint and public key from a DSN of the form
- * https://<publicKey>@<host>/<projectId>. Null for anything else, so a
- * malformed DSN degrades to the stdout reporter instead of throwing.
- */
-export function parseSentryDsn(dsn: string): ParsedSentryDsn | null {
-  const match =
-    /^(?<protocol>https?):\/\/(?<publicKey>[^@\s]+)@(?<host>[^/\s]+)\/(?<projectId>\d+)$/.exec(
-      dsn.trim(),
-    );
-  const groups = match?.groups;
-  if (!groups?.protocol || !groups.publicKey || !groups.host || !groups.projectId) return null;
-  return {
-    envelopeUrl: `${groups.protocol}://${groups.host}/api/${groups.projectId}/envelope/`,
-    publicKey: groups.publicKey,
-  };
-}
-
 const defaultTransport: ErrorTransport = (url, headers, body) =>
   fetch(url, { method: "POST", headers, body, signal: AbortSignal.timeout(5000) }).then(
     (response) => {
       if (!response.ok) throw new Error(`sentry envelope rejected: ${response.status}`);
     },
   );
-
-function sentryHeaders(publicKey: string): Record<string, string> {
-  return {
-    "content-type": "application/x-sentry-envelope",
-    "x-sentry-auth": `Sentry sentry_version=7, sentry_client=yen-api/1.0.0, sentry_key=${publicKey}`,
-  };
-}
-
-function buildEnvelope(eventId: string, event: Record<string, unknown>): string {
-  const header = {
-    event_id: eventId,
-    sent_at: new Date().toISOString(),
-    sdk: { name: "yen.api", version: "1.0.0" },
-  };
-  return `${JSON.stringify(header)}\n${JSON.stringify({ type: "event" })}\n${JSON.stringify(event)}\n`;
-}
 
 function stdoutLine(
   release: string,
@@ -145,8 +112,8 @@ export function createErrorReporter(options: ErrorReporterOptions = {}): ErrorRe
         };
         transport(
           parsedDsn.envelopeUrl,
-          sentryHeaders(parsedDsn.publicKey),
-          buildEnvelope(eventId, event),
+          sentryEnvelopeHeaders(parsedDsn.publicKey, "yen.api/1.0.0"),
+          buildSentryEnvelope(eventId, event, new Date().toISOString()),
         ).catch(() => {
           try {
             write(stdoutLine(release, environment, context, name, message));

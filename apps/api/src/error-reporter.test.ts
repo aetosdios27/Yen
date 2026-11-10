@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
-import {
-  createErrorReporter,
-  createStdoutErrorReporter,
-  parseSentryDsn,
-} from "./error-reporter.js";
+import { createErrorReporter, createStdoutErrorReporter } from "./error-reporter.js";
 
 const COMMIT_SHA = "a71a130aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const DSN = "https://publickey@example.sentry.io/42";
@@ -184,29 +180,6 @@ it("never lets a transport throw out of capture", () => {
   expect(() =>
     reporter.capture(new Error("boom"), { requestId: "r", route: "/v1/me", status: 500 }),
   ).not.toThrow();
-});
-
-describe("parseSentryDsn", () => {
-  it("parses https DSNs into the envelope endpoint", () => {
-    expect(parseSentryDsn("https://key@sentry.example/1")).toEqual({
-      envelopeUrl: "https://sentry.example/api/1/envelope/",
-      publicKey: "key",
-    });
-  });
-
-  it("parses http DSNs for self-hosted Sentry", () => {
-    expect(parseSentryDsn("http://key@sentry.internal/7")).toEqual({
-      envelopeUrl: "http://sentry.internal/api/7/envelope/",
-      publicKey: "key",
-    });
-  });
-
-  it("rejects DSNs without a numeric project id", () => {
-    expect(parseSentryDsn("https://key@sentry.example/proj")).toBeNull();
-    expect(parseSentryDsn("https://sentry.example/1")).toBeNull();
-    expect(parseSentryDsn("ftp://key@sentry.example/1")).toBeNull();
-    expect(parseSentryDsn("")).toBeNull();
-  });
 });
 
 describe("stdout fallback reporter", () => {
