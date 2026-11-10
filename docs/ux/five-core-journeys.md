@@ -568,3 +568,119 @@ Approval count on the expense: `0 -> 1 -> quorum(2)`. Each authorization is
 Expense-level: `submitted -> hold_reserved -> approved -> settled`, or
 `hold_reserved -> rejected` (reason recorded), or expiry releasing the hold. A settled or
 rejected expense is terminal and its deep link renders the already-decided banner.
+
+## Journey 5: Public transparency inspection and verification link check
+
+Actor: any visitor with a link: a donor who gave money, a member who wants to check, a
+journalist or an auditor. No account, no sign-in, no payment.
+
+Goal: end with the visitor able to answer "did the money go where they said?" and, for a
+specific record, "has this record been changed since it was written?"
+
+Route flow:
+
+```
+shared link -> /funds/[fundId]
+  -> timeline entry -> /verify?fundId=...&recordId=...   ("Check this record")
+  -> explainer dialog  ("How do I know?")
+  -> (optionally) any receipt -> /receipts/[id] -> /verify
+```
+
+### J5-S1 Public fund overview
+
+Route: `/funds/[fundId]`.
+
+- Content: fund name and purpose, org badge (`fund.orgBadge` "Registered group"), money
+  summary (`fund.totalRaised`, `fund.totalSpent`, `fund.currentBalance` with Indian digit
+  grouping), spending by category with plain names (`fund.categoryEquipment` "Equipment &
+  Hardware" and so on), and the live transparency timeline
+  (`fund.timelineTitle` "Live transparency timeline",
+  `fund.timelineDescription` "Every donation and expense confirmed by the community.").
+- Primary action: reading is the task; the donate CTA (`fund.donateCta`) is the screen's single
+  forward action for donors (journey 2 entry).
+- Secondary actions: timeline filters (`fund.filterAll`, `fund.filterDonations`,
+  `fund.filterExpenses`) and per-entry exits (`fund.viewEvidence` "View bill or receipt",
+  `fund.checkRecord` "Check this record").
+- Trust explainer: `fund.howDoIKnow` ("How do I know?") opens a dialog with four numbered
+  proofs (`fund.bankVerificationTitle`, `fund.approvalsTitle`, `fund.evidenceTitle`,
+  `fund.tamperProofTitle`). The tamper-evident proof is written as "Each entry is sealed in the
+  public account book so past records cannot be altered or deleted." No protocol names.
+- Empty state: no spending yet shows `fund.spendingEmpty` ("No spending recorded yet."); an
+  empty filter result shows `fund.emptyFilter` ("No records match this filter.").
+- Loading: server rendered.
+- Error state: unknown fund renders not-found.
+- Offline/slow network: saved copy banner `fund.savedCopy` in a status region (see J2-S1).
+  The page is cached and ETagged precisely so this banner is rare.
+
+### J5-S2 Verification link check
+
+Route: `/verify?fundId=...&recordId=...` (arriving from a timeline entry or a receipt).
+
+- Primary action: none; the check runs automatically on arrival and the visitor reads the
+  outcome. The page must never require the visitor to press a button to start a check it could
+  run itself.
+- Secondary action: `verify.backToFund` ("Back to fund").
+- Idle state (no record id in the query, manual path): the form with
+  `verify.enterRecordIdLabel` ("Record identifier"), optional `verify.fundIdLabel`, and the
+  `verify.verifyButton` ("Check record") as the primary action; below it the audit bundle
+  upload (`verify.uploadBundlePrompt`, `verify.dropBundleHere`) for auditors with an exported
+  bundle.
+
+### J5-S3 Verification outcomes
+
+Route: `/verify`, result region after a check.
+
+Four outcomes, each leading with the plain-language meaning, with technical inspection folded
+away by default:
+
+- Verified: `verify.outcomeVerified` ("Verified") with `verify.passHeadline` ("This record was
+  written on {date} and has not been changed since"). Green, with a check mark; never the only
+  signal, the word is the signal.
+- Pending: `verify.outcomePending` ("Pending seal") with `verify.pendingHeadline` ("Sealed in
+  account book; awaiting next scheduled public seal"). Honest about the delay, never worded as
+  a failure.
+- Skipped: `verify.outcomeSkipped` ("Unverified / Registry skipped") for records whose public
+  registry seal was not run; the visitor is told the in-browser proof still holds
+  (`verify.offlineNotice` covers the server-independence of the check).
+- Failed: `verify.outcomeFailed` ("Verification failed") with `verify.failHeadline`
+  ("Verification failed: record was altered or invalid") in the destructive style. This is the
+  screen that catches tampering; it must be unmistakable.
+- For skeptics and auditors only: the collapsed details disclosure
+  `verify.technicalInspectionTitle` ("Technical details (for skeptics and auditors)") exposes
+  fingerprints, seal roots and registry references. This is the one sanctioned place where
+  technical terms appear, deliberately folded away from the main flow.
+- Loading: `verify.checking` ("Checking record proof...") in a status region with a spinner.
+- Error state: `verify.outcomeFailed` region with the failure message (record not found,
+  network error); the form keeps the entered identifiers for retry.
+- Offline: the same failed region; verification of an uploaded bundle still works fully offline
+  because the checks run in the browser, which the page states in `verify.offlineNotice`.
+
+### J5-S4 Audit bundle exports
+
+Route: `/verify`, export bar.
+
+- Actions: `verify.downloadVerifierScript` ("Download offline verifier script"),
+  `verify.downloadBundleJson`, `verify.downloadBundleCsv`. These exist so an auditor can check
+  the whole fund without network access or trust in this website.
+- These are auditor exits from the main visitor flow; they are visually secondary to the
+  record check form and never appear before an outcome exists.
+
+### Journey 5 record state machine
+
+Verification outcome for one record:
+`idle -> checking -> verified | pending | skipped | failed`, plus the manual-path
+`idle` when no record is given. Nothing in this journey mutates anything: it is read-only by
+design, which is also why it must work signed-out, offline-first and from a saved copy.
+
+### Cross-journey state vocabulary
+
+| Concept | States | Where shown |
+| --- | --- | --- |
+| Donation | pledged, verified, refunded, rejected | receipt, fund timeline |
+| Expense | draft, submitted, hold_reserved, approved, settled, rejected, expired | treasurer list, approval timeline |
+| Approval count | 0 to quorum (2 of 3 default) | expense timeline |
+| Verification outcome | verified, pending, skipped, failed | verify page, badges |
+| Connectivity | online, offline (cached copy), slow (progress) | banners and status regions |
+
+Every status string pairs a word with a distinct shape or icon; colour alone is never the
+signal (`designSystem.statusBody`).
