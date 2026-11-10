@@ -32,9 +32,7 @@ export default defineConfig({
   workers: 1,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI
-    ? [["github"], ["list"], ["html", { open: "never" }]]
-    : [["list"]],
+  reporter: process.env.CI ? [["github"], ["list"], ["html", { open: "never" }]] : [["list"]],
   outputDir: "./e2e/.results",
   ...(realBackend ? { globalSetup: "./e2e/support/real-backend-global-setup.ts" } : {}),
   use: {
