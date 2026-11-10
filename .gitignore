@@ -14,3 +14,6 @@ coverage/
 contracts/out/
 contracts/cache/
 contracts/broadcast/
+.results/
+playwright-report/
+.cloud-attachments/
