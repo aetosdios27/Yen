@@ -1,4 +1,4 @@
-import { type Paise } from "@yen/shared";
+import type { Paise } from "@yen/shared";
 import type { Locale } from "../i18n/locales";
 
 const INTL_TAGS: Record<Locale, "en-IN" | "hi-IN"> = {

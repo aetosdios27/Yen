@@ -1,4 +1,4 @@
-import { type Paise } from "@yen/shared";
+import type { Paise } from "@yen/shared";
 import { useI18n } from "../i18n";
 import { formatMoney } from "../lib/format";
 import { cn } from "./cn";

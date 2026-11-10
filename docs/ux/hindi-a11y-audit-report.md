@@ -13,14 +13,14 @@ cannot measure something, the limitation is stated instead of glossed over.
 Core flows audited in both English and Hindi, keyed to the journeys in
 `docs/ux/five-core-journeys.md`:
 
-| Flow | Route | Journeys |
-| --- | --- | --- |
-| Public fund view (header, money summary, spending by category, spend timeline, explainer modal) | `/funds/[fundId]` | 2, 5 |
-| Donate (amount, UPI payment, confirm reference, receipt certificate) | `/funds/[fundId]/donate`, `/receipts/[id]` | 2 |
-| Public verification explainer (record check, audit bundle, technical inspection) | `/verify` | 2, 5 |
-| Treasurer dashboard (balances, pending requests) | `/funds/[fundId]/dashboard` | 3 |
-| New expense (form with validation) | `/funds/[fundId]/expenses/new` | 3 |
-| Approval inbox (expense timeline, approval PIN modal, rejection modal) | `/funds/[fundId]/approvals/[expenseId]` | 4 |
+| Flow                                                                                            | Route                                      | Journeys |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------ | -------- |
+| Public fund view (header, money summary, spending by category, spend timeline, explainer modal) | `/funds/[fundId]`                          | 2, 5     |
+| Donate (amount, UPI payment, confirm reference, receipt certificate)                            | `/funds/[fundId]/donate`, `/receipts/[id]` | 2        |
+| Public verification explainer (record check, audit bundle, technical inspection)                | `/verify`                                  | 2, 5     |
+| Treasurer dashboard (balances, pending requests)                                                | `/funds/[fundId]/dashboard`                | 3        |
+| New expense (form with validation)                                                              | `/funds/[fundId]/expenses/new`             | 3        |
+| Approval inbox (expense timeline, approval PIN modal, rejection modal)                          | `/funds/[fundId]/approvals/[expenseId]`    | 4        |
 
 Two supporting layers were audited alongside the screens:
 
@@ -92,20 +92,20 @@ New in this increment:
 
 ### WCAG 2.2 AA mapping with evidence
 
-| Success criterion | How it was checked | Result |
-| --- | --- | --- |
-| 1.1.1 Non-text content | axe runs on every core component; icons render `aria-hidden="true"` (inspection of `components/icons.tsx` and `components/fund/icons.tsx`) | Pass |
-| 1.3.1 Info and relationships | axe on all core screens; landmark assertions in `src/test/core-journey-routes.test.ts` and `components/semantics.test.tsx` | Pass |
-| 1.4.3 Contrast (minimum) | arithmetic contrast checks over every token pair in `src/styles/tokens.test.ts` (jsdom cannot compute rendered contrast) | Pass at token level |
-| 1.4.4 Resize text | type scale is rem-based in `tokens.css`; the one fixed px text size found (`text-[11px]` on the verify technical panel) was replaced with `0.6875rem`; the rendered zoom guard in `src/app/hindi-360-layout.test.tsx` fails on any `text-[Npx]` in the core screens | Pass after fix |
-| 1.4.10 Reflow | static 360 px guard plus a new rendered guard over five core screens (fund view, donate, approvals with PIN modal, treasurer dashboard, verify) in Hindi: no width above 360 px, no `whitespace-nowrap` or `truncate` on Devanagari text | Pass after fix |
-| 1.4.11 Non-text contrast | token pairs checked in `tokens.test.ts`, including borders and status colours | Pass at token level |
-| 2.1.1 / 2.1.2 Keyboard | `components/keyboard.test.tsx` (Tab reaches controls, Enter and Space activate, Escape dismisses toast), `dashboards.a11y.test.tsx` (form tab order, Escape closes the PIN modal) | Pass |
-| 2.4.7 Focus visible | `:focus-visible` outline token in `app/globals.css` with the 3:1 focus colour in `tokens.css` (inspection) | Pass |
-| 2.5.8 Target size (minimum) | every Button, Input and primary link carries the `tap-target` class; `hindi-360-layout.test.tsx` proves the class resolves to `var(--spacing-tap)` = 3rem = 48 px and that every rendered primary or danger action in the five screens carries it | Pass |
-| 3.1.1 / 3.1.2 Language of parts | `LocaleProvider` sets `document.documentElement.lang` on every locale change and syncs `<title>` and meta description (inspection of `i18n/locale-provider.tsx`); Hindi strings are pure Devanagari plus the allowlisted acronyms | Pass |
-| 3.3.1 / 3.3.3 Error identification and suggestion | donation, expense form and PIN validation errors come from the catalogue and render in the active locale; axe passes with validation errors visible (`donation.a11y.test.tsx`, `dashboards.a11y.test.tsx`) | Pass |
-| 4.1.2 Name, role, value | axe on all core screens in both languages | Pass |
+| Success criterion                                 | How it was checked                                                                                                                                                                                                                                                  | Result              |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| 1.1.1 Non-text content                            | axe runs on every core component; icons render `aria-hidden="true"` (inspection of `components/icons.tsx` and `components/fund/icons.tsx`)                                                                                                                          | Pass                |
+| 1.3.1 Info and relationships                      | axe on all core screens; landmark assertions in `src/test/core-journey-routes.test.ts` and `components/semantics.test.tsx`                                                                                                                                          | Pass                |
+| 1.4.3 Contrast (minimum)                          | arithmetic contrast checks over every token pair in `src/styles/tokens.test.ts` (jsdom cannot compute rendered contrast)                                                                                                                                            | Pass at token level |
+| 1.4.4 Resize text                                 | type scale is rem-based in `tokens.css`; the one fixed px text size found (`text-[11px]` on the verify technical panel) was replaced with `0.6875rem`; the rendered zoom guard in `src/app/hindi-360-layout.test.tsx` fails on any `text-[Npx]` in the core screens | Pass after fix      |
+| 1.4.10 Reflow                                     | static 360 px guard plus a new rendered guard over five core screens (fund view, donate, approvals with PIN modal, treasurer dashboard, verify) in Hindi: no width above 360 px, no `whitespace-nowrap` or `truncate` on Devanagari text                            | Pass after fix      |
+| 1.4.11 Non-text contrast                          | token pairs checked in `tokens.test.ts`, including borders and status colours                                                                                                                                                                                       | Pass at token level |
+| 2.1.1 / 2.1.2 Keyboard                            | `components/keyboard.test.tsx` (Tab reaches controls, Enter and Space activate, Escape dismisses toast), `dashboards.a11y.test.tsx` (form tab order, Escape closes the PIN modal)                                                                                   | Pass                |
+| 2.4.7 Focus visible                               | `:focus-visible` outline token in `app/globals.css` with the 3:1 focus colour in `tokens.css` (inspection)                                                                                                                                                          | Pass                |
+| 2.5.8 Target size (minimum)                       | every Button, Input and primary link carries the `tap-target` class; `hindi-360-layout.test.tsx` proves the class resolves to `var(--spacing-tap)` = 3rem = 48 px and that every rendered primary or danger action in the five screens carries it                   | Pass                |
+| 3.1.1 / 3.1.2 Language of parts                   | `LocaleProvider` sets `document.documentElement.lang` on every locale change and syncs `<title>` and meta description (inspection of `i18n/locale-provider.tsx`); Hindi strings are pure Devanagari plus the allowlisted acronyms                                   | Pass                |
+| 3.3.1 / 3.3.3 Error identification and suggestion | donation, expense form and PIN validation errors come from the catalogue and render in the active locale; axe passes with validation errors visible (`donation.a11y.test.tsx`, `dashboards.a11y.test.tsx`)                                                          | Pass                |
+| 4.1.2 Name, role, value                           | axe on all core screens in both languages                                                                                                                                                                                                                           | Pass                |
 
 ### Component and screen axe coverage (both languages)
 
@@ -136,16 +136,16 @@ timeline and the verifier hardcoded `en-IN` regardless of locale.
 
 Boundary cases pinned in `src/lib/format.test.ts` and `money.test.tsx`:
 
-| Paise | Rendered |
-| --- | --- |
-| 0 | ₹0.00 |
-| 9950 | ₹99.50 |
-| 10000000 | ₹1,00,000.00 |
-| 123456700 | ₹12,34,567.00 |
-| 1000000000 | ₹1,00,00,000.00 |
+| Paise        | Rendered           |
+| ------------ | ------------------ |
+| 0            | ₹0.00              |
+| 9950         | ₹99.50             |
+| 10000000     | ₹1,00,000.00       |
+| 123456700    | ₹12,34,567.00      |
+| 1000000000   | ₹1,00,00,000.00    |
 | 100000000000 | ₹1,00,00,00,000.00 |
 | 999999999999 | ₹9,99,99,99,999.99 |
-| -5050 | -₹50.50 |
+| -5050        | -₹50.50            |
 
 No rendering ever produces a floating-point exponent; the tests assert it.
 
@@ -213,4 +213,3 @@ New or extended in this increment:
 - `packages/notifications/src/templates.test.ts` (10 tests, new parity sweep)
 
 Full web suite at audit time: 59 test files, 382 tests, all passing.
-

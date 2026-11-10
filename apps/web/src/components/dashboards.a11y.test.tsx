@@ -3,8 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { paise } from "@yen/shared";
 import { describe, expect, it, vi } from "vitest";
 import { LocaleProvider } from "../i18n";
-import { expectNoA11yViolations, runAxe } from "../test/a11y";
 import * as apiClientModule from "../lib/api-client";
+import { expectNoA11yViolations, runAxe } from "../test/a11y";
 import { ApprovalPinModal } from "./approval-pin-modal";
 import { ExpenseForm } from "./expense-form";
 import { ExpenseTimeline } from "./expense-timeline";
@@ -229,9 +229,7 @@ describe("Dashboard and Approver A11y & Navigation", () => {
       } as unknown as apiClientModule.YenClient);
 
       try {
-        const { default: TreasurerPage } = await import(
-          "../app/funds/[fundId]/treasurer/page"
-        );
+        const { default: TreasurerPage } = await import("../app/funds/[fundId]/treasurer/page");
         const { container } = render(
           <LocaleProvider initialLocale={locale}>
             <main>

@@ -753,8 +753,7 @@ export const en = {
       "This record is safely recorded in the account book and awaiting the next scheduled seal batch.",
     failHashDetail: "The record payload does not match its cryptographic signature.",
     failSealDetail: "The record does not match its sealed entry in the audit bundle.",
-    failRegistryDetail:
-      "The sealed record does not match the published public registry entry.",
+    failRegistryDetail: "The sealed record does not match the published public registry entry.",
     checkBundleFormat: "Bundle format",
     checkCanonicalEventHash: "Record fingerprints",
     checkHashChain: "Record chain",

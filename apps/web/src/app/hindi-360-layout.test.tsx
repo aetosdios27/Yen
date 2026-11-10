@@ -1,7 +1,7 @@
-import { render } from "@testing-library/react";
-import { paise } from "@yen/shared";
 import fs from "node:fs";
 import path from "node:path";
+import { render } from "@testing-library/react";
+import { paise } from "@yen/shared";
 import { describe, expect, it, vi } from "vitest";
 import { ApprovalPinModal } from "../components/approval-pin-modal";
 import { DonationForm } from "../components/donation-form";
@@ -73,7 +73,7 @@ function layoutViolations(root: Element): Violation[] {
 
   for (const node of [root, ...root.querySelectorAll("*")]) {
     const className =
-      typeof node.className === "string" ? node.className : node.getAttribute("class") ?? "";
+      typeof node.className === "string" ? node.className : (node.getAttribute("class") ?? "");
 
     const fixedWidth = fixedPx(className, "w-") ?? fixedPx(className, "min-w-");
     if (fixedWidth !== null && fixedWidth > NARROWEST_PHONE_PX) {
@@ -104,7 +104,10 @@ function layoutViolations(root: Element): Violation[] {
       }
       const fixedHeight = fixedPx(className, "h-") ?? fixedPx(className, "max-h-");
       if (fixedHeight !== null) {
-        violations.push({ reason: "fixed px height can clip text at 200% zoom", detail: className });
+        violations.push({
+          reason: "fixed px height can clip text at 200% zoom",
+          detail: className,
+        });
       }
     }
   }
@@ -116,7 +119,7 @@ function tapTargetViolations(root: Element): Violation[] {
   const violations: Violation[] = [];
   for (const node of root.querySelectorAll("button, a")) {
     const className =
-      typeof node.className === "string" ? node.className : node.getAttribute("class") ?? "";
+      typeof node.className === "string" ? node.className : (node.getAttribute("class") ?? "");
     // bg-primary/bg-danger without a suffix is the primary and danger action styling.
     const isPrimaryAction = /\b(?:bg-primary|bg-danger)(?![-\w])/.test(className);
     if (!isPrimaryAction || /\btap-target\b/.test(className)) {
