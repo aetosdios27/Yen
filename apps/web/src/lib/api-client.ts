@@ -37,3 +37,10 @@ export function setApiClient(client: YenClient | null): void {
 }
 
 export type { YenClient };
+
+/** Resolved API base URL, matching the default client configuration. */
+export function getApiBaseUrl(): string {
+  return typeof process !== "undefined" && process.env?.NEXT_PUBLIC_API_URL
+    ? process.env.NEXT_PUBLIC_API_URL
+    : "http://localhost:3001";
+}

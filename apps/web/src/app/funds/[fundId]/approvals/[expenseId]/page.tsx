@@ -16,6 +16,7 @@ import { RejectionModal } from "../../../../../components/rejection-modal";
 import { StatusBadge } from "../../../../../components/status-badge";
 import { Toast } from "../../../../../components/toast";
 import { useDocumentTitle, useI18n } from "../../../../../i18n";
+import { getApiBaseUrl } from "../../../../../lib/api-client";
 import {
   type DashboardExpenseItem,
   fetchExpenseItem,
@@ -249,9 +250,14 @@ export default function ApproverPage({ params }: ApproverPageProps) {
                 </dt>
                 <dd className="text-small text-ink">
                   {expense.receiptRef ? (
-                    <span className="inline-flex items-center gap-1.5 font-medium text-primary">
-                      📄 {expense.receiptRef}
-                    </span>
+                    <a
+                      href={`${getApiBaseUrl()}/v1/funds/${expense.fundId}/expenses/${expense.id}/evidence/${expense.receiptRef}/download`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 font-medium text-primary underline-offset-4 hover:underline"
+                    >
+                      {expense.receiptRef}
+                    </a>
                   ) : (
                     <span className="text-ink-muted">{t("approver.noReceipts")}</span>
                   )}
