@@ -20,18 +20,18 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@aws-sdk/client-kms": "^3.1158.0",
+    "@aws-sdk/client-kms": "^3.1164.0",
     "@yen/db": "workspace:*",
     "@yen/shared": "workspace:*",
-    "pg-boss": "^12.38.0",
-    "viem": "^2.57.12",
+    "pg-boss": "^12.38.1",
+    "viem": "^2.57.16",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@opentelemetry/api": "^1.10.0",
     "@opentelemetry/sdk-metrics": "^3.1.0",
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.5"
+    "vitest": "^5.1.0"
   }
 }
