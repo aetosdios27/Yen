@@ -49,15 +49,17 @@ jobs:
       - name: Build twice and compare release artifact
         run: bash scripts/repro-build.sh "$ARTIFACT_DIR"
 
-      - name: Generate CycloneDX SBOM
-        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
-        with:
-          path: .
-          format: cyclonedx-json
-          output-file: ${{ runner.temp }}/sbom.cdx.json
-          syft-version: v1.42.1
-          upload-artifact: false
-          upload-release-assets: false
+      - name: Generate CycloneDX SBOM with checksum-verified Syft
+        run: |
+          archive="$RUNNER_TEMP/syft.tar.gz"
+          curl --fail --location --silent --show-error --retry 3 \
+            https://github.com/anchore/syft/releases/download/v1.42.1/syft_1.42.1_linux_amd64.tar.gz \
+            --output "$archive"
+          # GitHub release asset digest: anchore/syft v1.42.1 linux_amd64.
+          printf '989ded4e772810f93de6ccdc4512f79a6dabb5fb2dd2a9ffc72a80c955e6125a  %s\n' "$archive" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/syft-bin"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/syft-bin" syft
+          "$RUNNER_TEMP/syft-bin/syft" scan dir:. -o "cyclonedx-json=$RUNNER_TEMP/sbom.cdx.json"
 
       - name: Add SBOM and check release assets
         env:

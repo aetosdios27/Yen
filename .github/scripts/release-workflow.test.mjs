@@ -22,7 +22,7 @@ test("release build exercises reproducibility and verification without publishin
 
 test("every release action is pinned to a full SHA and names its upstream tag", () => {
   const usesLines = workflow.split("\n").filter((line) => /^\s*(?:-\s*)?uses:/.test(line));
-  assert.equal(usesLines.length, 15);
+  assert.equal(usesLines.length, 14);
   for (const line of usesLines) {
     assert.match(
       line,

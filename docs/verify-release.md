@@ -10,8 +10,9 @@ not evidence that a two-machine release build has already succeeded.
 
 Before the first tag after this change merges, a repository administrator must
 apply the updated Actions allow-list with
-`.github/scripts/apply-repo-settings.sh aetosdios27/Yen`. It adds the pinned
-Anchore SBOM and Sigstore Cosign installer actions used by the release workflow.
+`.github/scripts/apply-repo-settings.sh aetosdios27/Yen`. The release workflow uses the pinned Sigstore Cosign installer; Syft is
+downloaded directly with a pinned checksum. See the
+[workflow and Dependabot audit](release-supply-chain-audit.md).
 
 ## Download and check the release
 

@@ -30,3 +30,10 @@ test("release installer supports Cosign v3 with a pinned bootstrap checksum", ()
   assert.match(release, /sigstore\/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532/);
   assert.match(release, /cosign-release: v3\.1\.4/);
 });
+
+test("SBOM generation verifies the pinned Syft archive before execution", () => {
+  const release = readFileSync(new URL("release.yml", directory), "utf8");
+  assert.match(release, /989ded4e772810f93de6ccdc4512f79a6dabb5fb2dd2a9ffc72a80c955e6125a/);
+  assert.doesNotMatch(release, /uses: anchore\/sbom-action/);
+  assert.match(release, /sha256sum --check --strict/);
+});
