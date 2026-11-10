@@ -1,0 +1,34 @@
+name: API deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - "packages/db/**"
+      - "Dockerfile"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print infrastructure commands instead of running them"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+# All cloud authentication is OpenID Connect only. Every job that touches
+# infrastructure declares id-token: write and exchanges the short-lived GitHub
+# OIDC token for temporary credentials through scripts/deploy-api.sh. No
+# long-lived cloud credentials are stored in GitHub Secrets.
+env:
+  DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true && '1' || '' }}
