@@ -50,9 +50,7 @@ export interface SmsDltTemplateRegistration {
  * other notifications are delivered on WhatsApp only. Template IDs are filled
  * in after DLT approval, see docs/compliance/dlt-whatsapp-templates.md.
  */
-export const SMS_DLT_TEMPLATE_REGISTRY: Readonly<
-  Record<string, SmsDltTemplateRegistration>
-> = {
+export const SMS_DLT_TEMPLATE_REGISTRY: Readonly<Record<string, SmsDltTemplateRegistration>> = {
   otp: {
     template_key: "otp",
     dlt_template_id: "",
@@ -84,9 +82,7 @@ export interface WhatsAppTemplateRegistration {
  * BSP-approved WhatsApp utility templates. Template names and bodies must stay
  * identical to the approved submissions, see docs/compliance/dlt-whatsapp-templates.md.
  */
-export const WHATSAPP_TEMPLATE_REGISTRY: Readonly<
-  Record<string, WhatsAppTemplateRegistration>
-> = {
+export const WHATSAPP_TEMPLATE_REGISTRY: Readonly<Record<string, WhatsAppTemplateRegistration>> = {
   otp: {
     template_key: "otp",
     template_name: "yen_login_otp",
@@ -135,23 +131,9 @@ export const WHATSAPP_TEMPLATE_REGISTRY: Readonly<
 };
 
 const DLT_PLACEHOLDER_PATTERN = /\{#([a-zA-Z0-9_]+)#\}/g;
-const WHATSAPP_PLACEHOLDER_PATTERN = /\{\{(\d+)\}\}/g;
 
 function complianceFailure(violations: ComplianceViolation[]): ComplianceResult {
   return { compliant: false, violations };
-}
-
-function escapeRegExpPart(part: string): string {
-  return part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/**
- * Builds a strict full-match pattern for a registered body: every placeholder
- * is replaced by a non-empty wildcard, all literal text must match exactly.
- */
-function registeredBodyPattern(registeredBody: string, placeholder: RegExp): RegExp {
-  const literals = registeredBody.split(placeholder).filter((_part, index) => index % 2 === 0);
-  return new RegExp(`^${literals.map(escapeRegExpPart).join(".+")}$`);
 }
 
 export interface SmsDispatchInput {
@@ -293,9 +275,168 @@ export function validateSmsDispatch(
     });
   }
 
-  violations.push(
-    ...checkVariables(registration.variables, input.variables, "variables"),
-  );
+  violations.push(...checkVariables(registration.variables, input.variables, "variables"));
 
   return { compliant: violations.length === 0, violations };
+}
+
+export interface WhatsAppDispatchInput {
+  template_key: string;
+  recipient: string;
+  template_name?: string | null;
+  language_code?: string | null;
+  variables: Readonly<Record<string, string>>;
+}
+
+export type WhatsAppDispatchRegistry = Readonly<Record<string, WhatsAppTemplateRegistration>>;
+
+/**
+ * Validates an outbound WhatsApp dispatch against BSP template approval rules:
+ * the approved template name, an approved language code, and variables limited
+ * to the registered positional set. Fails closed on any missing input.
+ */
+export function validateWhatsAppDispatch(
+  input: WhatsAppDispatchInput,
+  registry: WhatsAppDispatchRegistry = WHATSAPP_TEMPLATE_REGISTRY,
+): ComplianceResult {
+  const violations: ComplianceViolation[] = [];
+
+  const registration = registry[input.template_key];
+  if (!registration) {
+    violations.push({
+      code: "unregistered_template",
+      field: "template_key",
+      message: `Template ${input.template_key} has no approved WhatsApp template`,
+    });
+    return complianceFailure(violations);
+  }
+
+  const templateName = input.template_name?.trim() ?? "";
+  if (!templateName) {
+    violations.push({
+      code: "missing_whatsapp_template_name",
+      field: "template_name",
+      message: "WhatsApp template name is required on every outgoing dispatch",
+    });
+  } else if (templateName !== registration.template_name) {
+    violations.push({
+      code: "whatsapp_template_name_mismatch",
+      field: "template_name",
+      message: `WhatsApp template name does not match the approved name for ${input.template_key}`,
+    });
+  }
+
+  const languageCode = input.language_code?.trim() ?? "";
+  if (!languageCode) {
+    violations.push({
+      code: "missing_whatsapp_language_code",
+      field: "language_code",
+      message: "WhatsApp language code is required on every outgoing dispatch",
+    });
+  } else if (!registration.approved_language_codes.includes(languageCode)) {
+    violations.push({
+      code: "unapproved_language_code",
+      field: "language_code",
+      message: `Language ${languageCode} has no approved registration for ${input.template_key}`,
+    });
+  }
+
+  violations.push(...checkVariables(registration.variables, input.variables, "variables"));
+
+  return { compliant: violations.length === 0, violations };
+}
+
+/** Ordered WhatsApp body parameters for the Graph API template component. */
+export function buildWhatsAppBodyParameters(
+  registration: WhatsAppTemplateRegistration,
+  variables: Readonly<Record<string, string>>,
+): { type: "text"; text: string }[] {
+  return registration.variables.map((name) => {
+    const value = variables[name];
+    if (value === undefined || value === "") {
+      throw new Error(`WhatsApp template variable is missing: ${name}`);
+    }
+    return { type: "text" as const, text: value };
+  });
+}
+
+export interface SmsDispatchEnvelope {
+  recipient: string;
+  sender_id: string;
+  dlt_entity_id: string;
+  dlt_template_id: string;
+  message: string;
+}
+
+/**
+ * Validates a dispatch and renders the registered SMS body into a dispatch
+ * envelope carrying the DLT regulatory headers. Returns the violations when
+ * the dispatch is not compliant.
+ */
+export function buildSmsDispatchEnvelope(
+  input: SmsDispatchInput,
+  registry: SmsDispatchRegistry = SMS_DLT_TEMPLATE_REGISTRY,
+): { ok: true; envelope: SmsDispatchEnvelope } | { ok: false; violations: ComplianceViolation[] } {
+  const result = validateSmsDispatch(input, registry);
+  if (!result.compliant) return { ok: false, violations: result.violations };
+  const registration = registry[input.template_key];
+  if (!registration) return { ok: false, violations: result.violations };
+  return {
+    ok: true,
+    envelope: {
+      recipient: input.recipient,
+      sender_id: (input.sender_id ?? "").trim(),
+      dlt_entity_id: (input.dlt_entity_id ?? "").trim(),
+      dlt_template_id: registration.dlt_template_id,
+      message: renderDltRegisteredBody(registration, input.variables),
+    },
+  };
+}
+
+/** WhatsApp Cloud API template message payload structure. */
+export interface WhatsAppTemplatePayload {
+  messaging_product: "whatsapp";
+  recipient_type: "individual";
+  to: string;
+  type: "template";
+  template: {
+    name: string;
+    language: { code: string };
+    components: { type: "body"; parameters: { type: "text"; text: string }[] }[];
+  };
+}
+
+/**
+ * Validates a dispatch and builds the WhatsApp Cloud API template payload.
+ * Returns the violations when the dispatch is not compliant.
+ */
+export function buildWhatsAppTemplatePayload(
+  input: WhatsAppDispatchInput,
+  registry: WhatsAppDispatchRegistry = WHATSAPP_TEMPLATE_REGISTRY,
+):
+  | {
+      ok: true;
+      payload: WhatsAppTemplatePayload;
+    }
+  | { ok: false; violations: ComplianceViolation[] } {
+  const result = validateWhatsAppDispatch(input, registry);
+  if (!result.compliant) return { ok: false, violations: result.violations };
+  const registration = registry[input.template_key];
+  if (!registration) return { ok: false, violations: result.violations };
+  return {
+    ok: true,
+    payload: {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: input.recipient,
+      type: "template",
+      template: {
+        name: registration.template_name,
+        language: { code: (input.language_code ?? "").trim() },
+        components: [
+          { type: "body", parameters: buildWhatsAppBodyParameters(registration, input.variables) },
+        ],
+      },
+    },
+  };
 }
