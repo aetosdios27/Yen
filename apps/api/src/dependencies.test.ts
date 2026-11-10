@@ -2,10 +2,11 @@ import { createSql } from "@yen/db";
 import { InMemoryExpenseStore } from "@yen/ledger";
 import { describe, expect, it } from "vitest";
 import { createApp } from "./app.js";
-import { defaultDependencies, validatePinSecret } from "./dependencies.js";
+import { defaultDependencies, selectVirusScanner, validatePinSecret } from "./dependencies.js";
 import { PostgresEvidenceStore } from "./evidence-store-postgres.js";
-import { MemoryStorageAdapter } from "./storage.js";
+import { MemoryStorageAdapter, type StorageAdapter } from "./storage.js";
 import { MemoryEvidenceStore } from "./stores.js";
+import { ClamAvVirusScannerAdapter, LocalDemoVirusScannerAdapter } from "./virus-scanner.js";
 
 describe("durable evidence dependency defaults", () => {
   it("requires a configured evidence store and storage in production", async () => {
@@ -120,5 +121,88 @@ describe("dependencies PIN secret configuration", () => {
         process.env.PIN_HMAC_SECRET = original;
       }
     }
+  });
+});
+
+describe("virus scanner selection", () => {
+  const durableStorage: StorageAdapter = {
+    putObject: async () => undefined,
+    getObject: async () => ({
+      data: new Uint8Array(),
+      mimeType: "application/octet-stream",
+      sizeBytes: 0,
+      createdAt: new Date().toISOString(),
+    }),
+    deleteObject: async () => undefined,
+    createUploadGrant: async () => ({ objectKey: "", uploadUrl: "", expiresAt: "" }),
+  };
+
+  function withEnv(values: Record<string, string | undefined>, run: () => void) {
+    const saved: Record<string, string | undefined> = {};
+    for (const [key, value] of Object.entries(values)) {
+      saved[key] = process.env[key];
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    try {
+      run();
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  }
+
+  it("uses ClamAV whenever CLAMAV_HOST is configured", () => {
+    expect(selectVirusScanner({ CLAMAV_HOST: "clamav", NODE_ENV: "production" })).toBeInstanceOf(
+      ClamAvVirusScannerAdapter,
+    );
+    expect(
+      selectVirusScanner({ CLAMAV_HOST: "localhost", NODE_ENV: "development" }),
+    ).toBeInstanceOf(ClamAvVirusScannerAdapter);
+  });
+
+  it("falls back to the local demo scanner outside production", () => {
+    expect(selectVirusScanner({ NODE_ENV: "development" })).toBeInstanceOf(
+      LocalDemoVirusScannerAdapter,
+    );
+    expect(selectVirusScanner({ NODE_ENV: "test" })).toBeInstanceOf(LocalDemoVirusScannerAdapter);
+    expect(selectVirusScanner({ NODE_ENV: undefined })).toBeInstanceOf(
+      LocalDemoVirusScannerAdapter,
+    );
+  });
+
+  it("refuses the demo fallback in production", () => {
+    expect(() => selectVirusScanner({ NODE_ENV: "production" })).toThrow("CLAMAV_HOST");
+  });
+
+  it("defaults to the demo scanner in non-production dependencies", () => {
+    const deps = defaultDependencies();
+    expect(deps.virusScanner).toBeInstanceOf(LocalDemoVirusScannerAdapter);
+  });
+
+  it("refuses production default dependencies without CLAMAV_HOST", async () => {
+    const sql = createSql("postgres://postgres:pw@localhost:55432/postgres");
+    withEnv(
+      {
+        NODE_ENV: "production",
+        CLAMAV_HOST: undefined,
+        PAYEE_FINGERPRINT_SALT: "s".repeat(32),
+        WEBAUTHN_RP_ID: "yen.example",
+        WEBAUTHN_ORIGIN: "https://yen.example",
+      },
+      () => {
+        expect(() =>
+          defaultDependencies(
+            Date.now,
+            new InMemoryExpenseStore(),
+            new PostgresEvidenceStore(sql),
+            durableStorage,
+          ),
+        ).toThrow("Production requires CLAMAV_HOST");
+      },
+    );
+    await sql.end();
   });
 });

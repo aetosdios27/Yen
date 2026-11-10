@@ -8,7 +8,11 @@ import { devPolicy } from "./policy.js";
 import { MemoryStorageAdapter } from "./storage.js";
 import { MemoryEvidenceStore, type StoredEvidence } from "./stores.js";
 import { MemoryVirusScannerAdapter } from "./test-utils/memory-virus-scanner.js";
-import { ClamAvVirusScannerAdapter, type VirusScannerAdapter } from "./virus-scanner.js";
+import {
+  ClamAvVirusScannerAdapter,
+  UnconfiguredVirusScannerAdapter,
+  type VirusScannerAdapter,
+} from "./virus-scanner.js";
 
 const FUND_OWNER = { id: "00000000-0000-4000-8000-000000000001" };
 const EXPENSE_ID_1 = "00000000-0000-4000-8000-000000000011";
@@ -91,8 +95,12 @@ async function createTestFund(app: ReturnType<typeof createApp>) {
 }
 
 describe("Evidence Upload API Endpoint", () => {
-  it("rejects uploads when the default app has no malware scanner configured", async () => {
-    const app = createApp({ principal: FUND_OWNER, policy: devPolicy });
+  it("rejects uploads when the app has no malware scanner configured", async () => {
+    const app = createApp({
+      principal: FUND_OWNER,
+      policy: devPolicy,
+      virusScanner: new UnconfiguredVirusScannerAdapter(),
+    });
     const fundId = await createTestFund(app);
     const form = new FormData();
     form.append("file", new File([VALID_PDF_BYTES], "invoice.pdf", { type: "application/pdf" }));
@@ -687,5 +695,92 @@ describe("Evidence Upload API Endpoint", () => {
       expect(serialized).not.toContain("CONFIDENTIAL-INV-99");
       expect(serialized).not.toContain("confidential_bill.pdf");
     }
+  });
+});
+
+describe("Evidence Download API Endpoint", () => {
+  it("serves the stored bytes with the original MIME type and filename", async () => {
+    const { app, storageAdapter, evidenceStore } = createTestApp();
+    const fundId = await createTestFund(app);
+
+    const fd = new FormData();
+    fd.append("file", new File([VALID_PDF_BYTES], "invoice.pdf", { type: "application/pdf" }));
+    const upload = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`,
+      { method: "POST", body: fd },
+    );
+    expect(upload.status).toBe(201);
+    const record = (await upload.json()) as StoredEvidence;
+
+    const download = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence/${record.evidenceId}/download`,
+    );
+    expect(download.status).toBe(200);
+    expect(download.headers.get("content-type")).toBe("application/pdf");
+    expect(download.headers.get("content-disposition")).toBe('inline; filename="invoice.pdf"');
+    expect(download.headers.get("cache-control")).toBe("private, no-store");
+    const bytes = new Uint8Array(await download.arrayBuffer());
+    expect(bytes).toEqual(VALID_PDF_BYTES);
+
+    const [persisted] = await evidenceStore.getByExpense(fundId, EXPENSE_ID_1);
+    const stored = await storageAdapter.getObject(persisted?.objectKey ?? "");
+    expect(new Uint8Array(stored.data)).toEqual(VALID_PDF_BYTES);
+  });
+
+  it("returns 404 for an unknown evidence id on the same expense", async () => {
+    const { app } = createTestApp();
+    const fundId = await createTestFund(app);
+    const download = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence/00000000-0000-4000-8000-999999999999/download`,
+    );
+    expect(download.status).toBe(404);
+  });
+
+  it("returns 404 when the evidence belongs to a different expense in the same fund", async () => {
+    const { app } = createTestApp();
+    const fundId = await createTestFund(app);
+
+    const fd = new FormData();
+    fd.append("file", new File([VALID_PDF_BYTES], "one.pdf", { type: "application/pdf" }));
+    const upload = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`,
+      { method: "POST", body: fd },
+    );
+    const record = (await upload.json()) as StoredEvidence;
+
+    const download = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_2}/evidence/${record.evidenceId}/download`,
+    );
+    expect(download.status).toBe(404);
+  });
+
+  it("returns 500 when the stored bytes no longer match the pinned SHA-256", async () => {
+    const storageAdapter = new MemoryStorageAdapter();
+    const { app, evidenceStore } = createTestApp({ storageAdapter });
+    const fundId = await createTestFund(app);
+
+    const fd = new FormData();
+    fd.append("file", new File([VALID_PDF_BYTES], "tamper.pdf", { type: "application/pdf" }));
+    const upload = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence`,
+      { method: "POST", body: fd },
+    );
+    const record = (await upload.json()) as StoredEvidence;
+    const [persisted] = await evidenceStore.getByExpense(fundId, EXPENSE_ID_1);
+
+    storageAdapter.simulateTamper(persisted?.objectKey ?? "", new Uint8Array([0x00, 0x01, 0x02]));
+
+    const download = await evidenceRequest(
+      app,
+      `/v1/funds/${fundId}/expenses/${EXPENSE_ID_1}/evidence/${record.evidenceId}/download`,
+    );
+    expect(download.status).toBe(500);
+    expect(await download.json()).toMatchObject({ error: { code: "internal" } });
   });
 });

@@ -80,6 +80,7 @@ import {
   createFundRoute,
   createSubscriptionRoute,
   donationDetailsRoute,
+  downloadEvidenceRoute,
   type expenseSchema,
   getEvidenceRoute,
   getExpenseRoute,
@@ -2739,6 +2740,42 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const evidence = await deps.evidenceStore.getByExpense(fundParam.value, expenseId);
     for (const item of evidence) await getVerifiedEvidenceObject(item, deps.storageAdapter);
     return c.json(deps.policy.redact(principal, { kind: "evidence_list", evidence }), 200);
+  });
+  app.openapi(downloadEvidenceRoute, async (c) => {
+    const fundParam = parseFundId(c.req.valid("param").fundId);
+    if (!fundParam.ok) throw new ApiError("not_found");
+    const fundEntry = await funds.get(fundParam.value);
+    if (!fundEntry) throw new ApiError("not_found");
+
+    const { expenseId, evidenceId } = c.req.valid("param");
+    if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(expenseId)) {
+      throw new ApiError("not_found");
+    }
+    if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(evidenceId)) {
+      throw new ApiError("not_found");
+    }
+
+    authorizedExpense(c, "expense:read_evidence", {
+      kind: "expense",
+      fund: fundEntry,
+      expenseId,
+    });
+    if (!(await deps.evidenceStore.expenseBelongsToFund(fundParam.value, expenseId))) {
+      throw new ApiError("not_found");
+    }
+
+    const evidence = await deps.evidenceStore.getByExpense(fundParam.value, expenseId);
+    const record = evidence.find((item) => item.evidenceId === evidenceId);
+    if (!record) throw new ApiError("not_found");
+
+    const object = await getVerifiedEvidenceObject(record, deps.storageAdapter);
+    const bytes = new Uint8Array(object.data);
+    return c.newResponse(bytes, 200, {
+      "Content-Type": record.mimeType,
+      "Content-Disposition": `inline; filename="${record.fileName}"`,
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+    });
   });
   app.openapi(statementUploadRoute, async (c) => {
     const input = c.req.valid("json");

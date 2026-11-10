@@ -31,6 +31,36 @@ export class UnconfiguredVirusScannerAdapter implements VirusScannerAdapter {
   }
 }
 
+/**
+ * Explicitly labeled demo and development scanner. It performs no malware
+ * detection: every upload is reported clean after a loud warning. Construction
+ * is refused in production so it can never be selected there.
+ */
+export class LocalDemoVirusScannerAdapter implements VirusScannerAdapter {
+  readonly scannerName = "LocalDemoScanner";
+
+  constructor(
+    private readonly warn: (message: string) => void = (message) => console.warn(message),
+  ) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "The local demo malware scanner is not allowed in production; configure CLAMAV_HOST",
+      );
+    }
+  }
+
+  async scan(input: {
+    objectKey: string;
+    data: Uint8Array;
+    mimeType: string;
+  }): Promise<VirusScanResult> {
+    this.warn(
+      `Local demo malware scanner accepted ${input.objectKey} (${input.data.byteLength} bytes, ${input.mimeType}) without a real scan; set CLAMAV_HOST to scan uploads with ClamAV`,
+    );
+    return { status: "clean", scannerName: this.scannerName, signatureVersion: "local-demo" };
+  }
+}
+
 export interface ClamAvOptions {
   readonly host: string;
   readonly port: number;

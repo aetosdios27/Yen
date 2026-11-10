@@ -132,7 +132,12 @@ function scanRouteHandlersForRedaction(sourceText: string): string[] {
           }
         }
 
-        if (totalReturns === 0 || unredactedReturns > 0) {
+        // Raw byte streaming handlers (c.newResponse / c.body with no JSON returns)
+        // serve stored file bytes rather than fund JSON, so redaction does not apply;
+        // their bytes are guarded by SHA-256 integrity verification instead.
+        const returnsRawBytes =
+          totalReturns === 0 && /return\s+c\.(?:newResponse|body)\s*\(/.test(handlerBody);
+        if (totalReturns === 0 ? !returnsRawBytes : unredactedReturns > 0) {
           violations.push(
             `Route ${routeName} returns fund data without passing through policy.redact() (${unredactedReturns} unredacted of ${totalReturns} branch${totalReturns === 1 ? "" : "es"})`,
           );
@@ -151,6 +156,28 @@ describe("API route redaction guard (tripwire)", () => {
 
     const violations = scanRouteHandlersForRedaction(appTsContent);
     expect(violations).toEqual([]);
+  });
+
+  it("accepts fund route handlers that stream stored file bytes without JSON returns", () => {
+    const byteStreamSource = `
+      app.openapi(downloadEvidenceRoute, async (c) => {
+        const fundEntry = await funds.get(id.value);
+        const object = await getVerifiedEvidenceObject(record, deps.storageAdapter);
+        return c.newResponse(object.data, 200, { "Content-Type": record.mimeType });
+      });
+    `;
+    expect(scanRouteHandlersForRedaction(byteStreamSource)).toEqual([]);
+  });
+
+  it("flags a byte streaming handler that also returns unredacted JSON", () => {
+    const mixedSource = `
+      app.openapi(downloadEvidenceRoute, async (c) => {
+        const fundEntry = await funds.get(id.value);
+        if (leak) return c.json(fundEntry.fund, 200);
+        return c.newResponse(bytes, 200);
+      });
+    `;
+    expect(scanRouteHandlersForRedaction(mixedSource).length).toBe(1);
   });
 
   it("detects and flags violations when a route handler returns fund data without calling redact", () => {

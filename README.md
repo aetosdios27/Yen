@@ -155,6 +155,24 @@ pnpm dev:full
 
 The web and API ports are pinned separately (3000 and 3001) so they never collide. Override them per app with `WEB_PORT` and `API_PORT`, for example `WEB_PORT=3100 API_PORT=3200 pnpm dev:full`.
 
+### Receipt Upload in Local Demo Mode
+
+Receipt uploads work end to end without extra configuration. With `CLAMAV_HOST`
+unset outside production, the API uses the local demo malware scanner: every
+upload logs a loud warning and is accepted as clean so treasurers can attach
+bill photos and PDFs to expense requests. For real scanning, start the ClamAV
+container and set the host:
+
+```sh
+docker compose up -d clamav    # first start downloads signatures, allow a few minutes
+# then set CLAMAV_HOST=127.0.0.1 in .env and restart the API
+```
+
+Uploaded receipts are stored under `EVIDENCE_STORAGE_DIR` and the approver opens
+them from the approval screen, which links to
+`GET /v1/funds/{fundId}/expenses/{expenseId}/evidence/{evidenceId}/download`.
+Production refuses the demo scanner: `CLAMAV_HOST` is required there.
+
 ### Development Commands
 
 | Command            | Description                                                      |

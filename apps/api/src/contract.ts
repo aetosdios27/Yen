@@ -2247,6 +2247,43 @@ export const getEvidenceRoute = createRoute({
     ...protectedErrors,
   },
 });
+const evidenceBytesSchema = z.any().openapi({
+  type: "string",
+  format: "binary",
+  description: "Raw evidence file bytes",
+});
+const downloadEvidenceParams = z.object({
+  fundId: z.string().openapi({
+    description: "Canonical lowercase FundId UUID; invalid IDs return 404",
+    param: { name: "fundId", in: "path" },
+  }),
+  expenseId: z.string().openapi({
+    description: "Canonical lowercase ExpenseId UUID; invalid IDs return 404",
+    param: { name: "expenseId", in: "path" },
+  }),
+  evidenceId: z.string().openapi({
+    description: "Canonical lowercase EvidenceId UUID; invalid IDs return 404",
+    param: { name: "evidenceId", in: "path" },
+  }),
+});
+export const downloadEvidenceRoute = createRoute({
+  method: "get",
+  path: "/v1/funds/{fundId}/expenses/{expenseId}/evidence/{evidenceId}/download",
+  tags: ["expenses", "evidence"],
+  operationId: "downloadEvidence",
+  description:
+    "Serves the stored receipt bytes for one evidence record after verifying them against the pinned SHA-256 hash. Approvers use this to open the bill attached to an expense.",
+  security,
+  request: { params: downloadEvidenceParams },
+  responses: {
+    200: {
+      description: "The stored evidence file, served inline with its original MIME type",
+      headers: responseHeaders,
+      content: { "application/octet-stream": { schema: evidenceBytesSchema } },
+    },
+    ...protectedErrors,
+  },
+});
 
 export const statementTransactionSummarySchema = z
   .object({
