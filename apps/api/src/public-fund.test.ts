@@ -19,6 +19,7 @@ function fixtureApp(
   principalValue: AppDependencies["principal"] = owner,
   publicFundReadStore = new MemoryPublicFundReadStore(),
   category?: ExpenseRequest["category"],
+  includeExpense = true,
 ) {
   const expenses = new InMemoryExpenseStore();
   const expense = {
@@ -62,7 +63,7 @@ function fixtureApp(
     expenseStore: {
       ...expenses,
       get: expenses.get.bind(expenses),
-      list: async (id: string) => (id === fundId ? [expense] : []),
+      list: async (id: string) => (id === fundId && includeExpense ? [expense] : []),
       save: expenses.save.bind(expenses),
       atomicApprove: expenses.atomicApprove.bind(expenses),
     } as AppDependencies["expenseStore"],
@@ -162,6 +163,34 @@ describe("public fund read API", () => {
       items: [{ verified: "unverified" }, { verified: "anchored" }, { verified: "bank-matched" }],
     });
   });
+
+  it.each(["unverified", "bank-matched", "anchored"] as const)(
+    "reports fund verification as %s from coverage of every matched item",
+    async (state) => {
+      const id = "00000000-0000-4000-8000-000000000051";
+      class ReadStore extends MemoryPublicFundReadStore {
+        override async anchoredItems() {
+          return new Set(state === "anchored" ? [id] : []);
+        }
+      }
+      const store = new ReadStore();
+      if (state !== "unverified")
+        store.set(fundId, [
+          {
+            id,
+            occurredAt: "2026-10-28T01:00:00.000Z",
+            amountPaise: 100n,
+            donorDisplayName: null,
+            donorNameChoice: "anonymous",
+          },
+        ]);
+      const app = fixtureApp(new MemoryDisplayNameStore(), owner, store, undefined, false);
+      await createPublicFund(app);
+      expect(await (await app.request(`/v1/funds/${fundId}/public/summary`)).json()).toMatchObject({
+        verification: state,
+      });
+    },
+  );
 
   it("carries the requested expense category into the public breakdown", async () => {
     const app = fixtureApp(

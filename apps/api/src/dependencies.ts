@@ -112,6 +112,11 @@ export interface DonationPledgeStore {
 }
 
 export interface PublicFundDonation {
+  readonly refund?: {
+    readonly id: string;
+    readonly occurredAt: string;
+    readonly anchored: boolean;
+  };
   readonly id: string;
   readonly occurredAt: string;
   readonly amountPaise: bigint;

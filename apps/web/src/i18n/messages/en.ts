@@ -209,6 +209,8 @@ export const en = {
     viewReceipt: "View receipt certificate",
   },
   receipt: {
+    refundedTitle: "Donation refunded",
+    rejectedTitle: "Donation rejected",
     consentUpdates: "I agree to fund updates under the {notice}.",
     privacyNotice: "Privacy notice",
     consentWhatsapp: "I separately agree to WhatsApp messages.",
@@ -324,6 +326,7 @@ export const en = {
     footer: "Yen design system · YEN-13",
   },
   status: {
+    refunded: "Donation refunded",
     verified: "Verified",
     pending: "Pending review",
     unmatched: "No approval found",
@@ -392,10 +395,15 @@ export const en = {
     iosClose: "Close instructions",
   },
   fund: {
+    refundItem: "Refund",
+    refundDetail: "Donation refunded",
     title: "Public fund",
     donateCta: "Donate via UPI",
     donateQr: "UPI QR code",
     orgBadge: "Registered group",
+    verificationUnverified: "No bank matches yet",
+    verificationBankMatched: "Bank matched · anchoring incomplete",
+    verificationAnchored: "All bank matches anchored",
     verifiedOrg: "Verified organization",
     summaryTitle: "Money summary",
     totalRaised: "Total raised",

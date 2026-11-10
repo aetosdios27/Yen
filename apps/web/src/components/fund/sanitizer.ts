@@ -113,7 +113,7 @@ export function sanitizePublicFund(raw: RawFundRecord): PublicFund {
     org: {
       id: raw.org.id,
       name: raw.org.name,
-      verified: Boolean(raw.org.verified ?? true),
+      verification: "unverified",
       legalForm: raw.org.legal_form,
     },
     money: {

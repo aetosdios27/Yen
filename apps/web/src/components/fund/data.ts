@@ -66,14 +66,16 @@ export async function getPublicFund(fundId: string): Promise<PublicFund | null> 
       };
     });
 
-    const isFundVerified =
-      summary.verification === "bank-matched" || summary.verification === "anchored";
-
     const timelineEntries: PublicTimelineEntry[] = (timeline?.items ?? []).map((item) => {
       const isItemVerified = item.verified === "anchored";
       return {
         id: item.id,
-        type: "expense",
+        type:
+          item.itemType === "refund"
+            ? "refund"
+            : item.itemType === "donation"
+              ? "donation"
+              : "expense",
         title: item.message,
         description: item.actorDisplayName,
         amount: item.amountPaise ? paise(Number(item.amountPaise)) : paise(0),
@@ -92,7 +94,7 @@ export async function getPublicFund(fundId: string): Promise<PublicFund | null> 
       org: {
         id: summary.fundId,
         name: summary.name,
-        verified: isFundVerified,
+        verification: summary.verification,
       },
       money: {
         totalRaised: raisedPaise,

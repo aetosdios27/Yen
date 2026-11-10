@@ -6,6 +6,16 @@ export type {
   DeliveryStatus,
 } from "./delivery.js";
 export {
+  type DonationStatus,
+  donationStatusSchema,
+  isOutstandingPledge,
+} from "./donation-status.js";
+export {
+  type FundVerificationState,
+  fundVerificationSchema,
+  fundVerificationState,
+} from "./fund-verification.js";
+export {
   calculateGstinChecksum,
   GSTIN_ALPHABET,
   GSTIN_REGEX,
