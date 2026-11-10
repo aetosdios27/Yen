@@ -94,3 +94,56 @@ Co-approver, on your own phone:
 | You typed the wrong PIN  | You see how many attempts remain. Five wrong attempts lock approvals for 30 minutes.              | गलत पिन डाला          | बचे हुए प्रयास दिखते हैं। पाँच गलत प्रयासों पर 30 मिनट के लिए स्वीकृति बंद।                         |
 | PIN was reset by support | A 24 hour cooling-off applies before the next approval.                                           | पिन सपोर्ट ने रीसेट किया | अगली स्वीकृति से पहले 24 घंटे का कूलिंग-ऑफ।                                                    |
 | You want to say no       | Tap Reject. A reason of at least 5 characters is mandatory and becomes part of the public record. | मना करना है            | अस्वीकार करें दबाएँ। कम से कम 5 अक्षरों का कारण अनिवार्य है और सार्वजनिक रिकॉर्ड का हिस्सा बनता है। |
+
+## 6. Reading the public fund page / सार्वजनिक फ़ंड पेज पढ़ना
+
+Anyone with the link, no sign-in, visits `/funds/[fundId]`. Show donors and club members the
+four things below.
+
+| English                                                                                                                                                                                                                                                                               | हिन्दी                                                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Money summary: total raised, total spent, current balance, in Indian digit grouping.                                                                                                                                                                                               | 1. पैसों का विवरण: कुल जुटाया, कुल खर्च, वर्तमान शेष, भारतीय अंकों में।                                                                                                                                                                             |
+| 2. Live transparency timeline: every donation and expense confirmed so far, with filters for donations and expenses. Each entry carries a badge; tapping Check this record opens `/verify?recordId=...&fundId=...` and tells you whether the record has changed since it was written. | 2. सीधा पारदर्शिता विवरण: अब तक की हर पुष्ट दान और खर्च, फ़िल्टर सहित। हर प्रविष्टि पर बैज है; इस रिकॉर्ड की जांच करें दबाने पर `/verify?recordId=...&fundId=...` खुलता है जो बताता है कि रिकॉर्ड लिखे जाने के बाद बदला या नहीं।                               |
+| 3. How do I know? opens a four-point explainer: bank verification, approvals, evidence and the tamper-evident account book.                                                                                                                                                           | 3. मुझे कैसे पता चलेगा? चार बिंदुओं का समझाना खोलता है: बैंक पुष्टि, स्वीकृतियाँ, बिल का सबूत और बदलाव-दिखाने वाला खाता बही।                                                                                                                              |
+| 4. Donors tap Donate via UPI, pay the club's UPI ID (QR or their UPI app), then record the 12-digit UPI reference from their app on `/funds/[fundId]/donate`. Until the bank statement match, the donation shows as waiting; the receipt at `/receipts/[id]` says so plainly.         | 4. दानदाता UPI से दान करें दबाकर क्लब की UPI ID पर (QR या अपना UPI ऐप) पैसे भेजता है, फिर `/funds/[fundId]/donate` पर अपने ऐप का 12 अंकों का UPI संदर्भ दर्ज करता है। बैंक विवरण मिलान तक दान प्रतीक्षारत दिखता है; `/receipts/[id]` की रसीद यह साफ कहती है। |
+
+## 7. Screen map / स्क्रीन नक्शा
+
+| What                   | Route                                   | Who                      |
+| ---------------------- | --------------------------------------- | ------------------------ |
+| Sign in with OTP       | `/login`                                | Everyone with an account |
+| Create fund (5 steps)  | `/onboarding`                           | Treasurer                |
+| Accept approver invite | `/invites/accept?code=...`              | Co-approver              |
+| Public fund page       | `/funds/[fundId]`                       | Anyone, no sign-in       |
+| Donate                 | `/funds/[fundId]/donate`                | Donor, no sign-in        |
+| Receipt certificate    | `/receipts/[id]`                        | Donor                    |
+| Treasurer dashboard    | `/funds/[fundId]/treasurer`             | Treasurer                |
+| New expense            | `/funds/[fundId]/expenses/new`          | Treasurer                |
+| Approve or reject      | `/funds/[fundId]/approvals/[expenseId]` | Co-approver              |
+| Verify one record      | `/verify?recordId=...&fundId=...`       | Anyone, no sign-in       |
+| Privacy notice         | `/privacy`                              | Everyone                 |
+
+| क्या                     | रूट                                      | कौन                    |
+| ----------------------- | --------------------------------------- | ---------------------- |
+| OTP से साइन इन           | `/login`                                | खाता रखने वाला हर व्यक्ति |
+| फ़ंड बनाना (5 कदम)        | `/onboarding`                           | खजांची                  |
+| स्वीकर्ता निमंत्रण स्वीकारना | `/invites/accept?code=...`              | सह-स्वीकर्ता             |
+| सार्वजनिक फ़ंड पेज          | `/funds/[fundId]`                       | कोई भी, बिना साइन इन   |
+| दान करना                | `/funds/[fundId]/donate`                | दानदाता, बिना साइन इन  |
+| रसीद प्रमाणपत्र           | `/receipts/[id]`                        | दानदाता                |
+| खजांची डैशबोर्ड            | `/funds/[fundId]/treasurer`             | खजांची                  |
+| नया खर्च                 | `/funds/[fundId]/expenses/new`          | खजांची                  |
+| स्वीकृति या अस्वीकृति       | `/funds/[fundId]/approvals/[expenseId]` | सह-स्वीकर्ता             |
+| एक रिकॉर्ड की जांच        | `/verify?recordId=...&fundId=...`       | कोई भी, बिना साइन इन   |
+| गोपनीयता सूचना           | `/privacy`                              | सभी                    |
+
+## 8. Who to contact / किससे संपर्क करें
+
+Problems go to the pilot WhatsApp support channel. Response target during the fest is under
+30 minutes. The channel runbook, with the question templates and the escalation path, is
+`docs/pilot/support-runbook.md`. Do not share your approval PIN with anyone, including
+support: support can reset the PIN, it never needs the PIN itself.
+
+| English                                                                                                                                                                                                                                                                                  | हिन्दी                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Problems go to the pilot WhatsApp support channel. Response target during the fest is under 30 minutes. The channel runbook is `docs/pilot/support-runbook.md`. Do not share your approval PIN with anyone, including support: support can reset the PIN, it never needs the PIN itself. | समस्याएँ पायलट WhatsApp सपोर्ट चैनल में भेजें। उत्सव के दिनों में जवाब का लक्ष्य 30 मिनट से कम है। चैनल रनबुक `docs/pilot/support-runbook.md` में है। अपना स्वीकृति पिन किसी को न दें, सपोर्ट को भी नहीं: सपोर्ट पिन रीसेट कर सकता है, पिन माँगने की ज़रूरत कभी नहीं होती। |
