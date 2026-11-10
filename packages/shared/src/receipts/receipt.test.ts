@@ -138,3 +138,21 @@ describe("generateReceiptPdf", () => {
     expect(pdfString).toContain("Section 80G");
   });
 });
+
+it("renders a refunded receipt with the return date and proof in SVG and PDF", () => {
+  const refunded = {
+    ...sampleReceipt,
+    status: "refunded" as const,
+    refundedAt: "2026-11-01T12:34:56.000Z",
+  };
+  const svg = generateReceiptSvg(refunded);
+  const pdf = new TextDecoder().decode(generateReceiptPdf(refunded));
+  for (const document of [svg, pdf]) {
+    expect(document).toContain("REFUNDED CONTRIBUTION");
+    expect(document).toContain("2026-11-01 12:34:56");
+    expect(document).not.toContain("WAITING FOR BANK");
+    expect(document).not.toContain("Awaiting");
+    expect(document).toContain(sampleReceipt.proofUrl);
+  }
+  expect(svg).toContain("योगदान वापस किया गया");
+});

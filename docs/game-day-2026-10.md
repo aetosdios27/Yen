@@ -1,5 +1,7 @@
 # Game day report — 2026-10-29
 
+> Historical results below describe the October implementation. See the YEN-61 revalidation section for the current consent fixture and delivery recovery limits.
+
 ## What ran
 
 The randomized run exercised the real Postgres 16 database, `@yen/ledger` writes, event append, event replay, and `verifyChain`; the real Postgres notifications outbox and `NotificationsWorker`; and the real `AnchoringWorker` with a deterministic fake chain. A fake provider recorded provider requests and one effect per idempotency key. The run used a dedicated local Postgres 16 container on `127.0.0.1:39243`; no live chain or provider was contacted.
@@ -49,3 +51,12 @@ The final 1,000-scenario run had zero invariant violations. No ledger/event atom
 - The outage test covers RPC failure, alert emission, local application health, and recovery against a fake client. It does not exercise a live network, vendor, or production alert delivery.
 - Partner API and production WhatsApp/SMS clients do not exist in this repository. Their policies and the shared wrapper are documented for future clients. ClamAV uses the wrapper, but this game day did not use a live daemon.
 - Anvil was unavailable, so no local EVM deployment or real contract publication was exercised.
+
+
+## YEN-61 revalidation — 2026-11-10
+
+The nightly seed `1640038382` reproduced a scenario-0 failure on real Postgres 16: the outbox row was `skipped` with “User opted out of this notification channel”. Privacy commit `aacea9c` (#101) made active channel consent mandatory in `PostgresNotificationStore.getUserPreferences`. The randomized fixture enabled preferences but never granted consent. It now records `notification_whatsapp` consent using the current notice version, matching the existing worker-kill fixture. Delivery, provider-effect, single-attempt, ledger, and anchor assertions remain intact.
+
+The current SIGKILL drill covers `claimed`, `send-started`, `sent-to-provider`, and `status-recorded`. Recovery delivers a claimed row, retains a submitted row, and dead-letters ambiguous sending rows without a second provider call. This prevents automatic duplicate sends and preserves durable evidence for reconciliation; it does **not** prove eventual delivery for an ambiguous send. The historical deduplicating fake-provider results above must not be interpreted as a guarantee from Meta or Exotel. A production provider with stable idempotency or a provider reconciliation mechanism is required before claiming both no duplicate and no dropped external notifications. See [notification delivery](notification-delivery.md).
+
+The chain outage drill still checks alert emission, `/health` availability and idempotent backlog drain. Live chain, vendor and alert-delivery validation remains an operator task. No partner HTTP payout client exists: the API has fail-closed and development reference adapters, so a live partner policy cannot yet be exercised.

@@ -1,3 +1,4 @@
+import { normalizePhone } from "@yen/shared";
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
 import { createApp } from "./app.js";
@@ -10,7 +11,6 @@ import {
   hashOtp,
   hashSessionToken,
   MemoryAuthStore,
-  normalizePhone,
   parseDeviceInfo,
   verifyOtp,
 } from "./auth/index.js";

@@ -1,3 +1,4 @@
+import type { components } from "@yen/api-client";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { type ReceiptData, ReceiptView } from "../../../components/receipt-view";
@@ -19,7 +20,22 @@ async function fetchReceipt(apiUrl: string, id: string): Promise<ReceiptData | n
     if (!response.ok) {
       throw new Error(`Failed to fetch receipt: HTTP ${response.status}`);
     }
-    return (await response.json()) as ReceiptData;
+    const data = (await response.json()) as components["schemas"]["DonorReceipt"];
+    return {
+      donationId: data.donationId,
+      fundId: data.fundId,
+      fundName: data.fundName,
+      amountPaise: data.amountPaise,
+      status: data.status,
+      utr: data.utr,
+      occurredAt: data.createdAt,
+      refundedAt: data.refundedAt,
+      donorName: data.donorDisplayName,
+      verificationUrl: data.proofUrl ?? `/verify?fundId=${data.fundId}&recordId=${data.donationId}`,
+      isTaxExempt: false,
+      taxDisclaimer: { en: data.disclaimerEn, hi: data.disclaimerHi },
+      downloadUrls: { pdf: `/v1/receipts/${id}/pdf`, svg: `/v1/receipts/${id}/svg` },
+    };
   } catch (error) {
     if (error instanceof Error && error.message.includes("404")) {
       return null;
@@ -41,7 +57,7 @@ export async function generateMetadata(props: ReceiptPageProps): Promise<Metadat
   }
 
   const title = `Donation Receipt · ${receipt.fundName} · Yen`;
-  const description = `Verified contribution to ${receipt.fundName} via UPI (Reference: ${receipt.utr}).`;
+  const description = `Donation record for ${receipt.fundName} via UPI (Reference: ${receipt.utr}).`;
 
   return {
     title,

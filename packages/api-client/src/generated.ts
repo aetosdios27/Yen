@@ -2005,9 +2005,10 @@ export interface components {
       /** @enum {string} */
       donorNameChoice?: "full" | "initials" | "anonymous";
       /** @enum {string} */
-      status: "pledged" | "verified" | "rejected";
+      status: "pledged" | "verified" | "rejected" | "refunded";
       createdAt: string;
       verifiedAt?: string;
+      refundedAt?: string;
       proofUrl?: string;
       onChainRoot?: string;
       onChainTxHash?: string;
@@ -4551,6 +4552,8 @@ export interface operations {
             /** Format: uuid */
             fundId: string;
             items: {
+              /** @enum {string} */
+              itemType?: "donation" | "refund" | "expense" | "alert";
               /** Format: uuid */
               id: string;
               /** Format: date-time */
