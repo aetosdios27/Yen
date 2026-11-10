@@ -3,6 +3,7 @@ import { createSql } from "@yen/db";
 import { PgBoss } from "pg-boss";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { observePgBossErrors } from "./boss.js";
+import { unwrapJobPayload } from "./envelope.js";
 import { buildIdempotencyKey, transactionalEnqueue } from "./outbox.js";
 import { describePostgres } from "./test-utils.js";
 
@@ -84,7 +85,7 @@ describePostgres("Transactional Outbox Enqueue", (adminUrl) => {
     `;
     expect(job?.id).toBe(enqueuedJobId);
     expect(job?.singleton_key).toBe(`entry:${entryId}`);
-    expect(job?.data).toEqual({ entryId, amount: 5000 });
+    expect(unwrapJobPayload(job?.data).payload).toEqual({ entryId, amount: 5000 });
   });
 
   it("rolls back the background job when the domain transaction aborts", async () => {

@@ -342,6 +342,14 @@ databaseSuite("migration runner", (sql, url) => {
         checksum: createHash("sha256").update(subscriptionConsentSource).digest("hex"),
         applied_at: expect.any(Date),
       },
+      {
+        version: 34,
+        name: "0034_money_sampler_indexes.sql",
+        checksum: createHash("sha256")
+          .update(await readFile(join(defaultDir, "0034_money_sampler_indexes.sql"), "utf8"))
+          .digest("hex"),
+        applied_at: expect.any(Date),
+      },
     ]);
   });
 
@@ -501,7 +509,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(33);
+    expect(before).toHaveLength(34);
   });
 
   it("rejects an edited applied file and names it", async () => {
