@@ -223,6 +223,76 @@ migrate() {
   log "Migrations applied for $env_name; traffic may now be routed to $image_digest"
 }
 
+# Rolls the ECS service onto a new task definition revision built from the
+# pinned digest. The deployment circuit breaker rolls the service back
+# automatically if tasks fail to become healthy, and the command fails if the
+# service never stabilizes.
+deploy() {
+  local env_name=${1:?usage: deploy <env> <image-digest>}
+  local image_digest=${2:?usage: deploy <env> <image-digest>}
+  [[ "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
+    || fail "refusing to deploy without a content addressed image digest, got: $image_digest"
+  require_vars AWS_REGION ECR_REPOSITORY OIDC_ROLE_ARN ECS_CLUSTER ECS_SERVICE
+  assume_role "deploy-$env_name"
+
+  local image_uri current family new_revision
+  image_uri="$(image_uri_for_digest "$image_digest")"
+  current="$(run_capture aws ecs describe-services \
+    --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+    --query 'services[0].taskDefinition' --output text)"
+  family="${current%:*}"
+  new_revision="$(register_revision "$family" "$image_uri")"
+  run aws ecs update-service \
+    --cluster "$ECS_CLUSTER" \
+    --service "$ECS_SERVICE" \
+    --task-definition "$new_revision" \
+    --deployment-configuration "deploymentCircuitBreaker={enable=true,rollback=true},maximumPercent=200,minimumHealthyPercent=100"
+  if [[ -n "${DRY_RUN:-}" ]]; then
+    return 0
+  fi
+  log "Waiting for $env_name to stabilize on $new_revision; the circuit breaker rolls back automatically if tasks fail"
+  if ! aws ecs wait services-stable --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE"; then
+    fail "$env_name rollout did not stabilize; check the circuit breaker rollback and run: bash scripts/deploy-api.sh rollback $env_name"
+  fi
+  log "Deployed $image_digest to $env_name"
+}
+
+# Routes traffic back to an earlier task definition revision. With no explicit
+# revision the command targets the previous revision. One command, no rebuild:
+# it points the same service at an older, already registered revision.
+rollback() {
+  local env_name=${1:?usage: rollback <env> [revision]}
+  local target_revision=${2:-}
+  require_vars AWS_REGION OIDC_ROLE_ARN ECS_CLUSTER ECS_SERVICE
+  assume_role "rollback-$env_name"
+
+  local current family current_revision
+  current="$(run_capture aws ecs describe-services \
+    --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+    --query 'services[0].taskDefinition' --output text)"
+  family="${current%:*}"
+  current_revision="${current##*:}"
+  if [[ -z "$target_revision" ]]; then
+    target_revision=$((current_revision - 1))
+  fi
+  [[ "$target_revision" =~ ^[0-9]+$ ]] || fail "revision must be a number, got: $target_revision"
+  [[ "$target_revision" -lt "$current_revision" ]] \
+    || fail "target revision $target_revision must be older than the current revision $current_revision"
+  log "Rolling $env_name back from revision $current_revision to $target_revision"
+  run aws ecs update-service \
+    --cluster "$ECS_CLUSTER" \
+    --service "$ECS_SERVICE" \
+    --task-definition "${family}:${target_revision}" \
+    --deployment-configuration "deploymentCircuitBreaker={enable=true,rollback=true},maximumPercent=200,minimumHealthyPercent=100"
+  if [[ -n "${DRY_RUN:-}" ]]; then
+    return 0
+  fi
+  if ! aws ecs wait services-stable --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE"; then
+    fail "rollback to revision $target_revision did not stabilize"
+  fi
+  log "Rollback complete: $env_name serves $family:$target_revision"
+}
+
 main() {
   local cmd=${1:-}
   [[ -n "$cmd" ]] || { usage; exit 1; }
