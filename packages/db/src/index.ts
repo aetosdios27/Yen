@@ -86,7 +86,11 @@ export {
   type EnsureFundPseudonymParams,
   ensureFundPseudonym,
 } from "./pseudonyms.js";
-export { publicAnchoredItemsSql, publicPledgedPaiseSql } from "./public-fund-queries.js";
+export {
+  publicAnchoredItemsSql,
+  publicFundHeadSql,
+  publicPledgedPaiseSql,
+} from "./public-fund-queries.js";
 export {
   assertAllRegisteredQueryPlans,
   explainQuery,
