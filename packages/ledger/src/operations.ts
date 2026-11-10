@@ -1233,8 +1233,8 @@ export async function getBalances(
   >`
     SELECT
       a.id AS account_id,
-      COALESCE(e.entries_sum, 0)::text AS entries_sum,
-      COALESCE(h.holds_sum, 0)::text AS holds_sum
+      COALESCE(t.entries_total, 0)::text AS entries_sum,
+      (COALESCE(t.pending_nonexpiring, 0) + COALESCE(h.holds_sum, 0))::text AS holds_sum
     FROM (
       SELECT ${accounts.bankId}::uuid AS id
       UNION ALL SELECT ${accounts.donationsId}::uuid
@@ -1243,17 +1243,12 @@ export async function getBalances(
       UNION ALL SELECT ${accounts.pledgedReceivableId}::uuid
       UNION ALL SELECT ${accounts.donationsPendingId}::uuid
     ) a
-    LEFT JOIN (
-      SELECT account_id, SUM(amount) AS entries_sum
-      FROM konto_entries
-      GROUP BY account_id
-    ) e ON e.account_id = a.id
-    LEFT JOIN (
-      SELECT account_id, SUM(amount) AS holds_sum
+    LEFT JOIN konto_account_totals t ON t.account_id = a.id
+    LEFT JOIN LATERAL (
+      SELECT SUM(amount) AS holds_sum
       FROM konto_holds
-      WHERE status = 'PENDING'
-      GROUP BY account_id
-    ) h ON h.account_id = a.id
+      WHERE account_id = a.id AND status = 'PENDING' AND expires_at IS NOT NULL
+    ) h ON true
   `;
 
   const byId = new Map(
