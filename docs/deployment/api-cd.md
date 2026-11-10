@@ -104,3 +104,62 @@ And the environment secret:
 | Secret | Meaning |
 | --- | --- |
 | `MIGRATION_SECRET_ID` | Secrets Manager id holding the migration `DATABASE_URL` |
+
+## Migrations run before traffic shifts
+
+Database migrations never run inside the containers that serve traffic.
+Before each environment rollout, the pipeline starts a one-off FARGATE task
+(from the migration task definition family, re-registered with the new image
+digest pinned) that runs the migrator from `packages/db`, `node
+packages/db/dist/cli.js`, against the production database with the
+`DATABASE_URL` injected at task start. The job waits for the task to stop
+and requires exit code 0.
+
+Because `deploy-<env>` declares `needs: migrate-<env>`, a failed migration
+halts the rollout before any container is replaced. The ECS service keeps
+serving the previous task definition and nothing about the traffic path
+changes. This holds for staging and production alike.
+
+Why the migration task definition is re-registered instead of using
+`run-task` overrides: ECS overrides can replace a container command but
+cannot pin an image, so the only way to guarantee the migration runs against
+the exact digest that will serve traffic is to register the family with that
+digest first.
+
+## Proving that a bad migration halts the rollout
+
+The full failure path is covered by an offline negative test that needs no
+cloud account:
+
+```sh
+bash scripts/deploy-api.sh selftest
+```
+
+The selftest puts a fake `aws` CLI and a fake `curl` on `PATH` and drives
+the real `migrate`, `deploy`, `rollback` and `smoke` code paths. The first
+check forces the migration container to exit nonzero and asserts the
+`migrate` command fails with
+`rollout halted before any container was replaced`. The remaining checks
+prove the healthy paths: a zero exit migration unblocks the rollout, a
+digest pin is enforced, an unstable service fails the deploy, rollback
+routes to the previous revision, and the smoke probes accept and reject the
+right servers. Run it locally or in CI; it is the executable specification
+of the migration gate.
+
+Workflow-level validation is documented in "Validating without deploying"
+below.
+
+## Smoke probes
+
+After each rollout the `smoke-<env>` job probes the live environment over
+HTTPS:
+
+1. `/health` returns a 2xx status (HTTPS reachability).
+2. `/ready` reports every dependency as ok (`status == "ok"`).
+3. `/version` reports a `gitSha` equal to the commit that was deployed.
+
+Each probe retries for up to two minutes (`SMOKE_TIMEOUT_SECS` overrides
+this) so a slow rollout does not fail spuriously, then fails hard. A failed
+staging smoke test stops the run before production migration and production
+deploy are ever considered. The probes run last in each environment, so a
+green run means a reachable, ready service serving the expected commit.
