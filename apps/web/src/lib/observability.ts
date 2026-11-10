@@ -7,9 +7,9 @@ import {
 } from "@yen/shared";
 
 type ClientErrorContext = {
-  readonly route?: string;
-  readonly requestId?: string;
-  readonly extra?: Record<string, unknown>;
+  readonly route?: string | undefined;
+  readonly requestId?: string | undefined;
+  readonly extra?: Record<string, unknown> | undefined;
 };
 
 type ClientTransport = (
