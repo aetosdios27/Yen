@@ -23,8 +23,8 @@ export function createPgBoss(options: WorkerRuntimeOptions): PgBoss {
 
 /** pg-boss reports asynchronous database and worker failures through this event. */
 export function observePgBossErrors(boss: PgBoss): PgBoss {
-  boss.on("error", () => {
-    process.stderr.write("pg-boss background operation failed\n");
+  boss.on("error", (error: unknown) => {
+    logQueueError("pg-boss background operation failed", error);
   });
   return boss;
 }
@@ -51,4 +51,15 @@ export async function ensureQueueSchema(
   );
   await boss.start();
   await boss.stop();
+}
+
+export function logQueueError(line: string, error: unknown): void {
+  const safeToken = (value: unknown) =>
+    typeof value === "string" && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(value) ? value : "unknown";
+  const name = error instanceof Error ? safeToken(error.name) : "unknown";
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? safeToken(error.code)
+      : "unknown";
+  process.stderr.write(`${line} name=${name} code=${code}\n`);
 }

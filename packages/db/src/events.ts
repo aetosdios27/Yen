@@ -12,6 +12,7 @@ import {
 } from "@yen/eventlog";
 import type { FundId } from "@yen/shared";
 import { measuredObjective, recordSaturation, withTelemetrySpan } from "@yen/shared/telemetry";
+import postgres from "postgres";
 import { isSql, type SqlClient } from "./client.ts";
 
 export type StoredFundEvent = Event & {
@@ -266,9 +267,17 @@ function toEventInput(input: AppendEventInput): EventInput {
   }
 }
 
+class AppendInputError extends TypeError {}
+
 async function executeAppend(client: SqlClient, input: AppendEventInput): Promise<StoredFundEvent> {
-  return measuredObjective("event_append", () =>
-    withTelemetrySpan("db.event.append", () => executeAppendInner(client, input)),
+  return measuredObjective(
+    "event_append",
+    () => withTelemetrySpan("db.event.append", () => executeAppendInner(client, input)),
+    (error) =>
+      !(
+        error instanceof AppendInputError ||
+        (error instanceof postgres.PostgresError && ["23505", "23503"].includes(error.code))
+      ),
   );
 }
 async function executeAppendInner(
@@ -314,6 +323,16 @@ async function executeAppendInner(
     }
     prevEvent = parsedHead.value;
   }
+
+  const candidate = parseEvent({
+    ...eventInput,
+    seq: 1,
+    prev_hash: "0".repeat(64),
+    hash: "0".repeat(64),
+  });
+  if (!candidate.ok) throw new AppendInputError(candidate.error);
+  if (prevEvent && eventInput.occurred_at < prevEvent.occurred_at)
+    throw new AppendInputError("Event time moved backwards");
 
   // Construct next chained event
   const nextEvent = await makeNextEvent(prevEvent, eventInput);

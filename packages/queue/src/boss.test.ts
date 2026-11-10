@@ -7,11 +7,11 @@ it("keeps personal data in pg-boss errors out of the log stream", () => {
     const boss = createPgBoss({ connectionString: "postgres://localhost/yen" });
     boss.emit(
       "error",
-      new Error(
-        "Private Person +919876543210 private@example.com private@yenbank Bearer secret-token",
-      ),
+      Object.assign(new Error("private@example.com +919876543210"), { code: "ECONNREFUSED" }),
     );
-    expect(write.mock.calls).toEqual([["pg-boss background operation failed\n"]]);
+    expect(write.mock.calls).toEqual([
+      ["pg-boss background operation failed name=Error code=ECONNREFUSED\n"],
+    ]);
   } finally {
     write.mockRestore();
   }

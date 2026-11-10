@@ -1,8 +1,9 @@
 import { createSql, type Sql } from "@yen/db";
 import { traceJob } from "@yen/shared/telemetry";
 import { type JobResult, PgBoss, type Queue, type WorkOptions } from "pg-boss";
-import { observePgBossErrors } from "./boss.js";
+import { logQueueError, observePgBossErrors } from "./boss.js";
 import { DEFAULT_QUEUES, DEFAULT_SCHEMA } from "./config.js";
+import { unwrapJobPayload } from "./envelope.js";
 import { sampleMoneyTelemetry } from "./telemetry.js";
 import type { DeadLetterJob, Job, JobHandler, QueuePolicy, WorkerRuntimeOptions } from "./types.js";
 
@@ -28,7 +29,6 @@ export class WorkerRuntime {
   private readonly options: WorkerRuntimeOptions;
   private readonly registrations = new Map<string, HandlerRegistration>();
   private isStarted = false;
-  private telemetryTimer: ReturnType<typeof setInterval> | undefined;
   private stopPromise?: Promise<void>;
   private signalCleanup?: (() => void) | undefined;
 
@@ -120,23 +120,15 @@ export class WorkerRuntime {
         await this.boss.work(queueName, workOptions, async (jobs) => {
           const results: JobResult[] = [];
           for (const rawJob of jobs) {
+            const { payload, carrier } = unwrapJobPayload(rawJob.data);
             const job: Job<unknown> = {
               id: rawJob.id,
               name: rawJob.name,
-              data: rawJob.data,
+              data: payload,
               retryCount: rawJob.retryCount,
               expireInSeconds: rawJob.expireInSeconds,
             };
             try {
-              const data = job.data;
-              const carrier =
-                typeof data === "object" && data !== null && "__yenTelemetry" in data
-                  ? data.__yenTelemetry
-                  : {};
-              if (typeof data === "object" && data !== null && "__yenTelemetry" in data) {
-                const { __yenTelemetry: _telemetry, ...payload } = data;
-                job.data = payload;
-              }
               await traceJob(carrier, () => handler(job));
               results.push({ id: rawJob.id, status: "completed" });
             } catch (err) {
@@ -154,17 +146,13 @@ export class WorkerRuntime {
         });
       }
 
-      let sampling = false;
-      this.telemetryTimer = setInterval(() => {
-        if (sampling) return;
-        sampling = true;
-        void sampleMoneyTelemetry(this.sql, this.options.schema ?? DEFAULT_SCHEMA)
-          .catch(() => undefined)
-          .finally(() => {
-            sampling = false;
-          });
-      }, 30000);
-      this.telemetryTimer.unref();
+      // pg-boss schedules one durable job per database/schema, shared by all workers.
+      const samplerQueue = "yen-money-telemetry";
+      await this.boss.createQueue(samplerQueue, { policy: "singleton" });
+      await this.boss.schedule(samplerQueue, "* * * * *");
+      await this.boss.work(samplerQueue, { localConcurrency: 1 }, async () => {
+        await sampleMoneyTelemetry(this.sql, this.options.schema ?? DEFAULT_SCHEMA);
+      });
       this.setupSignalHandlers();
       this.isStarted = true;
     } catch (err) {
@@ -183,7 +171,6 @@ export class WorkerRuntime {
     // The signal listeners stay installed until shutdown finishes. Removing them first lets a
     // repeated SIGTERM (a wrapper plus the process manager) fall back to the default kill and cut
     // the graceful stop short. Repeats are harmless because stop() is idempotent.
-    clearInterval(this.telemetryTimer);
     const timeout = this.options.gracefulShutdownTimeoutMs ?? 10000;
     try {
       await this.boss.stop({ graceful: true, timeout });
@@ -201,8 +188,8 @@ export class WorkerRuntime {
     const onSignal = async (signal: string) => {
       try {
         await this.stop();
-      } catch {
-        process.stderr.write(`Worker shutdown failed on ${signal}\n`);
+      } catch (error) {
+        logQueueError(`Worker shutdown failed on ${signal}`, error);
       }
     };
 
@@ -243,7 +230,7 @@ export class WorkerRuntime {
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
-      data: r.data,
+      data: unwrapJobPayload(r.data).payload,
       retryCount: r.retry_count,
       state: r.state,
       createdOn: new Date(r.created_on),

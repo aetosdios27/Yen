@@ -35,16 +35,23 @@ export function startObservability(endpoint = process.env.OTEL_EXPORTER_OTLP_END
   };
 }
 
-export function startEventLoopMetrics(intervalMs = 30000): () => void {
-  const lag = monitorEventLoopDelay({ resolution: 20 });
+export function startEventLoopMetrics(
+  intervalMs = 30000,
+  lag: Pick<
+    ReturnType<typeof monitorEventLoopDelay>,
+    "max" | "enable" | "disable" | "reset"
+  > = monitorEventLoopDelay({ resolution: 20 }),
+): () => void {
   lag.enable();
-  const timer = setInterval(() => {
+  const sample = () => {
     recordSaturation("event_loop.lag", lag.max / 1000000);
     lag.reset();
-  }, intervalMs);
+  };
+  const timer = setInterval(sample, intervalMs);
   timer.unref();
   return () => {
     clearInterval(timer);
     lag.disable();
+    sample();
   };
 }

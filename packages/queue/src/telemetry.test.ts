@@ -60,7 +60,7 @@ databaseSuite("Outstanding money work telemetry", (sql) => {
         .flatMap((metric) =>
           metric.dataPoints.map((point) => ({ attributes: point.attributes, value: point.value })),
         );
-      for (const id of ["reconciliation_lag", "anchor_lag", "event_append"])
+      for (const id of ["reconciliation_lag", "anchor_lag"])
         for (const good of [true, false])
           expect(points).toContainEqual(
             expect.objectContaining({
@@ -69,7 +69,11 @@ databaseSuite("Outstanding money work telemetry", (sql) => {
             }),
           );
       expect(all.map((m) => m.descriptor.name)).toEqual(
-        expect.arrayContaining(["yen.queue.depth", "yen.pool.connections", "yen.append_lock.wait"]),
+        expect.arrayContaining([
+          "yen.queue.depth",
+          "yen.database.client_connections",
+          "yen.append_lock.wait",
+        ]),
       );
     } finally {
       await provider.shutdown();

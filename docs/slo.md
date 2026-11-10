@@ -10,7 +10,7 @@ commitments. `packages/shared/src/slo.ts` is the typed target registry.
 | approve_p95_latency       | 95%    | Approval response below 500 and duration <= 1,000 ms                         |
 | pay_p95_latency           | 95%    | Pay response below 500 and duration <= 1,500 ms                              |
 | donation_recording        | 99.5%  | Donation pledge recording responses below 500                                |
-| event_append              | 99.9%  | Database event append attempts complete without error                        |
+| event_append              | 99.9%  | Event append attempts without a service-owned failure                        |
 | reconciliation_lag        | 99%    | Samples with no unverified pledge older than 15 minutes                      |
 | anchor_lag                | 99%    | Samples with no event beyond the last confirmed anchor older than 60 minutes |
 | public_page_availability  | 99.5%  | External page probe returns HTTP 2xx within 10 seconds                       |
@@ -18,12 +18,10 @@ commitments. `packages/shared/src/slo.ts` is the typed target registry.
 All objectives emit `yen.slo.observations` with `yen.slo.id` and boolean
 `yen.slo.good` labels. Availability treats validation and authorization failures
 as successful service responses. Latency includes these responses. Event append
-measures the append statement, not the eventual enclosing transaction commit.
+measures the append statement, not the eventual enclosing transaction commit. Invalid input, backwards caller timestamps, missing funds and duplicate keys count as good service responses; stored-head corruption and infrastructure failures count as bad. Classification uses error types and SQLSTATE, never messages.
 Reconciliation and anchor objectives are time-based samples of **outstanding**
 work, rather than completion latency: a failed consumer must not report healthy
-lag just because it completes nothing. The queue runtime samples every 30 seconds;
-an empty backlog is healthy. Run one designated collector runtime to avoid
-weighting one interval multiple times. Reconciliation currently measures donation
+lag just because it completes nothing. A pg-boss cron job samples once per minute per database/schema. Its singleton queue serializes collectors across worker replicas; no production replica count is declared in this repository (the CLI creates one runtime per process). An empty backlog is healthy. Reconciliation currently measures donation
 pledges awaiting verification; bank-feed ingestion delay is outside this SLI.
 
 Public-page availability uses `scripts/probe-public-page.ts`: schedule
@@ -58,6 +56,8 @@ notifications while the page condition is active. The existing
 `calculateBurnRate` and `emitBurnRateAlert` helpers support evaluating one pair;
 the monitoring backend owns window aggregation and alert delivery.
 
+Alert immediately on any increase in `yen.telemetry.sampler_failures` (Prometheus `yen_telemetry_sampler_failures_total`) over five minutes, grouped by `measurement`. Each query runs independently. A query failure increments this counter and logs only a fixed line plus sanitized error name/code; it emits no healthy observation. This dedicated alert distinguishes unavailable measurement from measured stale work without distorting the lag budget. The no-data alert also catches a stopped scheduler/exporter.
+
 This follows the multiwindow approach in the
 [Google SRE Workbook: Alerting on SLOs](https://sre.google/workbook/alerting-on-slos/).
 Repeated budget exhaustion should pause risky releases and prioritize reliability
@@ -65,29 +65,25 @@ work without weakening money controls.
 
 ## Saturation and tracing
 
-Histograms `yen.pool.connections` (database-wide client connections),
+Histograms `yen.database.client_connections` (database-wide client connections),
 `yen.queue.depth` (created/retry/active jobs), `yen.event_loop.lag` (maximum delay
 in ms per 30s interval), and `yen.append_lock.wait` (ms per lock acquisition,
-including failed attempts) provide saturation panels. Pool connections are
+including failed attempts) provide saturation panels. Database client connections are
 aggregated from `pg_stat_activity`, not the private internal state of one
-Postgres.js pool; compare with the sum of configured pool caps. Queue and pool
-samples come from the designated worker. Append wait is instrumented at the
+Postgres.js pool; compare with the sum of configured pool caps. Queue and database connection samples come from the scheduled singleton job. Append wait is instrumented at the
 actual event append lock. Event-loop delay is measured in API and worker
 processes with export enabled. Plot p50/p95/max and queue/connection counts;
 thresholds depend on deployment capacity.
 
-Export is opt-in through `OTEL_EXPORTER_OTLP_ENDPOINT` for API/workers and
-`NEXT_PUBLIC_OTEL_EXPORTER_OTLP_ENDPOINT` for the browser. The browser collector
-must permit the web origin via CORS. Browser API requests send `traceparent` and
+Export is opt-in through `OTEL_EXPORTER_OTLP_ENDPOINT` for API/workers. The browser generates random W3C trace/span ids using Web Crypto and exports no spans. Browser API requests send `traceparent` and
 a UUID `x-request-id`; the API exports the same request id as `yen.request.id`.
-Transactional enqueues persist only a W3C traceparent under reserved
-`__yenTelemetry`; workers restore the parent before executing the handler.
+Transactional enqueues persist an explicit `{ payload, __yenTelemetry }` envelope with only a W3C traceparent. Handler and dead-letter readers unwrap the payload; workers restore the trace parent before executing the handler.
 Inbound tracestate and baggage are dropped; only the traceparent is propagated.
 No raw URL, payload, identity, amount, exception message or stack is
 copied into spans. Logs use template routes and the existing structured schema.
 YEN-20 / PR #135 owns additional free-text log redaction and error reporting.
 
-The operator must deploy collectors, configure browser export/CORS, provision
+The operator must deploy collectors, provision
 these dashboards and alert routes, and schedule the supplied public page probe. Tests use
 in-memory exporters and real Postgres; they do not prove hosted alert delivery.
 

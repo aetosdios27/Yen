@@ -4,7 +4,7 @@ import { browserApiFetch } from "@yen/shared/browser-tracing";
 let defaultClient: YenClient | null = null;
 
 function tracedFetch(input: Request): Promise<Response> {
-  return browserApiFetch(input, process.env.NEXT_PUBLIC_OTEL_EXPORTER_OTLP_ENDPOINT);
+  return browserApiFetch(input);
 }
 
 export function getApiClient(baseUrl?: string): YenClient {

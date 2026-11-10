@@ -910,7 +910,6 @@ databaseSuite("Postgres expense store", (sql, url) => {
             },
             body: JSON.stringify({ pin: "482915" }),
           }),
-          undefined,
           async (request) => {
             if (!(request instanceof Request)) throw new Error("Expected Request");
             return makeApp({ id: approverId, role: "approver" }).request(request);

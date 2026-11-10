@@ -49,18 +49,25 @@ export function traceJob<T>(input: unknown, run: () => Promise<T>): Promise<T> {
   return context.with(parent, () => withTelemetrySpan("queue.job", run));
 }
 
-export async function measuredObjective<T>(id: string, run: () => Promise<T>): Promise<T> {
+export async function measuredObjective<T>(
+  id: string,
+  run: () => Promise<T>,
+  isServiceFailure: (error: unknown) => boolean = () => true,
+): Promise<T> {
   let good = false;
   try {
     const result = await run();
     good = true;
     return result;
+  } catch (error) {
+    good = !isServiceFailure(error);
+    throw error;
   } finally {
     observeObjective(id, good);
   }
 }
 export function recordSaturation(
-  name: "pool.connections" | "queue.depth" | "event_loop.lag" | "append_lock.wait",
+  name: "database.client_connections" | "queue.depth" | "event_loop.lag" | "append_lock.wait",
   value: number,
 ) {
   metrics
@@ -86,4 +93,8 @@ export async function probePublicPage(url: URL, fetchPage: typeof fetch = fetch)
     observeObjective("public_page_availability", good);
   }
   return good;
+}
+
+export function recordSamplerFailure(measurement: string): void {
+  metrics.getMeter("yen").createCounter("yen.telemetry.sampler_failures").add(1, { measurement });
 }
