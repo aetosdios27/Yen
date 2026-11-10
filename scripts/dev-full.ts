@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createSql, parseDatabaseUrl, seedDevDatabase } from "@yen/db";
-import { buildDevServerEnv, DEFAULT_API_PORT, DEFAULT_WEB_PORT } from "./dev-server-env.js";
+import { buildDevServerEnv } from "./dev-server-env.js";
 
 async function isPostgresReachable(url: string): Promise<boolean> {
   try {
