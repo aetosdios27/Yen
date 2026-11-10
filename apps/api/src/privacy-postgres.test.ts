@@ -27,9 +27,11 @@ import { initLedgerSchema } from "../../../packages/ledger/src/schema.js";
 import { PostgresNotificationStore } from "../../../packages/notifications/src/store.js";
 import { createApp } from "./app.js";
 import { PostgresDonationPledgeStore } from "./donation-store.js";
+import { PostgresExpenseStore } from "./expense-store.js";
 import { PostgresFundStore } from "./fund-store.js";
 import { devPolicy } from "./policy.js";
 import { PostgresPrivacyStore } from "./privacy-store.js";
+import { PostgresPublicFundReadStore } from "./public-fund-store.js";
 import { PostgresReceiptStore } from "./receipt-store.js";
 
 async function seedFund(sql: Sql, name = "Sensitive Person Name") {
@@ -49,7 +51,7 @@ async function seedFund(sql: Sql, name = "Sensitive Person Name") {
   await sql`INSERT INTO fund_pseudonyms (pseudonym_id, user_id, fund_id) VALUES (${pseudonymId}, ${userId}, ${fundId})`;
   await sql`INSERT INTO display_names (fund_id, pseudonym_id, display_name) VALUES (${fundId}, ${pseudonymId}, ${name})`;
   await sql`INSERT INTO expenses (id, fund_id, status, expense_data, created_at, updated_at)
-    VALUES (${uuidv7()}, ${fundId}, 'draft', ${sql.json({ requesterId: `psn_${pseudonymId}`, description: `${name} reimbursement`, recipientRef: name, payee: { identity: { kind: "upi", vpa: `${phone.slice(1)}@upi` }, name: name }, payeeFingerprint: "fp-sensitive" })}, now(), now())`;
+    VALUES (${uuidv7()}, ${fundId}, 'draft', ${sql.json({ status: "draft", requesterId: `psn_${pseudonymId}`, description: `${name} reimbursement`, recipientRef: name, payee: { identity: { kind: "upi", vpa: `${phone.slice(1)}@upi` }, name: name }, payeeFingerprint: "fp-sensitive" })}, now(), now())`;
   await sql`INSERT INTO donation_pledges (id, fund_id, amount_paise, utr, donor_display_name, donor_contact, status, created_at)
     VALUES (${uuidv7()}, ${fundId}, 1000, ${String(Math.floor(100000000000 + Math.random() * 899999999999))}, ${name}, ${phone}, 'pledged', now())`;
   const salt = randomBytes(32);
@@ -239,7 +241,15 @@ databaseSuite("privacy erasure operations", (sql) => {
     >`SELECT pseudonym_id FROM fund_pseudonyms WHERE user_id = ${userId}`;
     if (!mapping) throw new Error("missing mapping");
     await sql`INSERT INTO expenses (id, fund_id, status, expense_data, created_at, updated_at)
-      VALUES (${uuidv7()}, ${fundId}, 'draft', ${sql.json({ requesterId: `psn_${mapping.pseudonym_id}`, payee: { name, identity: { kind: "bank", accountNumber: bankAccount, ifsc: "TEST0000001" } }, recipientRef: bankAccount })}, now(), now())`;
+      VALUES (${uuidv7()}, ${fundId}, 'draft', ${sql.json({
+        status: "draft",
+        requesterId: `psn_${mapping.pseudonym_id}`,
+        payee: {
+          name,
+          identity: { kind: "bank", accountNumber: bankAccount, ifsc: "TEST0000001" },
+        },
+        recipientRef: bankAccount,
+      })}, now(), now())`;
     const email = `${uuidv7()}@private.example.test`;
     await sql`INSERT INTO donation_pledges (id, fund_id, amount_paise, utr, donor_contact, donor_display_name, status, created_at)
       VALUES (${uuidv7()}, ${fundId}, 100, '777777777777', ${email}, ${name}, 'pledged', now())`;
@@ -262,11 +272,18 @@ databaseSuite("privacy erasure operations", (sql) => {
     await sql`INSERT INTO anchors (id, fund_id, from_seq, to_seq, root, status, tx_hash, chain_id, chain_sequence)
       VALUES (${anchorId}, ${fundId}, 1, 1, ${toHex(tree.root)}, 'submitted', ${`0x${"ab".repeat(32)}`}, 80002, 1)`;
     await sql`INSERT INTO anchor_event_salts (anchor_id, fund_id, seq, salt) VALUES (${anchorId}, ${fundId}, 1, ${toHex(salt)})`;
+    const [pledge] = await sql<
+      { id: string }[]
+    >`UPDATE donation_pledges SET status = 'verified', donor_name_choice = 'anonymous' WHERE fund_id = ${fundId} AND donor_contact = ${phone} RETURNING id`;
+    if (!pledge) throw new Error("missing pledge");
+    await sql`UPDATE bank_transactions SET matched_pledge_id = ${pledge.id}, reconciliation_status = 'matched' WHERE fund_id = ${fundId}`;
     const publicApp = createApp({
       principal: null,
       sql,
       fundStore: new PostgresFundStore(sql),
       receiptStore: new PostgresReceiptStore(sql),
+      publicFundReadStore: new PostgresPublicFundReadStore(sql),
+      expenseStore: new PostgresExpenseStore(sql),
       logger: { log: () => undefined },
     });
     const inspectPublic = async () => {
@@ -275,6 +292,8 @@ databaseSuite("privacy erasure operations", (sql) => {
       for (const path of [
         `/v1/funds/${fundId}/audit-bundle`,
         `/v1/funds/${fundId}/public/timeline`,
+        `/v1/funds/${fundId}/public/summary`,
+        `/v1/funds/${fundId}/public/breakdown`,
       ]) {
         const response = await publicApp.request(path);
         expect(response.status).toBe(200);
