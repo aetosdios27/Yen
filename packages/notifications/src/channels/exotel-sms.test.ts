@@ -138,3 +138,12 @@ describe("Exotel SMS contract against local fake servers", () => {
     );
   });
 });
+
+it("opens the breaker after five failed sends without issuing a sixth request", async () => {
+  const fake = await fakeServer(() => ({ status: 503, body: "{}" }));
+  const provider = new ExotelSmsProvider(config(fake.endpoint));
+  for (let call = 0; call < 6; call++) {
+    await expect(provider.send(input)).rejects.toThrow();
+  }
+  expect(fake.getCalls()).toBe(5);
+});
