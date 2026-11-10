@@ -67,3 +67,28 @@ Partner onboarding for registered university clubs can still fail. The most comm
    - VPA verification degrades to pre-registration: the beneficiary VPA and expected name are captured at payout request creation, verified by the club treasurer against the bank's own beneficiary verification, and the recorded verification evidence is stored as part of the payout approval trail.
    - Payout initiation reverts to the bank portal's native dual authorization (maker, checker, authoriser). Yen records the approved payout request before execution and the bank's debit statement entry after execution; reconciliation closes the loop.
    - Yen still never holds, pools, or settles club funds. Only the level of automation degrades, never the audit properties.
+
+## Regulatory Analysis: Why Yen Operates Strictly Outside RBI Payment Aggregator (PA) Licensing
+
+The Reserve Bank of India regulates payment aggregation under the Payment and Settlement Systems Act, 2007 (PSS Act). The operative framework is:
+
+- **"Guidelines on Regulation of Payment Aggregators and Payment Gateways"**, circular `DPSS.CO.PD.No.1810/02.14.008/2019-20` (RBI/DPSS/2019-20/174), dated March 17, 2020, issued to banks and non-bank PAs. This is the 2020 PA/PG direction that first drew the line between aggregation and technology provision.
+- **Circular `CO.DPSS.POLC.No.S33/02-14-008/2020-2021`, dated March 31, 2021**, which extended the application timeline for existing non-bank PAs and carried the March 17, 2020 framework forward.
+- **"Reserve Bank of India (Regulation of Payment Aggregators) Directions, 2025"**, `RBI/DPSS/2025-26/141`, `CO.DPSS.POLC.No.S-633/02-14-008/2025-26`, dated September 15, 2025, the current consolidated Master Direction that subsumed the 2020 PA/PG guidelines.
+
+What triggers PA authorization under these directions is the handling of funds: a payment aggregator collects payments from customers into escrow (or nodal) accounts that the aggregator controls, pools the money, and settles it onward to merchants on T+0/T+1 terms. Para 3.2 of the March 17, 2020 circular requires authorization under the PSS Act for non-bank PAs precisely because they operate this settlement machinery.
+
+The same framework explicitly places technology-only providers outside that perimeter:
+
+- Para 1.1.2 of the March 17, 2020 circular defines a payment gateway as "an entity that provides technology infrastructure to route and facilitate processing of an online payment transaction without any involvement in handling of funds".
+- Para 3.7 of the same circular is the technical service provider (TSP) clarification: PGs "shall be considered as 'technology providers' or 'outsourcing partners' of banks or non-banks". An entity in this slot routes, processes, or records payments but never touches the funds themselves.
+- Para 10(g) of the September 15, 2025 Master Direction carries the clarification forward verbatim in effect: a PG, defined in its para 4(j) as an entity providing routing infrastructure "without any involvement in handling of funds", "shall not fall within the scope" of the aggregator directions.
+
+Yen's architecture is designed to sit permanently inside the TSP slot:
+
+1. **No Yen-controlled account ever receives money.** Donations are collected into the club's own bank account (or a virtual account the licensed partner operates for the club); approved payouts debit that same account. Yen opens no escrow, nodal, or wallet account, and no Yen API endpoint accepts or transmits value.
+2. **The regulated entity is the partner, not Yen.** The chosen partner (RazorpayX, or the runner-up) holds its own PA authorization and operates the escrow and settlement machinery that the 2020 circular and the 2025 Master Direction regulate. Yen interacts with the partner exclusively as a technology integrator acting for the club, the merchant of record.
+3. **The adapter boundary is data-only.** The partner integration surface (`packages/ledger/src/partner/types.ts`, `apps/api/src/reconciliation`) moves signed webhook payloads, normalized statement entries, VPA verification results, and payout status records. These are records about money movement, not money movement itself.
+4. **The ledger stores evidence, not balances.** The hash-chained event log and reconciliation records hold hashes, sequence numbers, UTRs, and amounts as integers. No pooled balance exists anywhere in Yen that could be settled, withdrawn, or reversed.
+
+The corollary is a hard architectural constraint: if Yen ever added pooled donations, a Yen-held wallet, or settlement intermediation between donors and clubs, it would cross from the TSP slot into PA activity and would require PSS Act authorization under the directions cited above. Every change to the money path must keep the property that only regulated entities (the club's bank and its authorized payment partner) handle funds.
