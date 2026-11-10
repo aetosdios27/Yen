@@ -7,7 +7,7 @@ import type { NotificationChannel } from "./types.js";
 export interface FundSubscription {
   readonly id: string;
   readonly fundId: string;
-  readonly contact: string | null;
+  readonly contact: string;
   readonly contactType: "email" | "phone";
   readonly channel: NotificationChannel;
   readonly weeklySummary: boolean;
@@ -17,6 +17,7 @@ export interface FundSubscription {
   readonly createdAt: Date;
   readonly updatedAt: Date;
   readonly unsubscribedAt: Date | null;
+  readonly consentGrantedAt: Date | null;
 }
 
 export interface SubscribeInput {
@@ -144,6 +145,7 @@ export class PostgresFundSubscriptionStore implements FundSubscriptionStore {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       unsubscribedAt: row.unsubscribed_at,
+      consentGrantedAt: row.consent_granted_at,
     };
   }
 }
@@ -163,6 +165,7 @@ export class MemoryFundSubscriptionStore implements FundSubscriptionStore {
         channel,
         weeklySummary: input.weeklySummary ?? existing.weeklySummary,
         instantAlerts: input.instantAlerts ?? existing.instantAlerts,
+        consentGrantedAt: new Date(),
         status: "active",
         unsubscribedAt: null,
         updatedAt: new Date(),
@@ -179,6 +182,7 @@ export class MemoryFundSubscriptionStore implements FundSubscriptionStore {
       channel,
       weeklySummary: input.weeklySummary ?? true,
       instantAlerts: input.instantAlerts ?? true,
+      consentGrantedAt: new Date(),
       status: "active",
       unsubscribeToken: generateUnsubscribeToken(),
       createdAt: new Date(),

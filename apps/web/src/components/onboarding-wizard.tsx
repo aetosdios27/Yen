@@ -57,6 +57,10 @@ const savedSchema = persistableSchema
   .partial()
   .extend({ step: z.number().int().min(0).max(4).default(0) });
 
+export function serializeOnboardingDraft(draft: OnboardingDraft, step: number): string {
+  return JSON.stringify({ ...persistableSchema.parse(draft), step });
+}
+
 function restoreDraft() {
   const empty = { draft: EMPTY_ONBOARDING_DRAFT, step: 0 };
   try {
@@ -97,11 +101,7 @@ export function OnboardingWizard() {
     if (!restored) return;
     try {
       if (completed) window.localStorage.removeItem(DRAFT_KEY);
-      else
-        window.localStorage.setItem(
-          DRAFT_KEY,
-          JSON.stringify({ ...persistableSchema.parse(draft), step }),
-        );
+      else window.localStorage.setItem(DRAFT_KEY, serializeOnboardingDraft(draft, step));
     } catch {
       /* Storage may be unavailable in private browsing. */
     }

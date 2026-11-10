@@ -173,15 +173,21 @@ describe("ReceiptView", () => {
   });
 });
 
-it("renders consent labels and the linked privacy notice in Hindi", () => {
-  render(
-    <LocaleProvider initialLocale="hi">
-      <ReceiptView receipt={mockVerifiedReceipt} />
-    </LocaleProvider>,
-  );
-  expect(screen.getByRole("checkbox", { name: /गोपनीयता सूचना/ })).toBeDefined();
-  expect(screen.getByRole("link", { name: "गोपनीयता सूचना" }).getAttribute("href")).toBe("/privacy");
-  expect(
-    screen.getByRole("checkbox", { name: "मैं WhatsApp संदेशों के लिए अलग से सहमति देता/देती हूँ।" }),
-  ).toBeDefined();
-});
+it.each([
+  ["en", "Privacy notice", "I separately agree to WhatsApp messages."],
+  ["hi", "गोपनीयता सूचना", "WhatsApp संदेशों के लिए मेरी अलग से सहमति है।"],
+] as const)(
+  "renders both consent labels with the privacy link inside the %s sentence",
+  (locale, notice, whatsapp) => {
+    render(
+      <LocaleProvider initialLocale={locale}>
+        <ReceiptView receipt={mockVerifiedReceipt} />
+      </LocaleProvider>,
+    );
+    const link = screen.getByRole("link", { name: notice });
+    expect(link.getAttribute("href")).toBe("/privacy");
+    expect(link.closest("label")?.querySelector('input[type="checkbox"]')).not.toBeNull();
+    expect(screen.getAllByRole("checkbox")).toHaveLength(4);
+    expect(screen.getByRole("checkbox", { name: whatsapp })).toBeDefined();
+  },
+);

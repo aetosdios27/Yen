@@ -16,8 +16,7 @@ LANGUAGE sql IMMUTABLE STRICT AS $$
 $$;
 
 -- Unknown destinations cannot receive messages or satisfy the canonical-phone constraint.
-ALTER TABLE fund_subscriptions ALTER COLUMN contact DROP NOT NULL;
-UPDATE fund_subscriptions SET status = 'unsubscribed', unsubscribed_at = CURRENT_TIMESTAMP, contact = NULL
+DELETE FROM fund_subscriptions
 WHERE contact_type = 'phone' AND normalize_subscription_phone(contact) IS NULL;
 
 -- Prefer an unsubscribed row to avoid resurrecting a withdrawn subscription; then oldest/id.
@@ -27,11 +26,12 @@ DELETE FROM fund_subscriptions WHERE id IN (
       PARTITION BY fund_id, normalize_subscription_phone(contact)
       ORDER BY (status = 'unsubscribed') DESC, created_at, id
     ) AS position
-    FROM fund_subscriptions WHERE contact_type = 'phone' AND contact IS NOT NULL
+    FROM fund_subscriptions WHERE contact_type = 'phone'
   ) ranked WHERE position > 1
 );
 UPDATE fund_subscriptions SET contact = normalize_subscription_phone(contact)
 WHERE contact_type = 'phone';
 ALTER TABLE fund_subscriptions ADD CONSTRAINT subscription_phone_canonical
-CHECK ((contact IS NULL AND status = 'unsubscribed' AND contact_type = 'phone')
-  OR (contact IS NOT NULL AND (contact_type <> 'phone' OR contact ~ '^\+[1-9][0-9]{7,14}$')));
+CHECK (contact_type <> 'phone' OR contact ~ '^\+[1-9][0-9]{7,14}$');
+
+DROP FUNCTION normalize_subscription_phone(text);
