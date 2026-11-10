@@ -13,6 +13,9 @@ import { formatInr } from "@yen/shared";
 const API_PACKAGE_DIR = "apps/api";
 const DEV_EVIDENCE_DIR = ".data/evidence";
 
+export const DEFAULT_QUEUE_SCHEMA = "pgboss";
+const QUEUE_SCHEMA_PATTERN = /^[a-z_][a-z0-9_]{0,62}$/;
+
 export class UnsafePathError extends Error {}
 
 /**
@@ -28,6 +31,22 @@ export function resolveEvidenceStorageDir(
   const base = resolve(root, API_PACKAGE_DIR);
   if (!configured) return resolve(base, ...DEV_EVIDENCE_DIR.split("/"));
   return isAbsolute(configured) ? configured : resolve(base, configured);
+}
+
+/**
+ * Validates the pg-boss queue schema name from QUEUE_SCHEMA. The identifier is
+ * interpolated into SQL by pg-boss itself, so only plain lowercase identifiers
+ * are accepted (same contract as packages/queue env validation).
+ */
+export function resolveQueueSchemaName(env: Pick<NodeJS.ProcessEnv, "QUEUE_SCHEMA">): string {
+  const configured = env.QUEUE_SCHEMA?.trim();
+  if (!configured) return DEFAULT_QUEUE_SCHEMA;
+  if (!QUEUE_SCHEMA_PATTERN.test(configured)) {
+    throw new Error(
+      "QUEUE_SCHEMA must be 1-63 lowercase letters, digits or underscores, not starting with a digit",
+    );
+  }
+  return configured;
 }
 
 /**
@@ -91,9 +110,10 @@ export async function main(): Promise<void> {
   const root = repoRoot();
   const databaseUrl = process.env.DATABASE_URL || "postgres://postgres:pw@localhost:5432/postgres";
   const parsedUrl = parseDatabaseUrl(databaseUrl, "DATABASE_URL");
+  const queueSchema = resolveQueueSchemaName(process.env);
 
   process.stdout.write("\n======================================================\n");
-  process.stdout.write(" Yen Demo Reset (database and evidence storage)\n");
+  process.stdout.write(" Yen Demo Reset (database, evidence, queue, chain)\n");
   process.stdout.write("======================================================\n\n");
 
   process.stdout.write("1. Cleaning local evidence uploads...\n");
@@ -104,13 +124,17 @@ export async function main(): Promise<void> {
     process.stdout.write(`   Nothing to clean at ${evidence.path}\n`);
   }
 
-  process.stdout.write("2. Tearing down database...\n");
+  process.stdout.write("2. Dropping queue schema so no jobs or dead letters survive...\n");
+  process.stdout.write(`   Queue schema: ${queueSchema}\n`);
+
+  process.stdout.write("3. Tearing down database (including anchor chain state)...\n");
   const sql = createSql(parsedUrl);
   try {
     await sql.unsafe("DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;");
     await sql.unsafe("GRANT ALL ON SCHEMA public TO public;");
+    await sql.unsafe(dropQueueSchemaSql(queueSchema));
 
-    process.stdout.write("3. Running migrations and reseeding demo dataset...\n");
+    process.stdout.write("4. Running migrations and reseeding demo dataset...\n");
     const result = await seedDevDatabase(sql);
 
     process.stdout.write("\n======================================================\n");
