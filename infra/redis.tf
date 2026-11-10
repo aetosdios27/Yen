@@ -46,12 +46,12 @@ resource "aws_elasticache_replication_group" "yen_staging" {
   replication_group_id = "yen-${var.environment}-redis"
   description          = "Staging Redis for queue processing and distributed locks"
 
-  engine                = "redis"
-  engine_version        = "7.1"
-  node_type             = var.redis_node_type
-  port                  = 6379
-  num_node_groups       = 1
-  replicas_per_node_group = 0
+  engine                     = "redis"
+  engine_version             = "7.1"
+  node_type                  = var.redis_node_type
+  port                       = 6379
+  num_node_groups            = 1
+  replicas_per_node_group    = 0
   automatic_failover_enabled = false
 
   subnet_group_name  = aws_elasticache_subnet_group.yen_staging.name
