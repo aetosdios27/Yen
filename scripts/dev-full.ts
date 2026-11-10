@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createSql, parseDatabaseUrl, seedDevDatabase } from "@yen/db";
+import { buildDevServerEnv } from "./dev-server-env.js";
 
 async function isPostgresReachable(url: string): Promise<boolean> {
   try {
@@ -87,16 +88,17 @@ async function main(): Promise<void> {
   }
 
   // Step 4: Boot development servers (Next.js + Hono)
-  process.stdout.write("\nBooting Next.js frontend (port 3000) and Hono API (port 3001)...\n\n");
+  const devEnv = buildDevServerEnv({
+    ...process.env,
+    DATABASE_URL: databaseUrl,
+  });
+  process.stdout.write(
+    `\nBooting Next.js frontend (port ${devEnv.WEB_PORT}) and Hono API (port ${devEnv.API_PORT})...\n\n`,
+  );
 
   const child = spawn("pnpm", ["turbo", "run", "dev"], {
     stdio: "inherit",
-    env: {
-      ...process.env,
-      DATABASE_URL: databaseUrl,
-      PORT: process.env.PORT || "3001",
-      NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001",
-    },
+    env: devEnv,
   });
 
   const cleanup = () => {

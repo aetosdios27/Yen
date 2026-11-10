@@ -151,7 +151,9 @@ pnpm dev:full
    - **Expense Requests**: 3 realistic requests (1 approved with invoice evidence, 1 pending approval, 1 paid)
    - **Double-Entry Ledger**: Initial verified balance (₹4,65,000) with double-entry zero-sum invariant
    - **Append-Only Event Log**: 23 chained audit events verified by database triggers
-4. Boot the Next.js frontend (`http://localhost:3000`) and Hono API (`http://localhost:3001`) in parallel.
+4. Boot the Next.js frontend (`http://localhost:3000`) and Hono API (`http://localhost:3001`) in parallel, with the web app pointed at the API via `NEXT_PUBLIC_API_URL`.
+
+The web and API ports are pinned separately (3000 and 3001) so they never collide. Override them per app with `WEB_PORT` and `API_PORT`, for example `WEB_PORT=3100 API_PORT=3200 pnpm dev:full`.
 
 ### Development Commands
 
