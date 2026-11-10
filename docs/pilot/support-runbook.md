@@ -159,3 +159,32 @@ Escalation note: any donor report of "Verification failed" is SEV-1 until the re
 call confirms it is a wrong link: "Any suspicion of tampering with the event log, the anchors,
 or the salts is SEV-1 regardless of whether verification currently passes" (from
 `docs/runbooks/incident-response.md`).
+
+## 5. Escalation paths
+
+1. **SEV-1 hand-off.** Post in the operations channel with the incident thread format from
+   `docs/runbooks/incident-response.md` (timeline, severity, impact). The on-call primary owns
+   it from that moment; support keeps the user informed with the club communication templates
+   of that runbook. Acknowledgement target 15 minutes.
+2. **SEV-2 hand-off.** Same channel, same format, severity SEV-2. Support may keep
+   corresponding with the user while the on-call works the technical side.
+3. **Security or privacy reports.** Anything that looks like a leak (an OTP seen by someone
+   else, a bill photo on the wrong fund, a phone number on a public page) goes straight to the
+   security owner in parallel with the SEV-1 hand-off, per the incident runbook. Do not
+   investigate alone, and do not copy the material into the support group.
+4. **Known-issue shortcuts.** Before escalating, check the troubleshooting table of
+   `docs/runbooks/demo-recording.md` section 11: the 503 scanner message, the PIN rejection
+   rules, the "pending seal" verify state and the demo reset requirements are all documented
+   there with their causes.
+
+## 6. Support log
+
+Keep one append-only log file (or sheet) per pilot week. One line per report:
+
+`<date time> | <club> | <who> | <one-line issue> | <SEV-1|SEV-2|SEV-3> | <template or runbook
+used> | <resolved|escalated|waiting> | <minutes to first response>`
+
+The HOD pilot report (`docs/pilot/hod-pilot-report-template.md`) pulls its incident table and
+its SLA statistics straight from this log, and the pilot metrics script
+(`scripts/pilot-metrics.ts`) provides the quantitative half. Log honestly; a slow first
+response that is written down is a finding, not a failure.
