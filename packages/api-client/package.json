@@ -13,8 +13,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "node node_modules/typescript-native/bin/tsc -p tsconfig.build.json",
+    "typecheck": "node node_modules/typescript-native/bin/tsc -p tsconfig.json --noEmit",
     "generate": "node scripts/generate.mjs",
     "generate:check": "node scripts/generate.mjs --check",
     "test": "pnpm generate:check && vitest run"
@@ -26,7 +26,8 @@
     "@types/node": "^26.6.5",
     "@yen/api": "workspace:*",
     "openapi-typescript": "7.13.0",
-    "typescript": "7.0.2",
-    "vitest": "^5.0.5"
+    "typescript": "5.9.3",
+    "vitest": "^5.0.5",
+    "typescript-native": "npm:typescript@7.0.2"
   }
 }
