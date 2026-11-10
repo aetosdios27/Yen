@@ -219,3 +219,71 @@ production before restoring service.
 6. Downgrade to SEV-2 only when both endpoints answer `ok` for 30 consecutive
    minutes and the club update has been posted. Post-mortem within 5 business
    days for any SEV-1, including restart-only recoveries.
+## Scenario: database failover and point-in-time recovery (PITR)
+
+Symptoms: `/ready` fails while `/health` answers, the database check in
+`scripts/check-status.ts` fails, connection errors in API and worker logs, or
+the managed database provider reports a failed primary.
+
+Yen uses PostgreSQL 16. Read [backup-restore.md](backup-restore.md) first: it
+documents what this repository actually provides (a logical `pg_dump` restore
+drill) and what it does not (no WAL archiving, no PITR pipeline, no claimed RPO
+or RTO). If your deployment runs on a managed provider, PITR comes from the
+provider's base backup plus WAL retention; use its restore tooling, then apply
+the verification steps below.
+
+### Failover to a standby
+
+1. Stop writers before promoting, so no transaction lands on the dead primary
+   after the failover point:
+
+   ```sh
+   docker compose stop api worker
+   ```
+
+2. Promote the standby. With the managed provider console this is a single
+   action; the provider changes the replica role to primary. Record the exact
+   promotion timestamp; it becomes the boundary for any later reconciliation.
+3. Point the deployment at the new primary and restart the API and worker:
+
+   ```sh
+   # update DATABASE_URL, then
+   docker compose up -d api worker
+   pnpm exec tsx scripts/check-status.ts
+   ```
+
+4. Run the fund verification for every active fund and record the results:
+
+   ```sh
+   pnpm --filter @yen/db verify-chain <fund-id>
+   ```
+
+   Compare the printed head hash and event count against the last
+   independently authenticated checkpoint (the most recent confirmed anchor or
+   a protected manifest captured per backup-restore.md). A mismatch is a chain
+   divergence: switch to the Merkle divergence scenario below.
+
+### Restore from a PITR snapshot
+
+1. Freeze writes and stop the queue worker. Never restore into a database that
+   is still accepting writes.
+2. In the provider console, start a restore to a new instance at the target
+   timestamp. Choose a timestamp at or before the first observed bad write; when
+   unsure, pick a few minutes earlier. Keep the damaged instance stopped, not
+   deleted: it is evidence for the post-mortem.
+3. Restore into a staging instance first, never straight into production.
+4. Verify the restored instance before cutover:
+   - Per fund, run `pnpm --filter @yen/db verify-chain <fund-id>` on the
+     staging instance and compare heads with the protected manifest.
+   - For anchors, recompute the salted Merkle roots from restored events and
+     salts and compare them with the stored roots, exactly as the
+     backup-restore drill does. Missing salts or recomputed root mismatches fail
+     the restore.
+5. Cut over by pointing `DATABASE_URL` at the verified instance and restarting
+   the API and worker, then run `scripts/check-status.ts` and the per-fund
+   `verify-chain` once more against production.
+6. If the recovery window dropped recent committed donations, reconcile against
+   external evidence: payment provider records and bank transactions. Re-record
+   only what external evidence proves, and note every replayed event in the
+   post-mortem. Do not guess missing events into existence; the hash chain makes
+   invented backfills detectable, and inventing them is a break-glass violation.
