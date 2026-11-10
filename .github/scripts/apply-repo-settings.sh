@@ -46,7 +46,9 @@ gh api -X PUT "repos/$repo/actions/permissions/selected-actions" \
   -f 'patterns_allowed[]=gitleaks/gitleaks-action@*' \
   -f 'patterns_allowed[]=pnpm/action-setup@*' \
   -f 'patterns_allowed[]=amannn/action-semantic-pull-request@*' \
-  -f 'patterns_allowed[]=sigstore/cosign-installer@*' --silent
+  -f 'patterns_allowed[]=sigstore/cosign-installer@*' \
+  -f 'patterns_allowed[]=aws-actions/configure-aws-credentials@*' \
+  -f 'patterns_allowed[]=hashicorp/setup-terraform@*' --silent
 
 echo "==> Immutable releases"
 gh api -X PUT "repos/$repo/immutable-releases" --silent || echo "warn: could not enable immutable releases"
