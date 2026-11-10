@@ -16,7 +16,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 | Testing and failure handling         |       4 |
 | Benchmarking and latency             |       1 |
 | SRE and observability                |       5 |
-| PostgreSQL                           |      15 |
+| PostgreSQL                           |      16 |
 | Authentication and approvals         |       9 |
 | Messaging providers                  |       2 |
 | Blockchain anchoring                 |       2 |
@@ -435,6 +435,14 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **URL:** https://www.postgresql.org/docs/16/runtime-config-client.html
 - **What we use it for:** statement_timeout bounds statement execution, while lock_timeout applies to individual lock waits. These settings are references for future operational configuration, not asserted Yen defaults.
 - **Where in this repo:** packages/db/README.md
+
+<a id="pg-triggers"></a>
+### Overview of Trigger Behavior
+
+- **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
+- **URL:** https://www.postgresql.org/docs/16/trigger-definition.html
+- **What we use it for:** Triggers run in the writer's transaction and roll back with it. Statement triggers with transition tables maintain account totals alongside entries and holds; expiring holds remain a time-dependent query.
+- **Where in this repo:** packages/db/migrations/0037_ledger_totals.sql
 
 <a id="pg-constraints"></a>
 ### Constraints

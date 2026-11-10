@@ -1,0 +1,695 @@
+[
+  {
+    "phase": "before",
+    "initialEntries": 10000,
+    "operations": 5000,
+    "loadBeforeOperations": "14.44 21.50 23.50 3/2031 651493",
+    "loadAfterOperations": "11.40 19.79 22.83 86/3272 659279",
+    "statements": [
+      {
+        "statement": "journal constraint",
+        "query": "SELECT COALESCE(SUM(amount), $17)                        FROM public.konto_entries WHERE journal_id = affected_journal",
+        "calls": "8000",
+        "rows": "8000",
+        "shared_blks_hit": "1394880",
+        "shared_blks_read": "0"
+      },
+      {
+        "statement": "donation admission",
+        "query": "SELECT\n        ids.id AS account_id,\n        (COALESCE(s.balance, $2) + COALESCE(e.entry_sum, $3) - COALESCE(h.hold_sum, $4))::text AS balance\n      FROM unnest($1::uuid[]) AS ids(id)\n      LEFT JOIN LATERAL (\n        SELECT balance, entry_sequence\n        FROM konto_balance_snapshots\n        WHERE account_id = ids.id\n        ORDER BY entry_sequence DESC\n        LIMIT $5\n      ) s ON $6\n      LEFT JOIN LATERAL (\n        SELECT SUM(amount) as entry_sum\n        FROM konto_entries\n        WHERE account_id = ids.id\n          AND (s.entry_sequence IS NULL OR entry_sequence > s.entry_sequence)\n      ) e ON $7\n      LEFT JOIN LATERAL (\n        SELECT SUM(amount) as hold_sum\n        FROM konto_holds\n        WHERE account_id = ids.id\n          AND status = $8\n          AND (expires_at IS NULL OR NOW() <= expires_at)\n      ) h ON $9",
+        "calls": "4000",
+        "rows": "4000",
+        "shared_blks_hit": "789690",
+        "shared_blks_read": "0"
+      },
+      {
+        "statement": "hold admission",
+        "query": "SELECT\n          ids.id AS account_id,\n          (COALESCE(s.balance, $2) + COALESCE(e.entry_sum, $3) - COALESCE(h.hold_sum, $4))::text AS balance\n        FROM unnest(ARRAY[$1]::uuid[]) AS ids(id)\n        LEFT JOIN LATERAL (\n          SELECT balance, entry_sequence\n          FROM konto_balance_snapshots\n          WHERE account_id = ids.id\n          ORDER BY entry_sequence DESC\n          LIMIT $5\n        ) s ON $6\n        LEFT JOIN LATERAL (\n          SELECT SUM(amount) as entry_sum\n          FROM konto_entries\n          WHERE account_id = ids.id\n            AND (s.entry_sequence IS NULL OR entry_sequence > s.entry_sequence)\n        ) e ON $7\n        LEFT JOIN LATERAL (\n          SELECT SUM(amount) as hold_sum\n          FROM konto_holds\n          WHERE account_id = ids.id\n            AND status = $8\n            AND (expires_at IS NULL OR NOW() <= expires_at)\n        ) h ON $9",
+        "calls": "1000",
+        "rows": "1000",
+        "shared_blks_hit": "197374",
+        "shared_blks_read": "0"
+      }
+    ],
+    "plans": {
+      "journal": {
+        "estimatedCost": 249.02,
+        "sharedHits": 124,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Seq Scan",
+            "Relation Name": "konto_entries",
+            "Actual Rows": 2,
+            "Actual Loops": 1,
+            "Rows Removed by Filter": 9998,
+            "Shared Hit Blocks": 124,
+            "Shared Read Blocks": 0
+          }
+        ]
+      },
+      "entries": {
+        "estimatedCost": 261.51,
+        "sharedHits": 124,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Seq Scan",
+            "Relation Name": "konto_entries",
+            "Actual Rows": 5000,
+            "Actual Loops": 1,
+            "Rows Removed by Filter": 5000,
+            "Shared Hit Blocks": 124,
+            "Shared Read Blocks": 0
+          }
+        ]
+      },
+      "holds": {
+        "estimatedCost": 44.14,
+        "sharedHits": 16,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Seq Scan",
+            "Relation Name": "konto_holds",
+            "Actual Rows": 1250,
+            "Actual Loops": 1,
+            "Rows Removed by Filter": 0,
+            "Shared Hit Blocks": 16,
+            "Shared Read Blocks": 0
+          }
+        ]
+      },
+      "batch": {
+        "estimatedCost": 17.53,
+        "sharedHits": 10,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Index Scan",
+            "Relation Name": "konto_entries",
+            "Index Name": "konto_entries_entry_sequence_key",
+            "Actual Rows": 160,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 6,
+            "Shared Read Blocks": 0
+          },
+          {
+            "Node Type": "Index Scan",
+            "Relation Name": "konto_accounts",
+            "Index Name": "konto_accounts_pkey",
+            "Actual Rows": 1,
+            "Actual Loops": 2,
+            "Rows Removed by Filter": 0,
+            "Shared Hit Blocks": 4,
+            "Shared Read Blocks": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "phase": "before",
+    "initialEntries": 50000,
+    "operations": 5000,
+    "loadBeforeOperations": "11.40 19.79 22.83 4/1936 660248",
+    "loadAfterOperations": "7.48 17.10 21.70 1/1940 670051",
+    "statements": [
+      {
+        "statement": "journal constraint",
+        "query": "SELECT COALESCE(SUM(amount), $17)                        FROM public.konto_entries WHERE journal_id = affected_journal",
+        "calls": "8000",
+        "rows": "8000",
+        "shared_blks_hit": "5345760",
+        "shared_blks_read": "0"
+      },
+      {
+        "statement": "donation admission",
+        "query": "SELECT\n        ids.id AS account_id,\n        (COALESCE(s.balance, $2) + COALESCE(e.entry_sum, $3) - COALESCE(h.hold_sum, $4))::text AS balance\n      FROM unnest($1::uuid[]) AS ids(id)\n      LEFT JOIN LATERAL (\n        SELECT balance, entry_sequence\n        FROM konto_balance_snapshots\n        WHERE account_id = ids.id\n        ORDER BY entry_sequence DESC\n        LIMIT $5\n      ) s ON $6\n      LEFT JOIN LATERAL (\n        SELECT SUM(amount) as entry_sum\n        FROM konto_entries\n        WHERE account_id = ids.id\n          AND (s.entry_sequence IS NULL OR entry_sequence > s.entry_sequence)\n      ) e ON $7\n      LEFT JOIN LATERAL (\n        SELECT SUM(amount) as hold_sum\n        FROM konto_holds\n        WHERE account_id = ids.id\n          AND status = $8\n          AND (expires_at IS NULL OR NOW() <= expires_at)\n      ) h ON $9",
+        "calls": "4000",
+        "rows": "4000",
+        "shared_blks_hit": "3011941",
+        "shared_blks_read": "0"
+      },
+      {
+        "statement": "hold admission",
+        "query": "SELECT\n          ids.id AS account_id,\n          (COALESCE(s.balance, $2) + COALESCE(e.entry_sum, $3) - COALESCE(h.hold_sum, $4))::text AS balance\n        FROM unnest(ARRAY[$1]::uuid[]) AS ids(id)\n        LEFT JOIN LATERAL (\n          SELECT balance, entry_sequence\n          FROM konto_balance_snapshots\n          WHERE account_id = ids.id\n          ORDER BY entry_sequence DESC\n          LIMIT $5\n        ) s ON $6\n        LEFT JOIN LATERAL (\n          SELECT SUM(amount) as entry_sum\n          FROM konto_entries\n          WHERE account_id = ids.id\n            AND (s.entry_sequence IS NULL OR entry_sequence > s.entry_sequence)\n        ) e ON $7\n        LEFT JOIN LATERAL (\n          SELECT SUM(amount) as hold_sum\n          FROM konto_holds\n          WHERE account_id = ids.id\n            AND status = $8\n            AND (expires_at IS NULL OR NOW() <= expires_at)\n        ) h ON $9",
+        "calls": "1000",
+        "rows": "1000",
+        "shared_blks_hit": "752936",
+        "shared_blks_read": "0"
+      }
+    ],
+    "plans": {
+      "journal": {
+        "estimatedCost": 1243.02,
+        "sharedHits": 618,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Seq Scan",
+            "Relation Name": "konto_entries",
+            "Actual Rows": 2,
+            "Actual Loops": 1,
+            "Rows Removed by Filter": 49998,
+            "Shared Hit Blocks": 618,
+            "Shared Read Blocks": 0
+          }
+        ]
+      },
+      "entries": {
+        "estimatedCost": 1305.52,
+        "sharedHits": 618,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Seq Scan",
+            "Relation Name": "konto_entries",
+            "Actual Rows": 25000,
+            "Actual Loops": 1,
+            "Rows Removed by Filter": 25000,
+            "Shared Hit Blocks": 618,
+            "Shared Read Blocks": 0
+          }
+        ]
+      },
+      "holds": {
+        "estimatedCost": 218.64,
+        "sharedHits": 78,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Seq Scan",
+            "Relation Name": "konto_holds",
+            "Actual Rows": 6250,
+            "Actual Loops": 1,
+            "Rows Removed by Filter": 0,
+            "Shared Hit Blocks": 78,
+            "Shared Read Blocks": 0
+          }
+        ]
+      },
+      "batch": {
+        "estimatedCost": 17.39,
+        "sharedHits": 9,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Index Scan",
+            "Relation Name": "konto_entries",
+            "Index Name": "konto_entries_entry_sequence_key",
+            "Actual Rows": 160,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 5,
+            "Shared Read Blocks": 0
+          },
+          {
+            "Node Type": "Index Scan",
+            "Relation Name": "konto_accounts",
+            "Index Name": "konto_accounts_pkey",
+            "Actual Rows": 1,
+            "Actual Loops": 2,
+            "Rows Removed by Filter": 0,
+            "Shared Hit Blocks": 4,
+            "Shared Read Blocks": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "phase": "before",
+    "initialEntries": 100000,
+    "operations": 5000,
+    "loadBeforeOperations": "7.20 16.88 21.60 2/1974 670240",
+    "loadAfterOperations": "33.52 28.02 25.19 7/2334 705981",
+    "statements": [
+      {
+        "statement": "journal constraint",
+        "query": "SELECT COALESCE(SUM(amount), $17)                        FROM public.konto_entries WHERE journal_id = affected_journal",
+        "calls": "8000",
+        "rows": "8000",
+        "shared_blks_hit": "10283520",
+        "shared_blks_read": "0"
+      },
+      {
+        "statement": "donation admission",
+        "query": "SELECT\n        ids.id AS account_id,\n        (COALESCE(s.balance, $2) + COALESCE(e.entry_sum, $3) - COALESCE(h.hold_sum, $4))::text AS balance\n      FROM unnest($1::uuid[]) AS ids(id)\n      LEFT JOIN LATERAL (\n        SELECT balance, entry_sequence\n        FROM konto_balance_snapshots\n        WHERE account_id = ids.id\n        ORDER BY entry_sequence DESC\n        LIMIT $5\n      ) s ON $6\n      LEFT JOIN LATERAL (\n        SELECT SUM(amount) as entry_sum\n        FROM konto_entries\n        WHERE account_id = ids.id\n          AND (s.entry_sequence IS NULL OR entry_sequence > s.entry_sequence)\n      ) e ON $7\n      LEFT JOIN LATERAL (\n        SELECT SUM(amount) as hold_sum\n        FROM konto_holds\n        WHERE account_id = ids.id\n          AND status = $8\n          AND (expires_at IS NULL OR NOW() <= expires_at)\n      ) h ON $9",
+        "calls": "4000",
+        "rows": "4000",
+        "shared_blks_hit": "5789704",
+        "shared_blks_read": "0"
+      },
+      {
+        "statement": "hold admission",
+        "query": "SELECT\n          ids.id AS account_id,\n          (COALESCE(s.balance, $2) + COALESCE(e.entry_sum, $3) - COALESCE(h.hold_sum, $4))::text AS balance\n        FROM unnest(ARRAY[$1]::uuid[]) AS ids(id)\n        LEFT JOIN LATERAL (\n          SELECT balance, entry_sequence\n          FROM konto_balance_snapshots\n          WHERE account_id = ids.id\n          ORDER BY entry_sequence DESC\n          LIMIT $5\n        ) s ON $6\n        LEFT JOIN LATERAL (\n          SELECT SUM(amount) as entry_sum\n          FROM konto_entries\n          WHERE account_id = ids.id\n            AND (s.entry_sequence IS NULL OR entry_sequence > s.entry_sequence)\n        ) e ON $7\n        LEFT JOIN LATERAL (\n          SELECT SUM(amount) as hold_sum\n          FROM konto_holds\n          WHERE account_id = ids.id\n            AND status = $8\n            AND (expires_at IS NULL OR NOW() <= expires_at)\n        ) h ON $9",
+        "calls": "1000",
+        "rows": "1000",
+        "shared_blks_hit": "1447377",
+        "shared_blks_read": "0"
+      }
+    ],
+    "plans": {
+      "journal": {
+        "estimatedCost": 2485.02,
+        "sharedHits": 1235,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Seq Scan",
+            "Relation Name": "konto_entries",
+            "Actual Rows": 2,
+            "Actual Loops": 1,
+            "Rows Removed by Filter": 99998,
+            "Shared Hit Blocks": 1235,
+            "Shared Read Blocks": 0
+          }
+        ]
+      },
+      "entries": {
+        "estimatedCost": 2609.86,
+        "sharedHits": 1235,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Seq Scan",
+            "Relation Name": "konto_entries",
+            "Actual Rows": 50000,
+            "Actual Loops": 1,
+            "Rows Removed by Filter": 50000,
+            "Shared Hit Blocks": 1235,
+            "Shared Read Blocks": 0
+          }
+        ]
+      },
+      "holds": {
+        "estimatedCost": 436.26,
+        "sharedHits": 155,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Seq Scan",
+            "Relation Name": "konto_holds",
+            "Actual Rows": 12500,
+            "Actual Loops": 1,
+            "Rows Removed by Filter": 0,
+            "Shared Hit Blocks": 155,
+            "Shared Read Blocks": 0
+          }
+        ]
+      },
+      "batch": {
+        "estimatedCost": 18.87,
+        "sharedHits": 10,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Index Scan",
+            "Relation Name": "konto_entries",
+            "Index Name": "konto_entries_entry_sequence_key",
+            "Actual Rows": 160,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 6,
+            "Shared Read Blocks": 0
+          },
+          {
+            "Node Type": "Index Scan",
+            "Relation Name": "konto_accounts",
+            "Index Name": "konto_accounts_pkey",
+            "Actual Rows": 1,
+            "Actual Loops": 2,
+            "Rows Removed by Filter": 0,
+            "Shared Hit Blocks": 4,
+            "Shared Read Blocks": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "phase": "after",
+    "initialEntries": 10000,
+    "operations": 5000,
+    "loadBeforeOperations": "23.13 26.24 24.72 4/2420 711736",
+    "loadAfterOperations": "16.50 23.89 24.00 8/2444 725317",
+    "statements": [
+      {
+        "statement": "journal constraint",
+        "query": "SELECT COALESCE(SUM(amount), $17)                        FROM public.konto_entries WHERE journal_id = affected_journal",
+        "calls": "8000",
+        "rows": "8000",
+        "shared_blks_hit": "24098",
+        "shared_blks_read": "0"
+      },
+      {
+        "statement": "donation admission",
+        "query": "SELECT\n        ids.id AS account_id,\n        public.yen_konto_available(ids.id)::text AS balance\n      FROM unnest($1::uuid[]) AS ids(id)",
+        "calls": "4000",
+        "rows": "4000",
+        "shared_blks_hit": "29485",
+        "shared_blks_read": "0"
+      },
+      {
+        "statement": "hold admission",
+        "query": "SELECT\n          ids.id AS account_id,\n          public.yen_konto_available(ids.id)::text AS balance\n        FROM unnest(ARRAY[$1]::uuid[]) AS ids(id)",
+        "calls": "1000",
+        "rows": "1000",
+        "shared_blks_hit": "7651",
+        "shared_blks_read": "0"
+      }
+    ],
+    "plans": {
+      "journal": {
+        "estimatedCost": 11.58,
+        "sharedHits": 3,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Bitmap Heap Scan",
+            "Relation Name": "konto_entries",
+            "Actual Rows": 2,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 3,
+            "Shared Read Blocks": 0
+          },
+          {
+            "Node Type": "Bitmap Index Scan",
+            "Index Name": "idx_entries_journal",
+            "Actual Rows": 2,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 2,
+            "Shared Read Blocks": 0
+          }
+        ]
+      },
+      "totals": {
+        "estimatedCost": 8.17,
+        "sharedHits": 2,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Index Scan",
+            "Relation Name": "konto_account_totals",
+            "Index Name": "konto_account_totals_pkey",
+            "Actual Rows": 1,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 2,
+            "Shared Read Blocks": 0
+          }
+        ]
+      },
+      "holds": {
+        "estimatedCost": 5.91,
+        "sharedHits": 2,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Index Only Scan",
+            "Relation Name": "konto_holds",
+            "Index Name": "idx_holds_expiring",
+            "Actual Rows": 0,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 2,
+            "Shared Read Blocks": 0
+          }
+        ]
+      },
+      "available": {
+        "estimatedCost": 0.26,
+        "sharedHits": 9,
+        "sharedReads": 0,
+        "scans": []
+      },
+      "batch": {
+        "estimatedCost": 17.53,
+        "sharedHits": 10,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Index Scan",
+            "Relation Name": "konto_entries",
+            "Index Name": "konto_entries_entry_sequence_key",
+            "Actual Rows": 160,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 6,
+            "Shared Read Blocks": 0
+          },
+          {
+            "Node Type": "Index Scan",
+            "Relation Name": "konto_accounts",
+            "Index Name": "konto_accounts_pkey",
+            "Actual Rows": 1,
+            "Actual Loops": 2,
+            "Rows Removed by Filter": 0,
+            "Shared Hit Blocks": 4,
+            "Shared Read Blocks": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "phase": "after",
+    "initialEntries": 50000,
+    "operations": 5000,
+    "loadBeforeOperations": "16.50 23.89 24.00 6/2524 726271",
+    "loadAfterOperations": "24.55 25.10 24.43 10/2709 738656",
+    "statements": [
+      {
+        "statement": "journal constraint",
+        "query": "SELECT COALESCE(SUM(amount), $17)                        FROM public.konto_entries WHERE journal_id = affected_journal",
+        "calls": "8000",
+        "rows": "8000",
+        "shared_blks_hit": "24098",
+        "shared_blks_read": "0"
+      },
+      {
+        "statement": "donation admission",
+        "query": "SELECT\n        ids.id AS account_id,\n        public.yen_konto_available(ids.id)::text AS balance\n      FROM unnest($1::uuid[]) AS ids(id)",
+        "calls": "4000",
+        "rows": "4000",
+        "shared_blks_hit": "30634",
+        "shared_blks_read": "0"
+      },
+      {
+        "statement": "hold admission",
+        "query": "SELECT\n          ids.id AS account_id,\n          public.yen_konto_available(ids.id)::text AS balance\n        FROM unnest(ARRAY[$1]::uuid[]) AS ids(id)",
+        "calls": "1000",
+        "rows": "1000",
+        "shared_blks_hit": "10241",
+        "shared_blks_read": "0"
+      }
+    ],
+    "plans": {
+      "journal": {
+        "estimatedCost": 12.01,
+        "sharedHits": 3,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Bitmap Heap Scan",
+            "Relation Name": "konto_entries",
+            "Actual Rows": 2,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 3,
+            "Shared Read Blocks": 0
+          },
+          {
+            "Node Type": "Bitmap Index Scan",
+            "Index Name": "idx_entries_journal",
+            "Actual Rows": 2,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 2,
+            "Shared Read Blocks": 0
+          }
+        ]
+      },
+      "totals": {
+        "estimatedCost": 8.17,
+        "sharedHits": 2,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Index Scan",
+            "Relation Name": "konto_account_totals",
+            "Index Name": "konto_account_totals_pkey",
+            "Actual Rows": 1,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 2,
+            "Shared Read Blocks": 0
+          }
+        ]
+      },
+      "holds": {
+        "estimatedCost": 5.91,
+        "sharedHits": 2,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Index Only Scan",
+            "Relation Name": "konto_holds",
+            "Index Name": "idx_holds_expiring",
+            "Actual Rows": 0,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 2,
+            "Shared Read Blocks": 0
+          }
+        ]
+      },
+      "available": {
+        "estimatedCost": 0.26,
+        "sharedHits": 9,
+        "sharedReads": 0,
+        "scans": []
+      },
+      "batch": {
+        "estimatedCost": 17.46,
+        "sharedHits": 9,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Index Scan",
+            "Relation Name": "konto_entries",
+            "Index Name": "konto_entries_entry_sequence_key",
+            "Actual Rows": 160,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 5,
+            "Shared Read Blocks": 0
+          },
+          {
+            "Node Type": "Index Scan",
+            "Relation Name": "konto_accounts",
+            "Index Name": "konto_accounts_pkey",
+            "Actual Rows": 1,
+            "Actual Loops": 2,
+            "Rows Removed by Filter": 0,
+            "Shared Hit Blocks": 4,
+            "Shared Read Blocks": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "phase": "after",
+    "initialEntries": 100000,
+    "operations": 5000,
+    "loadBeforeOperations": "23.06 24.78 24.33 6/2259 738912",
+    "loadAfterOperations": "16.95 23.22 23.82 3/1963 739895",
+    "statements": [
+      {
+        "statement": "journal constraint",
+        "query": "SELECT COALESCE(SUM(amount), $17)                        FROM public.konto_entries WHERE journal_id = affected_journal",
+        "calls": "8000",
+        "rows": "8000",
+        "shared_blks_hit": "32100",
+        "shared_blks_read": "0"
+      },
+      {
+        "statement": "donation admission",
+        "query": "SELECT\n        ids.id AS account_id,\n        public.yen_konto_available(ids.id)::text AS balance\n      FROM unnest($1::uuid[]) AS ids(id)",
+        "calls": "4000",
+        "rows": "4000",
+        "shared_blks_hit": "25163",
+        "shared_blks_read": "0"
+      },
+      {
+        "statement": "hold admission",
+        "query": "SELECT\n          ids.id AS account_id,\n          public.yen_konto_available(ids.id)::text AS balance\n        FROM unnest(ARRAY[$1]::uuid[]) AS ids(id)",
+        "calls": "1000",
+        "rows": "1000",
+        "shared_blks_hit": "11607",
+        "shared_blks_read": "0"
+      }
+    ],
+    "plans": {
+      "journal": {
+        "estimatedCost": 12.23,
+        "sharedHits": 4,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Bitmap Heap Scan",
+            "Relation Name": "konto_entries",
+            "Actual Rows": 2,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 4,
+            "Shared Read Blocks": 0
+          },
+          {
+            "Node Type": "Bitmap Index Scan",
+            "Index Name": "idx_entries_journal",
+            "Actual Rows": 2,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 3,
+            "Shared Read Blocks": 0
+          }
+        ]
+      },
+      "totals": {
+        "estimatedCost": 8.17,
+        "sharedHits": 2,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Index Scan",
+            "Relation Name": "konto_account_totals",
+            "Index Name": "konto_account_totals_pkey",
+            "Actual Rows": 1,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 2,
+            "Shared Read Blocks": 0
+          }
+        ]
+      },
+      "holds": {
+        "estimatedCost": 5.91,
+        "sharedHits": 2,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Index Only Scan",
+            "Relation Name": "konto_holds",
+            "Index Name": "idx_holds_expiring",
+            "Actual Rows": 0,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 2,
+            "Shared Read Blocks": 0
+          }
+        ]
+      },
+      "available": {
+        "estimatedCost": 0.26,
+        "sharedHits": 9,
+        "sharedReads": 0,
+        "scans": []
+      },
+      "batch": {
+        "estimatedCost": 18.65,
+        "sharedHits": 10,
+        "sharedReads": 0,
+        "scans": [
+          {
+            "Node Type": "Index Scan",
+            "Relation Name": "konto_entries",
+            "Index Name": "konto_entries_entry_sequence_key",
+            "Actual Rows": 160,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 6,
+            "Shared Read Blocks": 0
+          },
+          {
+            "Node Type": "Index Scan",
+            "Relation Name": "konto_accounts",
+            "Index Name": "konto_accounts_pkey",
+            "Actual Rows": 1,
+            "Actual Loops": 2,
+            "Rows Removed by Filter": 0,
+            "Shared Hit Blocks": 4,
+            "Shared Read Blocks": 0
+          }
+        ]
+      }
+    }
+  }
+]

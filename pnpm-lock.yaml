@@ -162,6 +162,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@konto-ledger/core@0.2.0': 213ffb8740f07fc221f74a2d42a82619272ee5a04008dc747b53dc6e71b98b57
+
 importers:
 
   .:
@@ -435,7 +438,7 @@ importers:
         version: 0.2.0(postgres@3.4.9)
       '@konto-ledger/core':
         specifier: 0.2.0
-        version: 0.2.0
+        version: 0.2.0(patch_hash=213ffb8740f07fc221f74a2d42a82619272ee5a04008dc747b53dc6e71b98b57)
       '@konto-ledger/types':
         specifier: 0.2.0
         version: 0.2.0
@@ -3661,7 +3664,7 @@ snapshots:
     optionalDependencies:
       postgres: 3.4.9
 
-  '@konto-ledger/core@0.2.0':
+  '@konto-ledger/core@0.2.0(patch_hash=213ffb8740f07fc221f74a2d42a82619272ee5a04008dc747b53dc6e71b98b57)':
     dependencies:
       '@konto-ledger/types': 0.2.0
       zod: 3.25.76

@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS konto_entries (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE INDEX IF NOT EXISTS idx_entries_journal ON konto_entries(journal_id);
+
 CREATE SEQUENCE IF NOT EXISTS konto_entry_sequence AS BIGINT;
 ALTER SEQUENCE konto_entry_sequence OWNED BY konto_entries.entry_sequence;
 
