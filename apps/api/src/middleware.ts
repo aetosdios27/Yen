@@ -177,6 +177,13 @@ export function requestContext(deps: AppDependencies): MiddlewareHandler<ApiEnv>
     const parentContext = propagation.extract(ROOT_CONTEXT, carrier);
     const span = startRequestSpan("http.server.request", parentContext);
     span.setAttribute("yen.request.id", c.get("requestId"));
+    // Stored before next() so the error handler can tag reports with the
+    // trace even when the request fails mid-chain.
+    const requestTraceId =
+      span.spanContext().traceId === "00000000000000000000000000000000"
+        ? c.get("requestId").replaceAll("-", "")
+        : span.spanContext().traceId;
+    c.set("traceId", requestTraceId);
     await runRequestSpan(span, next);
     if (isWaitlistRoute(c.req.path)) {
       const remaining = deps.waitlistMinResponseMs - (deps.clock() - started);
@@ -190,11 +197,7 @@ export function requestContext(deps: AppDependencies): MiddlewareHandler<ApiEnv>
     span.setAttribute("http.route", route);
     span.setAttribute("http.response.status_code", c.res.status);
     if (c.res.status >= 500) span.setStatus({ code: SpanStatusCode.ERROR });
-    const spanContext = span.spanContext();
-    const traceId =
-      spanContext.traceId === "00000000000000000000000000000000"
-        ? c.get("requestId").replaceAll("-", "")
-        : spanContext.traceId;
+    const traceId = requestTraceId;
     c.header("x-trace-id", traceId);
     recordRequest(
       parsedMethod.success ? parsedMethod.data : "OTHER",
