@@ -4,6 +4,7 @@ import { paise } from "@yen/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LocaleProvider } from "../../../../../i18n";
 import * as apiClientModule from "../../../../../lib/api-client";
+import { getApiBaseUrl } from "../../../../../lib/api-client";
 import * as expenseService from "../../../../../lib/expense-service";
 import ApproverPage from "./page";
 
@@ -126,6 +127,23 @@ describe("ApproverPage", () => {
     expect(screen.getByRole("button", { name: "Reject" })).toBeTruthy();
     expect(screen.queryByText(/Demo data:/)).toBeNull();
     expect(screen.getByText("Request progress")).toBeTruthy();
+  });
+
+  it("links the receipt to the evidence download endpoint", async () => {
+    render(
+      <LocaleProvider initialLocale="en">
+        <ApproverPage params={Promise.resolve({ fundId: "demo-fund", expenseId: "exp-101" })} />
+      </LocaleProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Ramesh Hardware")).toBeTruthy();
+    });
+
+    const link = screen.getByRole("link", { name: "INV-2026-441" });
+    expect(link.getAttribute("href")).toBe(
+      `${getApiBaseUrl()}/v1/funds/demo-fund/expenses/exp-101/evidence/INV-2026-441/download`,
+    );
   });
 
   it("opens 6-digit approval PIN modal on Approve click and verifies PIN", async () => {
