@@ -19,7 +19,6 @@ Retries are safe only for idempotent operations or operations protected by a sta
 
 Construct one `ResilientCall` per dependency and reuse it across calls so breaker state persists. Pass `now`, `random`, and `sleep` in tests for deterministic timing and backoff.
 
-
 ## Verification and external delivery limits
 
 `packages/shared/src/resilience.test.ts` tests timeout and attempt caps, capped exponential backoff with full jitter, and breaker cooldown/probe recovery. The WhatsApp Cloud and Exotel local HTTP contract suites each test timeout, a single request on HTTP errors, and suppression of the sixth request after five failed sends. These are deliberately one-attempt policies: enabling jittered retries for ambiguous sends without vendor deduplication could send a notification twice.

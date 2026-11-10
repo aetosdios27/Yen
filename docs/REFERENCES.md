@@ -29,6 +29,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 ## Tamper-evident logs and transparency
 
 <a id="crosby-wallach"></a>
+
 ### Efficient Data Structures for Tamper-Evident Logging
 
 - **Source:** Scott A. Crosby and Dan S. Wallach; USENIX Security, 2009.
@@ -37,6 +38,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/shared/src/merkle/README.md; packages/eventlog/README.md
 
 <a id="rfc-6962"></a>
+
 ### Certificate Transparency
 
 - **Source:** Ben Laurie, Adam Langley and Emilia Kasper; RFC 6962, 2013.
@@ -45,6 +47,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/shared/src/merkle/README.md; packages/verifier/README.md
 
 <a id="fips-180-4"></a>
+
 ### Secure Hash Standard (SHS)
 
 - **Source:** National Institute of Standards and Technology; FIPS PUB 180-4, August 2015.
@@ -53,6 +56,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/eventlog/src/chain.ts; packages/verifier/src/verify.ts
 
 <a id="rfc-9162"></a>
+
 ### Certificate Transparency Version 2.0
 
 - **Source:** Ben Laurie, Eran Messeri and Rob Stradling; RFC 9162, 2021.
@@ -61,6 +65,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/shared/src/merkle/README.md; contracts/README.md
 
 <a id="coniks"></a>
+
 ### CONIKS: Bringing Key Transparency to End Users
 
 - **Source:** Marcela S. Melara, Aaron Blankstein, Joseph Bonneau, Edward W. Felten and Michael J. Freedman; USENIX Security, 2015.
@@ -69,6 +74,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/shared/src/merkle/README.md
 
 <a id="cox-tlog"></a>
+
 ### Transparent Logs for Skeptical Clients
 
 - **Source:** Russ Cox; research!rsc, 2019.
@@ -77,6 +83,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/shared/src/merkle/README.md
 
 <a id="schneier-kelsey"></a>
+
 ### Cryptographic Support for Secure Logs on Untrusted Machines
 
 - **Source:** Bruce Schneier and John Kelsey; 7th USENIX Security Symposium, 1998.
@@ -85,6 +92,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/eventlog/README.md
 
 <a id="trillian-structures"></a>
+
 ### Verifiable data structures
 
 - **Source:** Transparency.dev; Trillian documentation, undated (accessed 2026).
@@ -93,6 +101,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/shared/src/merkle/README.md
 
 <a id="rfc-6234"></a>
+
 ### US Secure Hash Algorithms (SHA and SHA-based HMAC and HKDF)
 
 - **Source:** Donald Eastlake 3rd and Tony Hansen; RFC 6234, 2011.
@@ -103,6 +112,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 ## Canonical serialization
 
 <a id="rfc-8785"></a>
+
 ### JSON Canonicalization Scheme (JCS)
 
 - **Source:** Anders Rundgren, Brian Jordan and S. Erdtman; RFC 8785, 2020.
@@ -113,6 +123,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 ## Money and ledgers
 
 <a id="stripe-ledger"></a>
+
 ### Ledger: Stripe’s system for tracking and validating money movement
 
 - **Source:** Ilya Ganelin; Stripe, 2024.
@@ -121,6 +132,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/eventlog/README.md; YEN-18
 
 <a id="square-money"></a>
+
 ### Money
 
 - **Source:** Square; Square API Reference, 2026 (API version 2026-09-16).
@@ -129,6 +141,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** apps/api/README.md; packages/db/README.md
 
 <a id="fowler-money"></a>
+
 ### Money
 
 - **Source:** Martin Fowler; Patterns of Enterprise Application Architecture catalog, 2003.
@@ -137,6 +150,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/shared/src; apps/api/README.md
 
 <a id="tigerbeetle-account"></a>
+
 ### Account
 
 - **Source:** TigerBeetle; TigerBeetle documentation, undated (accessed 2026).
@@ -145,6 +159,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** YEN-18
 
 <a id="kleppmann-accounting"></a>
+
 ### Accounting for Computer Scientists
 
 - **Source:** Martin Kleppmann; author’s blog, 2011.
@@ -155,6 +170,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 ## Idempotency and retries
 
 <a id="stripe-idempotency"></a>
+
 ### Designing robust and predictable APIs with idempotency
 
 - **Source:** Brandur Leach; Stripe, 2017.
@@ -163,6 +179,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** docs/slo.md
 
 <a id="aws-retries"></a>
+
 ### Timeouts, retries, and backoff with jitter
 
 - **Source:** Amazon Web Services; AWS Builders’ Library, undated (accessed 2026).
@@ -171,6 +188,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** docs/slo.md
 
 <a id="ietf-idempotency"></a>
+
 ### The Idempotency-Key HTTP Header Field
 
 - **Source:** Jayadeba Jena, Sanjay Dalal and Dmitrii Tishkin; IETF Internet-Draft 08, 2026 (work in progress).
@@ -179,6 +197,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** apps/api/README.md
 
 <a id="aws-idempotency"></a>
+
 ### Making retries safe with idempotent APIs
 
 - **Source:** Malcolm Featonby; AWS Builders’ Library, undated (accessed 2026).
@@ -187,6 +206,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** apps/api/README.md
 
 <a id="aws-fallback"></a>
+
 ### Avoiding fallback in distributed systems
 
 - **Source:** Jacob Gabrielson; AWS Builders’ Library, 2019.
@@ -195,6 +215,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** apps/api/README.md
 
 <a id="pg-boss"></a>
+
 ### pg-boss: Background Jobs in PostgreSQL
 
 - **Source:** Tim Jones and contributors; pg-boss v12 documentation, 2026.
@@ -203,6 +224,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/queue/README.md
 
 <a id="bullmq"></a>
+
 ### BullMQ: Redis-based Distributed Message Queue
 
 - **Source:** Taskforce.sh Inc.; BullMQ documentation, 2026.
@@ -211,6 +233,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/queue/README.md
 
 <a id="temporal"></a>
+
 ### Temporal Platform Documentation
 
 - **Source:** Temporal Technologies Inc.; Temporal Platform Documentation, 2026.
@@ -221,6 +244,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 ## Rate limiting and load shedding
 
 <a id="stripe-rate-limiters"></a>
+
 ### Scaling your API with rate limiters
 
 - **Source:** Paul Tarjan; Stripe, 2017.
@@ -229,6 +253,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** apps/api/README.md
 
 <a id="sre-overload"></a>
+
 ### Handling Overload
 
 - **Source:** Alejandro Forero Cuervo; Google, Site Reliability Engineering, 2016.
@@ -237,6 +262,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** apps/api/README.md
 
 <a id="sre-cascading"></a>
+
 ### Addressing Cascading Failures
 
 - **Source:** Mike Ulrich; Google, Site Reliability Engineering, 2016.
@@ -245,6 +271,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** apps/api/README.md
 
 <a id="aws-load-shedding"></a>
+
 ### Using load shedding to avoid overload
 
 - **Source:** David Yanacek; AWS Builders’ Library, 2019.
@@ -253,6 +280,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** apps/api/README.md
 
 <a id="rfc-6585"></a>
+
 ### Additional HTTP Status Codes
 
 - **Source:** Mark Nottingham and Roy Fielding; RFC 6585, 2012.
@@ -261,6 +289,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** apps/api/README.md
 
 <a id="rfc-9110"></a>
+
 ### HTTP Semantics
 
 - **Source:** Roy T. Fielding, Mark Nottingham and Julian Reschke; RFC 9110, 2022.
@@ -269,6 +298,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** apps/api/README.md
 
 <a id="cloudflare-rate-headers"></a>
+
 ### Introducing new headers for rate limiting on Cloudflare’s API
 
 - **Source:** Cloudflare; Cloudflare changelog, 2025.
@@ -279,6 +309,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 ## Testing and failure handling
 
 <a id="yuan-failures"></a>
+
 ### Simple Testing Can Prevent Most Critical Failures: An Analysis of Production Failures in Distributed Data-Intensive Systems
 
 - **Source:** Ding Yuan, Yu Luo, Xin Zhuang, Guilherme Renna Rodrigues, Xu Zhao, Yongle Zhang, Pranay U. Jain and Michael Stumm; USENIX OSDI, 2014.
@@ -287,6 +318,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** apps/api/src/app.test.ts
 
 <a id="foundationdb"></a>
+
 ### FoundationDB: A Distributed Unbundled Transactional Key Value Store
 
 - **Source:** Jingyu Zhou and coauthors; ACM SIGMOD, 2021.
@@ -295,6 +327,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/db/src/test/database.test.ts
 
 <a id="jepsen-models"></a>
+
 ### Consistency Models
 
 - **Source:** Jepsen; consistency reference, undated (accessed 2026).
@@ -303,6 +336,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/db/README.md
 
 <a id="brandur-queues"></a>
+
 ### Postgres Job Queues & Failure By MVCC
 
 - **Source:** Brandur Leach; author’s blog, 2015.
@@ -313,6 +347,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 ## Benchmarking and latency
 
 <a id="gregg-use"></a>
+
 ### The USE Method
 
 - **Source:** Brendan Gregg; FISL13 presentation, 2012.
@@ -323,6 +358,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 ## SRE and observability
 
 <a id="sre-slo"></a>
+
 ### Service Level Objectives
 
 - **Source:** Chris Jones, John Wilkes, Niall Murphy and Cody Smith; Google, Site Reliability Engineering, 2016.
@@ -331,6 +367,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** docs/slo.md
 
 <a id="sre-burn"></a>
+
 ### Alerting on SLOs
 
 - **Source:** Google; Site Reliability Workbook, 2018.
@@ -339,6 +376,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** docs/slo.md
 
 <a id="otel-overview"></a>
+
 ### Overview
 
 - **Source:** OpenTelemetry; OpenTelemetry Specification, undated (accessed 2026).
@@ -347,6 +385,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** apps/api/src/telemetry.ts; packages/shared/src/observability.ts
 
 <a id="sre-monitoring"></a>
+
 ### Monitoring Distributed Systems
 
 - **Source:** Rob Ewaschuk; Google, Site Reliability Engineering, 2016.
@@ -355,6 +394,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** apps/api/README.md
 
 <a id="sre-implementing-slos"></a>
+
 ### Implementing SLOs
 
 - **Source:** Steven Thurgood and David Ferguson, with Alex Hidalgo and Betsy Beyer; Google, Site Reliability Workbook, 2018.
@@ -365,6 +405,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 ## PostgreSQL
 
 <a id="pg-isolation"></a>
+
 ### Transaction Isolation
 
 - **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
@@ -373,6 +414,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/db/README.md; apps/api/README.md
 
 <a id="pg-locking"></a>
+
 ### Explicit Locking
 
 - **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
@@ -381,6 +423,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/eventlog/README.md; YEN-18
 
 <a id="pg-select"></a>
+
 ### SELECT
 
 - **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
@@ -389,6 +432,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/db/README.md
 
 <a id="pg-partition"></a>
+
 ### Table Partitioning
 
 - **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
@@ -397,6 +441,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/db/migrations/0001_app_tables.sql
 
 <a id="pg-lexical"></a>
+
 ### Lexical Structure
 
 - **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
@@ -405,6 +450,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/db/src/sql-statements.ts
 
 <a id="pg-strings"></a>
+
 ### Version and Platform Compatibility
 
 - **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
@@ -413,6 +459,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/db/src/sql-statements.ts
 
 <a id="brandur-job-drain"></a>
+
 ### Transactionally Staged Job Drains in Postgres
 
 - **Source:** Brandur Leach; author’s blog, 2017.
@@ -421,6 +468,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/eventlog/README.md
 
 <a id="pg-explain"></a>
+
 ### EXPLAIN
 
 - **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
@@ -429,6 +477,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/db/README.md
 
 <a id="pg-timeouts"></a>
+
 ### Client Connection Defaults
 
 - **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
@@ -437,6 +486,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/db/README.md
 
 <a id="pg-triggers"></a>
+
 ### Overview of Trigger Behavior
 
 - **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
@@ -445,6 +495,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/db/migrations/0037_ledger_totals.sql
 
 <a id="pg-constraints"></a>
+
 ### Constraints
 
 - **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
@@ -453,6 +504,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/db/migrations/0001_app_tables.sql; packages/eventlog/README.md
 
 <a id="pg-row-security"></a>
+
 ### Row Security Policies
 
 - **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
@@ -461,6 +513,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** apps/api/README.md; packages/db/README.md
 
 <a id="pg-insert"></a>
+
 ### INSERT
 
 - **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
@@ -469,6 +522,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** apps/api/README.md; packages/db/README.md
 
 <a id="pg-trigger"></a>
+
 ### CREATE TRIGGER
 
 - **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
@@ -477,6 +531,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/eventlog/README.md
 
 <a id="pg-privileges"></a>
+
 ### Privileges
 
 - **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
@@ -485,6 +540,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/eventlog/README.md
 
 <a id="pg-index"></a>
+
 ### CREATE INDEX
 
 - **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
@@ -495,6 +551,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 ## Authentication and approvals
 
 <a id="webauthn-2"></a>
+
 ### Web Authentication: An API for accessing Public Key Credentials Level 2
 
 - **Source:** W3C; W3C Recommendation, 2021.
@@ -503,6 +560,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** apps/api/README.md; YEN-71
 
 <a id="webauthn-3"></a>
+
 ### Web Authentication: An API for accessing Public Key Credentials Level 3
 
 - **Source:** W3C; W3C Recommendation, 2026.
@@ -511,6 +569,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** apps/api/README.md; YEN-71
 
 <a id="owasp-api"></a>
+
 ### OWASP Top 10 API Security Risks – 2023
 
 - **Source:** OWASP API Security Project; OWASP, 2023.
@@ -519,6 +578,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** apps/api/README.md
 
 <a id="owasp-transaction"></a>
+
 ### Transaction Authorization
 
 - **Source:** OWASP; OWASP Cheat Sheet Series, undated (accessed 2026).
@@ -527,6 +587,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** YEN-26
 
 <a id="rfc-9457"></a>
+
 ### Problem Details for HTTP APIs
 
 - **Source:** Mark Nottingham, Erik Wilde and Sanjay Dalal; RFC 9457, 2023.
@@ -535,6 +596,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** apps/api/README.md
 
 <a id="nist-800-63b"></a>
+
 ### Digital Identity Guidelines: Authentication and Authenticator Management
 
 - **Source:** David Temoshok, James L. Fenton, Yee-Yin Choong, Naomi Lefkovitz, Andrew Regenscheid, Ryan Galluzzo and Justin P. Richer; NIST Special Publication 800-63B-4, July 2025.
@@ -543,6 +605,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** apps/api/README.md; docs/THREAT-MODEL.md; docs/TRUST-CLAIMS.md
 
 <a id="owasp-auth"></a>
+
 ### Authentication Cheat Sheet
 
 - **Source:** OWASP; OWASP Cheat Sheet Series, undated (accessed 2026).
@@ -551,6 +614,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** docs/THREAT-MODEL.md; docs/TRUST-CLAIMS.md
 
 <a id="owasp-password-storage"></a>
+
 ### Password Storage Cheat Sheet
 
 - **Source:** OWASP; OWASP Cheat Sheet Series, undated (accessed 2026).
@@ -559,6 +623,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** docs/THREAT-MODEL.md; docs/TRUST-CLAIMS.md
 
 <a id="rfc-2104"></a>
+
 ### HMAC: Keyed-Hashing for Message Authentication
 
 - **Source:** H. Krawczyk, M. Bellare and R. Canetti; RFC 2104, 1997.
@@ -569,6 +634,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 ## Blockchain anchoring
 
 <a id="opentimestamps"></a>
+
 ### A timestamping proof standard
 
 - **Source:** OpenTimestamps; project documentation, undated (accessed 2026).
@@ -577,6 +643,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** contracts/README.md
 
 <a id="ethereum-reorg"></a>
+
 ### Ethereum proof-of-stake attack and defense
 
 - **Source:** Ethereum.org; Ethereum documentation, undated (accessed 2026).
@@ -587,6 +654,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 ## Privacy and law
 
 <a id="dpdp-act"></a>
+
 ### The Digital Personal Data Protection Act, 2023
 
 - **Source:** Government of India, Ministry of Law and Justice; Gazette of India, 2023.
@@ -595,6 +663,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/eventlog/README.md; packages/db/README.md
 
 <a id="dpdp-commencement"></a>
+
 ### Digital Personal Data Protection Act commencement notification
 
 - **Source:** Ministry of Electronics and Information Technology; Gazette of India, 2025.
@@ -603,6 +672,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/db/README.md
 
 <a id="ico-pseudonymisation"></a>
+
 ### Pseudonymisation
 
 - **Source:** Information Commissioner’s Office; UK GDPR guidance, undated (accessed 2026).
@@ -611,6 +681,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** packages/eventlog/README.md; packages/db/README.md
 
 <a id="dpdpa-transcription"></a>
+
 ### Digital Personal Data Protection Act, 2023 Transcription (Sections 8 and 12)
 
 - **Source:** Prashant Mali; dpdpa.com transcription and legal interpretation, 2023.
@@ -621,6 +692,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 ## Supply chain and CI
 
 <a id="slsa"></a>
+
 ### SLSA specification
 
 - **Source:** SLSA; Linux Foundation, version 1.2, undated (accessed 2026).
@@ -629,6 +701,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** .github/workflows/release.yml; docs/verify-release.md
 
 <a id="reproducible-builds"></a>
+
 ### Reproducible Builds documentation
 
 - **Source:** Reproducible Builds project; documentation, undated (accessed 2026).
@@ -637,6 +710,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** scripts/repro-build.sh; docs/verify-release.md
 
 <a id="source-date-epoch"></a>
+
 ### SOURCE_DATE_EPOCH
 
 - **Source:** Reproducible Builds project; SOURCE_DATE_EPOCH specification, undated (accessed 2026).
@@ -645,6 +719,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** scripts/repro-build.sh; scripts/reproduce-release.sh
 
 <a id="sigstore-cosign"></a>
+
 ### Cosign keyless signing and verification
 
 - **Source:** Sigstore; Cosign documentation, undated (accessed 2026).
@@ -653,6 +728,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** .github/workflows/release.yml; docs/verify-release.md
 
 <a id="github-artifact-attestations"></a>
+
 ### GitHub artifact attestations
 
 - **Source:** GitHub; GitHub Docs, undated (accessed 2026).
@@ -661,6 +737,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** .github/workflows/release.yml; docs/verify-release.md
 
 <a id="github-actions"></a>
+
 ### Secure use reference
 
 - **Source:** GitHub; GitHub Docs, undated (accessed 2026).
@@ -671,6 +748,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 ## Security and threat modeling
 
 <a id="stride-approach"></a>
+
 ### Uncover Security Design Flaws Using The STRIDE Approach
 
 - **Source:** Shawn Hernan, Scott Lambert, Tomasz Ostwald and Adam Shostack; Microsoft Corporation, MSDN Magazine, 2006.
@@ -679,6 +757,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** docs/THREAT-MODEL.md
 
 <a id="owasp-threat-modeling"></a>
+
 ### Threat Modeling Cheat Sheet
 
 - **Source:** OWASP; OWASP Cheat Sheet Series, undated (accessed 2026).
@@ -687,6 +766,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** docs/THREAT-MODEL.md
 
 <a id="pg-dump"></a>
+
 ### pg_dump and pg_restore
 
 - **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
@@ -695,6 +775,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Where in this repo:** docs/runbooks/backup-restore.md
 
 <a id="pg-pitr"></a>
+
 ### Continuous Archiving and Point-in-Time Recovery
 
 - **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
@@ -705,6 +786,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 ## Messaging providers
 
 <a id="exotel-sms-api"></a>
+
 ### Exotel SMS API
 
 - **Source:** Exotel Developer Docs, SMS API and Send SMS reference.
@@ -715,6 +797,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Verification:** Opened and read on 2026-10-29. No live request was made.
 
 <a id="meta-whatsapp-cloud-template-send"></a>
+
 ### Send Message Template Text
 
 - **Source:** Meta; WhatsApp Business Platform public Postman workspace.
