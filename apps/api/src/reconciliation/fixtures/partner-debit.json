@@ -1,0 +1,17 @@
+{
+  "event": "payout.settled",
+  "timestamp": "2026-10-28T18:45:22.000Z",
+  "data": {
+    "fund_id": "e3fb2fc4-03f9-45b1-bcef-464ab0d87ddd",
+    "bank_reference": "XPL281024009045",
+    "amount_paise": "487300",
+    "type": "debit",
+    "posted_at": "2026-10-28T18:44:03.000Z",
+    "utr": "281024009045",
+    "narration": "NEFT/DR/281024009045/VENDOR-SOUND-LIGHTS",
+    "counterparty": {
+      "vpa": "megha.sound@ybl",
+      "name": "Megha Sound and Lights"
+    }
+  }
+}
