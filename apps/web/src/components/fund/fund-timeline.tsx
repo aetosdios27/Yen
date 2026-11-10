@@ -9,6 +9,7 @@ import { VerifiedBadge } from "./verified-badge";
 
 export type FundTimelineProps = {
   readonly timeline: readonly PublicTimelineEntry[];
+  readonly fundId?: string | undefined;
   readonly onOpenExplainer: () => void;
   readonly className?: string | undefined;
 };
@@ -21,10 +22,11 @@ const CATEGORY_MESSAGE_KEYS: Record<SpendingCategoryId, MessageKey> = {
   registration: "fund.categoryRegistration",
   logistics: "fund.categoryLogistics",
   food: "fund.categoryFood",
+  facilities: "fund.categoryFacilities",
   other: "fund.categoryOther",
 };
 
-export function FundTimeline({ timeline, onOpenExplainer, className }: FundTimelineProps) {
+export function FundTimeline({ timeline, fundId, onOpenExplainer, className }: FundTimelineProps) {
   const { t, locale } = useI18n();
   const [filter, setFilter] = useState<FilterType>("all");
 
@@ -152,7 +154,11 @@ export function FundTimeline({ timeline, onOpenExplainer, className }: FundTimel
                           : "bg-surface text-ink border border-border",
                       )}
                     >
-                      {isDonation ? t("fund.donationItem") : t("fund.expenseItem")}
+                      {entry.type === "refund"
+                        ? t("fund.refundItem")
+                        : isDonation
+                          ? t("fund.donationItem")
+                          : t("fund.expenseItem")}
                     </span>
 
                     {categoryLabel ? (
@@ -164,7 +170,9 @@ export function FundTimeline({ timeline, onOpenExplainer, className }: FundTimel
                     </time>
                   </div>
 
-                  <h3 className="mt-1.5 text-body font-bold text-ink">{entry.title}</h3>
+                  <h3 className="mt-1.5 text-body font-bold text-ink">
+                    {entry.type === "refund" ? t("fund.refundDetail") : entry.title}
+                  </h3>
 
                   {entry.description ? (
                     <p className="mt-1 text-small leading-relaxed text-ink-muted">
@@ -185,6 +193,8 @@ export function FundTimeline({ timeline, onOpenExplainer, className }: FundTimel
                       status={entry.status}
                       evidence={entry.evidence}
                       verification={entry.verification}
+                      recordId={entry.id}
+                      fundId={fundId}
                       onOpenExplainer={onOpenExplainer}
                     />
                   </div>

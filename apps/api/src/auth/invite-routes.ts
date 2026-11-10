@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import type { OpenAPIHono } from "@hono/zod-openapi";
+import { normalizePhone } from "@yen/shared";
 import type { Context } from "hono";
 import { setCookie } from "hono/cookie";
 import {
@@ -11,12 +12,7 @@ import {
 import type { ApiEnv, AppDependencies, Principal } from "../dependencies.js";
 import { ApiError } from "../errors.js";
 import type { ExistingFundResource, FundAction, FundResource } from "../policy.js";
-import {
-  generateSessionToken,
-  hashSessionToken,
-  normalizePhone,
-  parseDeviceInfo,
-} from "./index.js";
+import { generateSessionToken, hashSessionToken, parseDeviceInfo } from "./index.js";
 
 type GetFund = (
   fundId: string,

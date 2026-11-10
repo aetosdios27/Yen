@@ -1,3 +1,4 @@
+import type { FundVerificationState } from "@yen/shared";
 import { type Paise, type PseudonymId, paiseWire, parsePseudonymId } from "@yen/shared";
 import { isValidPaiseAmount } from "./policy.js";
 import { type Actor, type FundRole, isMemberRole, isStaffRole, isValidRole } from "./roles.js";
@@ -103,13 +104,14 @@ function selectedDonationName(record: DonationRecord): string | undefined {
   return record.donorNameChoice === "full" ? name : maskNameToInitials(name) || "A donor";
 }
 
-export type FundVerificationState = "bank-matched" | "anchored" | "unverified";
+export type { FundVerificationState } from "@yen/shared";
 export interface FundSummaryRecord {
   readonly kind: "fund_summary";
   readonly fundId: string;
   readonly name: string;
   readonly purpose: string | null;
   readonly raisedPaise: string | null;
+  readonly pledgedPaise: string;
   readonly spentPaise: string;
   readonly verification: FundVerificationState;
   readonly dataGaps: readonly string[];
@@ -132,6 +134,7 @@ export interface FundTimelineRecord {
     readonly occurredAt: string;
     readonly message: string;
     readonly actorDisplayName?: string | undefined;
+    readonly itemType?: "donation" | "refund" | "expense" | "alert" | undefined;
     readonly actorNameChoice?: "full" | "initials" | undefined;
     readonly amountPaise?: string | undefined;
     /** Fund alert items only. */
@@ -505,6 +508,7 @@ export function redactFundReadModel<T extends FundReadRecord>(
       fundId: str(record.fundId),
       name: publicText(record.name),
       purpose: record.purpose === null ? null : publicText(record.purpose),
+      pledgedPaise: paiseString(record.pledgedPaise),
       raisedPaise: record.raisedPaise === null ? null : paiseString(record.raisedPaise),
       spentPaise: paiseString(record.spentPaise),
       verification: verificationState(record.verification),
@@ -530,6 +534,7 @@ export function redactFundReadModel<T extends FundReadRecord>(
       fundId: str(record.fundId),
       items: record.items.map((item) => ({
         id: str(item.id),
+        ...(item.itemType ? { itemType: item.itemType } : {}),
         occurredAt: str(item.occurredAt),
         message: publicText(item.message),
         ...(item.actorDisplayName === undefined

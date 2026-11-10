@@ -625,7 +625,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 
 - **Source:** Reproducible Builds project; documentation, undated (accessed 2026).
 - **URL:** https://reproducible-builds.org/docs/
-- **What we use it for:** Reproducible Builds describes controlling timestamps, time zones, locales, build paths and other variable inputs. Yen sets a fixed build environment and compares release archives from two clean worktrees on one host; that check is not an independent or cross-platform rebuild.
+- **What we use it for:** Reproducible Builds describes controlling timestamps, time zones, locales, build paths and other variable inputs. Yen sets a fixed build environment and compares release archives from two clean worktrees with separate HOME/TMPDIR directories. The release workflow also compares another runner’s archive digest before signing; that configured gate is not evidence of a completed two-machine or cross-platform rebuild.
 - **Where in this repo:** scripts/repro-build.sh; docs/verify-release.md
 
 <a id="source-date-epoch"></a>

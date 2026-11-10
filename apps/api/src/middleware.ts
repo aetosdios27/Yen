@@ -44,7 +44,7 @@ export function isStatementUploadRoute(path: string): boolean {
 }
 
 export function isPublicFundReadRoute(path: string): boolean {
-  return /^\/v1\/funds\/[0-9a-f-]{36}\/public\/(?:summary|breakdown|timeline|expenses\/[0-9a-f-]{36}(?:\/(?:proofs|objections))?)\/?$/.test(
+  return /^\/v1\/funds\/[0-9a-f-]{36}\/(?:public\/(?:summary|breakdown|timeline|expenses\/[0-9a-f-]{36}(?:\/(?:proofs|objections))?)|audit-bundle|records\/[^/]+\/proof)\/?$/.test(
     path,
   );
 }
@@ -157,11 +157,10 @@ export function requestContext(deps: AppDependencies): MiddlewareHandler<ApiEnv>
     const started = deps.clock();
     const carrier: Record<string, string> = {};
     const traceparent = c.req.header("traceparent");
-    const tracestate = c.req.header("tracestate");
     if (traceparent !== undefined) carrier.traceparent = traceparent;
-    if (tracestate !== undefined) carrier.tracestate = tracestate;
     const parentContext = propagation.extract(ROOT_CONTEXT, carrier);
     const span = startRequestSpan("http.server.request", parentContext);
+    span.setAttribute("yen.request.id", c.get("requestId"));
     await runRequestSpan(span, next);
     if (isWaitlistRoute(c.req.path)) {
       const remaining = deps.waitlistMinResponseMs - (deps.clock() - started);
