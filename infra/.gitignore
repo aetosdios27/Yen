@@ -1,0 +1,7 @@
+# Terraform working metadata. The provider lock file is committed so CI
+# validates against the exact provider versions used by operators.
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan
+tfplan.txt
