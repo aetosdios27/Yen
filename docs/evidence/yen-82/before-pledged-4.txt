@@ -1,0 +1,8 @@
+Aggregate  (cost=772.50..772.52 rows=1 width=32) (actual time=2.458..2.458 rows=1 loops=1)
+  Buffers: shared hit=385
+  ->  Seq Scan on donation_pledges  (cost=0.00..760.00 rows=5000 width=8) (actual time=1.838..2.282 rows=5000 loops=1)
+        Filter: ((fund_id = '00000000-0000-4000-8000-000000000010'::uuid) AND (status = 'pledged'::text))
+        Rows Removed by Filter: 20000
+        Buffers: shared hit=385
+Planning Time: 0.081 ms
+Execution Time: 2.470 ms

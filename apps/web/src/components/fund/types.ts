@@ -1,4 +1,4 @@
-import type { Paise } from "@yen/shared";
+import type { FundVerificationState, Paise } from "@yen/shared";
 
 export type SpendingCategoryId =
   | "equipment"
@@ -47,7 +47,7 @@ export type PublicTimelineEntry = {
 export type PublicOrg = {
   readonly id: string;
   readonly name: string;
-  readonly verified: boolean;
+  readonly verification: FundVerificationState;
   readonly legalForm?: string | undefined;
 };
 

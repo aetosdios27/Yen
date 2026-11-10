@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { beforeAll, expect, it } from "vitest";
 import { migrate } from "./migrate.js";
 import {
@@ -14,6 +15,7 @@ import {
 } from "./query-registry.js";
 import { type SeedStats, seedRealisticDataset } from "./seed.js";
 import { databaseSuite } from "./test/database.js";
+import { seedPublicFundPlanFixture } from "./test/public-fund-plan-fixture.js";
 
 databaseSuite("query-plan discipline and EXPLAIN budgets", (sql) => {
   let seedStats: SeedStats;
@@ -25,7 +27,8 @@ databaseSuite("query-plan discipline and EXPLAIN budgets", (sql) => {
     const seeded = await seedRealisticDataset(sql);
     seedStats = seeded.stats;
     queryContext = seeded.context;
-    tableRowCounts = seeded.tableRowCounts;
+    await seedPublicFundPlanFixture(sql, queryContext.fundId);
+    tableRowCounts = await getTableEstimatedRowCounts(sql);
   }, 60000);
 
   it("seeds a realistic dataset with thousands of funds and large tables exceeding 100k rows", () => {
@@ -44,6 +47,40 @@ databaseSuite("query-plan discipline and EXPLAIN budgets", (sql) => {
       expect(res.passed).toBe(true);
       expect(res.violations).toEqual([]);
       expect(res.actualCost).toBeLessThanOrEqual(res.maxCostBudget);
+    }
+  });
+
+  it("rejects the old public text-join plan and a missing outstanding-pledge index", async () => {
+    const anchor = getRegisteredHotPathQueries().find(
+      (query) => query.id === "public_fund_anchored_items",
+    );
+    const pledged = getRegisteredHotPathQueries().find(
+      (query) => query.id === "public_fund_pledged_paise",
+    );
+    if (!anchor || !pledged) throw new Error("Missing public query registration");
+    const oldSql = await readFile(
+      new URL("../../../docs/evidence/yen-82/before-anchored.sql", import.meta.url),
+      "utf8",
+    );
+    const oldQuery = {
+      ...anchor,
+      explain: (client: typeof sql) =>
+        client.unsafe(`EXPLAIN (FORMAT JSON, VERBOSE) ${oldSql}`, [queryContext.fundId]),
+    };
+    const oldResult = verifyPlanNode(
+      await explainQuery(sql, oldQuery, queryContext),
+      tableRowCounts,
+    );
+    expect(oldResult.passed).toBe(false);
+    expect(oldResult.violations.map((v) => v.kind)).toContain("cost_budget");
+    await sql`DROP INDEX donation_pledges_outstanding_fund_idx`;
+    try {
+      const result = verifyPlanNode(await explainQuery(sql, pledged, queryContext), tableRowCounts);
+      expect(result.passed).toBe(false);
+      expect(result.violations.map((v) => v.kind)).toContain("missing_expected_index");
+    } finally {
+      await sql`CREATE INDEX donation_pledges_outstanding_fund_idx ON donation_pledges (fund_id) INCLUDE (amount_paise) WHERE status = 'pledged'`;
+      await sql`ANALYZE donation_pledges`;
     }
   });
 

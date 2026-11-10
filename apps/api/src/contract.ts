@@ -1,5 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { paiseWire } from "@yen/shared";
+import { fundVerificationSchema, paiseWire } from "@yen/shared";
 import { errorEnvelope } from "./errors.js";
 import {
   fraudAcknowledgementSchema,
@@ -285,7 +285,7 @@ const publicFundIdParams = z.object({
       param: { name: "fundId", in: "path" },
     }),
 });
-const verificationState = z.enum(["bank-matched", "anchored", "unverified"]);
+const verificationState = fundVerificationSchema;
 const alertSeverity = z.enum(["info", "warning", "critical"]);
 const alertTypeWire = z.enum([
   "unapproved_debit",

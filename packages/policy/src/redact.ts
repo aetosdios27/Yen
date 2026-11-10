@@ -1,3 +1,4 @@
+import type { FundVerificationState } from "@yen/shared";
 import { type Paise, type PseudonymId, paiseWire, parsePseudonymId } from "@yen/shared";
 import { isValidPaiseAmount } from "./policy.js";
 import { type Actor, type FundRole, isMemberRole, isStaffRole, isValidRole } from "./roles.js";
@@ -103,7 +104,7 @@ function selectedDonationName(record: DonationRecord): string | undefined {
   return record.donorNameChoice === "full" ? name : maskNameToInitials(name) || "A donor";
 }
 
-export type FundVerificationState = "bank-matched" | "anchored" | "unverified";
+export type { FundVerificationState } from "@yen/shared";
 export interface FundSummaryRecord {
   readonly kind: "fund_summary";
   readonly fundId: string;

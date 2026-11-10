@@ -1,0 +1,54 @@
+Unique  (cost=214226.67..214229.51 rows=567 width=32) (actual time=184.644..187.745 rows=20000 loops=1)
+  Buffers: shared hit=3917, temp read=1019 written=1020
+  ->  Sort  (cost=214226.67..214228.09 rows=567 width=32) (actual time=184.643..185.319 rows=20000 loops=1)
+        Sort Key: (CASE WHEN (e.type = 'donation.verified'::text) THEN (bt.id)::text ELSE (ex.id)::text END)
+        Sort Method: quicksort  Memory: 1706kB
+        Buffers: shared hit=3917, temp read=1019 written=1020
+        ->  Hash Left Join  (cost=173808.55..214200.74 rows=567 width=32) (actual time=148.529..181.901 rows=20000 loops=1)
+              Hash Cond: ((bt.id)::text = (ex.expense_data ->> 'bankTransactionId'::text))
+              Filter: (((e.type = 'donation.verified'::text) AND (bt.type = 'credit'::text) AND (bt.reconciliation_status = ANY ('{matched,manually_matched}'::text[])) AND ((bt.matched_pledge_id)::text = (e.payload ->> 'donation_id'::text)) AND (hashed SubPlan 2)) OR ((e.type = 'bank.debit_seen'::text) AND (bt.type = 'debit'::text) AND (ex.id IS NOT NULL) AND ((ex.expense_data ->> 'amountPaise'::text) = (bt.amount_paise)::text)))
+              Buffers: shared hit=3917, temp read=1019 written=1020
+              ->  Merge Join  (cost=173808.54..186557.17 rows=561028 width=227) (actual time=141.837..156.544 rows=20000 loops=1)
+                    Merge Cond: (((bt.id)::text) = ((e.payload ->> 'bank_transaction_id'::text)))
+                    Buffers: shared hit=3532, temp read=1019 written=1020
+                    ->  Sort  (cost=167910.39..167935.39 rows=10000 width=71) (actual time=62.234..65.427 rows=20000 loops=1)
+                          Sort Key: ((bt.id)::text)
+                          Sort Method: quicksort  Memory: 3271kB
+                          Buffers: shared hit=1031
+                          ->  Seq Scan on bank_transactions bt  (cost=0.00..167246.00 rows=10000 width=71) (actual time=29.576..39.287 rows=20000 loops=1)
+                                Filter: ((fund_id = '00000000-0000-4000-8000-000000000010'::uuid) AND (((type = 'credit'::text) AND (reconciliation_status = ANY ('{matched,manually_matched}'::text[])) AND (hashed SubPlan 2)) OR (type = 'debit'::text)))
+                                Buffers: shared hit=1031
+                                SubPlan 2
+                                  ->  Seq Scan on donation_pledges dp  (cost=0.00..697.50 rows=20000 width=32) (actual time=0.083..2.493 rows=20000 loops=2)
+                                        Filter: (status = 'verified'::text)
+                                        Rows Removed by Filter: 5000
+                                        Buffers: shared hit=770
+                    ->  Sort  (cost=5898.16..5926.21 rows=11221 width=156) (actual time=79.508..81.878 rows=20000 loops=1)
+                          Sort Key: ((e.payload ->> 'bank_transaction_id'::text))
+                          Sort Method: external sort  Disk: 4080kB
+                          Buffers: shared hit=2501, temp read=1019 written=1020
+                          ->  Nested Loop  (cost=0.00..5143.32 rows=11221 width=156) (actual time=0.040..21.351 rows=20000 loops=1)
+                                Join Filter: ((e.seq >= a.from_seq) AND (e.seq <= a.to_seq))
+                                Rows Removed by Join Filter: 80000
+                                Buffers: shared hit=2501
+                                ->  Seq Scan on fund_events e  (cost=0.00..3375.00 rows=20197 width=164) (actual time=0.017..7.815 rows=20000 loops=1)
+                                      Filter: ((fund_id = '00000000-0000-4000-8000-000000000010'::uuid) AND ((type = 'donation.verified'::text) OR (type = 'bank.debit_seen'::text)))
+                                      Rows Removed by Filter: 30000
+                                      Buffers: shared hit=2500
+                                ->  Materialize  (cost=0.00..1.10 rows=5 width=32) (actual time=0.000..0.000 rows=5 loops=20000)
+                                      Buffers: shared hit=1
+                                      ->  Seq Scan on anchors a  (cost=0.00..1.07 rows=5 width=32) (actual time=0.011..0.012 rows=5 loops=1)
+                                            Filter: ((tx_hash IS NOT NULL) AND (fund_id = '00000000-0000-4000-8000-000000000010'::uuid) AND (status = 'confirmed'::text))
+                                            Buffers: shared hit=1
+              ->  Hash  (cost=0.00..0.00 rows=1 width=64) (actual time=0.007..0.008 rows=0 loops=1)
+                    Buckets: 1024  Batches: 1  Memory Usage: 8kB
+                    ->  Seq Scan on expenses ex  (cost=0.00..0.00 rows=1 width=64) (actual time=0.007..0.007 rows=0 loops=1)
+                          Filter: ((status = 'reconciled'::text) AND (fund_id = '00000000-0000-4000-8000-000000000010'::uuid))
+Planning:
+  Buffers: shared hit=10
+Planning Time: 0.422 ms
+JIT:
+  Functions: 55
+  Options: Inlining false, Optimization false, Expressions true, Deforming true
+  Timing: Generation 2.611 ms, Inlining 0.000 ms, Optimization 1.429 ms, Emission 23.218 ms, Total 27.258 ms
+Execution Time: 191.839 ms

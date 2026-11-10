@@ -1,0 +1,136 @@
+{
+  "machine": {
+    "cores": 22,
+    "loadAverage": [24.25, 23.2, 23.94]
+  },
+  "fixture": {
+    "fundEvents": 50000,
+    "matchedCredits": 20000,
+    "pledges": 25000,
+    "confirmedAnchors": 5,
+    "resultItems": 20000,
+    "pledgedPaise": 500000
+  },
+  "samples": [
+    {
+      "side": "before",
+      "query": "anchored",
+      "run": 1,
+      "executionMs": 236.09
+    },
+    {
+      "side": "before",
+      "query": "pledged",
+      "run": 1,
+      "executionMs": 2.302
+    },
+    {
+      "side": "after",
+      "query": "anchored",
+      "run": 1,
+      "executionMs": 197.051
+    },
+    {
+      "side": "after",
+      "query": "pledged",
+      "run": 1,
+      "executionMs": 0.951
+    },
+    {
+      "side": "before",
+      "query": "anchored",
+      "run": 2,
+      "executionMs": 169.855
+    },
+    {
+      "side": "before",
+      "query": "pledged",
+      "run": 2,
+      "executionMs": 2.204
+    },
+    {
+      "side": "after",
+      "query": "anchored",
+      "run": 2,
+      "executionMs": 189.774
+    },
+    {
+      "side": "after",
+      "query": "pledged",
+      "run": 2,
+      "executionMs": 0.754
+    },
+    {
+      "side": "before",
+      "query": "anchored",
+      "run": 3,
+      "executionMs": 165.523
+    },
+    {
+      "side": "before",
+      "query": "pledged",
+      "run": 3,
+      "executionMs": 2.335
+    },
+    {
+      "side": "after",
+      "query": "anchored",
+      "run": 3,
+      "executionMs": 177.079
+    },
+    {
+      "side": "after",
+      "query": "pledged",
+      "run": 3,
+      "executionMs": 0.674
+    },
+    {
+      "side": "before",
+      "query": "anchored",
+      "run": 4,
+      "executionMs": 191.839
+    },
+    {
+      "side": "before",
+      "query": "pledged",
+      "run": 4,
+      "executionMs": 2.47
+    },
+    {
+      "side": "after",
+      "query": "anchored",
+      "run": 4,
+      "executionMs": 161.517
+    },
+    {
+      "side": "after",
+      "query": "pledged",
+      "run": 4,
+      "executionMs": 0.889
+    },
+    {
+      "side": "before",
+      "query": "anchored",
+      "run": 5,
+      "executionMs": 164.483
+    },
+    {
+      "side": "before",
+      "query": "pledged",
+      "run": 5,
+      "executionMs": 2.309
+    },
+    {
+      "side": "after",
+      "query": "anchored",
+      "run": 5,
+      "executionMs": 171.42
+    },
+    {
+      "side": "after",
+      "query": "pledged",
+      "run": 5,
+      "executionMs": 0.944
+    }
+  ]
+}

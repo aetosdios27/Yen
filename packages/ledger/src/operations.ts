@@ -1196,6 +1196,9 @@ export async function recordRefund(
     }),
   );
 
+  await tx`UPDATE donation_pledges SET status = 'rejected'
+    WHERE id = ${input.donationId} AND fund_id = ${input.fundId}`;
+
   return {
     journalId,
     rejectedEvent,

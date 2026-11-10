@@ -34,6 +34,7 @@ import {
   buildIntervalTree,
   type DonorReceiptData,
   fromHex,
+  fundVerificationState,
   generateReceiptPdf,
   generateReceiptSvg,
   hash32,
@@ -928,10 +929,11 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   app.openapi(publicFundSummaryRoute, async (c) => {
     const fundId = c.req.valid("param").fundId;
     const { entry, actor, publicTier } = await publicFundContext(fundId, c.get("principal"));
-    const [expenses, donations, pledgedPaise] = await Promise.all([
+    const [expenses, donations, pledgedPaise, anchoredItems] = await Promise.all([
       listFundExpenses(fundId),
       deps.publicFundReadStore.donations(fundId),
       deps.publicFundReadStore.pledgedPaise(fundId),
+      deps.publicFundReadStore.anchoredItems(fundId),
     ]);
     const spentPaise = safePaiseSum(
       expenses
@@ -946,7 +948,16 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       pledgedPaise: String(pledgedPaise),
       raisedPaise: String(safePaiseSum(donations.map((donation) => donation.amountPaise))),
       spentPaise: String(spentPaise),
-      verification: donations.length > 0 ? "bank-matched" : "unverified",
+      verification: fundVerificationState(
+        [
+          ...donations.map((donation) => donation.id),
+          ...expenses
+            .filter((expense) => expense.status === "reconciled")
+            .map((expense) => expense.id),
+        ],
+        anchoredItems,
+        expenses.some((expense) => expense.status === "paid"),
+      ),
       dataGaps: publicDataGaps,
     });
     setFundReadCache(c, publicTier, body);

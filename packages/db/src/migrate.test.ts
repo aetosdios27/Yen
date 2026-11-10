@@ -142,6 +142,9 @@ databaseSuite("migration runner", (sql, url) => {
     const subscriptionConsentSource = await readFile(
       join(defaultDir, "0033_subscription_consent.sql"),
     );
+    const publicPledgeTotalsSource = await readFile(
+      join(defaultDir, "0034_public_pledge_totals.sql"),
+    );
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -342,6 +345,12 @@ databaseSuite("migration runner", (sql, url) => {
         checksum: createHash("sha256").update(subscriptionConsentSource).digest("hex"),
         applied_at: expect.any(Date),
       },
+      {
+        version: 34,
+        name: "0034_public_pledge_totals.sql",
+        checksum: createHash("sha256").update(publicPledgeTotalsSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
     ]);
   });
 
@@ -501,7 +510,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(33);
+    expect(before).toHaveLength(34);
   });
 
   it("rejects an edited applied file and names it", async () => {
