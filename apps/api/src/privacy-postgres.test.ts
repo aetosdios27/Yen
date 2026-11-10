@@ -624,6 +624,12 @@ databaseSuite("canonical subscription migration", (sql) => {
     expect(rows.flatMap((r) => (r.contact === null ? [] : [r.contact])).sort()).toEqual(
       [...new Set(inputs.map(normalizePhone).filter((v) => v !== null))].sort(),
     );
+    const subscriptions = new PostgresFundSubscriptionStore(sql);
+    expect(await subscriptions.getByToken("legacy-7")).toMatchObject({
+      contact: null,
+      status: "unsubscribed",
+    });
+    expect(await subscriptions.getActiveSubscribers(fundId)).toHaveLength(0);
     expect(rows.filter((r) => r.contact === null)).toEqual([
       { contact: null, status: "unsubscribed" },
       { contact: null, status: "unsubscribed" },

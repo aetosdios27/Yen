@@ -7,7 +7,7 @@ import type { NotificationChannel } from "./types.js";
 export interface FundSubscription {
   readonly id: string;
   readonly fundId: string;
-  readonly contact: string;
+  readonly contact: string | null;
   readonly contactType: "email" | "phone";
   readonly channel: NotificationChannel;
   readonly weeklySummary: boolean;

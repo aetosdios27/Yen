@@ -286,7 +286,7 @@ export const bankTransactionRowSchema = z.object({
 export const fundSubscriptionRowSchema = z.object({
   id: z.string().uuid(),
   fund_id: fundId,
-  contact: z.string(),
+  contact: z.string().nullable(),
   contact_type: z.enum(["email", "phone"]),
   channel: z.enum(["whatsapp", "email", "sms"]),
   weekly_summary: z.boolean(),
