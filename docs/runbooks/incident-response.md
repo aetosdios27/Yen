@@ -287,3 +287,64 @@ the verification steps below.
    only what external evidence proves, and note every replayed event in the
    post-mortem. Do not guess missing events into existence; the hash chain makes
    invented backfills detectable, and inventing them is a break-glass violation.
+## Scenario: Merkle root verification failure or chain divergence
+
+Symptoms: `pnpm --filter @yen/db verify-chain <fund-id>` reports a head or
+linkage mismatch, the verifier bundle checks fail
+(`packages/verifier`, `yen-verify bundle.json --rpc URL --contract ADDRESS`),
+a recomputed anchor root differs from the stored root, or the on-chain
+`RootRegistry` root does not match the recomputed interval root for the same
+interval.
+
+Treat every verification failure as tampering until proven otherwise. This is
+always SEV-1. Never edit, delete, or reorder events to make verification pass;
+read [break-glass.md](break-glass.md) before touching anything.
+
+1. Freeze writes and stop the queue worker so the evidence stops moving:
+
+   ```sh
+   docker compose stop worker
+   # pause API writes per break-glass.md
+   ```
+
+2. Preserve evidence immediately, before any restart or failover can rotate
+   logs or state:
+
+   ```sh
+   pnpm --filter @yen/db verify-chain <fund-id> | tee incident-verify-<fund-id>.log
+   pg_dump --format=custom --file incident-snapshot-<utc-timestamp>.dump "$DATABASE_URL"
+   ```
+
+3. Localize the divergence. `verify-chain` recomputes the hash chain from the
+   database in sequence order and reports where linkage breaks. Compare the
+   recomputed chain with the protected manifest or the confirmed on-chain root
+   to decide which side is wrong:
+   - Database chain broken before the last confirmed anchor: the database state
+     is suspect. Prefer restoring from the most recent verified backup (PITR
+     scenario above) over any in-place repair.
+   - Recomputed root matches the database but the on-chain root differs:
+     investigate the anchoring path with [anchor-recovery.md](anchor-recovery.md);
+     check whether a replacement transaction re-anchored a different interval
+     root.
+   - Both match each other but differ from the external checkpoint: treat as
+     possible compromise of the checkpoint source and escalate to the security
+     owner.
+
+4. Identify the change window: compare the event count and head hash from the
+   protected manifest or checkpoint with the current database, and extract the
+   affected events. Record fund id, sequence positions, and hashes in the
+   incident thread.
+
+5. Classify with the security owner:
+   - Explained bug (for example an application bug wrote a malformed envelope):
+     fix the application, replay the affected window from a verified backup
+     into a clean instance, re-verify, then cut over. Document the bug and the
+     replay in the post-mortem.
+   - Unexplained or malicious change: keep SEV-1, run
+     [account-compromise.md](account-compromise.md) and
+     [kms-rotation.md](kms-rotation.md) in parallel, and notify the club with
+     the communication template. Do not attempt in-place repair.
+
+6. Recovery ends only when every fund passes `verify-chain` against an
+   independently authenticated checkpoint and the next anchor publishes a root
+   that the verifier confirms. State exactly that in the resolved club update.
