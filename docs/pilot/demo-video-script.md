@@ -42,3 +42,22 @@ Seeded identifiers used below (from `packages/db/src/dev-seed.ts`):
 | Treasurer persona      | Aarav Sharma, cookie `yen_mock_session_treasurer_token`                            |
 | Approver personas      | Priya Verma (`..._approver1_token`), Rohan Iyer (`..._approver2_token`, hi locale) |
 | Backup pending expense | `01940000-0000-7000-8000-000000000062` (25,000 INR, batteries)                     |
+
+## Shot list
+
+| Shot | Window         | Screen or camera           | Route or target                                     | Length |
+| ---- | -------------- | -------------------------- | --------------------------------------------------- | ------ |
+| 1    | 00:00 to 00:12 | Screen                     | `/` landing, then title card                        | 12 s   |
+| 2    | 00:12 to 00:40 | Screen                     | `/onboarding` wizard, steps 1 to 5                  | 28 s   |
+| 3    | 00:40 to 00:54 | Screen                     | `/invites/accept?code=...` on second phone          | 14 s   |
+| 4    | 00:54 to 01:14 | Screen                     | `/funds/[fundId]/donate`                            | 20 s   |
+| 5    | 01:14 to 01:28 | Screen                     | `/receipts/[id]`                                    | 14 s   |
+| 6    | 01:28 to 01:56 | Screen, 390 px window      | `/funds/[fundId]/treasurer` and `/expenses/new`     | 28 s   |
+| 7    | 01:56 to 02:10 | Screen split with terminal | evidence upload API call                            | 14 s   |
+| 8    | 02:10 to 02:34 | Screen                     | `/funds/[fundId]/approvals/[expenseId]` + PIN modal | 24 s   |
+| 9    | 02:34 to 02:46 | Screen                     | quorum reached, second approver                     | 12 s   |
+| 10   | 02:46 to 03:06 | Screen                     | `/funds/[fundId]` timeline, `/verify`               | 20 s   |
+| 11   | 03:06 to 03:20 | Screen                     | closer card with support contact                    | 14 s   |
+
+Windows sum to 200 seconds; the edit must land at 180. The cut points marked (cut to fit) are
+the sanctioned trims: shorten shots 2, 4 and 10 narration, never the [honesty] lines.
