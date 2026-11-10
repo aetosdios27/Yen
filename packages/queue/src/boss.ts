@@ -11,6 +11,8 @@ export function createPgBoss(options: WorkerRuntimeOptions): PgBoss {
   const schema = options.schema ?? DEFAULT_SCHEMA;
   return observePgBossErrors(
     new PgBoss({
+      // Library failure spans include raw exception messages; Yen emits id-only spans.
+      openTelemetry: { enabled: false },
       connectionString: options.connectionString,
       schema,
       migrate: options.migrate ?? false,
@@ -21,8 +23,8 @@ export function createPgBoss(options: WorkerRuntimeOptions): PgBoss {
 
 /** pg-boss reports asynchronous database and worker failures through this event. */
 export function observePgBossErrors(boss: PgBoss): PgBoss {
-  boss.on("error", (error: Error) => {
-    process.stderr.write(`pg-boss error: ${error.message}\n`);
+  boss.on("error", () => {
+    process.stderr.write("pg-boss background operation failed\n");
   });
   return boss;
 }
@@ -38,6 +40,8 @@ export async function ensureQueueSchema(
 ): Promise<void> {
   const boss = observePgBossErrors(
     new PgBoss({
+      // Library failure spans include raw exception messages; Yen emits id-only spans.
+      openTelemetry: { enabled: false },
       connectionString,
       schema,
       migrate: true,

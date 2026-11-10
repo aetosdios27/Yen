@@ -27,15 +27,16 @@
     "@yen/db": "workspace:*",
     "@yen/eventlog": "workspace:*",
     "@yen/ledger": "workspace:*",
+    "@yen/notifications": "workspace:*",
     "@yen/policy": "workspace:*",
     "@yen/queue": "workspace:*",
     "@yen/shared": "workspace:*",
     "bcryptjs": "^3.0.3",
     "hono": "4.13.14",
-    "zod": "4.6.7",
-    "@yen/notifications": "workspace:*"
+    "zod": "4.6.7"
   },
   "devDependencies": {
+    "@opentelemetry/sdk-metrics": "^2.12.0",
     "@opentelemetry/sdk-trace-base": "^2.12.0",
     "@opentelemetry/sdk-trace-node": "^2.12.0",
     "@types/bcryptjs": "^3.0.0",

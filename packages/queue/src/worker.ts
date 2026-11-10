@@ -1,7 +1,9 @@
 import { createSql, type Sql } from "@yen/db";
+import { traceJob } from "@yen/shared/telemetry";
 import { type JobResult, PgBoss, type Queue, type WorkOptions } from "pg-boss";
 import { observePgBossErrors } from "./boss.js";
 import { DEFAULT_QUEUES, DEFAULT_SCHEMA } from "./config.js";
+import { sampleMoneyTelemetry } from "./telemetry.js";
 import type { DeadLetterJob, Job, JobHandler, QueuePolicy, WorkerRuntimeOptions } from "./types.js";
 
 interface HandlerRegistration {
@@ -26,6 +28,7 @@ export class WorkerRuntime {
   private readonly options: WorkerRuntimeOptions;
   private readonly registrations = new Map<string, HandlerRegistration>();
   private isStarted = false;
+  private telemetryTimer: ReturnType<typeof setInterval> | undefined;
   private stopPromise?: Promise<void>;
   private signalCleanup?: (() => void) | undefined;
 
@@ -35,6 +38,8 @@ export class WorkerRuntime {
     const migrate = options.migrate ?? false;
     this.boss = observePgBossErrors(
       new PgBoss({
+        // Library failure spans include raw exception messages; Yen emits id-only spans.
+        openTelemetry: { enabled: false },
         connectionString: options.connectionString,
         schema,
         migrate,
@@ -123,7 +128,12 @@ export class WorkerRuntime {
               expireInSeconds: rawJob.expireInSeconds,
             };
             try {
-              await handler(job);
+              const data = job.data;
+              const carrier =
+                typeof data === "object" && data !== null && "__yenTelemetry" in data
+                  ? data.__yenTelemetry
+                  : {};
+              await traceJob(carrier, () => handler(job));
               results.push({ id: rawJob.id, status: "completed" });
             } catch (err) {
               results.push({
@@ -140,6 +150,17 @@ export class WorkerRuntime {
         });
       }
 
+      let sampling = false;
+      this.telemetryTimer = setInterval(() => {
+        if (sampling) return;
+        sampling = true;
+        void sampleMoneyTelemetry(this.sql, this.options.schema ?? DEFAULT_SCHEMA)
+          .catch(() => undefined)
+          .finally(() => {
+            sampling = false;
+          });
+      }, 30000);
+      this.telemetryTimer.unref();
       this.setupSignalHandlers();
       this.isStarted = true;
     } catch (err) {
@@ -158,6 +179,7 @@ export class WorkerRuntime {
     // The signal listeners stay installed until shutdown finishes. Removing them first lets a
     // repeated SIGTERM (a wrapper plus the process manager) fall back to the default kill and cut
     // the graceful stop short. Repeats are harmless because stop() is idempotent.
+    clearInterval(this.telemetryTimer);
     const timeout = this.options.gracefulShutdownTimeoutMs ?? 10000;
     try {
       await this.boss.stop({ graceful: true, timeout });
@@ -175,8 +197,8 @@ export class WorkerRuntime {
     const onSignal = async (signal: string) => {
       try {
         await this.stop();
-      } catch (err) {
-        process.stderr.write(`Error during graceful shutdown on ${signal}: ${String(err)}\n`);
+      } catch {
+        process.stderr.write(`Worker shutdown failed on ${signal}\n`);
       }
     };
 

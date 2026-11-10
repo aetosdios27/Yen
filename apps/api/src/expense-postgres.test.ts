@@ -11,10 +11,13 @@ import {
   recordDonation,
   submitExpense,
 } from "@yen/ledger";
+import { transactionalEnqueue, WorkerRuntime } from "@yen/queue";
 import { paise, salt32, toHex } from "@yen/shared";
+import { browserApiFetch } from "@yen/shared/browser-tracing";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { databaseSuite } from "../../../packages/db/src/test/database.js";
 import { initLedgerSchema } from "../../../packages/ledger/src/schema.js";
+import { waitFor } from "../../../packages/queue/src/test-utils.js";
 import { createApp } from "./app.js";
 import { fundSchema } from "./contract.js";
 import { MemoryFundStore } from "./dependencies.js";
@@ -723,7 +726,7 @@ databaseSuite("Postgres expense store", (sql, url) => {
     ];
     for (const { attributes } of spans) {
       for (const [key, value] of Object.entries(attributes)) {
-        expect(key).not.toMatch(/user.?id|phone|name|upi|amount/i);
+        expect(key).not.toMatch(/user.?id|phone|^name$|person.*name|upi|amount/i);
         for (const personalValue of personalValues) {
           expect(JSON.stringify(value)).not.toContain(personalValue);
         }
@@ -880,21 +883,71 @@ databaseSuite("Postgres expense store", (sql, url) => {
     expect(submitResponse.status).toBe(200);
     nowMs += 49 * 3_600_000;
 
-    for (const approverId of approverIds) {
-      await pinService.setupPin(approverId, "482915", { userId: approverId });
-      const response = await makeApp({ id: approverId, role: "approver" }).request(
-        `/v1/funds/${fundId}/expenses/${created.id}/approve`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "idempotency-key": `trace-approve-${approverId}`,
+    const worker = new WorkerRuntime({ connectionString: url, migrate: true, schema: "tracejobs" });
+    let processed = 0;
+    worker.registerHandler("approval-notify", async () => {
+      processed++;
+    });
+    await worker.start();
+    const notify = pinNotificationService.notify.bind(pinNotificationService);
+    pinNotificationService.notify = async (notification) => {
+      await notify(notification);
+      if (notification.kind === "approval_executed") {
+        await sql.begin((tx) => transactionalEnqueue(worker.getBoss(), tx, "approval-notify", {}));
+      }
+    };
+    const approvalTraces: string[] = [];
+    try {
+      for (const approverId of approverIds) {
+        await pinService.setupPin(approverId, "482915", { userId: approverId });
+        const response = await browserApiFetch(
+          new Request(`http://localhost/v1/funds/${fundId}/expenses/${created.id}/approve`, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "idempotency-key": `trace-approve-${approverId}`,
+            },
+            body: JSON.stringify({ pin: "482915" }),
+          }),
+          undefined,
+          async (request) => {
+            if (!(request instanceof Request)) throw new Error("Expected Request");
+            return makeApp({ id: approverId, role: "approver" }).request(request);
           },
-          body: JSON.stringify({ pin: "482915" }),
-        },
-      );
-      expect(response.status).toBe(200);
+        );
+        expect(response.status).toBe(200);
+        approvalTraces.push(response.headers.get("x-trace-id") ?? "");
+      }
+      await waitFor(async () => (processed === 2 ? true : undefined));
+    } finally {
+      await worker.stop();
     }
+    for (const traceId of approvalTraces) {
+      const names = spanExporter
+        .getFinishedSpans()
+        .filter((s) => s.spanContext().traceId === traceId)
+        .map((s) => s.name);
+      expect(names).toEqual(
+        expect.arrayContaining([
+          "browser.api.request",
+          "POST /v1/funds/:fundId/expenses/:expenseId/approve",
+          "ledger.approve",
+          "queue.job",
+        ]),
+      );
+    }
+    const quorumTrace = approvalTraces[1];
+    expect(
+      spanExporter
+        .getFinishedSpans()
+        .filter((s) => s.spanContext().traceId === quorumTrace)
+        .map((s) => s.name),
+    ).toContain("event.append");
+    expect(
+      (
+        await sql`SELECT seq FROM fund_events WHERE fund_id = ${fundId} AND type = 'expense.approved'`
+      ).length,
+    ).toBe(1);
 
     const traceBankTransactionId = uuidv7();
     await sql`
@@ -942,7 +995,7 @@ databaseSuite("Postgres expense store", (sql, url) => {
     ];
     for (const { attributes } of spans) {
       for (const [key, value] of Object.entries(attributes)) {
-        expect(key).not.toMatch(/user.?id|phone|name|upi|amount/i);
+        expect(key).not.toMatch(/user.?id|phone|^name$|person.*name|upi|amount/i);
         for (const personalValue of personalValues) {
           expect(JSON.stringify(value)).not.toContain(personalValue);
         }

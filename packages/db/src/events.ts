@@ -11,6 +11,7 @@ import {
   verifyChainStream,
 } from "@yen/eventlog";
 import type { FundId } from "@yen/shared";
+import { measuredObjective, recordSaturation, withTelemetrySpan } from "@yen/shared/telemetry";
 import { isSql, type SqlClient } from "./client.ts";
 
 export type StoredFundEvent = Event & {
@@ -266,11 +267,24 @@ function toEventInput(input: AppendEventInput): EventInput {
 }
 
 async function executeAppend(client: SqlClient, input: AppendEventInput): Promise<StoredFundEvent> {
+  return measuredObjective("event_append", () =>
+    withTelemetrySpan("db.event.append", () => executeAppendInner(client, input)),
+  );
+}
+async function executeAppendInner(
+  client: SqlClient,
+  input: AppendEventInput,
+): Promise<StoredFundEvent> {
   const eventInput = toEventInput(input);
   const fundId = eventInput.fund_id;
 
   // Acquire transaction-scoped advisory lock on fund ID to serialize appends
-  await client`SELECT pg_advisory_xact_lock(yen_fund_lock_key(${fundId}::uuid))`;
+  const lockStarted = performance.now();
+  try {
+    await client`SELECT pg_advisory_xact_lock(yen_fund_lock_key(${fundId}::uuid))`;
+  } finally {
+    recordSaturation("append_lock.wait", performance.now() - lockStarted);
+  }
 
   // Read current head event for this fund
   const rows = await client`

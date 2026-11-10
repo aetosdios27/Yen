@@ -162,6 +162,7 @@ export function requestContext(deps: AppDependencies): MiddlewareHandler<ApiEnv>
     if (tracestate !== undefined) carrier.tracestate = tracestate;
     const parentContext = propagation.extract(ROOT_CONTEXT, carrier);
     const span = startRequestSpan("http.server.request", parentContext);
+    span.setAttribute("yen.request.id", c.get("requestId"));
     await runRequestSpan(span, next);
     if (isWaitlistRoute(c.req.path)) {
       const remaining = deps.waitlistMinResponseMs - (deps.clock() - started);

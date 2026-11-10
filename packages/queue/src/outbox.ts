@@ -1,4 +1,5 @@
 import type { Sql } from "@yen/db";
+import { jobTelemetry } from "@yen/shared/telemetry";
 import type { PgBoss } from "pg-boss";
 import type { EnqueueOptions } from "./types.js";
 
@@ -42,5 +43,9 @@ export async function transactionalEnqueue<T extends object>(
   options: EnqueueOptions = {},
 ): Promise<string | null> {
   const db = createPostgresAdapter(tx);
-  return boss.send(queueName, data, { ...options, db });
+  const carrier = jobTelemetry();
+  return boss.send(queueName, carrier.traceparent ? { ...data, __yenTelemetry: carrier } : data, {
+    ...options,
+    db,
+  });
 }
