@@ -46,7 +46,6 @@ gh api -X PUT "repos/$repo/actions/permissions/selected-actions" \
   -f 'patterns_allowed[]=gitleaks/gitleaks-action@*' \
   -f 'patterns_allowed[]=pnpm/action-setup@*' \
   -f 'patterns_allowed[]=amannn/action-semantic-pull-request@*' \
-  -f 'patterns_allowed[]=anchore/sbom-action@*' \
   -f 'patterns_allowed[]=sigstore/cosign-installer@*' --silent
 
 echo "==> Immutable releases"

@@ -6,6 +6,16 @@ export type {
   DeliveryStatus,
 } from "./delivery.js";
 export {
+  type DonationStatus,
+  donationStatusSchema,
+  isOutstandingPledge,
+} from "./donation-status.js";
+export {
+  type FundVerificationState,
+  fundVerificationSchema,
+  fundVerificationState,
+} from "./fund-verification.js";
+export {
   calculateGstinChecksum,
   GSTIN_ALPHABET,
   GSTIN_REGEX,
@@ -29,6 +39,20 @@ export {
   type UserId,
   userIdSchema,
 } from "./ids.js";
+export {
+  type AuditAnchor,
+  type AuditBundle,
+  type AuditCheck,
+  type AuditEvent,
+  type AuditEventEntry,
+  type AuditProof,
+  AuditReasonCode,
+  type AuditRootRange,
+  canonicalizeJson,
+  computeCanonicalEventHash,
+  exportAuditBundleCsv,
+  verifyAuditBundle,
+} from "./merkle/bundle.js";
 export { fromHex, type Hash32, hash32, type Salt32, salt32, sha256, toHex } from "./merkle/hash.js";
 export {
   buildIntervalTree,
@@ -39,6 +63,7 @@ export {
   verifyEventProof,
 } from "./merkle/interval.js";
 export {
+  createEventProof,
   type EventProof,
   parseEventProof,
   parseEventProofJson,
@@ -57,7 +82,7 @@ export {
 } from "./merkle/tree.js";
 export { addPaise, formatInr, type Paise, paise, type paiseBrand, toPaise } from "./paise.js";
 export { paiseWire } from "./paise-wire.js";
-export { type PhoneE164, parsePhoneE164 } from "./phone.js";
+export { normalizePhone, type PhoneE164, parsePhoneE164 } from "./phone.js";
 export { PRIVACY_NOTICE_VERSION } from "./privacy.js";
 export {
   type DonationReceiptStatus,

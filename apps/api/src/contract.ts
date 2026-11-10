@@ -1,5 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { paiseWire } from "@yen/shared";
+import { donationStatusSchema, fundVerificationSchema, paiseWire } from "@yen/shared";
 import { errorEnvelope } from "./errors.js";
 import {
   fraudAcknowledgementSchema,
@@ -298,7 +298,7 @@ const publicFundIdParams = z.object({
       param: { name: "fundId", in: "path" },
     }),
 });
-const verificationState = z.enum(["bank-matched", "anchored", "unverified"]);
+const verificationState = fundVerificationSchema;
 const alertSeverity = z.enum(["info", "warning", "critical"]);
 const alertTypeWire = z.enum([
   "unapproved_debit",
@@ -311,6 +311,7 @@ const alertTypeWire = z.enum([
   "integrity_check_failure",
 ]);
 const publicTimelineItem = z.object({
+  itemType: z.enum(["donation", "refund", "expense", "alert"]).optional(),
   id: z.string().uuid(),
   occurredAt: z.iso.datetime(),
   message: z.string(),
@@ -328,6 +329,7 @@ export const publicFundSummarySchema = z
     name: z.string(),
     purpose: z.string().nullable(),
     raisedPaise: paiseWire.nullable(),
+    pledgedPaise: paiseWire,
     spentPaise: paiseWire,
     verification: verificationState,
     dataGaps: z.array(z.string()),
@@ -398,6 +400,116 @@ export const publicFundTimelineRoute = createRoute({
   responses: {
     200: {
       ...jsonResponse(publicFundTimelineSchema, "Visibility-filtered plain language timeline"),
+      headers: fundReadHeaders,
+    },
+    ...publicFundErrors,
+  },
+});
+
+export const publicAuditBundleSchema = z
+  .object({
+    format: z.literal("yen/audit-bundle/v1"),
+    fund_id: z.string().uuid(),
+    chain: z.object({
+      start_seq: z.number().int().nonnegative(),
+      start_hash: z.string().regex(/^[0-9a-f]{64}$/),
+    }),
+    events: z.array(z.record(z.string(), z.unknown())),
+    roots: z.array(z.record(z.string(), z.unknown())),
+    anchor: z.object({
+      chain_id: z.number().int().positive(),
+      contract_address: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+      tx_hash: z.string().regex(/^0x[0-9a-fA-F]{64}$/),
+      root: z.string().regex(/^[0-9a-f]{64}$/),
+      sequence: z.number().int().positive(),
+    }),
+  })
+  .strict();
+
+export const publicAuditBundleRoute = createRoute({
+  method: "get",
+  path: "/v1/funds/{fundId}/audit-bundle",
+  tags: ["public funds"],
+  operationId: "getPublicAuditBundle",
+  request: { params: publicFundIdParams },
+  responses: {
+    200: {
+      ...jsonResponse(publicAuditBundleSchema, "Canonical audit bundle v1 for fund interval"),
+      headers: fundReadHeaders,
+    },
+    ...publicFundErrors,
+  },
+});
+
+const publicRecordProofParams = z.object({
+  fundId: z
+    .string()
+    .uuid()
+    .openapi({
+      description: "Canonical FundId UUID",
+      param: { name: "fundId", in: "path" },
+    }),
+  recordId: z.string().openapi({
+    description: "Record, expense, or donation identifier",
+    param: { name: "recordId", in: "path" },
+  }),
+});
+
+export const publicRecordProofSchema = z
+  .object({
+    recordId: z.string(),
+    fundId: z.string().uuid(),
+    status: z.enum(["anchored", "pending"]),
+    event: z.record(z.string(), z.unknown()),
+    salt: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
+    latestEventHash: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
+    eventProof: z
+      .object({
+        index: z.number().int().nonnegative(),
+        size: z.number().int().positive(),
+        path: z.array(z.string().regex(/^[0-9a-f]{64}$/)),
+      })
+      .optional(),
+    fundProof: z
+      .object({
+        index: z.number().int().nonnegative(),
+        size: z.number().int().positive(),
+        path: z.array(z.string().regex(/^[0-9a-f]{64}$/)),
+      })
+      .optional(),
+    anchor: z
+      .object({
+        chainId: z.number().int().positive(),
+        contractAddress: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+        txHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/),
+        root: z.string().regex(/^[0-9a-f]{64}$/),
+        sequence: z.number().int().positive(),
+      })
+      .optional(),
+    pendingWindow: z
+      .object({
+        message: z.string(),
+        estimatedAnchorMinutes: z.number(),
+      })
+      .optional(),
+  })
+  .strict();
+
+export const publicRecordProofRoute = createRoute({
+  method: "get",
+  path: "/v1/funds/{fundId}/records/{recordId}/proof",
+  tags: ["public funds"],
+  operationId: "getPublicRecordProof",
+  request: { params: publicRecordProofParams },
+  responses: {
+    200: {
+      ...jsonResponse(publicRecordProofSchema, "Record cryptographic proof and anchor status"),
       headers: fundReadHeaders,
     },
     ...publicFundErrors,
@@ -2369,9 +2481,10 @@ export const donorReceiptSchema = z
     utr: z.string().regex(/^[0-9]{12}$/),
     donorDisplayName: z.string().optional(),
     donorNameChoice: z.enum(["full", "initials", "anonymous"]).optional(),
-    status: z.enum(["pledged", "verified", "rejected"]),
+    status: donationStatusSchema,
     createdAt: z.string(),
     verifiedAt: z.string().optional(),
+    refundedAt: z.string().optional(),
     proofUrl: z.string().optional(),
     onChainRoot: z.string().optional(),
     onChainTxHash: z.string().optional(),
@@ -2447,10 +2560,16 @@ export const createFundSubscriptionInput = z
     }),
     contactType: z.enum(["email", "phone"]),
     channel: z.enum(["email", "whatsapp", "sms"]).default("whatsapp"),
+    consent: z.literal(true),
+    whatsappConsent: z.boolean().default(false),
     weeklySummary: z.boolean().default(true),
     instantAlerts: z.boolean().default(true),
   })
   .strict()
+  .refine((input) => input.channel !== "whatsapp" || input.whatsappConsent, {
+    message: "Separate WhatsApp consent is required",
+    path: ["whatsappConsent"],
+  })
   .openapi("CreateFundSubscriptionInput");
 
 export const fundSubscriptionSchema = z

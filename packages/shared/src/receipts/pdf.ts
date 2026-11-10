@@ -1,6 +1,6 @@
 import qrcode from "qrcode-generator";
 import { formatInr } from "../paise.js";
-import type { DonorReceiptData } from "./types.js";
+import { type DonorReceiptData, receiptStatusLabels } from "./types.js";
 
 function escapePdfText(text: string): string {
   // Replace characters outside printable ASCII or escape backslash and parentheses
@@ -24,15 +24,15 @@ export function generateReceiptPdf(data: DonorReceiptData): Uint8Array {
   const formattedInr = formatInr(data.amountPaise);
   // Replace ₹ with INR for standard Type 1 font compatibility
   const amountStr = formattedInr.replace(/^₹/, "INR ");
-  const isVerified = data.status === "verified";
-  const statusStr = isVerified ? "VERIFIED CONTRIBUTION" : "RECORDED (WAITING FOR BANK)";
+  const isVerified = receiptStatusLabels(data.status).verified;
+  const statusStr = receiptStatusLabels(data.status).en;
   const donorName =
     data.donorDisplayName && data.donorDisplayName.trim().length > 0
       ? data.donorDisplayName
       : data.donorNameChoice === "anonymous"
         ? "Anonymous Contributor"
         : "Community Contributor";
-  const dateStr = `${new Date(data.createdAt).toISOString().replace("T", " ").slice(0, 19)} UTC`;
+  const dateStr = `${new Date(data.refundedAt ?? data.createdAt).toISOString().replace("T", " ").slice(0, 19)} UTC`;
 
   // Build stream content
   // A4 dimensions: 595.28 x 841.89 points
@@ -193,9 +193,7 @@ export function generateReceiptPdf(data: DonorReceiptData): Uint8Array {
   streamLines.push("/F1 10 Tf");
   streamLines.push("0.01 0.52 0.78 rg");
   streamLines.push("310 474 Td");
-  streamLines.push(
-    `(${escapePdfText(isVerified ? "Tamper-evident record" : "Awaiting bank statement")}) Tj`,
-  );
+  streamLines.push(`(${escapePdfText(receiptStatusLabels(data.status).proof)}) Tj`);
   streamLines.push("ET");
 
   // Horizontal divider

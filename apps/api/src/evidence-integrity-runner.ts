@@ -1,4 +1,4 @@
-import { raiseAlert, type SqlClient } from "@yen/db";
+import { raiseAlert, raiseAlertWithNotification, type SqlClient } from "@yen/db";
 import { runEvidenceIntegrityJob } from "./integrity-job.js";
 import type { StorageAdapter } from "./storage.js";
 import type { StoredEvidence } from "./stores.js";
@@ -41,12 +41,6 @@ export function runPersistedEvidenceIntegrityJob(
 /** Dedup key for the platform-wide integrity_check_failure alert. */
 export const INTEGRITY_JOB_ALERT_KEY = "evidence-integrity-job";
 
-/**
- * Runs the persisted integrity job. When the job itself throws (for example the
- * evidence store or storage is unreachable), a platform alert with fund_id NULL
- * is raised, deduplicated across repeated failures, and the error is rethrown.
- * Tampered or missing files are reported in the summary, not as job failures.
- */
 export async function runPersistedEvidenceIntegrityJobWithAlert(
   sql: SqlClient,
   store: EvidencePageReader,
@@ -55,7 +49,24 @@ export async function runPersistedEvidenceIntegrityJobWithAlert(
   fundId?: string,
 ) {
   try {
-    return await runPersistedEvidenceIntegrityJob(store, storage, pageSize, fundId);
+    return await runEvidenceIntegrityJob(
+      scanEvidencePages(store, pageSize, fundId),
+      storage,
+      async (evidence, result) => {
+        await raiseAlertWithNotification(sql, {
+          fundId: evidence.fundId,
+          alertType: "integrity_check_failure",
+          severity: "critical",
+          title: "Evidence integrity check failed",
+          details:
+            result.status === "tampered"
+              ? "Stored evidence does not match its pinned SHA-256 hash."
+              : "Stored evidence could not be read for integrity verification.",
+          entityType: "evidence",
+          entityId: evidence.evidenceId,
+        });
+      },
+    );
   } catch (error) {
     await raiseAlert(sql, {
       fundId: null,

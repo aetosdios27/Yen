@@ -51,8 +51,12 @@ databaseSuite("retention job", (sql) => {
       ${stagedIntentId}, 'TRANSFER', 'stale-staged-intent', ${sql.json({ note: "old" })},
       'EXPIRED', now() - interval '90 days', now() - interval '60 days'
     )`;
+    await sql`INSERT INTO fund_subscriptions (id, fund_id, contact, contact_type, unsubscribe_token, status, unsubscribed_at)
+      VALUES (${uuidv7()}, ${fundId}, 'expired@example.test', 'email', ${randomBytes(32).toString("hex")}, 'unsubscribed', now() - interval '31 days'),
+             (${uuidv7()}, ${fundId}, 'active@example.test', 'email', ${randomBytes(32).toString("hex")}, 'active', NULL)`;
     const dryRun = await runRetentionJob(sql, { dryRun: true });
     expect(dryRun.wouldPurge).toMatchObject({
+      fund_subscriptions: 1,
       auth_otps: 1,
       sessions: 1,
       trusted_devices: 2,
@@ -66,6 +70,9 @@ databaseSuite("retention job", (sql) => {
     ).toHaveLength(1);
 
     const result = await runRetentionJob(sql);
+    expect(await sql`SELECT contact FROM fund_subscriptions`).toEqual([
+      { contact: "active@example.test" },
+    ]);
     expect(result.wouldPurge.auth_otps).toBe(1);
     expect(await sql`SELECT id FROM auth_otps WHERE id = ${otpId}`).toHaveLength(0);
     expect(await sql`SELECT id FROM sessions WHERE id = ${sessionId}`).toHaveLength(0);
