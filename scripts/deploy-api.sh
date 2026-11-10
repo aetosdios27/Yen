@@ -121,6 +121,41 @@ assume_role() {
   export AWS_SESSION_TOKEN="$session_token"
 }
 
+# Builds the API image from the root Dockerfile and pushes it under an
+# immutable tag. Prints the pushed digest so later jobs can pin the exact
+# bytes they promote.
+image() {
+  local git_sha=${1:?usage: image <git-sha>}
+  [[ "$git_sha" =~ ^[0-9a-f]{40}$ ]] || fail "git sha must be a full 40 character commit sha"
+  [[ -f Dockerfile ]] || fail "no Dockerfile at the repository root"
+  require_vars AWS_REGION ECR_REPOSITORY
+  assume_role image
+
+  local account_id registry_host registry_uri digest
+  account_id="$(run_capture aws sts get-caller-identity --query 'Account' --output text)"
+  registry_host="${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+  registry_uri="${registry_host}/${ECR_REPOSITORY}"
+
+  if [[ -n "${DRY_RUN:-}" ]]; then
+    log "[dry-run] aws ecr get-login-password | docker login --username AWS --password-stdin $registry_host"
+    log "[dry-run] docker build --build-arg YEN_BUILD_SHA=$git_sha --tag $registry_uri:sha-$git_sha ."
+    log "[dry-run] docker push $registry_uri:sha-$git_sha"
+    log "digest=sha256:${DRY_IMAGE_DIGEST:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}"
+    return 0
+  fi
+
+  aws ecr get-login-password | docker login --username AWS --password-stdin "$registry_host"
+  docker build --build-arg YEN_BUILD_SHA="$git_sha" --tag "$registry_uri:sha-$git_sha" .
+  docker push "$registry_uri:sha-$git_sha" >/dev/null
+  digest="$(docker image inspect --format '{{join .RepoDigests ","}}' "$registry_uri:sha-$git_sha")"
+  digest="${digest##*@}"
+  [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || fail "pushed image digest was not reported: $digest"
+  if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+    echo "digest=$digest" >>"$GITHUB_OUTPUT"
+  fi
+  log "Pushed $registry_uri:sha-$git_sha as $digest"
+}
+
 main() {
   local cmd=${1:-}
   [[ -n "$cmd" ]] || { usage; exit 1; }
