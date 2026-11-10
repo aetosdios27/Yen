@@ -57,6 +57,8 @@ export default defineConfig({
             DATABASE_URL: process.env.E2E_DATABASE_URL ?? "",
             PAYEE_FINGERPRINT_SALT:
               process.env.E2E_PAYEE_FINGERPRINT_SALT ?? "e2e-payee-fingerprint-salt-0123456789",
+            PIN_HMAC_SECRET:
+              process.env.E2E_PIN_HMAC_SECRET ?? "e2e-pin-hmac-secret-0123456789abcdef0123456789",
             WEBAUTHN_RP_ID: sharedHost,
             WEBAUTHN_ORIGIN: webUrl,
             WEBAUTHN_RP_NAME: "Yen",

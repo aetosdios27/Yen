@@ -50,6 +50,7 @@ const app = createApp({
   policy: devPolicy,
   principal: null,
   corsOrigins: [],
+  sql,
   donationPledgeStore: new PostgresDonationPledgeStore(sql),
   publicFundReadStore: new PostgresPublicFundReadStore(sql),
   receiptStore: new PostgresReceiptStore(sql),
