@@ -60,3 +60,60 @@ _One or two lines. Examples: a p90 approval turnaround above target because appr
 travelling during `<dates>`; a low conversion rate because `<count>` donors typed a wrong
 UPI reference; time to first fund of `<value>` minutes because the treasurer created the fund
 during the onboarding session itself._
+
+## 3. Incidents during the pilot
+
+_One row per incident in the support log, with the severity as classified under
+`docs/runbooks/incident-response.md`. An incident with no severity assignment is not a closed
+incident; classify it before reporting._
+
+| Date | Severity (SEV-1/2/3) | One-line description | Resolution | Time to first response | Closed |
+| ---- | -------------------- | -------------------- | ---------- | ---------------------- | ------ |
+|      |                      |                      |            |                        |        |
+
+Incident summary: `<count>` SEV-1, `<count>` SEV-2, `<count>` SEV-3. SLA (first response under
+30 minutes during the fest) met in `<count>` of `<count>` support reports.
+
+## 4. Student feedback summary
+
+_From the usability sessions run under `docs/ux/usability-interview-protocol.md` (tasks T1 to
+T5) and the debrief answers. Report findings, not opinions: which task, which screen, what the
+participant did. Quote participants only with permission._
+
+| Session | Task (T1 to T5) | Language | Outcome (done / abandoned / needed prompt) | Finding |
+| ------- | --------------- | -------- | ------------------------------------------ | ------- |
+|         |                 |          |                                            |         |
+
+Top three findings across sessions:
+
+1. `<finding and the screen id it maps to, for example J1-S2>`
+2. `<finding>`
+3. `<finding>`
+
+Feedback themes in one paragraph: _what participants said the tool is for, what they did not
+trust, and what they would change first._
+
+## 5. Recommendation
+
+_Pick one and justify with the sections above:_
+
+- **Continue and expand** (recommended when: metrics met, no open SEV-1, feedback themes are
+  refinements rather than blockers).
+- **Continue with changes** (name the changes; each maps to a finding in section 4 or an
+  incident in section 3).
+- **Pause** (open SEV-1, or a data-integrity concern; state what must be true to restart).
+
+Recommendation: `<one of the above>`, for the reasons in sections 2 to 4.
+
+## 6. Sign-off
+
+| Role               | Name | Signature | Date |
+| ------------------ | ---- | --------- | ---- |
+| Pilot coordinator  |      |           |      |
+| Faculty advisor    |      |           |      |
+| Head of Department |      |           |      |
+
+## Appendix: metrics payload
+
+_Paste the full `pnpm pilot:metrics` JSON output here, unmodified, including the
+`generatedAt` timestamp. This is the evidence trail for the table in section 2._
