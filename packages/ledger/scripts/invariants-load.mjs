@@ -121,6 +121,16 @@ try {
         `Invariant violation after ${completed} operations: batch entries=${batchRows.length}, expected=${expectedEntries}, bank=${batchBank}, donations=${batchDonations}`,
       );
     }
+    const batchBalances = await getBalances(sql, fundId);
+    if (
+      batchBalances.bankPaise !== expectedBank ||
+      batchBalances.donationsPaise !== expectedBank ||
+      batchBalances.pendingSpendPaise !== expectedPending ||
+      batchBalances.availablePaise !== expectedBank - expectedPending
+    ) {
+      violations += 1;
+      throw new Error(`Account total invariant failed after ${completed} operations`);
+    }
     lastEntrySequence = Number(
       (await sql`SELECT COALESCE(MAX(entry_sequence), 0)::int AS sequence FROM konto_entries`)[0]
         .sequence,

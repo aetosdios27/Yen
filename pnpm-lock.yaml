@@ -162,6 +162,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@konto-ledger/core@0.2.0': 213ffb8740f07fc221f74a2d42a82619272ee5a04008dc747b53dc6e71b98b57
+
 importers:
 
   .:
@@ -203,8 +206,8 @@ importers:
         specifier: ^1.10.0
         version: 1.10.0
       '@opentelemetry/context-async-hooks':
-        specifier: ^2.12.0
-        version: 2.12.0(@opentelemetry/api@1.10.0)
+        specifier: ^3.0.0
+        version: 3.0.0(@opentelemetry/api@1.10.0)
       '@simplewebauthn/server':
         specifier: 14.0.3
         version: 14.0.3
@@ -358,6 +361,9 @@ importers:
       typescript:
         specifier: 5.9.3
         version: 5.9.3
+      typescript-native:
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
       vitest:
         specifier: ^5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(jsdom@30.1.3(@noble/hashes@1.8.0))(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
@@ -435,7 +441,7 @@ importers:
         version: 0.2.0(postgres@3.4.9)
       '@konto-ledger/core':
         specifier: 0.2.0
-        version: 0.2.0
+        version: 0.2.0(patch_hash=213ffb8740f07fc221f74a2d42a82619272ee5a04008dc747b53dc6e71b98b57)
       '@konto-ledger/types':
         specifier: 0.2.0
         version: 0.2.0
@@ -1360,6 +1366,12 @@ packages:
     peerDependencies:
       '@opentelemetry/api': '>=1.0.0 <1.10.0'
 
+  '@opentelemetry/context-async-hooks@3.0.0':
+    resolution: {integrity: sha512-qDZeKSgTT+qTaL99eRbpvWO5+oZ0MKvMH4pqvzi6xYKyhiMTDBxBeTLI6BpdeMt58T5TpxHJvFl9P52i6CDWGA==}
+    engines: {node: '>=22.15.0'}
+    peerDependencies:
+      '@opentelemetry/api': '>=1.0.0 <1.11.0'
+
   '@opentelemetry/core@2.12.0':
     resolution: {integrity: sha512-1HsSAuvT4/my0QrXWsyXFdWjKaPeCHsismKZgEEIb8NK13LP6DrMRlsUbvD/0F9mDWK3xDom9AMv3IscxgOnOQ==}
     engines: {node: ^18.19.0 || >=20.6.0}
@@ -1691,6 +1703,9 @@ packages:
   '@smithy/core@3.37.0':
     resolution: {integrity: sha512-97imTcCyiPd8k0e9+ts/Sp0W65Dn9Ti357J7M09Ov4tI8Q1JDJVFSoAJtjEVKqfHEr3Pdo2jfolqKCaaiszH0g==}
     engines: {node: '>=18.0.0'}
+    deprecated: |-
+      Deprecated due to a bug in custom logger data redaction. Upgrade to the latest version. If you used a custom logger with this
+        version, review your logs and rotate any credentials or other secrets. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
 
   '@smithy/credential-provider-imds@4.5.2':
     resolution: {integrity: sha512-A9uSdn72ozbRUSit0eib0TW7nXuNPlaeM0zcGkJ+nE6tFcSDbnmtwoxbTCFBukVQcszDAyvsd7+rTduPTXpygg==}
@@ -3667,7 +3682,7 @@ snapshots:
     optionalDependencies:
       postgres: 3.4.9
 
-  '@konto-ledger/core@0.2.0':
+  '@konto-ledger/core@0.2.0(patch_hash=213ffb8740f07fc221f74a2d42a82619272ee5a04008dc747b53dc6e71b98b57)':
     dependencies:
       '@konto-ledger/types': 0.2.0
       zod: 3.25.76
@@ -3721,6 +3736,10 @@ snapshots:
   '@opentelemetry/api@1.10.0': {}
 
   '@opentelemetry/context-async-hooks@2.12.0(@opentelemetry/api@1.10.0)':
+    dependencies:
+      '@opentelemetry/api': 1.10.0
+
+  '@opentelemetry/context-async-hooks@3.0.0(@opentelemetry/api@1.10.0)':
     dependencies:
       '@opentelemetry/api': 1.10.0
 

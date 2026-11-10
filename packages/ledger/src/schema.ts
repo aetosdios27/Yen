@@ -1,6 +1,8 @@
 import { migrate, type Sql } from "@yen/db";
 
 export const LEDGER_SCHEMA_SQL = `
+-- Konto + Yen Ledger & Events Schema
+
 CREATE TABLE IF NOT EXISTS konto_accounts (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name        TEXT NOT NULL UNIQUE,
@@ -32,6 +34,8 @@ CREATE TABLE IF NOT EXISTS konto_entries (
   amount      BIGINT NOT NULL CHECK (amount != 0),
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS idx_entries_journal ON konto_entries(journal_id);
 
 CREATE SEQUENCE IF NOT EXISTS konto_entry_sequence AS BIGINT;
 ALTER SEQUENCE konto_entry_sequence OWNED BY konto_entries.entry_sequence;
@@ -168,4 +172,5 @@ CREATE INDEX IF NOT EXISTS idx_staged_intents_status
 export async function initLedgerSchema(sql: Sql): Promise<void> {
   await migrate(sql);
   await sql.unsafe(LEDGER_SCHEMA_SQL);
+  await sql`SELECT yen_init_konto_totals()`;
 }
