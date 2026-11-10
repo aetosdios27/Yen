@@ -86,23 +86,23 @@ One-time cloud setup:
 
 Then set these repository or environment variables in GitHub:
 
-| Variable | Meaning |
-| --- | --- |
-| `OIDC_ROLE_ARN` | IAM role the job assumes (per environment) |
-| `AWS_REGION` | Cloud region |
-| `ECR_REPOSITORY` | ECR repository for the API image |
-| `ECS_CLUSTER` | ECS cluster for the environment |
-| `ECS_SERVICE` | ECS service backing the API |
-| `ECS_CONTAINER_NAME` | Container name inside the task definition |
-| `ECS_MIGRATION_TASK_DEFINITION` | Task definition family for migration tasks |
-| `ECS_SUBNETS` | Comma separated subnet ids for one-off tasks |
-| `ECS_SECURITY_GROUPS` | Comma separated security group ids |
-| `API_BASE_URL` | Public HTTPS base URL, used by the smoke probes |
+| Variable                        | Meaning                                         |
+| ------------------------------- | ----------------------------------------------- |
+| `OIDC_ROLE_ARN`                 | IAM role the job assumes (per environment)      |
+| `AWS_REGION`                    | Cloud region                                    |
+| `ECR_REPOSITORY`                | ECR repository for the API image                |
+| `ECS_CLUSTER`                   | ECS cluster for the environment                 |
+| `ECS_SERVICE`                   | ECS service backing the API                     |
+| `ECS_CONTAINER_NAME`            | Container name inside the task definition       |
+| `ECS_MIGRATION_TASK_DEFINITION` | Task definition family for migration tasks      |
+| `ECS_SUBNETS`                   | Comma separated subnet ids for one-off tasks    |
+| `ECS_SECURITY_GROUPS`           | Comma separated security group ids              |
+| `API_BASE_URL`                  | Public HTTPS base URL, used by the smoke probes |
 
 And the environment secret:
 
-| Secret | Meaning |
-| --- | --- |
+| Secret                | Meaning                                                 |
+| --------------------- | ------------------------------------------------------- |
 | `MIGRATION_SECRET_ID` | Secrets Manager id holding the migration `DATABASE_URL` |
 
 ## Migrations run before traffic shifts
