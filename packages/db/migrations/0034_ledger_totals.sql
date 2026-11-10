@@ -71,6 +71,16 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER maintain_hold_total AFTER UPDATE OR DELETE ON konto_holds
   FOR EACH ROW EXECUTE FUNCTION yen_konto_hold_total();
 
+CREATE FUNCTION yen_konto_holds_truncate_total() RETURNS trigger AS $$
+BEGIN
+  UPDATE konto_account_totals SET pending_nonexpiring = 0 WHERE pending_nonexpiring <> 0;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER maintain_holds_truncate_total AFTER TRUNCATE ON konto_holds
+  FOR EACH STATEMENT EXECUTE FUNCTION yen_konto_holds_truncate_total();
+
 CREATE INDEX idx_holds_expiring ON konto_holds(account_id, expires_at) INCLUDE (amount)
   WHERE status = 'PENDING' AND expires_at IS NOT NULL;
 

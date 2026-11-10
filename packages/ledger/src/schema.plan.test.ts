@@ -121,5 +121,15 @@ ledgerDatabaseSuite("incremental account totals", (sql) => {
     await check();
     await sql`DELETE FROM konto_holds WHERE account_id = ${bank}`;
     await check();
+    await sql`INSERT INTO konto_holds (account_id, recipient_id, amount) VALUES (${bank}, ${recipient}, 75)`;
+    await expect(
+      sql.begin(async (tx) => {
+        await tx`TRUNCATE konto_holds`;
+        throw rollback;
+      }),
+    ).rejects.toBe(rollback);
+    await check();
+    await sql`TRUNCATE konto_holds`;
+    await check();
   });
 });
