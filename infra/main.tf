@@ -96,3 +96,58 @@ resource "aws_vpc_endpoint" "bill_evidence_s3_gateway" {
     Name = "yen-${var.environment}-s3-gateway"
   }
 }
+
+# -----------------------------------------------------------------------------
+# CI access via OIDC, no static credentials
+#
+# The infra plan workflow in .github/workflows/infra-plan.yml authenticates
+# by exchanging a GitHub Actions OIDC token for this role. The trust policy
+# is scoped to this repository on pull_request and main only. The role is
+# read-only, so a PR can produce a plan but can never change anything.
+# There is no apply role for CI; applies are manual by an operator.
+# -----------------------------------------------------------------------------
+
+resource "aws_iam_openid_connect_provider" "github" {
+  url             = "https://token.actions.githubusercontent.com"
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
+
+  tags = {
+    Name = "yen-${var.environment}-github-oidc"
+  }
+}
+
+resource "aws_iam_role" "yen_staging_infra_plan" {
+  name        = "yen-${var.environment}-infra-plan"
+  description = "GitHub Actions OIDC role for terraform plan on infra PRs. Read only."
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Federated = aws_iam_openid_connect_provider.github.arn
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          }
+          StringLike = {
+            "token.actions.githubusercontent.com:sub" = var.github_oidc_allowed_subconditions
+          }
+        }
+      },
+    ]
+  })
+
+  tags = {
+    Name = "yen-${var.environment}-infra-plan"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "yen_staging_infra_plan_readonly" {
+  role       = aws_iam_role.yen_staging_infra_plan.name
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}

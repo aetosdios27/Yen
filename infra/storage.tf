@@ -67,6 +67,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "yen_staging_bill_evidence" {
     id     = "expire-noncurrent-versions"
     status = "Enabled"
 
+    # An empty filter applies the rule to every object in the bucket.
+    filter {}
+
     noncurrent_version_expiration {
       noncurrent_days = var.bill_evidence_noncurrent_expiration_days
     }

@@ -62,7 +62,7 @@ resource "aws_iam_role" "yen_staging_anchoring_worker" {
 resource "aws_kms_key" "yen_staging_chain_publication" {
   description              = "Yen staging chain publication signing key. Usage restricted to the anchoring worker."
   key_usage                = "SIGN_VERIFY"
-  customer_master_key_spec = "ECC_SECG_P256"
+  customer_master_key_spec = "ECC_NIST_P256"
   deletion_window_in_days  = var.kms_deletion_window_days
   enable_key_rotation      = false
 
