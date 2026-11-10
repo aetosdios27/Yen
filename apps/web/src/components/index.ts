@@ -13,6 +13,7 @@ export {
   type DonationPledge,
 } from "./donation-form";
 export { EmptyState, type EmptyStateProps } from "./empty-state";
+export { ErrorObservability } from "./error-observability";
 export {
   type EvidenceItem,
   EvidenceUpload,
