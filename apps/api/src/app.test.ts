@@ -57,7 +57,7 @@ it.each(["/health", "/ready"])("serves %s without auth", async (path) => {
   const { app } = setup({ principal: null });
   const response = await app.request(path);
   expect(response.status).toBe(200);
-  expect(await response.json()).toEqual({ status: "ok" });
+  expect(await response.json()).toMatchObject({ status: "ok" });
   expect(response.headers.get("x-request-id")).toBeTruthy();
 });
 

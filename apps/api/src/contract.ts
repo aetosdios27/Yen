@@ -135,7 +135,16 @@ export const fundSchema = z
   .strict()
   .openapi("Fund");
 
-const statusSchema = z.object({ status: z.literal("ok") });
+const healthCheckSchema = z.object({
+  name: z.string().max(64),
+  status: z.enum(["ok", "fail", "skipped"]),
+});
+const statusSchema = z.object({
+  status: z.literal("ok"),
+  checks: z.array(healthCheckSchema).openapi({
+    description: "One entry per probed dependency, so a degraded dependency is named",
+  }),
+});
 const versionSchema = z
   .object({
     gitSha: z.string(),
@@ -152,7 +161,11 @@ export const healthRoute = createRoute({
   path: "/health",
   operationId: "health",
   summary: "Liveness",
-  responses: { 200: jsonResponse(statusSchema, "Process is alive"), 500: internalResponse },
+  responses: {
+    200: jsonResponse(statusSchema, "Process is alive"),
+    503: jsonResponse(errorEnvelope, "A recorded runtime fault or a shutdown in progress"),
+    500: internalResponse,
+  },
 });
 export const versionRoute = createRoute({
   method: "get",

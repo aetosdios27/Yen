@@ -515,7 +515,7 @@ describe("Graceful shutdown lifecycle unit tests", () => {
 
       const health = await started.app.request("/health");
       expect(health.status).toBe(200);
-      expect(await health.json()).toEqual({ status: "ok" });
+      expect(await health.json()).toMatchObject({ status: "ok" });
 
       // The drain still waits for the held request.
       expect(started.inFlightTracker.count).toBe(1);
