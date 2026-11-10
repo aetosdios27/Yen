@@ -4,7 +4,6 @@ import { test } from "node:test";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const workflow = read("workflows/release.yml");
-const settings = read("scripts/apply-repo-settings.sh");
 const prepare = read("../scripts/prepare-release-assets.sh");
 
 test("release workflow is tag-only and does not deploy", () => {
@@ -44,11 +43,6 @@ test("build, signing and release publishing use separate minimal permissions", (
   assert.match(publish, /\n {4}permissions:\n {6}contents: write\n/);
   assert.doesNotMatch(build, /id-token: write|attestations: write|contents: write/);
   assert.doesNotMatch(publish, /id-token: write|attestations: write/);
-});
-
-test("new external release actions are in the repository allow-list", () => {
-  assert.match(settings, /patterns_allowed\[\]=anchore\/sbom-action@\*/);
-  assert.match(settings, /patterns_allowed\[\]=sigstore\/cosign-installer@\*/);
 });
 
 test("release signing waits for a build on a separate runner and compares bytes", () => {

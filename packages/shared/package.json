@@ -11,6 +11,14 @@
     "./observability": {
       "types": "./dist/observability.d.ts",
       "default": "./dist/observability.js"
+    },
+    "./telemetry": {
+      "types": "./dist/telemetry.d.ts",
+      "default": "./dist/telemetry.js"
+    },
+    "./browser-tracing": {
+      "types": "./dist/browser-tracing.d.ts",
+      "default": "./dist/browser-tracing.js"
     }
   },
   "files": [

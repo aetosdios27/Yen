@@ -110,3 +110,12 @@ describe("WhatsApp Cloud adapter contract against local fake servers", () => {
     );
   });
 });
+
+it("opens the breaker after five failed sends without issuing a sixth request", async () => {
+  const fake = await fakeServer(503, "{}");
+  const provider = new WhatsAppCloudProvider(config(fake.url));
+  for (let call = 0; call < 6; call++) {
+    await expect(provider.send(request)).rejects.toThrow();
+  }
+  expect(fake.calls()).toBe(5);
+});

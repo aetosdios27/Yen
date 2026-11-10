@@ -64,7 +64,7 @@ jobs:
         run: pnpm turbo run build
 
       - name: Run unit & integration tests
-        run: pnpm --filter @yen/load-tests test
+        run: pnpm turbo run test --filter=@yen/load-tests
 
       - name: Run load-test harness and assert performance budgets
-        run: pnpm test:load --duration 5 --connections 10 --verify-state
+        run: pnpm turbo run test:load --filter=@yen/load-tests -- --duration 5 --connections 10 --verify-state
