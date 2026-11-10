@@ -8,12 +8,12 @@ repo should be able to reproduce every screen below without asking questions.
 
 ## 1. Prerequisites
 
-| Requirement | Version / value | Notes |
-| --- | --- | --- |
-| Node.js | 24.21.0 | pinned in `package.json` engines |
-| pnpm | 12.6.0 | enabled through corepack |
-| Docker (or Podman) compose | any current | runs PostgreSQL 16 and Redis 7 from `docker-compose.yml` |
-| ClamAV daemon | any with INSTREAM on TCP | required only for the bill-upload step; see section 6 |
+| Requirement                | Version / value          | Notes                                                    |
+| -------------------------- | ------------------------ | -------------------------------------------------------- |
+| Node.js                    | 24.21.0                  | pinned in `package.json` engines                         |
+| pnpm                       | 12.6.0                   | enabled through corepack                                 |
+| Docker (or Podman) compose | any current              | runs PostgreSQL 16 and Redis 7 from `docker-compose.yml` |
+| ClamAV daemon              | any with INSTREAM on TCP | required only for the bill-upload step; see section 6    |
 
 One-time setup from the repository root:
 
@@ -83,33 +83,33 @@ Fund ID (used in URLs and curl calls throughout this runbook):
 Seeded accounts. All six have active mock sessions valid for one year from
 seed time, stored as SHA-256 token hashes in the `sessions` table:
 
-| Persona | Role | Phone (E.164) | Locale | Mock session token |
-| --- | --- | --- | --- | --- |
-| Aarav Sharma | treasurer | +919876543210 | en | `yen_mock_session_treasurer_token` |
-| Priya Verma | approver | +919876543211 | en | `yen_mock_session_approver1_token` |
-| Rohan Iyer | approver | +919876543212 | hi | `yen_mock_session_approver2_token` |
-| Ananya Sen | member (donor) | +919876543213 | en | `yen_mock_session_donor1_token` |
-| Vikram Malhotra | member (donor) | +919876543214 | en | `yen_mock_session_donor2_token` |
-| Sunita Rao | member (donor) | +919876543215 | hi | `yen_mock_session_donor3_token` |
+| Persona         | Role           | Phone (E.164) | Locale | Mock session token                 |
+| --------------- | -------------- | ------------- | ------ | ---------------------------------- |
+| Aarav Sharma    | treasurer      | +919876543210 | en     | `yen_mock_session_treasurer_token` |
+| Priya Verma     | approver       | +919876543211 | en     | `yen_mock_session_approver1_token` |
+| Rohan Iyer      | approver       | +919876543212 | hi     | `yen_mock_session_approver2_token` |
+| Ananya Sen      | member (donor) | +919876543213 | en     | `yen_mock_session_donor1_token`    |
+| Vikram Malhotra | member (donor) | +919876543214 | en     | `yen_mock_session_donor2_token`    |
+| Sunita Rao      | member (donor) | +919876543215 | hi     | `yen_mock_session_donor3_token`    |
 
 Seeded donations (all verified against bank transactions in the seed):
 
-| Donor | Amount | UTR |
-| --- | --- | --- |
-| Ananya Sen | 2,00,000 INR | 123456789012 |
+| Donor           | Amount       | UTR          |
+| --------------- | ------------ | ------------ |
+| Ananya Sen      | 2,00,000 INR | 123456789012 |
 | Vikram Malhotra | 2,00,000 INR | 123456789013 |
-| Sunita Rao | 1,00,000 INR | 123456789014 |
+| Sunita Rao      | 1,00,000 INR | 123456789014 |
 
 Ledger balance after the seeded paid expense: 4,65,000.00 INR, zero-sum
 verified, 23 chained audit events.
 
 Seeded expenses:
 
-| Expense | Amount | Status | Description |
-| --- | --- | --- | --- |
-| `01940000-0000-7000-8000-000000000061` | 75,000 INR | approved | High-torque brushless motor set and ESCs, evidence `motors_invoice.pdf` |
-| `01940000-0000-7000-8000-000000000062` | 25,000 INR | submitted (pending approval) | LiPo battery packs and safety charging station |
-| `01940000-0000-7000-8000-000000000063` | 35,000 INR | paid | RoboCup Asia Pacific 2026 Team Registration Fee, UTR 987654321001 |
+| Expense                                | Amount     | Status                       | Description                                                             |
+| -------------------------------------- | ---------- | ---------------------------- | ----------------------------------------------------------------------- |
+| `01940000-0000-7000-8000-000000000061` | 75,000 INR | approved                     | High-torque brushless motor set and ESCs, evidence `motors_invoice.pdf` |
+| `01940000-0000-7000-8000-000000000062` | 25,000 INR | submitted (pending approval) | LiPo battery packs and safety charging station                          |
+| `01940000-0000-7000-8000-000000000063` | 35,000 INR | paid                         | RoboCup Asia Pacific 2026 Team Registration Fee, UTR 987654321001       |
 
 ### OTPs and PINs: what is real and what is simulated
 
@@ -400,32 +400,32 @@ Notes, all verified against the code:
 Say on camera (or in the description) which parts are simulated locally. This
 list matches what the code actually does in local development.
 
-| Component | Local simulation | Where it lives |
-| --- | --- | --- |
-| SMS DLT gateway | OTPs and notifications are handed to `DevStubOtpDeliveryProvider` / in-memory channel providers; no SMS is sent. Real sending requires the Exotel provider with DLT entity and template IDs via env credentials. | `apps/api/src/auth/provider.ts`, `packages/notifications/src/channels/exotel-sms.ts` |
-| WhatsApp Business Cloud | Same stub treatment; the Meta webhook receiver (`GET/POST /v1/delivery/webhooks/meta`) is mounted when `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN` and `EXOTEL_RELAY_WEBHOOK_SECRET` are set. | `apps/api/src/server-bootstrap.ts`, `apps/api/src/delivery-webhooks.ts` |
-| Payment partner webhooks | `POST /v1/reconciliation/webhooks/partner` accepts simulated UPI virtual account credit notifications. Requests must carry `X-Webhook-Timestamp` and `X-Webhook-Signature` (HMAC-SHA256 of `v1.<timestamp>.<body>` under `PARTNER_WEBHOOK_SECRET`); unsigned or tampered requests are rejected with 401. | `apps/api/src/app.ts` (`partnerWebhookRoute`) |
-| Virus scanner | With `CLAMAV_HOST` set, uploads are scanned over ClamAV's INSTREAM protocol (`ClamAvVirusScannerAdapter`). Without it, uploads fail closed through `UnconfiguredVirusScannerAdapter`. | `apps/api/src/virus-scanner.ts` |
-| Blockchain anchor | The queue worker publishes Merkle roots to a `RootRegistry` contract through `ANCHOR_RPC_URL`. Locally that is Anvil; staging uses Polygon Amoy. Signing uses `ANCHOR_PRIVATE_KEY` with `ANCHOR_ALLOW_LOCAL_SIGNER=true` outside production, or KMS in production. | `packages/queue/src/anchoring.ts`, `contracts/src/RootRegistry.sol` |
-| Bank statement feed | The reconciliation statement endpoint ingests CSV bank statements (`POST /v1/reconciliation/statements`) instead of a live bank API connection. | `apps/api/src/reconciliation/` |
-| Redis | Started by docker compose but unused by application code; all durable state is PostgreSQL. | `docker-compose.yml` |
+| Component                | Local simulation                                                                                                                                                                                                                                                                                         | Where it lives                                                                       |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| SMS DLT gateway          | OTPs and notifications are handed to `DevStubOtpDeliveryProvider` / in-memory channel providers; no SMS is sent. Real sending requires the Exotel provider with DLT entity and template IDs via env credentials.                                                                                         | `apps/api/src/auth/provider.ts`, `packages/notifications/src/channels/exotel-sms.ts` |
+| WhatsApp Business Cloud  | Same stub treatment; the Meta webhook receiver (`GET/POST /v1/delivery/webhooks/meta`) is mounted when `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN` and `EXOTEL_RELAY_WEBHOOK_SECRET` are set.                                                                                                         | `apps/api/src/server-bootstrap.ts`, `apps/api/src/delivery-webhooks.ts`              |
+| Payment partner webhooks | `POST /v1/reconciliation/webhooks/partner` accepts simulated UPI virtual account credit notifications. Requests must carry `X-Webhook-Timestamp` and `X-Webhook-Signature` (HMAC-SHA256 of `v1.<timestamp>.<body>` under `PARTNER_WEBHOOK_SECRET`); unsigned or tampered requests are rejected with 401. | `apps/api/src/app.ts` (`partnerWebhookRoute`)                                        |
+| Virus scanner            | With `CLAMAV_HOST` set, uploads are scanned over ClamAV's INSTREAM protocol (`ClamAvVirusScannerAdapter`). Without it, uploads fail closed through `UnconfiguredVirusScannerAdapter`.                                                                                                                    | `apps/api/src/virus-scanner.ts`                                                      |
+| Blockchain anchor        | The queue worker publishes Merkle roots to a `RootRegistry` contract through `ANCHOR_RPC_URL`. Locally that is Anvil; staging uses Polygon Amoy. Signing uses `ANCHOR_PRIVATE_KEY` with `ANCHOR_ALLOW_LOCAL_SIGNER=true` outside production, or KMS in production.                                       | `packages/queue/src/anchoring.ts`, `contracts/src/RootRegistry.sol`                  |
+| Bank statement feed      | The reconciliation statement endpoint ingests CSV bank statements (`POST /v1/reconciliation/statements`) instead of a live bank API connection.                                                                                                                                                          | `apps/api/src/reconciliation/`                                                       |
+| Redis                    | Started by docker compose but unused by application code; all durable state is PostgreSQL.                                                                                                                                                                                                               | `docker-compose.yml`                                                                 |
 
 ## 10. Shot list and pacing
 
-| Order | Screen | Route | Length target |
-| --- | --- | --- | --- |
-| 1 | Demo reset output in terminal | `pnpm demo:reset` | 10 s |
-| 2 | Public landing page | `/` | 8 s |
-| 3 | Public fund view | `/funds/{fundId}` | 15 s |
-| 4 | Treasurer console | `/funds/{fundId}/treasurer` | 12 s |
-| 5 | New expense form and review | `/funds/{fundId}/expenses/new` | 25 s |
-| 6 | Bill upload response (terminal) | API call | 10 s |
-| 7 | Co-approver review screen | `/funds/{fundId}/approvals/{expenseId}` | 20 s |
-| 8 | PIN modal and approval toast | modal | 15 s |
-| 9 | Quorum reached (second approver) | same route, other persona | 10 s |
-| 10 | Public fund timeline with verified badge | `/funds/{fundId}` | 12 s |
-| 11 | Verify page with Merkle proof result | `/verify?recordId=...&fundId=...` | 20 s |
-| 12 | Offline verifier (optional) | downloaded bundle | 10 s |
+| Order | Screen                                   | Route                                   | Length target |
+| ----- | ---------------------------------------- | --------------------------------------- | ------------- |
+| 1     | Demo reset output in terminal            | `pnpm demo:reset`                       | 10 s          |
+| 2     | Public landing page                      | `/`                                     | 8 s           |
+| 3     | Public fund view                         | `/funds/{fundId}`                       | 15 s          |
+| 4     | Treasurer console                        | `/funds/{fundId}/treasurer`             | 12 s          |
+| 5     | New expense form and review              | `/funds/{fundId}/expenses/new`          | 25 s          |
+| 6     | Bill upload response (terminal)          | API call                                | 10 s          |
+| 7     | Co-approver review screen                | `/funds/{fundId}/approvals/{expenseId}` | 20 s          |
+| 8     | PIN modal and approval toast             | modal                                   | 15 s          |
+| 9     | Quorum reached (second approver)         | same route, other persona               | 10 s          |
+| 10    | Public fund timeline with verified badge | `/funds/{fundId}`                       | 12 s          |
+| 11    | Verify page with Merkle proof result     | `/verify?recordId=...&fundId=...`       | 20 s          |
+| 12    | Offline verifier (optional)              | downloaded bundle                       | 10 s          |
 
 Recording tips:
 
@@ -439,17 +439,12 @@ Recording tips:
 
 ## 11. Troubleshooting
 
-| Symptom | Cause | Fix |
-| --- | --- | --- |
-| Upload returns 503 "malware scanner is unavailable" | No ClamAV daemon at `CLAMAV_HOST` | Start the daemon (section 6) or record without the upload step |
-| Upload returns 400 on a valid-looking file | Declared MIME type does not match the file magic bytes | Keep the original extension and pass `;type=image/jpeg` in curl |
-| `/v1/me` returns 401 with the seeded cookie | The session is not a trusted device yet | Run the `/v1/auth/pin/setup` call from section 4 for that persona |
-| PIN modal rejects the PIN | PIN violates the rules in `apps/api/src/pin/rules.ts` | Use `482613` or another non-pattern six-digit PIN |
-| Worker exits immediately with "Invalid worker environment" | Missing `DATABASE_URL`, or `ANCHOR_ALLOW_LOCAL_SIGNER` not `true` with no KMS key | Export the full env block from section 8 |
-| Verify page says "proof data is incomplete" | No anchor has landed yet (worker not running or discovery job not fired) | Wait for the 5-minute discovery tick or record the pending-state story |
-| `demo:reset` fails with ECONNREFUSED | PostgreSQL is not running | `docker compose up -d` and retry |
-
-
-
-
-
+| Symptom                                                    | Cause                                                                             | Fix                                                                    |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Upload returns 503 "malware scanner is unavailable"        | No ClamAV daemon at `CLAMAV_HOST`                                                 | Start the daemon (section 6) or record without the upload step         |
+| Upload returns 400 on a valid-looking file                 | Declared MIME type does not match the file magic bytes                            | Keep the original extension and pass `;type=image/jpeg` in curl        |
+| `/v1/me` returns 401 with the seeded cookie                | The session is not a trusted device yet                                           | Run the `/v1/auth/pin/setup` call from section 4 for that persona      |
+| PIN modal rejects the PIN                                  | PIN violates the rules in `apps/api/src/pin/rules.ts`                             | Use `482613` or another non-pattern six-digit PIN                      |
+| Worker exits immediately with "Invalid worker environment" | Missing `DATABASE_URL`, or `ANCHOR_ALLOW_LOCAL_SIGNER` not `true` with no KMS key | Export the full env block from section 8                               |
+| Verify page says "proof data is incomplete"                | No anchor has landed yet (worker not running or discovery job not fired)          | Wait for the 5-minute discovery tick or record the pending-state story |
+| `demo:reset` fails with ECONNREFUSED                       | PostgreSQL is not running                                                         | `docker compose up -d` and retry                                       |
