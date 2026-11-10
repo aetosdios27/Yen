@@ -105,3 +105,51 @@ jobs:
           MIGRATION_SECRET_ID: ${{ secrets.MIGRATION_SECRET_ID }}
           IMAGE_DIGEST: ${{ needs.image.outputs.digest }}
         run: bash scripts/deploy-api.sh migrate staging "$IMAGE_DIGEST"
+
+  # Staging deploys automatically on every merge to main that touches the API
+  # surface. The digest is the one built by the image job in this run.
+  deploy-staging:
+    name: Deploy API to staging
+    needs: [image, migrate-staging]
+    if: needs.image.outputs.ready == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Roll out the new image digest to staging
+        env:
+          OIDC_ROLE_ARN: ${{ vars.OIDC_ROLE_ARN }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+          ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+          IMAGE_DIGEST: ${{ needs.image.outputs.digest }}
+        run: bash scripts/deploy-api.sh deploy staging "$IMAGE_DIGEST"
+
+  smoke-staging:
+    name: Smoke-test staging
+    needs: [image, deploy-staging]
+    if: needs.image.outputs.ready == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: staging
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # A dry run never deployed anything, so there is nothing to probe.
+      - name: Probe staging readiness and deployed commit
+        if: env.DRY_RUN == ''
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          GIT_SHA: ${{ github.sha }}
+        run: bash scripts/deploy-api.sh smoke "$API_BASE_URL" "$GIT_SHA"
