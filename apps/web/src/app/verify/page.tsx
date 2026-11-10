@@ -564,7 +564,7 @@ function VerifyPageContent() {
           <button
             type="button"
             onClick={handleDownloadScript}
-            className="inline-flex items-center gap-1.5 rounded-control border border-border bg-surface px-3 py-2 text-small font-medium text-ink hover:bg-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+            className="tap-target inline-flex items-center gap-1.5 rounded-control border border-border bg-surface px-4 py-2 text-small font-medium text-ink hover:bg-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
           >
             <DocumentTextIcon className="h-4 w-4 text-primary shrink-0" />
             <span>{t("verify.downloadVerifierScript")}</span>
@@ -576,7 +576,7 @@ function VerifyPageContent() {
               <button
                 type="button"
                 onClick={handleDownloadBundleJson}
-                className="inline-flex items-center gap-1.5 rounded-control border border-border bg-surface px-3 py-2 text-small font-medium text-ink hover:bg-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                className="tap-target inline-flex items-center gap-1.5 rounded-control border border-border bg-surface px-4 py-2 text-small font-medium text-ink hover:bg-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
               >
                 <span>{t("verify.downloadBundleJson")}</span>
               </button>
@@ -584,7 +584,7 @@ function VerifyPageContent() {
               <button
                 type="button"
                 onClick={handleDownloadBundleCsv}
-                className="inline-flex items-center gap-1.5 rounded-control border border-border bg-surface px-3 py-2 text-small font-medium text-ink hover:bg-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                className="tap-target inline-flex items-center gap-1.5 rounded-control border border-border bg-surface px-4 py-2 text-small font-medium text-ink hover:bg-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
               >
                 <span>{t("verify.downloadBundleCsv")}</span>
               </button>
