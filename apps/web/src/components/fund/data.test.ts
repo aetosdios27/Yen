@@ -44,3 +44,27 @@ it.each(["unverified", "bank-matched", "anchored"])(
     });
   },
 );
+
+it("keeps every API spending category in the public breakdown", async () => {
+  get.mockImplementation(async (path: string) => ({
+    response: { status: 200 },
+    data: path.endsWith("summary")
+      ? { fundId: "fund", name: "Community", raisedPaise: "600", spentPaise: "600" }
+      : path.endsWith("breakdown")
+        ? {
+            categories: ["Equipment", "Travel", "Catering", "Logistics", "Facilities", "Other"].map(
+              (category) => ({ category, spentPaise: "100" }),
+            ),
+          }
+        : { items: [] },
+  }));
+  const fund = await getPublicFund("fund");
+  expect(fund?.spendingBreakdown.map((category) => category.id)).toEqual([
+    "equipment",
+    "travel",
+    "food",
+    "logistics",
+    "facilities",
+    "other",
+  ]);
+});
