@@ -302,9 +302,6 @@ describe("WhatsApp utility template compliance", () => {
       }
     });
   });
-});
-
-describe("WhatsApp utility template compliance", () => {
   describe("fail-closed cases", () => {
     it("rejects a dispatch without a template name", () => {
       const result = validateWhatsAppDispatch(
