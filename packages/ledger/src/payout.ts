@@ -1,3 +1,4 @@
+import { createHmac, randomBytes } from "node:crypto";
 import type { Paise } from "@yen/shared";
 import type { ExpenseRequest, PseudonymId } from "./expense/types.js";
 
@@ -23,7 +24,7 @@ export interface PartnerPayoutAdapter {
 export interface PayoutRecord extends PartnerPayoutResult {
   readonly fundId: string;
   readonly expenseId: string;
-  readonly recipientRef: string;
+  readonly recipientFingerprint: string;
   readonly amountPaise: Paise;
   readonly idempotencyKey: string;
   readonly initiatedBy: PseudonymId;
@@ -77,6 +78,7 @@ export class InMemoryPayoutKillSwitch {
  * the provider from duplicate debits across retries in one process.
  */
 export class PayoutOrchestrator {
+  private readonly fingerprintKey = randomBytes(32);
   private readonly payouts = new Map<string, PayoutRecord>();
   private readonly locks = new Map<string, Promise<void>>();
 
@@ -95,13 +97,16 @@ export class PayoutOrchestrator {
       throw new MakerCheckerViolationError();
     }
 
+    const recipientFingerprint = createHmac("sha256", this.fingerprintKey)
+      .update(expense.recipientRef)
+      .digest("hex");
     const key = payoutIdempotencyKey(expense.fundId, expense.id);
     return this.withLock(key, async () => {
       const existing = this.payouts.get(key);
       if (existing) {
         if (
           existing.amountPaise !== expense.amountPaise ||
-          existing.recipientRef !== expense.recipientRef ||
+          existing.recipientFingerprint !== recipientFingerprint ||
           existing.initiatedBy !== initiatorId
         ) {
           throw new PayoutIdempotencyConflictError(key);
@@ -122,7 +127,7 @@ export class PayoutOrchestrator {
         ...result,
         fundId: expense.fundId,
         expenseId: expense.id,
-        recipientRef: expense.recipientRef,
+        recipientFingerprint,
         amountPaise: expense.amountPaise,
         idempotencyKey: key,
         initiatedBy: initiatorId,

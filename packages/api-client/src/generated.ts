@@ -2039,6 +2039,10 @@ export interface components {
        * @enum {string}
        */
       channel: "email" | "whatsapp" | "sms";
+      /** @enum {boolean} */
+      consent: true;
+      /** @default false */
+      whatsappConsent: boolean;
       /** @default true */
       weeklySummary: boolean;
       /** @default true */

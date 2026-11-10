@@ -118,8 +118,17 @@ describe("ReceiptView", () => {
 
     const submitBtn = screen.getByRole("button", { name: "Subscribe to fund updates" });
     await user.click(submitBtn);
+    expect(onSubscribe).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("checkbox", { name: /I agree to fund updates/ }));
+    if (!String(input.getAttribute("value")).includes("@")) {
+      const whatsapp = screen.queryByRole("checkbox", { name: /I separately agree/ });
+      if (whatsapp) await user.click(whatsapp);
+    }
+    await user.click(submitBtn);
 
     expect(onSubscribe).toHaveBeenCalledWith({
+      consent: true,
+      whatsappConsent: false,
       contact: "donor@example.com",
       contactType: "email",
       channel: "email",
@@ -141,8 +150,17 @@ describe("ReceiptView", () => {
 
     const submitBtn = screen.getByRole("button", { name: "Subscribe to fund updates" });
     await user.click(submitBtn);
+    expect(onSubscribe).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("checkbox", { name: /I agree to fund updates/ }));
+    if (!String(input.getAttribute("value")).includes("@")) {
+      const whatsapp = screen.queryByRole("checkbox", { name: /I separately agree/ });
+      if (whatsapp) await user.click(whatsapp);
+    }
+    await user.click(submitBtn);
 
     expect(onSubscribe).toHaveBeenCalledWith({
+      consent: true,
+      whatsappConsent: true,
       contact: "+919876543210",
       contactType: "phone",
       channel: "whatsapp",

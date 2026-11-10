@@ -2106,10 +2106,18 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     if (!deps.policy.canDonate(resource)) throw new ApiError("not_found");
 
     const input = c.req.valid("json");
+    const contact =
+      input.contactType === "phone" ? normalizePhone(input.contact) : input.contact.toLowerCase();
+    if (
+      !contact ||
+      (input.contactType === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) ||
+      (input.contactType === "email") !== (input.channel === "email")
+    )
+      throw new ApiError("validation_failed");
     const subStore = deps.fundSubscriptionStore ?? new MemoryFundSubscriptionStore();
     const sub = await subStore.subscribe({
       fundId: id.value,
-      contact: input.contact,
+      contact,
       channel: input.channel,
       weeklySummary: input.weeklySummary,
       instantAlerts: input.instantAlerts,
