@@ -67,6 +67,7 @@ describe("ReceiptView Accessibility", () => {
     );
 
     await user.type(screen.getByLabelText("Email or mobile number"), "donor@example.com");
+    await user.click(screen.getByRole("checkbox", { name: /I agree to fund updates/ }));
     await user.click(screen.getByRole("button", { name: "Subscribe to fund updates" }));
     await screen.findByRole("status");
 

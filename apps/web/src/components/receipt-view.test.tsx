@@ -117,6 +117,8 @@ describe("ReceiptView", () => {
     await user.type(input, "donor@example.com");
 
     const submitBtn = screen.getByRole("button", { name: "Subscribe to fund updates" });
+    await user.click(submitBtn);
+    expect(onSubscribe).not.toHaveBeenCalled();
     await user.click(screen.getByRole("checkbox", { name: /I agree to fund updates/ }));
     if (!String(input.getAttribute("value")).includes("@")) {
       const whatsapp = screen.queryByRole("checkbox", { name: /I separately agree/ });
@@ -147,6 +149,8 @@ describe("ReceiptView", () => {
     await user.type(input, "+919876543210");
 
     const submitBtn = screen.getByRole("button", { name: "Subscribe to fund updates" });
+    await user.click(submitBtn);
+    expect(onSubscribe).not.toHaveBeenCalled();
     await user.click(screen.getByRole("checkbox", { name: /I agree to fund updates/ }));
     if (!String(input.getAttribute("value")).includes("@")) {
       const whatsapp = screen.queryByRole("checkbox", { name: /I separately agree/ });
