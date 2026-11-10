@@ -145,11 +145,11 @@ lights. Find out whether that is true."
 
 Each task gets three measures:
 
-| Measure | Definition | Pilot target |
-| --- | --- | --- |
-| Completion rate | participants finishing unaided | 4 of 5 per task |
-| Time to done | median across successful runs | under 4 minutes (T1 under 8) |
-| Confidence | participant's own 1 to 5 rating after the task | median 4 or higher |
+| Measure         | Definition                                     | Pilot target                 |
+| --------------- | ---------------------------------------------- | ---------------------------- |
+| Completion rate | participants finishing unaided                 | 4 of 5 per task              |
+| Time to done    | median across successful runs                  | under 4 minutes (T1 under 8) |
+| Confidence      | participant's own 1 to 5 rating after the task | median 4 or higher           |
 
 A screen goes on the fix list when, in a single round of 5 participants: 2 or more fail the same
 step, or 1 participant actively distrusts the screen (money promise, verification outcome,

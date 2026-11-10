@@ -45,30 +45,30 @@ technical word to make sense, the screen is wrong.
 
 These are the only routes the five journeys use. All of them exist in the app router today.
 
-| Route | Page file | Journeys | Landmarks asserted |
-| --- | --- | --- | --- |
-| `/onboarding` | `app/onboarding/page.tsx` | 1 | main, form |
-| `/invites/accept` | `app/invites/accept/page.tsx` | 1 | main, form |
-| `/funds/[fundId]` | `app/funds/[fundId]/page.tsx` | 2, 5 | main, article |
-| `/funds/[fundId]/donate` | `app/funds/[fundId]/donate/page.tsx` | 2 | main, form |
-| `/receipts/[id]` | `app/receipts/[id]/page.tsx` | 2 | main |
-| `/verify` | `app/verify/page.tsx` | 2, 5 | main, form |
-| `/funds/[fundId]/treasurer` | `app/funds/[fundId]/treasurer/page.tsx` | 3 | main |
-| `/funds/[fundId]/dashboard` | `app/funds/[fundId]/dashboard/page.tsx` | 3 | main (alias of treasurer) |
-| `/funds/[fundId]/expenses/new` | `app/funds/[fundId]/expenses/new/page.tsx` | 3 | main, form |
-| `/funds/[fundId]/approvals/[expenseId]` | `app/funds/[fundId]/approvals/[expenseId]/page.tsx` | 4 | main, navigation |
-| `/` | `app/page.tsx` | 5 | main (pilot landing) |
-| `/privacy` | `app/privacy/page.tsx` | 5 | main (linked from receipts) |
+| Route                                   | Page file                                           | Journeys | Landmarks asserted          |
+| --------------------------------------- | --------------------------------------------------- | -------- | --------------------------- |
+| `/onboarding`                           | `app/onboarding/page.tsx`                           | 1        | main, form                  |
+| `/invites/accept`                       | `app/invites/accept/page.tsx`                       | 1        | main, form                  |
+| `/funds/[fundId]`                       | `app/funds/[fundId]/page.tsx`                       | 2, 5     | main, article               |
+| `/funds/[fundId]/donate`                | `app/funds/[fundId]/donate/page.tsx`                | 2        | main, form                  |
+| `/receipts/[id]`                        | `app/receipts/[id]/page.tsx`                        | 2        | main                        |
+| `/verify`                               | `app/verify/page.tsx`                               | 2, 5     | main, form                  |
+| `/funds/[fundId]/treasurer`             | `app/funds/[fundId]/treasurer/page.tsx`             | 3        | main                        |
+| `/funds/[fundId]/dashboard`             | `app/funds/[fundId]/dashboard/page.tsx`             | 3        | main (alias of treasurer)   |
+| `/funds/[fundId]/expenses/new`          | `app/funds/[fundId]/expenses/new/page.tsx`          | 3        | main, form                  |
+| `/funds/[fundId]/approvals/[expenseId]` | `app/funds/[fundId]/approvals/[expenseId]/page.tsx` | 4        | main, navigation            |
+| `/`                                     | `app/page.tsx`                                      | 5        | main (pilot landing)        |
+| `/privacy`                              | `app/privacy/page.tsx`                              | 5        | main (linked from receipts) |
 
 Journey coverage summary:
 
-| Journey | Entry route | Exit route | Actor |
-| --- | --- | --- | --- |
-| 1. Create fund and nominate co-approvers | `/onboarding` | `/onboarding` (done step) | Treasurer |
-| 2. Donate via UPI and verify receipt | `/funds/[fundId]` | `/verify?fundId=...&recordId=...` | Donor |
-| 3. Treasurer files expense request | `/funds/[fundId]/treasurer` | `/funds/[fundId]/treasurer` | Treasurer |
-| 4. Co-approver reviews claim and authorizes | `/funds/[fundId]/approvals/[expenseId]` | same route (settled state) | Co-approver |
-| 5. Public transparency inspection | `/funds/[fundId]` | `/verify?fundId=...&recordId=...` | Any visitor |
+| Journey                                     | Entry route                             | Exit route                        | Actor       |
+| ------------------------------------------- | --------------------------------------- | --------------------------------- | ----------- |
+| 1. Create fund and nominate co-approvers    | `/onboarding`                           | `/onboarding` (done step)         | Treasurer   |
+| 2. Donate via UPI and verify receipt        | `/funds/[fundId]`                       | `/verify?fundId=...&recordId=...` | Donor       |
+| 3. Treasurer files expense request          | `/funds/[fundId]/treasurer`             | `/funds/[fundId]/treasurer`       | Treasurer   |
+| 4. Co-approver reviews claim and authorizes | `/funds/[fundId]/approvals/[expenseId]` | same route (settled state)        | Co-approver |
+| 5. Public transparency inspection           | `/funds/[fundId]`                       | `/verify?fundId=...&recordId=...` | Any visitor |
 
 Each journey section below gives: the route flow, screen-by-screen specs (primary action,
 secondary action, states) and the state machine for the money record the journey creates.
@@ -674,13 +674,13 @@ design, which is also why it must work signed-out, offline-first and from a save
 
 ### Cross-journey state vocabulary
 
-| Concept | States | Where shown |
-| --- | --- | --- |
-| Donation | pledged, verified, refunded, rejected | receipt, fund timeline |
-| Expense | draft, submitted, hold_reserved, approved, settled, rejected, expired | treasurer list, approval timeline |
-| Approval count | 0 to quorum (2 of 3 default) | expense timeline |
-| Verification outcome | verified, pending, skipped, failed | verify page, badges |
-| Connectivity | online, offline (cached copy), slow (progress) | banners and status regions |
+| Concept              | States                                                                | Where shown                       |
+| -------------------- | --------------------------------------------------------------------- | --------------------------------- |
+| Donation             | pledged, verified, refunded, rejected                                 | receipt, fund timeline            |
+| Expense              | draft, submitted, hold_reserved, approved, settled, rejected, expired | treasurer list, approval timeline |
+| Approval count       | 0 to quorum (2 of 3 default)                                          | expense timeline                  |
+| Verification outcome | verified, pending, skipped, failed                                    | verify page, badges               |
+| Connectivity         | online, offline (cached copy), slow (progress)                        | banners and status regions        |
 
 Every status string pairs a word with a distinct shape or icon; colour alone is never the
 signal (`designSystem.statusBody`).
@@ -705,112 +705,112 @@ Parity rules quoted strings must keep:
 
 ### Journey 1 copy
 
-| Key | English | Hindi |
-| --- | --- | --- |
-| `onboarding.title` | Set up your club fund | अपने क्लब का फ़ंड सेट करें |
-| `onboarding.intro` | Your progress is saved on this device. Target amounts are entered as whole paise. | आपकी प्रगति इस डिवाइस पर सहेजी जाती है। लक्ष्य राशि पूरे पैसे में दर्ज करें। |
-| `onboarding.continue` | Continue | आगे बढ़ें |
-| `onboarding.back` | Back | पीछे |
-| `onboarding.create` | Create fund | फ़ंड बनाएँ |
-| `onboarding.creating` | Creating... | बना रहे हैं… |
-| `onboarding.errors.club` | Enter a club name. | क्लब का नाम दर्ज करें। |
-| `onboarding.errors.fund` | Enter a purpose and target in whole paise. | उद्देश्य और पूरे पैसे में लक्ष्य दर्ज करें। |
-| `onboarding.errors.payment` | Enter a valid UPI VPA and account name. | सही UPI VPA और खाता नाम दर्ज करें। |
-| `onboarding.errors.approvers` | Nominate at least two approvers with valid phone numbers for WhatsApp/SMS invites. | WhatsApp/SMS निमंत्रण के लिए कम से कम दो स्वीकर्ताओं के सही फ़ोन नंबर दर्ज करें। |
-| `onboarding.approvers.hint` | Nominate at least two people. A third is optional; two approvals are required. | कम से कम दो लोगों को नामित करें। तीसरा वैकल्पिक है; दो स्वीकृतियाँ ज़रूरी हैं। |
-| `onboarding.visibility.legend` | Who can see this fund? | यह फ़ंड कौन देख सकता है? |
-| `onboarding.done.title` | Your fund is ready | आपका फ़ंड तैयार है |
-| `onboarding.done.body` | Fund created. Invite your co-approvers to complete the 2-of-3 setup. | फ़ंड बन गया। 2-में-3 सेटअप पूरा करने के लिए सह-स्वीकर्ताओं को निमंत्रण भेजें। |
-| `onboarding.done.open` | Open fund | फ़ंड खोलें |
-| `onboarding.done.share` | Share approver invite {index} on WhatsApp | स्वीकर्ता निमंत्रण {index} WhatsApp पर साझा करें |
-| `invite.title` | Join as an approver | अनुमोदक के रूप में जुड़ें |
-| `invite.intro` | Enter your name and the same phone number the invite was sent to. | अपना नाम और वही फ़ोन नंबर दें जिस पर निमंत्रण भेजा गया था। |
-| `invite.submit` | Accept invite | निमंत्रण स्वीकार करें |
-| `invite.missingCode` | This invite link is incomplete. | यह निमंत्रण लिंक अधूरा है। |
-| `invite.invalid` | This invite is invalid or has expired. | यह निमंत्रण अमान्य है या इसकी अवधि बीत चुकी है। |
-| `invite.approved` | You are now an approver. | अब आप अनुमोदक हैं। |
-| `invite.pending` | Your nomination is awaiting confirmation. | आपका नामांकन स्वीकृति की प्रतीक्षा में है। |
+| Key                            | English                                                                            | Hindi                                                               |
+| ------------------------------ | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `onboarding.title`             | Set up your club fund                                                              | अपने क्लब का फ़ंड सेट करें                                                 |
+| `onboarding.intro`             | Your progress is saved on this device. Target amounts are entered as whole paise.  | आपकी प्रगति इस डिवाइस पर सहेजी जाती है। लक्ष्य राशि पूरे पैसे में दर्ज करें।      |
+| `onboarding.continue`          | Continue                                                                           | आगे बढ़ें                                                               |
+| `onboarding.back`              | Back                                                                               | पीछे                                                                 |
+| `onboarding.create`            | Create fund                                                                        | फ़ंड बनाएँ                                                             |
+| `onboarding.creating`          | Creating...                                                                        | बना रहे हैं…                                                           |
+| `onboarding.errors.club`       | Enter a club name.                                                                 | क्लब का नाम दर्ज करें।                                                  |
+| `onboarding.errors.fund`       | Enter a purpose and target in whole paise.                                         | उद्देश्य और पूरे पैसे में लक्ष्य दर्ज करें।                                       |
+| `onboarding.errors.payment`    | Enter a valid UPI VPA and account name.                                            | सही UPI VPA और खाता नाम दर्ज करें।                                     |
+| `onboarding.errors.approvers`  | Nominate at least two approvers with valid phone numbers for WhatsApp/SMS invites. | WhatsApp/SMS निमंत्रण के लिए कम से कम दो स्वीकर्ताओं के सही फ़ोन नंबर दर्ज करें। |
+| `onboarding.approvers.hint`    | Nominate at least two people. A third is optional; two approvals are required.     | कम से कम दो लोगों को नामित करें। तीसरा वैकल्पिक है; दो स्वीकृतियाँ ज़रूरी हैं।    |
+| `onboarding.visibility.legend` | Who can see this fund?                                                             | यह फ़ंड कौन देख सकता है?                                                |
+| `onboarding.done.title`        | Your fund is ready                                                                 | आपका फ़ंड तैयार है                                                      |
+| `onboarding.done.body`         | Fund created. Invite your co-approvers to complete the 2-of-3 setup.               | फ़ंड बन गया। 2-में-3 सेटअप पूरा करने के लिए सह-स्वीकर्ताओं को निमंत्रण भेजें।       |
+| `onboarding.done.open`         | Open fund                                                                          | फ़ंड खोलें                                                              |
+| `onboarding.done.share`        | Share approver invite {index} on WhatsApp                                          | स्वीकर्ता निमंत्रण {index} WhatsApp पर साझा करें                          |
+| `invite.title`                 | Join as an approver                                                                | अनुमोदक के रूप में जुड़ें                                                    |
+| `invite.intro`                 | Enter your name and the same phone number the invite was sent to.                  | अपना नाम और वही फ़ोन नंबर दें जिस पर निमंत्रण भेजा गया था।                 |
+| `invite.submit`                | Accept invite                                                                      | निमंत्रण स्वीकार करें                                                    |
+| `invite.missingCode`           | This invite link is incomplete.                                                    | यह निमंत्रण लिंक अधूरा है।                                               |
+| `invite.invalid`               | This invite is invalid or has expired.                                             | यह निमंत्रण अमान्य है या इसकी अवधि बीत चुकी है।                           |
+| `invite.approved`              | You are now an approver.                                                           | अब आप अनुमोदक हैं।                                                     |
+| `invite.pending`               | Your nomination is awaiting confirmation.                                          | आपका नामांकन स्वीकृति की प्रतीक्षा में है।                                  |
 
 ### Journey 2 copy
 
-| Key | English | Hindi |
-| --- | --- | --- |
-| `donate.intro` | Pay the club directly from any UPI app. Yen never holds your money. | किसी भी UPI ऐप से सीधे क्लब को भुगतान करें। येन आपका पैसा अपने पास नहीं रखता। |
-| `donate.amountTitle` | How much would you like to give? | आप कितना देना चाहेंगे? |
-| `donate.customAmountLabel` | Another amount in rupees | कोई और राशि (रुपये में) |
-| `donate.payBody` | Send money to {upiId}. Your app shows a 12-digit reference when the payment finishes. | {upiId} पर पैसे भेजें। भुगतान पूरा होने पर आपका ऐप 12 अंकों का संदर्भ दिखाता है। |
-| `donate.openUpiApp` | Open your UPI app | अपना UPI ऐप खोलें |
-| `donate.qrLabel` | Scan to pay {upiId} | {upiId} पर भुगतान के लिए स्कैन करें |
-| `donate.confirmBody` | We match your reference against the club's bank statement. Until then the donation shows as waiting. | हम आपके संदर्भ को क्लब के बैंक विवरण से मिलाते हैं। तब तक दान प्रतीक्षारत दिखता है। |
-| `donate.utrLabel` | 12-digit UPI reference | 12 अंकों का UPI संदर्भ |
-| `donate.utrHint` | Open the payment in your UPI app to find this number. | यह संख्या आपके UPI ऐप में भुगतान खोलकर देखें। |
-| `donate.nameLabel` | Name for the public record (optional) | सार्वजनिक रिकॉर्ड के लिए नाम (वैकल्पिक) |
-| `donate.submit` | Record my donation | मेरा दान दर्ज करें |
-| `donate.submitting` | Recording | दर्ज हो रहा है |
-| `donate.pendingTitle` | Donation recorded, waiting for the bank | दान दर्ज हुआ, बैंक की पुष्टि बाकी है |
-| `donate.pendingBody` | We'll confirm this when the bank statement reflects it. Nothing is spendable before that. | जब यह बैंक विवरण में दिखेगा, तब हम पुष्टि करेंगे। उससे पहले यह राशि खर्च नहीं हो सकती। |
-| `donate.duplicateUtr` | This UPI reference is already recorded. | यह UPI संदर्भ पहले से दर्ज है। |
-| `donate.failure` | We could not record that donation. Please try again. | यह दान दर्ज नहीं हो सका। कृपया फिर कोशिश करें। |
-| `donate.viewReceipt` | View receipt certificate | रसीद प्रमाणपत्र देखें |
-| `receipt.title` | Donation Receipt | दान रसीद |
-| `receipt.statusVerified` | Confirmed by bank | बैंक द्वारा पुष्ट |
-| `receipt.statusPledged` | Awaiting bank statement | बैंक विवरण की प्रतीक्षा |
-| `receipt.taxNoticeTitle` | Notice: Not an 80G Tax Receipt | महत्वपूर्ण सूचना: 80G कर रसीद नहीं है |
-| `receipt.qrLabel` | Scan to check this donation on the public record | सार्वजनिक रिकॉर्ड पर इस दान की जांच के लिए स्कैन करें |
-| `receipt.verifyLink` | Check live verification record | सत्यापन रिकॉर्ड देखें |
-| `receipt.backToFund` | Back to fund overview | फंड विवरण पर लौटें |
+| Key                        | English                                                                                              | Hindi                                                                    |
+| -------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `donate.intro`             | Pay the club directly from any UPI app. Yen never holds your money.                                  | किसी भी UPI ऐप से सीधे क्लब को भुगतान करें। येन आपका पैसा अपने पास नहीं रखता।      |
+| `donate.amountTitle`       | How much would you like to give?                                                                     | आप कितना देना चाहेंगे?                                                       |
+| `donate.customAmountLabel` | Another amount in rupees                                                                             | कोई और राशि (रुपये में)                                                      |
+| `donate.payBody`           | Send money to {upiId}. Your app shows a 12-digit reference when the payment finishes.                | {upiId} पर पैसे भेजें। भुगतान पूरा होने पर आपका ऐप 12 अंकों का संदर्भ दिखाता है।      |
+| `donate.openUpiApp`        | Open your UPI app                                                                                    | अपना UPI ऐप खोलें                                                          |
+| `donate.qrLabel`           | Scan to pay {upiId}                                                                                  | {upiId} पर भुगतान के लिए स्कैन करें                                            |
+| `donate.confirmBody`       | We match your reference against the club's bank statement. Until then the donation shows as waiting. | हम आपके संदर्भ को क्लब के बैंक विवरण से मिलाते हैं। तब तक दान प्रतीक्षारत दिखता है।    |
+| `donate.utrLabel`          | 12-digit UPI reference                                                                               | 12 अंकों का UPI संदर्भ                                                       |
+| `donate.utrHint`           | Open the payment in your UPI app to find this number.                                                | यह संख्या आपके UPI ऐप में भुगतान खोलकर देखें।                                     |
+| `donate.nameLabel`         | Name for the public record (optional)                                                                | सार्वजनिक रिकॉर्ड के लिए नाम (वैकल्पिक)                                       |
+| `donate.submit`            | Record my donation                                                                                   | मेरा दान दर्ज करें                                                           |
+| `donate.submitting`        | Recording                                                                                            | दर्ज हो रहा है                                                             |
+| `donate.pendingTitle`      | Donation recorded, waiting for the bank                                                              | दान दर्ज हुआ, बैंक की पुष्टि बाकी है                                            |
+| `donate.pendingBody`       | We'll confirm this when the bank statement reflects it. Nothing is spendable before that.            | जब यह बैंक विवरण में दिखेगा, तब हम पुष्टि करेंगे। उससे पहले यह राशि खर्च नहीं हो सकती। |
+| `donate.duplicateUtr`      | This UPI reference is already recorded.                                                              | यह UPI संदर्भ पहले से दर्ज है।                                                 |
+| `donate.failure`           | We could not record that donation. Please try again.                                                 | यह दान दर्ज नहीं हो सका। कृपया फिर कोशिश करें।                                |
+| `donate.viewReceipt`       | View receipt certificate                                                                             | रसीद प्रमाणपत्र देखें                                                         |
+| `receipt.title`            | Donation Receipt                                                                                     | दान रसीद                                                                 |
+| `receipt.statusVerified`   | Confirmed by bank                                                                                    | बैंक द्वारा पुष्ट                                                             |
+| `receipt.statusPledged`    | Awaiting bank statement                                                                              | बैंक विवरण की प्रतीक्षा                                                      |
+| `receipt.taxNoticeTitle`   | Notice: Not an 80G Tax Receipt                                                                       | महत्वपूर्ण सूचना: 80G कर रसीद नहीं है                                          |
+| `receipt.qrLabel`          | Scan to check this donation on the public record                                                     | सार्वजनिक रिकॉर्ड पर इस दान की जांच के लिए स्कैन करें                            |
+| `receipt.verifyLink`       | Check live verification record                                                                       | सत्यापन रिकॉर्ड देखें                                                         |
+| `receipt.backToFund`       | Back to fund overview                                                                                | फंड विवरण पर लौटें                                                          |
 
 ### Journey 3 copy
 
-| Key | English | Hindi |
-| --- | --- | --- |
-| `treasurer.title` | Treasurer dashboard | खजांची डैशबोर्ड |
-| `treasurer.totalBalance` | Total balance | कुल शेष |
-| `treasurer.spendableBalance` | Spendable balance | खर्च योग्य शेष |
-| `treasurer.pendingExpenses` | Pending expenses | लंबित खर्च |
-| `treasurer.newExpenseCta` | New Expense | नया खर्च |
-| `treasurer.emptyTitle` | No pending expenses | कोई लंबित खर्च नहीं |
-| `treasurer.emptyDescription` | When an expense request is drafted or submitted, it will appear here. | जब कोई खर्च अनुरोध तैयार या प्रस्तुत किया जाएगा, वह यहाँ दिखेगा। |
-| `treasurer.errorTitle` | Could not load dashboard | डैशबोर्ड लोड नहीं हो सका |
-| `treasurer.offlineNotice` | You are working offline. Displaying cached data. | आप ऑफ़लाइन काम कर रहे हैं। संचित डेटा दिखाया जा रहा है। |
-| `treasurer.retry` | Retry | पुनः प्रयास करें |
-| `expenseForm.title` | New expense request | नया खर्च अनुरोध |
-| `expenseForm.amountLabel` | Amount (₹) | रकम (₹) |
-| `expenseForm.amountHint` | Enter amount in rupees (e.g. 250.00). Converted exactly to paise. | रुपये में रकम दर्ज करें (जैसे 250.00)। यह सीधे पैसे में बदली जाएगी। |
-| `expenseForm.payeeNameLabel` | Payee name | भुगतान पाने वाले का नाम |
-| `expenseForm.payeeUpiHint` | Virtual Payment Address for UPI transfer (e.g. payee@bank or phone@upi). | UPI ट्रांसफ़र के लिए वर्चुअल पता (जैसे payee@bank या phone@upi)। |
-| `expenseForm.purposeHint` | Explain clearly why this fund money is being spent. | स्पष्ट बताएं कि यह पैसा क्यों खर्च किया जा रहा है। |
-| `expenseForm.reviewCta` | Review expense | खर्च की समीक्षा करें |
-| `expenseForm.reviewSummary` | Please check all details before submitting. Once submitted, fund approvers must verify with their PIN before release. | प्रस्तुत करने से पहले सभी विवरण जाँच लें। सबमिट होने पर, स्वीकृतकर्ताओं को अपने पिन से पुष्टि करनी होगी। |
-| `expenseForm.submitCta` | Submit expense | खर्च प्रस्तुत करें |
-| `expenseForm.submitSuccess` | Expense request submitted successfully | खर्च अनुरोध सफलतापूर्वक प्रस्तुत किया गया |
-| `evidence.uploadTitle` | Upload bill or receipt | बिल या रसीद अपलोड करें |
-| `evidence.uploadDescription` | Attach a photo of the bill or a PDF document (up to 10 MB). | बिल की तस्वीर या पीडीएफ दस्तावेज़ संलग्न करें (10 MB तक)। |
-| `evidence.cameraButton` | Take photo | फ़ोटो लें |
-| `evidence.uploadProgress` | Uploading: {percent}% | अपलोड हो रहा है: {percent}% |
-| `evidence.uploadSuccess` | Bill uploaded and pinned | बिल सफलतापूर्वक सुरक्षित किया गया |
-| `evidence.emptyHeading` | No bill attached | कोई बिल संलग्न नहीं है |
-| `evidence.errors.uploadFailed` | Upload failed. Please check your connection and try again. | अपलोड विफल रहा। कृपया अपना कनेक्शन जांचें और पुनः प्रयास करें। |
+| Key                            | English                                                                                                               | Hindi                                                                                  |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `treasurer.title`              | Treasurer dashboard                                                                                                   | खजांची डैशबोर्ड                                                                           |
+| `treasurer.totalBalance`       | Total balance                                                                                                         | कुल शेष                                                                                  |
+| `treasurer.spendableBalance`   | Spendable balance                                                                                                     | खर्च योग्य शेष                                                                            |
+| `treasurer.pendingExpenses`    | Pending expenses                                                                                                      | लंबित खर्च                                                                               |
+| `treasurer.newExpenseCta`      | New Expense                                                                                                           | नया खर्च                                                                                |
+| `treasurer.emptyTitle`         | No pending expenses                                                                                                   | कोई लंबित खर्च नहीं                                                                       |
+| `treasurer.emptyDescription`   | When an expense request is drafted or submitted, it will appear here.                                                 | जब कोई खर्च अनुरोध तैयार या प्रस्तुत किया जाएगा, वह यहाँ दिखेगा।                               |
+| `treasurer.errorTitle`         | Could not load dashboard                                                                                              | डैशबोर्ड लोड नहीं हो सका                                                                  |
+| `treasurer.offlineNotice`      | You are working offline. Displaying cached data.                                                                      | आप ऑफ़लाइन काम कर रहे हैं। संचित डेटा दिखाया जा रहा है।                                       |
+| `treasurer.retry`              | Retry                                                                                                                 | पुनः प्रयास करें                                                                           |
+| `expenseForm.title`            | New expense request                                                                                                   | नया खर्च अनुरोध                                                                          |
+| `expenseForm.amountLabel`      | Amount (₹)                                                                                                            | रकम (₹)                                                                                |
+| `expenseForm.amountHint`       | Enter amount in rupees (e.g. 250.00). Converted exactly to paise.                                                     | रुपये में रकम दर्ज करें (जैसे 250.00)। यह सीधे पैसे में बदली जाएगी।                                  |
+| `expenseForm.payeeNameLabel`   | Payee name                                                                                                            | भुगतान पाने वाले का नाम                                                                   |
+| `expenseForm.payeeUpiHint`     | Virtual Payment Address for UPI transfer (e.g. payee@bank or phone@upi).                                              | UPI ट्रांसफ़र के लिए वर्चुअल पता (जैसे payee@bank या phone@upi)।                               |
+| `expenseForm.purposeHint`      | Explain clearly why this fund money is being spent.                                                                   | स्पष्ट बताएं कि यह पैसा क्यों खर्च किया जा रहा है।                                             |
+| `expenseForm.reviewCta`        | Review expense                                                                                                        | खर्च की समीक्षा करें                                                                       |
+| `expenseForm.reviewSummary`    | Please check all details before submitting. Once submitted, fund approvers must verify with their PIN before release. | प्रस्तुत करने से पहले सभी विवरण जाँच लें। सबमिट होने पर, स्वीकृतकर्ताओं को अपने पिन से पुष्टि करनी होगी। |
+| `expenseForm.submitCta`        | Submit expense                                                                                                        | खर्च प्रस्तुत करें                                                                           |
+| `expenseForm.submitSuccess`    | Expense request submitted successfully                                                                                | खर्च अनुरोध सफलतापूर्वक प्रस्तुत किया गया                                                     |
+| `evidence.uploadTitle`         | Upload bill or receipt                                                                                                | बिल या रसीद अपलोड करें                                                                   |
+| `evidence.uploadDescription`   | Attach a photo of the bill or a PDF document (up to 10 MB).                                                           | बिल की तस्वीर या पीडीएफ दस्तावेज़ संलग्न करें (10 MB तक)।                                      |
+| `evidence.cameraButton`        | Take photo                                                                                                            | फ़ोटो लें                                                                                 |
+| `evidence.uploadProgress`      | Uploading: {percent}%                                                                                                 | अपलोड हो रहा है: {percent}%                                                             |
+| `evidence.uploadSuccess`       | Bill uploaded and pinned                                                                                              | बिल सफलतापूर्वक सुरक्षित किया गया                                                          |
+| `evidence.emptyHeading`        | No bill attached                                                                                                      | कोई बिल संलग्न नहीं है                                                                     |
+| `evidence.errors.uploadFailed` | Upload failed. Please check your connection and try again.                                                            | अपलोड विफल रहा। कृपया अपना कनेक्शन जांचें और पुनः प्रयास करें।                                   |
 
 ### Journey 4 copy
 
-| Key | English | Hindi |
-| --- | --- | --- |
-| `approver.title` | Expense approval request | खर्च स्वीकृति अनुरोध |
-| `approver.fastDecisionNotice` | Fast decision: Review details and approve or reject below. | त्वरित निर्णय: नीचे विवरण देखें और स्वीकार या अस्वीकार करें। |
-| `approver.approveCta` | Approve | स्वीकार करें |
-| `approver.rejectCta` | Reject | अस्वीकार करें |
-| `approver.pinModalTitle` | Enter 6-digit approval PIN | 6 अंकों का स्वीकृति पिन दर्ज करें |
-| `approver.pinModalDescription` | Your PIN signs the cryptographic approval for this expense release. | आपका पिन इस खर्च के लिए डिजिटल स्वीकृति दर्ज करता है। |
-| `approver.pinLabel` | Approval PIN | स्वीकृति पिन |
-| `approver.pinSubmit` | Confirm approval | स्वीकृति की पुष्टि करें |
-| `approver.pinError` | PIN must be exactly 6 digits | पिन ठीक 6 अंकों का होना चाहिए |
-| `approver.pinLockoutNotice` | PIN is temporarily locked due to repeated incorrect attempts. Please try again after 30 minutes. | बार-बार गलत प्रयासों के कारण पिन अस्थायी रूप से बंद है। कृपया 30 मिनट बाद पुनः प्रयास करें। |
-| `approver.rejectModalDescription` | A rejection reason is mandatory and will be recorded in the audit log. | अस्वीकृति का कारण अनिवार्य है और ऑडिट लॉग में दर्ज होगा। |
-| `approver.approvedSuccess` | Expense successfully approved | खर्च सफलतापूर्वक स्वीकृत हुआ |
-| `approver.alreadyApproved` | This request has already been approved | यह अनुरोध पहले ही स्वीकृत हो चुका है |
-| `expenseTimeline.stateSettledDesc` | Funds released to {payee} | {payee} को राशि जारी कर दी गई |
-| `expenseTimeline.stateRejectedDesc` | Reason: {reason} | कारण: {reason} |
+| Key                                 | English                                                                                          | Hindi                                                                          |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `approver.title`                    | Expense approval request                                                                         | खर्च स्वीकृति अनुरोध                                                               |
+| `approver.fastDecisionNotice`       | Fast decision: Review details and approve or reject below.                                       | त्वरित निर्णय: नीचे विवरण देखें और स्वीकार या अस्वीकार करें।                             |
+| `approver.approveCta`               | Approve                                                                                          | स्वीकार करें                                                                      |
+| `approver.rejectCta`                | Reject                                                                                           | अस्वीकार करें                                                                     |
+| `approver.pinModalTitle`            | Enter 6-digit approval PIN                                                                       | 6 अंकों का स्वीकृति पिन दर्ज करें                                                     |
+| `approver.pinModalDescription`      | Your PIN signs the cryptographic approval for this expense release.                              | आपका पिन इस खर्च के लिए डिजिटल स्वीकृति दर्ज करता है।                                |
+| `approver.pinLabel`                 | Approval PIN                                                                                     | स्वीकृति पिन                                                                     |
+| `approver.pinSubmit`                | Confirm approval                                                                                 | स्वीकृति की पुष्टि करें                                                              |
+| `approver.pinError`                 | PIN must be exactly 6 digits                                                                     | पिन ठीक 6 अंकों का होना चाहिए                                                    |
+| `approver.pinLockoutNotice`         | PIN is temporarily locked due to repeated incorrect attempts. Please try again after 30 minutes. | बार-बार गलत प्रयासों के कारण पिन अस्थायी रूप से बंद है। कृपया 30 मिनट बाद पुनः प्रयास करें। |
+| `approver.rejectModalDescription`   | A rejection reason is mandatory and will be recorded in the audit log.                           | अस्वीकृति का कारण अनिवार्य है और ऑडिट लॉग में दर्ज होगा।                              |
+| `approver.approvedSuccess`          | Expense successfully approved                                                                    | खर्च सफलतापूर्वक स्वीकृत हुआ                                                         |
+| `approver.alreadyApproved`          | This request has already been approved                                                           | यह अनुरोध पहले ही स्वीकृत हो चुका है                                                 |
+| `expenseTimeline.stateSettledDesc`  | Funds released to {payee}                                                                        | {payee} को राशि जारी कर दी गई                                                  |
+| `expenseTimeline.stateRejectedDesc` | Reason: {reason}                                                                                 | कारण: {reason}                                                                 |
 
 Note: `approver.pinModalDescription` is the one journey-critical string that still says
 "cryptographic" in English (the Hindi already reads as "records your digital approval"). It is
@@ -820,42 +820,42 @@ the journey 4 spec quotes it as shipped.
 
 ### Journey 5 copy
 
-| Key | English | Hindi |
-| --- | --- | --- |
-| `fund.donateCta` | Donate via UPI | UPI से दान करें |
-| `fund.savedCopy` | This is a saved copy from {time}. The fund records could not be refreshed just now. | {time} की सहेजी हुई प्रति दिखाई जा रही है। अभी फंड के रिकॉर्ड ताज़ा नहीं हो सके। |
-| `fund.summaryTitle` | Money summary | पैसों का विवरण |
-| `fund.totalRaised` | Total raised | कुल जुटाया |
-| `fund.totalSpent` | Total spent | कुल खर्च |
-| `fund.currentBalance` | Current balance | वर्तमान शेष |
-| `fund.timelineTitle` | Live transparency timeline | सीधा पारदर्शिता विवरण |
-| `fund.viewEvidence` | View bill or receipt | बिल या रसीद देखें |
-| `fund.howDoIKnow` | How do I know? | मुझे कैसे पता चलेगा? |
-| `fund.tamperProofDesc` | Each entry is sealed in the public account book so past records cannot be altered or deleted. | प्रत्येक प्रविष्टि सार्वजनिक खाता बही में मुहरबंद होती है ताकि पुराने रिकॉर्ड बदले या हटाए न जा सकें। |
-| `fund.checkRecord` | Check this record | इस रिकॉर्ड की जांच करें |
-| `verify.title` | Verify a record | रिकॉर्ड की जांच करें |
-| `verify.subtitle` | Check any payment or receipt against its permanent digital seal. | किसी भी भुगतान या रसीद की उसकी स्थायी डिजिटल मुहर से जांच करें। |
-| `verify.verifyButton` | Check record | रिकॉर्ड जांचें |
-| `verify.checking` | Checking record proof... | रिकॉर्ड प्रमाण की जांच हो रही है… |
-| `verify.outcomeVerified` | Verified | सत्यापित |
-| `verify.outcomePending` | Pending seal | मुहर प्रतीक्षारत |
-| `verify.outcomeFailed` | Verification failed | सत्यापन विफल |
-| `verify.passHeadline` | This record was written on {date} and has not been changed since | यह रिकॉर्ड {date} को लिखा गया था और तब से बदला नहीं गया है |
-| `verify.failHeadline` | Verification failed: record was altered or invalid | सत्यापन विफल: रिकॉर्ड में बदलाव किया गया है या अमान्य है |
-| `verify.offlineNotice` | Verified using in-browser cryptographic checks without relying on server claims. | सर्वर के दावों पर निर्भर किए बिना ब्राउज़र में सीधे क्रिप्टोग्राफ़िक जांच द्वारा सत्यापित। |
-| `verify.technicalInspectionTitle` | Technical details (for skeptics and auditors) | तकनीकी विवरण (लेखा परीक्षकों और जानकारों के लिए) |
-| `offline.title` | You are offline | आप ऑफ़लाइन हैं |
-| `offline.message` | You are offline. Yen needs a connection to show records or confirm anything. | आप ऑफ़लाइन हैं। रिकॉर्ड देखने या किसी भी चीज़ की पुष्टि करने के लिए येन को कनेक्शन की आवश्यकता है। |
+| Key                               | English                                                                                       | Hindi                                                                                |
+| --------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `fund.donateCta`                  | Donate via UPI                                                                                | UPI से दान करें                                                                         |
+| `fund.savedCopy`                  | This is a saved copy from {time}. The fund records could not be refreshed just now.           | {time} की सहेजी हुई प्रति दिखाई जा रही है। अभी फंड के रिकॉर्ड ताज़ा नहीं हो सके।               |
+| `fund.summaryTitle`               | Money summary                                                                                 | पैसों का विवरण                                                                         |
+| `fund.totalRaised`                | Total raised                                                                                  | कुल जुटाया                                                                             |
+| `fund.totalSpent`                 | Total spent                                                                                   | कुल खर्च                                                                               |
+| `fund.currentBalance`             | Current balance                                                                               | वर्तमान शेष                                                                            |
+| `fund.timelineTitle`              | Live transparency timeline                                                                    | सीधा पारदर्शिता विवरण                                                                 |
+| `fund.viewEvidence`               | View bill or receipt                                                                          | बिल या रसीद देखें                                                                       |
+| `fund.howDoIKnow`                 | How do I know?                                                                                | मुझे कैसे पता चलेगा?                                                                      |
+| `fund.tamperProofDesc`            | Each entry is sealed in the public account book so past records cannot be altered or deleted. | प्रत्येक प्रविष्टि सार्वजनिक खाता बही में मुहरबंद होती है ताकि पुराने रिकॉर्ड बदले या हटाए न जा सकें। |
+| `fund.checkRecord`                | Check this record                                                                             | इस रिकॉर्ड की जांच करें                                                                  |
+| `verify.title`                    | Verify a record                                                                               | रिकॉर्ड की जांच करें                                                                     |
+| `verify.subtitle`                 | Check any payment or receipt against its permanent digital seal.                              | किसी भी भुगतान या रसीद की उसकी स्थायी डिजिटल मुहर से जांच करें।                             |
+| `verify.verifyButton`             | Check record                                                                                  | रिकॉर्ड जांचें                                                                           |
+| `verify.checking`                 | Checking record proof...                                                                      | रिकॉर्ड प्रमाण की जांच हो रही है…                                                        |
+| `verify.outcomeVerified`          | Verified                                                                                      | सत्यापित                                                                              |
+| `verify.outcomePending`           | Pending seal                                                                                  | मुहर प्रतीक्षारत                                                                        |
+| `verify.outcomeFailed`            | Verification failed                                                                           | सत्यापन विफल                                                                          |
+| `verify.passHeadline`             | This record was written on {date} and has not been changed since                              | यह रिकॉर्ड {date} को लिखा गया था और तब से बदला नहीं गया है                               |
+| `verify.failHeadline`             | Verification failed: record was altered or invalid                                            | सत्यापन विफल: रिकॉर्ड में बदलाव किया गया है या अमान्य है                                    |
+| `verify.offlineNotice`            | Verified using in-browser cryptographic checks without relying on server claims.              | सर्वर के दावों पर निर्भर किए बिना ब्राउज़र में सीधे क्रिप्टोग्राफ़िक जांच द्वारा सत्यापित।           |
+| `verify.technicalInspectionTitle` | Technical details (for skeptics and auditors)                                                 | तकनीकी विवरण (लेखा परीक्षकों और जानकारों के लिए)                                          |
+| `offline.title`                   | You are offline                                                                               | आप ऑफ़लाइन हैं                                                                          |
+| `offline.message`                 | You are offline. Yen needs a connection to show records or confirm anything.                  | आप ऑफ़लाइन हैं। रिकॉर्ड देखने या किसी भी चीज़ की पुष्टि करने के लिए येन को कनेक्शन की आवश्यकता है।   |
 
 Shared status vocabulary (both locales, shown across journeys):
 
-| Key | English | Hindi |
-| --- | --- | --- |
-| `status.verified` | Verified | सत्यापित |
-| `status.pending` | Pending review | समीक्षा लंबित |
-| `status.unmatched` | No approval found | कोई स्वीकृति नहीं मिली |
-| `status.rejected` | Rejected | अस्वीकृत |
-| `status.refunded` | Donation refunded | दान वापस किया गया |
-| `treasurer.statusDraft` | Draft | ड्राफ्ट |
-| `treasurer.statusSubmitted` | Submitted | प्रस्तुत |
-| `treasurer.statusSettled` | Settled | संपन्न |
+| Key                         | English           | Hindi               |
+| --------------------------- | ----------------- | ------------------- |
+| `status.verified`           | Verified          | सत्यापित             |
+| `status.pending`            | Pending review    | समीक्षा लंबित         |
+| `status.unmatched`          | No approval found | कोई स्वीकृति नहीं मिली |
+| `status.rejected`           | Rejected          | अस्वीकृत              |
+| `status.refunded`           | Donation refunded | दान वापस किया गया   |
+| `treasurer.statusDraft`     | Draft             | ड्राफ्ट               |
+| `treasurer.statusSubmitted` | Submitted         | प्रस्तुत               |
+| `treasurer.statusSettled`   | Settled           | संपन्न                |
