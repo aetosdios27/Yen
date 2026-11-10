@@ -1,5 +1,9 @@
 import type { Sql } from "./client.js";
-import { publicAnchoredItemsSql, publicPledgedPaiseSql } from "./public-fund-queries.js";
+import {
+  publicAnchoredItemsSql,
+  publicFundHeadSql,
+  publicPledgedPaiseSql,
+} from "./public-fund-queries.js";
 
 /**
  * Categories of hot-path queries in Yen.
@@ -92,6 +96,20 @@ const INITIAL_HOT_PATH_QUERIES: RegisteredHotPathQuery[] = [
       expectedIndex: "donation_pledges_outstanding_fund_idx",
       disallowSeqScan: true,
       maxCost: 260,
+    },
+  },
+  {
+    id: "public_fund_head",
+    name: "Public fund event log head for CDN validators",
+    category: "fund_reads",
+    sqlTemplate: publicFundHeadSql,
+    explain: (sql, ctx) =>
+      sql.unsafe(`EXPLAIN (FORMAT JSON, VERBOSE) ${publicFundHeadSql}`, [ctx.fundId]),
+    expectedPlan: {
+      targetTable: "fund_events",
+      expectedIndex: "fund_events_pkey",
+      disallowSeqScan: true,
+      maxCost: 30,
     },
   },
   {
