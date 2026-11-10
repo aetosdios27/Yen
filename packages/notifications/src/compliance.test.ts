@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   buildSmsDispatchEnvelope,
+  buildWhatsAppBodyParameters,
+  buildWhatsAppTemplatePayload,
   renderDltRegisteredBody,
   SMS_DLT_TEMPLATE_REGISTRY,
   type SmsDispatchRegistry,
   validateSmsDispatch,
+  validateWhatsAppDispatch,
+  WHATSAPP_TEMPLATE_REGISTRY,
+  type WhatsAppDispatchRegistry,
 } from "./compliance.js";
 
 const DLT_ENTITY_ID = "1101234567890123456";
@@ -25,6 +30,20 @@ const validSmsDispatch = {
   dlt_template_id: DLT_TEMPLATE_ID,
   sender_id: DLT_SENDER_ID,
   variables: { code: "482913" },
+};
+
+const testWhatsAppRegistry: WhatsAppDispatchRegistry = WHATSAPP_TEMPLATE_REGISTRY;
+
+const validWhatsAppDispatch = {
+  template_key: "approval_needed",
+  recipient: "+919876543210",
+  template_name: "yen_expense_approval_required",
+  language_code: "en",
+  variables: {
+    expense_title: "Server hosting renewal",
+    amount_inr: "Rs 1,250.00",
+    fund_title: "Community Fund",
+  },
 };
 
 describe("SMS DLT dispatch compliance", () => {
@@ -198,6 +217,89 @@ describe("SMS DLT dispatch compliance", () => {
       expect(result.violations).toContainEqual(
         expect.objectContaining({ code: "missing_dlt_sender_id" }),
       );
+    });
+  });
+});
+
+describe("WhatsApp utility template compliance", () => {
+  describe("positive cases", () => {
+    it("accepts a dispatch referencing the approved template name and language", () => {
+      const result = validateWhatsAppDispatch(validWhatsAppDispatch, testWhatsAppRegistry);
+      expect(result.compliant).toBe(true);
+      expect(result.violations).toEqual([]);
+    });
+
+    it("builds body parameters in registered positional order", () => {
+      const parameters = buildWhatsAppBodyParameters(
+        testWhatsAppRegistry.approval_needed,
+        validWhatsAppDispatch.variables,
+      );
+      expect(parameters).toEqual([
+        { type: "text", text: "Server hosting renewal" },
+        { type: "text", text: "Rs 1,250.00" },
+        { type: "text", text: "Community Fund" },
+      ]);
+    });
+
+    it("builds the WhatsApp Cloud API template payload with name, language and body component", () => {
+      const result = buildWhatsAppTemplatePayload(validWhatsAppDispatch, testWhatsAppRegistry);
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected a compliant dispatch");
+      expect(result.payload).toEqual({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: "+919876543210",
+        type: "template",
+        template: {
+          name: "yen_expense_approval_required",
+          language: { code: "en" },
+          components: [
+            {
+              type: "body",
+              parameters: [
+                { type: "text", text: "Server hosting renewal" },
+                { type: "text", text: "Rs 1,250.00" },
+                { type: "text", text: "Community Fund" },
+              ],
+            },
+          ],
+        },
+      });
+    });
+
+    it("validates every registered WhatsApp template with its own variable set", () => {
+      const sampleVariables: Record<string, Record<string, string>> = {
+        otp: { code: "482913" },
+        approval_needed: {
+          expense_title: "Server hosting renewal",
+          amount_inr: "Rs 1,250.00",
+          fund_title: "Community Fund",
+        },
+        approved_rejected: {
+          expense_title: "Server hosting renewal",
+          amount_inr: "Rs 1,250.00",
+          fund_title: "Community Fund",
+        },
+        donation_received: { amount_inr: "Rs 500.00", fund_title: "Community Fund" },
+        objection_raised: {
+          expense_title: "Server hosting renewal",
+          fund_title: "Community Fund",
+        },
+      };
+      for (const [templateKey, registration] of Object.entries(testWhatsAppRegistry)) {
+        const result = validateWhatsAppDispatch(
+          {
+            template_key: templateKey,
+            recipient: "+919876543210",
+            template_name: registration.template_name,
+            language_code: "en",
+            variables: sampleVariables[templateKey],
+          },
+          testWhatsAppRegistry,
+        );
+        expect(result.compliant, templateKey).toBe(true);
+        expect(result.violations, templateKey).toEqual([]);
+      }
     });
   });
 });
