@@ -18,6 +18,7 @@ function fixtureApp(
   displayNameStore: DisplayNameStore = new MemoryDisplayNameStore(),
   principalValue: AppDependencies["principal"] = owner,
   publicFundReadStore = new MemoryPublicFundReadStore(),
+  category?: ExpenseRequest["category"],
 ) {
   const expenses = new InMemoryExpenseStore();
   const expense = {
@@ -26,6 +27,7 @@ function fixtureApp(
     requesterId: "psn_00000000-0000-4000-8000-000000000021" as ExpenseRequest["requesterId"],
     amountPaise: paise(2500),
     description: "fixture expense",
+    category,
     recipientRef: "private payee account 1234567890123456",
     status: "paid",
     holdId: null,
@@ -158,6 +160,20 @@ describe("public fund read API", () => {
     const timeline = await (await app.request(`/v1/funds/${fundId}/public/timeline`)).json();
     expect(timeline).toMatchObject({
       items: [{ verified: "unverified" }, { verified: "anchored" }, { verified: "bank-matched" }],
+    });
+  });
+
+  it("carries the requested expense category into the public breakdown", async () => {
+    const app = fixtureApp(
+      new MemoryDisplayNameStore(),
+      owner,
+      new MemoryPublicFundReadStore(),
+      "Equipment",
+    );
+    await createPublicFund(app);
+    const response = await app.request(`/v1/funds/${fundId}/public/breakdown`);
+    expect(await response.json()).toMatchObject({
+      categories: [{ category: "Equipment", spentPaise: "2500", transactionCount: 1 }],
     });
   });
 
