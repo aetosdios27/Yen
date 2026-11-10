@@ -13,6 +13,9 @@ const serverActionsKey = createHash("sha256")
   .digest("base64");
 
 process.env.YEN_BUILD_ID = buildId;
+// Self-hosted builds tag client error reports with the reproducible build id
+// unless a release SHA was provided at build time (Vercel injects its own).
+process.env.NEXT_PUBLIC_RELEASE_SHA ??= buildId;
 process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY = serverActionsKey;
 execFileSync("pnpm", ["exec", "next", "build"], {
   cwd: appRoot,
