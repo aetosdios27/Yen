@@ -62,3 +62,70 @@ pnpm dev:full
 
 Redis is currently started by compose but no application code connects to it;
 rate limits, queues and anchor state all live in PostgreSQL.
+
+## 3. Seeded demo dataset and credentials
+
+Every value in this section is read directly from
+`packages/db/src/dev-seed.ts` (`SEED_CONSTANTS` and `seedDevDatabase`).
+Nothing below is invented.
+
+Organization: `IIT Delhi Robotics Club` (`student_society`).
+
+Fund: `RoboCup 2026 Asia Fund`, public visibility, target 10,00,000 INR,
+payee VPA `iitd.robotics@sbi`, payee name `IIT Delhi Robotics Club`.
+
+Fund ID (used in URLs and curl calls throughout this runbook):
+
+```
+01940000-0000-7000-8000-000000000002
+```
+
+Seeded accounts. All six have active mock sessions valid for one year from
+seed time, stored as SHA-256 token hashes in the `sessions` table:
+
+| Persona | Role | Phone (E.164) | Locale | Mock session token |
+| --- | --- | --- | --- | --- |
+| Aarav Sharma | treasurer | +919876543210 | en | `yen_mock_session_treasurer_token` |
+| Priya Verma | approver | +919876543211 | en | `yen_mock_session_approver1_token` |
+| Rohan Iyer | approver | +919876543212 | hi | `yen_mock_session_approver2_token` |
+| Ananya Sen | member (donor) | +919876543213 | en | `yen_mock_session_donor1_token` |
+| Vikram Malhotra | member (donor) | +919876543214 | en | `yen_mock_session_donor2_token` |
+| Sunita Rao | member (donor) | +919876543215 | hi | `yen_mock_session_donor3_token` |
+
+Seeded donations (all verified against bank transactions in the seed):
+
+| Donor | Amount | UTR |
+| --- | --- | --- |
+| Ananya Sen | 2,00,000 INR | 123456789012 |
+| Vikram Malhotra | 2,00,000 INR | 123456789013 |
+| Sunita Rao | 1,00,000 INR | 123456789014 |
+
+Ledger balance after the seeded paid expense: 4,65,000.00 INR, zero-sum
+verified, 23 chained audit events.
+
+Seeded expenses:
+
+| Expense | Amount | Status | Description |
+| --- | --- | --- | --- |
+| `01940000-0000-7000-8000-000000000061` | 75,000 INR | approved | High-torque brushless motor set and ESCs, evidence `motors_invoice.pdf` |
+| `01940000-0000-7000-8000-000000000062` | 25,000 INR | submitted (pending approval) | LiPo battery packs and safety charging station |
+| `01940000-0000-7000-8000-000000000063` | 35,000 INR | paid | RoboCup Asia Pacific 2026 Team Registration Fee, UTR 987654321001 |
+
+### OTPs and PINs: what is real and what is simulated
+
+- OTPs are not seeded. Every code is generated at request time by
+  `generateOtpCode()` in `apps/api/src/auth/crypto.ts` (cryptographically
+  random, six digits). In local development the code is handed to
+  `DevStubOtpDeliveryProvider` (`apps/api/src/auth/provider.ts`), which keeps
+  it in memory only. No OTP is printed to the console or retrievable through
+  any endpoint, so the `/login` OTP screen cannot be completed locally. That
+  is why recording uses the seeded mock sessions below instead of typing an
+  OTP on camera.
+- PINs are not seeded either. Each persona used in an approval flow needs a
+  one-time PIN setup call (section 4). The recording PIN used throughout this
+  runbook is `482613`; it passes `validatePin` in `apps/api/src/pin/rules.ts`
+  (six digits, not a common PIN, no repeating pattern, no ascending or
+  descending run, not derived from the seeded phone numbers or user IDs).
+- Passkeys (WebAuthn) are optional in the product and are not used in this
+  recording; approvals are authorized with the PIN, which is the default
+  flow in the approval modal.
