@@ -1,4 +1,4 @@
-import { paise, type Paise } from "@yen/shared";
+import { type Paise, paise } from "@yen/shared";
 import { z } from "zod";
 
 /**
@@ -21,10 +21,7 @@ import { z } from "zod";
 export const partnerAmountPaiseWire = z
   .string()
   .regex(/^(?:0|[1-9][0-9]*)$/, "Amount must be a canonical integer paise decimal string")
-  .refine(
-    (value) => Number.isSafeInteger(Number(value)),
-    "Amount exceeds the safe integer range",
-  );
+  .refine((value) => Number.isSafeInteger(Number(value)), "Amount exceeds the safe integer range");
 
 const counterpartySchema = z.object({
   vpa: z.string().trim().min(1).max(256).optional(),
