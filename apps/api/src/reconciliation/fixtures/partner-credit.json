@@ -1,0 +1,17 @@
+{
+  "event": "virtual_account.credited",
+  "timestamp": "2026-10-28T14:30:00.000Z",
+  "data": {
+    "fund_id": "e3fb2fc4-03f9-45b1-bcef-464ab0d87ddd",
+    "bank_reference": "SPK281024004712",
+    "amount_paise": "1250000",
+    "type": "credit",
+    "posted_at": "2026-10-28T14:28:15.000Z",
+    "utr": "281024004712",
+    "narration": "UPI/CR/281024004712/FEST-DONATION",
+    "counterparty": {
+      "vpa": "aarav.sharma@okhdfcbank",
+      "name": "Aarav Sharma"
+    }
+  }
+}
