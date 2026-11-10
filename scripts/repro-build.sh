@@ -48,8 +48,8 @@ build_once() {
   local artifact="$2"
   (
     cd "$directory"
-    export HOME="$directory/.build-home"
-    export TMPDIR="$directory/.build-tmp"
+    export HOME="${directory}-home"
+    export TMPDIR="${directory}-tmp"
     mkdir -p "$HOME" "$TMPDIR"
     export TZ=UTC
     export LC_ALL=C
