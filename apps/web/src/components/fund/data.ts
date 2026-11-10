@@ -68,7 +68,7 @@ export async function getPublicFund(fundId: string): Promise<PublicFund | null> 
       summary.verification === "bank-matched" || summary.verification === "anchored";
 
     const timelineEntries: PublicTimelineEntry[] = (timeline?.items ?? []).map((item) => {
-      const isItemVerified = item.verified === "bank-matched" || item.verified === "anchored";
+      const isItemVerified = item.verified === "anchored";
       return {
         id: item.id,
         type: "expense",

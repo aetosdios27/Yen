@@ -125,6 +125,42 @@ describe("public fund read API", () => {
     }
   });
 
+  it("only labels bank-matched items anchored when a confirmed anchor covers their financial event", async () => {
+    class AnchoredReadStore extends MemoryPublicFundReadStore {
+      override async anchoredItems() {
+        return new Set(["00000000-0000-4000-8000-000000000051"]);
+      }
+      override async pledgedPaise() {
+        return 9000n;
+      }
+    }
+    const donations = new AnchoredReadStore();
+    donations.set(fundId, [
+      {
+        id: "00000000-0000-4000-8000-000000000051",
+        occurredAt: "2026-10-28T01:00:00.000Z",
+        amountPaise: 1500n,
+        donorDisplayName: null,
+        donorNameChoice: "anonymous",
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000052",
+        occurredAt: "2026-10-28T02:00:00.000Z",
+        amountPaise: 2500n,
+        donorDisplayName: null,
+        donorNameChoice: "initials",
+      },
+    ]);
+    const app = fixtureApp(new MemoryDisplayNameStore(), owner, donations);
+    await createPublicFund(app);
+    const summary = await (await app.request(`/v1/funds/${fundId}/public/summary`)).json();
+    expect(summary).toMatchObject({ raisedPaise: "4000", pledgedPaise: "9000" });
+    const timeline = await (await app.request(`/v1/funds/${fundId}/public/timeline`)).json();
+    expect(timeline).toMatchObject({
+      items: [{ verified: "unverified" }, { verified: "anchored" }, { verified: "bank-matched" }],
+    });
+  });
+
   it("returns zero rather than a stub when a fund has no verified donations", async () => {
     const app = fixtureApp();
     await createPublicFund(app);
@@ -243,6 +279,7 @@ describe("public fund read API", () => {
       purpose:
         "Phone +919876543210; UTR ABCDEF123456789; account number 1234567890123456; https://files.example/secret.pdf",
       raisedPaise: null,
+      pledgedPaise: "0",
       spentPaise: "0",
       verification: "unverified",
       dataGaps: [],
