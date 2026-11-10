@@ -13,7 +13,7 @@ import { createApp } from "./app.js";
 import { PostgresDonationPledgeStore } from "./donation-store.js";
 import { PostgresExpenseStore } from "./expense-store.js";
 import { PostgresFundStore } from "./fund-store.js";
-import { PostgresPublicFundReadStore } from "./public-fund-store.js";
+import { PostgresPublicFundHeadStore, PostgresPublicFundReadStore } from "./public-fund-store.js";
 import { PostgresReceiptStore } from "./receipt-store.js";
 import { PostgresReconciliationStore } from "./reconciliation/postgres-store.js";
 
@@ -70,6 +70,9 @@ databaseSuite("public HTTP financial proof with Postgres stores", (sql) => {
       expenseStore: expenses,
       donationPledgeStore: pledges,
       publicFundReadStore: new PostgresPublicFundReadStore(sql),
+      publicFundHead: new PostgresPublicFundHeadStore(sql).get.bind(
+        new PostgresPublicFundHeadStore(sql),
+      ),
       reconciliationStore: bank,
     });
     async function comparePlans() {
@@ -153,6 +156,32 @@ databaseSuite("public HTTP financial proof with Postgres stores", (sql) => {
       pledgedPaise: "0",
       verification: "bank-matched",
     });
+  });
+
+  it("validates public pages from the event log head", async () => {
+    const f = await fixture();
+    await f.pledge();
+    const head = (
+      await sql`SELECT hash FROM fund_events WHERE fund_id = ${f.fundId} ORDER BY seq DESC LIMIT 1`
+    )[0]?.hash;
+    const orgId = (await sql`SELECT org_id FROM funds WHERE id = ${f.fundId}`)[0]?.org_id;
+    expect(head).toBeDefined();
+    expect(orgId).toBeDefined();
+
+    const first = await f.app.request(`/v1/funds/${f.fundId}/public/summary`);
+    expect(first.status).toBe(200);
+    expect(first.headers.get("etag")).toBe(`W/"${f.fundId}-${head}"`);
+    expect(first.headers.get("cache-tag")).toBe(`fund-${f.fundId}, org-${orgId}`);
+    expect(first.headers.get("cache-control")).toBe(
+      "public, s-maxage=60, stale-while-revalidate=300, stale-if-error=86400",
+    );
+
+    const second = await f.app.request(`/v1/funds/${f.fundId}/public/summary`, {
+      headers: { "if-none-match": first.headers.get("etag") ?? "" },
+    });
+    expect(second.status).toBe(304);
+    expect(await second.text()).toBe("");
+    expect(second.headers.get("etag")).toBe(`W/"${f.fundId}-${head}"`);
   });
 
   it("retains both refund movements and a truthful receipt while HTTP totals equal the ledger", async () => {
