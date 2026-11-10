@@ -303,3 +303,128 @@ describe("WhatsApp utility template compliance", () => {
     });
   });
 });
+
+describe("WhatsApp utility template compliance", () => {
+  describe("fail-closed cases", () => {
+    it("rejects a dispatch without a template name", () => {
+      const result = validateWhatsAppDispatch(
+        { ...validWhatsAppDispatch, template_name: undefined },
+        testWhatsAppRegistry,
+      );
+      expect(result.compliant).toBe(false);
+      expect(result.violations).toContainEqual(
+        expect.objectContaining({
+          code: "missing_whatsapp_template_name",
+          field: "template_name",
+        }),
+      );
+    });
+
+    it("rejects a dispatch whose template name differs from the approved name", () => {
+      const result = validateWhatsAppDispatch(
+        { ...validWhatsAppDispatch, template_name: "yen_promotional_offer" },
+        testWhatsAppRegistry,
+      );
+      expect(result.compliant).toBe(false);
+      expect(result.violations).toContainEqual(
+        expect.objectContaining({
+          code: "whatsapp_template_name_mismatch",
+          field: "template_name",
+        }),
+      );
+    });
+
+    it("rejects a dispatch without a language code", () => {
+      const result = validateWhatsAppDispatch(
+        { ...validWhatsAppDispatch, language_code: "" },
+        testWhatsAppRegistry,
+      );
+      expect(result.compliant).toBe(false);
+      expect(result.violations).toContainEqual(
+        expect.objectContaining({
+          code: "missing_whatsapp_language_code",
+          field: "language_code",
+        }),
+      );
+    });
+
+    it("rejects a language code without an approved registration", () => {
+      const result = validateWhatsAppDispatch(
+        { ...validWhatsAppDispatch, language_code: "hi" },
+        testWhatsAppRegistry,
+      );
+      expect(result.compliant).toBe(false);
+      expect(result.violations).toContainEqual(
+        expect.objectContaining({
+          code: "unapproved_language_code",
+          field: "language_code",
+        }),
+      );
+    });
+
+    it("rejects template keys without an approved WhatsApp template", () => {
+      const result = validateWhatsAppDispatch(
+        { ...validWhatsAppDispatch, template_key: "fund_alert" },
+        testWhatsAppRegistry,
+      );
+      expect(result.compliant).toBe(false);
+      expect(result.violations).toContainEqual(
+        expect.objectContaining({ code: "unregistered_template", field: "template_key" }),
+      );
+    });
+
+    it("rejects variables outside the approved template body", () => {
+      const result = validateWhatsAppDispatch(
+        {
+          ...validWhatsAppDispatch,
+          variables: { ...validWhatsAppDispatch.variables, link: "https://example.com" },
+        },
+        testWhatsAppRegistry,
+      );
+      expect(result.compliant).toBe(false);
+      expect(result.violations).toContainEqual(
+        expect.objectContaining({ code: "unapproved_variable", field: "variables.link" }),
+      );
+    });
+
+    it("rejects dispatches missing an approved variable", () => {
+      const result = validateWhatsAppDispatch(
+        {
+          ...validWhatsAppDispatch,
+          variables: { expense_title: "Server hosting renewal", amount_inr: "Rs 1,250.00" },
+        },
+        testWhatsAppRegistry,
+      );
+      expect(result.compliant).toBe(false);
+      expect(result.violations).toContainEqual(
+        expect.objectContaining({ code: "missing_variable", field: "variables.fund_title" }),
+      );
+    });
+
+    it("rejects dispatches with an empty approved variable", () => {
+      const result = validateWhatsAppDispatch(
+        {
+          ...validWhatsAppDispatch,
+          variables: { ...validWhatsAppDispatch.variables, fund_title: "" },
+        },
+        testWhatsAppRegistry,
+      );
+      expect(result.compliant).toBe(false);
+      expect(result.violations).toContainEqual(
+        expect.objectContaining({ code: "empty_variable", field: "variables.fund_title" }),
+      );
+    });
+
+    it("returns violations instead of a payload for a non-compliant dispatch", () => {
+      const result = buildWhatsAppTemplatePayload(
+        { ...validWhatsAppDispatch, language_code: "fr" },
+        testWhatsAppRegistry,
+      );
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error("expected a rejected dispatch");
+      expect(result.violations).toContainEqual(
+        expect.objectContaining({ code: "unapproved_language_code" }),
+      );
+    });
+  });
+});
