@@ -278,4 +278,49 @@ not a bug.
    with the response; narrate that the hash is pinned before any approver
    sees the file.
 
+## 7. Journey 2: co-approver reviews the expense and approves with the PIN
+
+Persona: Rohan Iyer (co-approver, hi locale). Cookie:
+`yen_mock_session_approver2_token`, PIN `482613` (set up once in section 4).
+
+### Shots
+
+1. Review screen. In a fresh browser profile (so the UI reads as Rohan), open
+   the approval URL captured in Journey 1:
+   `http://localhost:3000/funds/01940000-0000-7000-8000-000000000002/approvals/EXPENSE_ID`
+   (`apps/web/src/app/funds/[fundId]/approvals/[expenseId]/page.tsx`). Show:
+   - status badge (pending) and the exact amount
+   - payee name and payee UPI VPA
+   - purpose and requested-by row (Aarav Sharma)
+   - the receipts row, which shows the attached evidence reference
+   - the expense timeline with the approval quorum (2 of 2)
+2. Inspect the bill. On camera, narrate over the receipts row. The reviewer
+   UI shows the receipt reference; the server pins the bytes to the SHA-256
+   recorded at upload time. To display the verification data, run:
+
+   ```sh
+   curl -s http://localhost:3001/v1/funds/01940000-0000-7000-8000-000000000002/expenses/EXPENSE_ID/evidence \
+     -b 'yen_session=yen_mock_session_approver2_token'
+   ```
+
+   The response lists each evidence item with its `fileSha256`, size and MIME
+   type; the API re-verifies stored bytes against the pinned hash before
+   returning (`apps/api/src/app.ts`, `getEvidenceRoute`).
+3. Approve with the PIN. Click "Approve" to open the PIN modal
+   (`ApprovalPinModal`), type `482613` and confirm. The modal first verifies
+   the PIN against an action hash
+   (`POST /v1/auth/pin/verify`) and receives a single-use 60-second approval
+   token, then submits it to
+   `POST /v1/funds/{fundId}/expenses/{expenseId}/approve`. Show the success
+   toast and the timeline updating to 1 of 2 approvals.
+4. Reach quorum. Repeat steps 1 to 3 as Priya Verma
+   (`yen_mock_session_approver1_token`, her own PIN setup call in section 4)
+   on the same expense. The expense status flips to approved once the second
+   approval lands. Point out that a single approver can never release money.
+5. Lockout safety net (optional b-roll). If you want to show it, type a wrong
+   PIN once and narrate the error copy; five consecutive failures lock
+   approvals for 30 minutes and ten failures in 24 hours require recovery, so
+   do not demonstrate past the first failure.
+
+
 
