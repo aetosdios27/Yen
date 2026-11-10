@@ -1,6 +1,6 @@
 "use client";
 
-import { type AuditBundle, exportAuditBundleCsv, formatInr } from "@yen/shared";
+import { type AuditBundle, exportAuditBundleCsv } from "@yen/shared";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
@@ -14,10 +14,12 @@ import {
   QuestionMarkCircleIcon,
   ShieldCheckIcon,
 } from "../../components/fund/icons";
-import { useI18n } from "../../i18n";
+import { type MessageKey, useI18n } from "../../i18n";
+import { formatDate, formatDateTime, formatMoney } from "../../lib/format";
 import { generateOfflineVerifierScript, triggerDownload } from "../../lib/offline-script";
 import {
   type BundleVerificationReport,
+  type RecordDetailKind,
   type RecordProofData,
   type RecordVerificationReport,
   verifyRecordProofData,
@@ -39,6 +41,33 @@ type VerifyState =
       bundle: AuditBundle;
     }
   | { kind: "error"; message: string };
+
+const DETAIL_KIND_MESSAGE_KEYS: Record<RecordDetailKind, MessageKey> = {
+  verified: "verify.passDetail",
+  skipped: "verify.skippedDetail",
+  pending: "verify.pendingDetail",
+  pending_window_message: "verify.pendingDetail",
+  hash_mismatch: "verify.failHashDetail",
+  seal_mismatch: "verify.failSealDetail",
+  registry_mismatch: "verify.failRegistryDetail",
+};
+
+/** Check names come from @yen/shared in English; unknown names fall back to the raw string. */
+const BUNDLE_CHECK_MESSAGE_KEYS: Record<string, MessageKey> = {
+  "bundle format": "verify.checkBundleFormat",
+  "canonical event hash": "verify.checkCanonicalEventHash",
+  "canonical event hashes": "verify.checkCanonicalEventHash",
+  "hash chain": "verify.checkHashChain",
+  "Merkle inclusion": "verify.checkMerkleInclusion",
+  "Merkle inclusion proofs": "verify.checkMerkleInclusion",
+  "batch ranges and roots": "verify.checkBatchRanges",
+  "anchor reference": "verify.checkAnchorReference",
+};
+
+function bundleCheckLabel(name: string, t: (key: MessageKey) => string): string {
+  const key = BUNDLE_CHECK_MESSAGE_KEYS[name];
+  return key === undefined ? name : t(key);
+}
 
 function VerifyPageContent() {
   const { t, locale } = useI18n();
@@ -325,9 +354,19 @@ function VerifyPageContent() {
                         : t("verify.outcomeFailed")}
                 </span>
 
-                <h2 className="mt-1 text-title font-bold leading-snug">{state.report.headline}</h2>
+                <h2 className="mt-1 text-title font-bold leading-snug">
+                  {state.report.outcome === "verified"
+                    ? t("verify.passHeadline", {
+                        date: formatDate(state.report.occurredAt ?? "", locale),
+                      })
+                    : state.report.outcome === "pending"
+                      ? t("verify.pendingHeadline")
+                      : state.report.outcome === "skipped"
+                        ? t("verify.skippedHeadline")
+                        : t("verify.failHeadline")}
+                </h2>
                 <p className="mt-2 text-small leading-relaxed opacity-90">
-                  {state.report.detailMessage}
+                  {t(DETAIL_KIND_MESSAGE_KEYS[state.report.detailKind])}
                 </p>
 
                 {/* Summary information grid */}
@@ -340,28 +379,28 @@ function VerifyPageContent() {
                   </div>
                   {state.report.amountPaise !== undefined && (
                     <div>
-                      <span className="opacity-75 block">Amount</span>
+                      <span className="opacity-75 block">{t("verify.amountLabel")}</span>
                       <span className="font-bold text-sm block">
-                        {formatInr(state.report.amountPaise)}
+                        {formatMoney(state.report.amountPaise, locale)}
                       </span>
                     </div>
                   )}
                   {state.report.occurredAt && (
                     <div>
-                      <span className="opacity-75 block">Date recorded</span>
+                      <span className="opacity-75 block">{t("verify.dateRecordedLabel")}</span>
                       <span className="font-medium block">
-                        {new Date(state.report.occurredAt).toLocaleString(locale)}
+                        {formatDateTime(state.report.occurredAt, locale)}
                       </span>
                     </div>
                   )}
                   <div>
-                    <span className="opacity-75 block">Seal verification</span>
+                    <span className="opacity-75 block">{t("verify.sealStatusLabel")}</span>
                     <span className="font-medium block">
                       {state.report.checks.onChainAnchorValid === true
-                        ? "Public registry seal verified"
+                        ? t("verify.sealVerified")
                         : state.report.checks.onChainAnchorValid === "pending"
-                          ? "Pending public seal batch"
-                          : "Cryptographic proof intact (offline check)"}
+                          ? t("verify.sealPending")
+                          : t("verify.sealOffline")}
                     </span>
                   </div>
                 </div>
@@ -461,7 +500,7 @@ function VerifyPageContent() {
 
                     <div className="border-t border-border pt-2">
                       <span className="text-ink-muted block text-[11px] mb-1 font-mono">
-                        Raw Event Record
+                        {t("verify.rawEventLabel")}
                       </span>
                       <pre className="max-h-48 overflow-auto rounded bg-canvas p-2 text-[11px] text-ink font-mono">
                         {JSON.stringify(state.report.rawEvent, null, 2)}
@@ -492,8 +531,8 @@ function VerifyPageContent() {
               <div className="flex-1">
                 <h2 className="text-title font-bold">
                   {state.report.allValid
-                    ? `Audit Bundle Verified: ${state.report.totalEvents} record(s) intact`
-                    : "Audit Bundle Verification Failed"}
+                    ? t("verify.bundlePassedTitle", { count: state.report.totalEvents })
+                    : t("verify.bundleFailedTitle")}
                 </h2>
                 <p className="mt-1 text-small opacity-90">{t("verify.offlineNotice")}</p>
 
@@ -503,9 +542,9 @@ function VerifyPageContent() {
                       key={check.name}
                       className="flex items-center justify-between py-1 border-b border-current/10"
                     >
-                      <span className="font-medium">{check.name}</span>
+                      <span className="font-medium">{bundleCheckLabel(check.name, t)}</span>
                       <span className="font-semibold uppercase tracking-wider">
-                        {check.ok ? "✓ Pass" : "✗ Fail"}
+                        {check.ok ? `✓ ${t("verify.checkPass")}` : `✗ ${t("verify.checkFail")}`}
                       </span>
                     </div>
                   ))}
@@ -519,7 +558,7 @@ function VerifyPageContent() {
       {/* Export & Standalone Script Action Bar */}
       <section aria-labelledby="downloads-heading" className="mt-8 border-t border-border pt-6">
         <h2 id="downloads-heading" className="text-title font-semibold text-ink mb-3">
-          Audit Exports & Independent Verification
+          {t("verify.exportsTitle")}
         </h2>
         <div className="flex flex-wrap gap-2.5">
           <button

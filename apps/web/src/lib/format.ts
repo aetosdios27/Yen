@@ -1,9 +1,10 @@
 import { type Paise } from "@yen/shared";
-import type { ProductLocale } from "../i18n/locales";
+import type { Locale } from "../i18n/locales";
 
-const INTL_TAGS: Record<ProductLocale, "en-IN" | "hi-IN"> = {
+const INTL_TAGS: Record<Locale, "en-IN" | "hi-IN"> = {
   en: "en-IN",
   hi: "hi-IN",
+  "en-XA": "en-IN",
 };
 
 const integerFormatters = new Map<string, Intl.NumberFormat>();
@@ -51,7 +52,7 @@ function dateTimeFormatter(tag: "en-IN" | "hi-IN"): Intl.DateTimeFormat {
  * Formats paise as rupees with the lakh/crore digit grouping of the locale.
  * Rupees and paise are split before formatting, so no float is ever formatted.
  */
-export function formatMoney(amount: Paise, locale: ProductLocale): string {
+export function formatMoney(amount: Paise, locale: Locale): string {
   const sign = amount < 0 ? "-" : "";
   const abs = Math.abs(amount);
   const rupees = Math.trunc(abs / 100);
@@ -60,7 +61,7 @@ export function formatMoney(amount: Paise, locale: ProductLocale): string {
 }
 
 /** Day, abbreviated month and year in the locale. Falls back to the raw string. */
-export function formatDate(iso: string, locale: ProductLocale): string {
+export function formatDate(iso: string, locale: Locale): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
     return iso;
@@ -69,7 +70,7 @@ export function formatDate(iso: string, locale: ProductLocale): string {
 }
 
 /** Day, abbreviated month, year, hour and minute in the locale. */
-export function formatDateTime(iso: string, locale: ProductLocale): string {
+export function formatDateTime(iso: string, locale: Locale): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
     return iso;

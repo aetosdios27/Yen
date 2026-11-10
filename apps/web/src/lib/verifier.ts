@@ -65,6 +65,19 @@ export interface VerifyRecordOptions {
   skipOnChainCheck?: boolean;
 }
 
+/**
+ * Why the check ended the way it did. The page maps this to a localized
+ * headline and detail line, so user-facing copy never comes from this module.
+ */
+export type RecordDetailKind =
+  | "verified"
+  | "skipped"
+  | "pending"
+  | "pending_window_message"
+  | "hash_mismatch"
+  | "seal_mismatch"
+  | "registry_mismatch";
+
 export interface RecordVerificationReport {
   outcome: VerificationOutcome;
   recordId: string;
@@ -73,6 +86,7 @@ export interface RecordVerificationReport {
   amountPaise?: Paise | undefined;
   headline: string;
   detailMessage: string;
+  detailKind: RecordDetailKind;
   checks: {
     eventHashValid: boolean;
     merkleProofValid: boolean;
@@ -184,6 +198,7 @@ export async function verifyRecordProofData(
       detailMessage:
         proofData.pendingWindow?.message ??
         "This record is safely recorded in the account book and awaiting the next scheduled seal batch.",
+      detailKind: proofData.pendingWindow?.message ? "pending_window_message" : "pending",
       checks: {
         eventHashValid: hashMatches,
         merkleProofValid: true,
@@ -208,6 +223,7 @@ export async function verifyRecordProofData(
       amountPaise,
       headline: "Verification failed: record was altered",
       detailMessage: "The record payload does not match its cryptographic hash signature.",
+      detailKind: "hash_mismatch",
       checks: {
         eventHashValid: false,
         merkleProofValid: false,
@@ -275,6 +291,7 @@ export async function verifyRecordProofData(
       headline: "Verification failed: seal mismatch",
       detailMessage:
         "The record could not be proven against the public seal root. The record or proof path may have been modified.",
+      detailKind: "seal_mismatch",
       checks: {
         eventHashValid: true,
         merkleProofValid: false,
@@ -323,6 +340,7 @@ export async function verifyRecordProofData(
       amountPaise,
       headline: "Verification failed: public registry mismatch",
       detailMessage: "The sealed root does not match the published public registry entry.",
+      detailKind: "registry_mismatch",
       checks: {
         eventHashValid: true,
         merkleProofValid: true,
@@ -367,6 +385,7 @@ export async function verifyRecordProofData(
     detailMessage: isFullyVerified
       ? "Cryptographic proof matches the publicly sealed registry entry."
       : "Cryptographic proof is intact against the audit bundle seal, but on-chain registry verification was skipped or offline.",
+    detailKind: isFullyVerified ? "verified" : "skipped",
     checks: {
       eventHashValid: true,
       merkleProofValid: true,
