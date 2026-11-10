@@ -898,6 +898,7 @@ databaseSuite("Postgres expense store", (sql, url) => {
       }
     };
     const approvalTraces: string[] = [];
+    const browserParents: string[] = [];
     try {
       for (const approverId of approverIds) {
         await pinService.setupPin(approverId, "482915", { userId: approverId });
@@ -912,6 +913,7 @@ databaseSuite("Postgres expense store", (sql, url) => {
           }),
           async (request) => {
             if (!(request instanceof Request)) throw new Error("Expected Request");
+            browserParents.push(request.headers.get("traceparent") ?? "");
             return makeApp({ id: approverId, role: "approver" }).request(request);
           },
         );
@@ -922,14 +924,22 @@ databaseSuite("Postgres expense store", (sql, url) => {
     } finally {
       await worker.stop();
     }
-    for (const traceId of approvalTraces) {
+    expect(approvalTraces).toEqual(browserParents.map((parent) => parent.split("-")[1]));
+    for (const [index, traceId] of approvalTraces.entries()) {
+      const apiSpan = spanExporter
+        .getFinishedSpans()
+        .find(
+          (span) =>
+            span.spanContext().traceId === traceId &&
+            span.name === "POST /v1/funds/:fundId/expenses/:expenseId/approve",
+        );
+      expect(apiSpan?.parentSpanContext?.spanId).toBe(browserParents[index]?.split("-")[2]);
       const names = spanExporter
         .getFinishedSpans()
         .filter((s) => s.spanContext().traceId === traceId)
         .map((s) => s.name);
       expect(names).toEqual(
         expect.arrayContaining([
-          "browser.api.request",
           "POST /v1/funds/:fundId/expenses/:expenseId/approve",
           "ledger.approve",
           "queue.job",
