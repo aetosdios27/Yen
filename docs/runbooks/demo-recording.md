@@ -322,5 +322,79 @@ Persona: Rohan Iyer (co-approver, hi locale). Cookie:
    approvals for 30 minutes and ten failures in 24 hours require recovery, so
    do not demonstrate past the first failure.
 
+## 8. Journey 3: public fund view, transaction verification and Merkle proof
+
+Persona: none; everything in this journey is public, no cookie needed. Record
+it in a clean browser profile so no session leaks into the shot.
+
+### Anchor availability (optional but recommended)
+
+The record proof endpoint returns `status: "pending"` with a
+`pendingWindow` message until an anchor has landed for the event. To record
+the full anchored state, run the queue worker against a local chain before
+this journey:
+
+```sh
+# Terminal A: local EVM chain
+anvil
+
+# Terminal B: deploy RootRegistry with the publisher set to the worker signer
+cd contracts
+forge create src/RootRegistry.sol:RootRegistry \
+  --rpc-url http://localhost:8545 \
+  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+  --constructor-args 0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A
+```
+
+The constructor argument is the address of the demo signer key below
+(computed from that exact private key). Then start the worker:
+
+```sh
+DATABASE_URL=postgres://postgres:pw@localhost:5432/postgres \
+QUEUE_MIGRATE=true \
+ANCHOR_RPC_URL=http://localhost:8545 \
+ROOT_REGISTRY_ADDRESS=0x<DEPLOYED_ADDRESS> \
+ANCHOR_PRIVATE_KEY=0x1111111111111111111111111111111111111111111111111111111111111111 \
+ANCHOR_ALLOW_LOCAL_SIGNER=true \
+pnpm --filter @yen/queue start
+```
+
+Notes, all verified against the code:
+
+- `QUEUE_MIGRATE=true` is required on the first worker start after
+  `pnpm demo:reset`, because the reset drops the pg-boss schema.
+- The anchoring discovery job runs every 5 minutes
+  (`registerAnchoringDiscovery` in `packages/queue/src/anchoring.ts`), so
+  allow a few minutes between the expense approval and the anchored status.
+- The API proof response reports `contractAddress` from
+  `REGISTRY_CONTRACT_ADDRESS` when set; export it with the deployed address
+  for a complete on-camera payload.
+- Without a chain configured, the journey still works end to end: the verify
+  page shows the pending state and the tamper-evident event log. Decide which
+  story you want on camera.
+
+### Shots
+
+1. Public fund view. Open
+   http://localhost:3000/funds/01940000-0000-7000-8000-000000000002 logged
+   out. Show the fund header, money summary and the activity timeline; each
+   entry carries a verified badge that links to the proof page with
+   `?recordId=...&fundId=...` (`apps/web/src/components/fund/verified-badge.tsx`).
+2. Verify a transaction. Click the verified badge on the paid expense entry
+   (35,000 INR, UTR 987654321001) or on a donation verification entry. The
+   verify page (`/verify`, `apps/web/src/app/verify/page.tsx`) fetches
+   `GET /v1/funds/{fundId}/records/{recordId}/proof` and shows the event
+   details, the anchor status and the verification result.
+3. Merkle inclusion proof. On the same page, narrate the verification report:
+   the client recomputes the record hash from the event and salt and checks
+   the Merkle proof path against the public seal root
+   (`apps/web/src/lib/verifier.ts`, `verifyEventProof`). With a local chain
+   running, the page also reports the on-chain registry check; otherwise it
+   states that on-chain verification was skipped or offline.
+4. Offline verification (optional closer). From the verify page, download the
+   offline verifier script or the audit bundle and show that the same proof
+   verifies without any server connection.
+
+
 
 
