@@ -1,4 +1,5 @@
 import type { Paise } from "@yen/shared";
+import { type DonationStatus, isOutstandingPledge } from "@yen/shared";
 import { type MatchCandidate, matchCredit } from "./matching-engine.js";
 import type {
   CandidatePledge,
@@ -28,7 +29,7 @@ export interface StoredPledge {
   utr: string;
   donorName?: string | undefined;
   donorContact?: string | undefined;
-  status: "pledged" | "verified" | "rejected";
+  status: DonationStatus;
   createdAt: string;
   verifiedAt?: string | undefined;
 }
@@ -112,7 +113,7 @@ export class MemoryReconciliationStore implements ReconciliationStore {
   }
 
   private reconcileLatePledge(pledge: StoredPledge): void {
-    if (pledge.status !== "pledged") return;
+    if (!isOutstandingPledge(pledge.status)) return;
 
     for (const tx of this.transactions.values()) {
       if (
@@ -189,7 +190,7 @@ export class MemoryReconciliationStore implements ReconciliationStore {
         // Collect active pledges in this fund
         const availablePledges: MatchCandidate[] = [];
         for (const p of this.pledges.values()) {
-          if (p.fundId === tx.fundId && p.status === "pledged") {
+          if (p.fundId === tx.fundId && isOutstandingPledge(p.status)) {
             availablePledges.push({
               pledgeId: p.id,
               fundId: p.fundId,
@@ -255,7 +256,7 @@ export class MemoryReconciliationStore implements ReconciliationStore {
     // Get available pending pledges in this fund
     const pendingPledges: MatchCandidate[] = [];
     for (const p of this.pledges.values()) {
-      if (p.fundId === fundId && p.status === "pledged") {
+      if (p.fundId === fundId && isOutstandingPledge(p.status)) {
         pendingPledges.push({
           pledgeId: p.id,
           fundId: p.fundId,
@@ -381,7 +382,7 @@ export class MemoryReconciliationStore implements ReconciliationStore {
     if (!pledge || pledge.fundId !== request.fundId) {
       return { kind: "pledge_not_found" };
     }
-    if (pledge.status !== "pledged") {
+    if (!isOutstandingPledge(pledge.status)) {
       return { kind: "already_matched" };
     }
 

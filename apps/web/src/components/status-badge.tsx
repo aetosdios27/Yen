@@ -5,12 +5,13 @@ import { type MessageKey, useI18n } from "../i18n";
 import { cn } from "./cn";
 import { AlertTriangleIcon, CheckCircleIcon, ClockIcon, XCircleIcon } from "./icons";
 
-export type Status = "verified" | "pending" | "unmatched" | "rejected";
+export type Status = "verified" | "pending" | "unmatched" | "rejected" | "refunded";
 
 const STATUS_STYLES: Record<Status, string> = {
   verified: "border-verified-border bg-verified-bg text-verified-ink",
   pending: "border-pending-border bg-pending-bg text-pending-ink",
   unmatched: "border-unmatched-border bg-unmatched-bg text-unmatched-ink",
+  refunded: "border-border bg-surface text-ink",
   rejected: "border-rejected-border bg-rejected-bg text-rejected-ink",
 };
 
@@ -19,12 +20,14 @@ const STATUS_MESSAGE_KEYS = {
   pending: "status.pending",
   unmatched: "status.unmatched",
   rejected: "status.rejected",
+  refunded: "status.refunded",
 } as const satisfies Record<Status, MessageKey>;
 
 const STATUS_ICONS: Record<Status, ReactNode> = {
   verified: <CheckCircleIcon className="h-5 w-5 shrink-0" />,
   pending: <ClockIcon className="h-5 w-5 shrink-0" />,
   unmatched: <AlertTriangleIcon className="h-5 w-5 shrink-0" />,
+  refunded: <XCircleIcon className="h-5 w-5 shrink-0" />,
   rejected: <XCircleIcon className="h-5 w-5 shrink-0" />,
 };
 

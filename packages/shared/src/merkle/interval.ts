@@ -20,17 +20,17 @@ export function fingerprint(fundId: FundId, latestEventHash: Hash32): Promise<Ha
   return sha256(Uint8Array.of(0x03), fromHex(fundId.replaceAll("-", "")), latestEventHash);
 }
 
-function u64be(count: number): Uint8Array {
+export function u64be(count: number): Uint8Array {
   const bytes = new Uint8Array(8);
   new DataView(bytes.buffer).setBigUint64(0, BigInt(count), false);
   return bytes;
 }
 
-function fundLeaf(eventCount: number, root: Hash32, identity: Hash32): Promise<Hash32> {
+export function fundLeaf(eventCount: number, root: Hash32, identity: Hash32): Promise<Hash32> {
   return sha256(Uint8Array.of(0x02), u64be(eventCount), root, identity);
 }
 
-function globalRoot(fundCount: number, root: Hash32): Promise<Hash32> {
+export function globalRoot(fundCount: number, root: Hash32): Promise<Hash32> {
   return sha256(Uint8Array.of(0x04), u64be(fundCount), root);
 }
 

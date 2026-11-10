@@ -1,6 +1,6 @@
 "use client";
 
-import { paise } from "@yen/shared";
+import { type DonationStatus, paise } from "@yen/shared";
 import Link from "next/link";
 import { type FormEvent, useState } from "react";
 import { useI18n } from "../i18n";
@@ -15,9 +15,10 @@ export interface ReceiptData {
   fundId: string;
   fundName: string;
   amountPaise: string;
-  status: "verified" | "pledged" | "failed";
+  status: DonationStatus;
   utr: string;
   occurredAt: string;
+  refundedAt?: string | undefined;
   donorName?: string | undefined;
   verificationUrl: string;
   isTaxExempt: false;
@@ -48,6 +49,8 @@ export interface ReceiptViewProps {
 export function ReceiptView({ receipt, apiUrl = "", onSubscribe }: ReceiptViewProps) {
   const { t } = useI18n();
   const [destination, setDestination] = useState("");
+  const [consent, setConsent] = useState(false);
+  const [whatsappConsent, setWhatsappConsent] = useState(false);
   const [weeklyDigest, setWeeklyDigest] = useState(true);
   const [instantAlerts, setInstantAlerts] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -55,20 +58,36 @@ export function ReceiptView({ receipt, apiUrl = "", onSubscribe }: ReceiptViewPr
   const [subscribeError, setSubscribeError] = useState<string | null>(null);
 
   const apiBase = apiUrl.replace(/\/+$/, "");
-  const badgeStatus = receipt.status === "verified" ? "verified" : "pending";
-  const formattedDate = new Date(receipt.occurredAt).toLocaleDateString("en-IN", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const presentation = (() => {
+    switch (receipt.status) {
+      case "verified":
+        return { badge: "verified", title: "receipt.verifiedTitle" } as const;
+      case "pledged":
+        return { badge: "pending", title: "receipt.pendingTitle" } as const;
+      case "rejected":
+        return { badge: "rejected", title: "receipt.rejectedTitle" } as const;
+      case "refunded":
+        return { badge: "refunded", title: "receipt.refundedTitle" } as const;
+    }
+    const exhaustive: never = receipt.status;
+    throw new Error(`Unknown receipt status: ${exhaustive}`);
+  })();
+  const formattedDate = new Date(receipt.refundedAt ?? receipt.occurredAt).toLocaleDateString(
+    "en-IN",
+    {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    },
+  );
 
   async function handleSubscribe(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submitting) return;
     const trimmed = destination.trim();
-    if (trimmed === "") return;
+    if (trimmed === "" || !consent || (!trimmed.includes("@") && !whatsappConsent)) return;
 
     setSubmitting(true);
     setSubscribeError(null);
@@ -76,6 +95,8 @@ export function ReceiptView({ receipt, apiUrl = "", onSubscribe }: ReceiptViewPr
     const contactType: "email" | "phone" = trimmed.includes("@") ? "email" : "phone";
     const channel: "email" | "whatsapp" | "sms" = contactType === "email" ? "email" : "whatsapp";
     const payload = {
+      consent: true as const,
+      whatsappConsent,
       contact: trimmed,
       contactType,
       channel,
@@ -130,13 +151,11 @@ export function ReceiptView({ receipt, apiUrl = "", onSubscribe }: ReceiptViewPr
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
           <div className="flex flex-col gap-1">
             <h1 className="text-heading font-bold tracking-tight text-ink">
-              {receipt.status === "verified"
-                ? t("receipt.verifiedTitle")
-                : t("receipt.pendingTitle")}
+              {t(presentation.title)}
             </h1>
             <p className="text-small text-ink-muted">{receipt.fundName}</p>
           </div>
-          <StatusBadge status={badgeStatus} />
+          <StatusBadge status={presentation.badge} />
         </header>
 
         {/* Certificate Details */}
@@ -268,6 +287,28 @@ export function ReceiptView({ receipt, apiUrl = "", onSubscribe }: ReceiptViewPr
               </label>
             </fieldset>
 
+            <label className="flex items-center gap-3 text-small">
+              <input
+                type="checkbox"
+                checked={consent}
+                onChange={(e) => setConsent(e.target.checked)}
+              />
+              <span>
+                {t("receipt.consentUpdates").split("{notice}")[0]}
+                <Link href="/privacy">{t("receipt.privacyNotice")}</Link>
+                {t("receipt.consentUpdates").split("{notice}")[1]}
+              </span>
+            </label>
+            {!destination.includes("@") && (
+              <label className="flex items-center gap-3 text-small">
+                <input
+                  type="checkbox"
+                  checked={whatsappConsent}
+                  onChange={(e) => setWhatsappConsent(e.target.checked)}
+                />
+                {t("receipt.consentWhatsapp")}
+              </label>
+            )}
             <Button type="submit" loading={submitting} loadingLabel={t("receipt.subscribing")}>
               {t("receipt.subscribeButton")}
             </Button>

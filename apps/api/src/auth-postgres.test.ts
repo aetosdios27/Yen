@@ -1,8 +1,8 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { migrate } from "@yen/db";
+import { normalizePhone } from "@yen/shared";
 import { beforeAll, expect, it } from "vitest";
 import { databaseSuite } from "../../../packages/db/src/test/database.js";
-import { normalizePhone } from "./auth/phone.js";
 import { PostgresAuthStore } from "./auth/stores.js";
 
 const phone = normalizePhone("+919999900001");

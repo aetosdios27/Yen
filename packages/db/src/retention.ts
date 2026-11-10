@@ -62,6 +62,10 @@ export async function runRetentionJob(
         "status IN ('delivered', 'failed', 'dead_letter', 'skipped') AND updated_at < now() - ($1::int * interval '1 day')",
         periods.logDays,
       ],
+      fund_subscriptions: [
+        "status = 'unsubscribed' AND unsubscribed_at < now() - ($1::int * interval '1 day')",
+        periods.logDays,
+      ],
       consent_records: [
         "withdrawn_at IS NOT NULL AND withdrawn_at < now() - ($1::int * interval '1 day')",
         periods.auditDays,
