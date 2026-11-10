@@ -133,3 +133,169 @@ export const WHATSAPP_TEMPLATE_REGISTRY: Readonly<
     approved_language_codes: ["en"],
   },
 };
+
+const DLT_PLACEHOLDER_PATTERN = /\{#([a-zA-Z0-9_]+)#\}/g;
+const WHATSAPP_PLACEHOLDER_PATTERN = /\{\{(\d+)\}\}/g;
+
+function complianceFailure(violations: ComplianceViolation[]): ComplianceResult {
+  return { compliant: false, violations };
+}
+
+function escapeRegExpPart(part: string): string {
+  return part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Builds a strict full-match pattern for a registered body: every placeholder
+ * is replaced by a non-empty wildcard, all literal text must match exactly.
+ */
+function registeredBodyPattern(registeredBody: string, placeholder: RegExp): RegExp {
+  const literals = registeredBody.split(placeholder).filter((_part, index) => index % 2 === 0);
+  return new RegExp(`^${literals.map(escapeRegExpPart).join(".+")}$`);
+}
+
+export interface SmsDispatchInput {
+  template_key: string;
+  recipient: string;
+  dlt_entity_id?: string | null;
+  dlt_template_id?: string | null;
+  sender_id?: string | null;
+  variables: Readonly<Record<string, string>>;
+}
+
+export type SmsDispatchRegistry = Readonly<Record<string, SmsDltTemplateRegistration>>;
+
+/**
+ * Renders a registered DLT body with the given variables. Throws when a
+ * required variable is missing so callers cannot send a partially rendered
+ * registered message.
+ */
+export function renderDltRegisteredBody(
+  registration: SmsDltTemplateRegistration,
+  variables: Readonly<Record<string, string>>,
+): string {
+  return registration.registered_body.replace(DLT_PLACEHOLDER_PATTERN, (_match, name: string) => {
+    const value = variables[name];
+    if (value === undefined || value === "") {
+      throw new Error(`DLT template variable is missing: ${name}`);
+    }
+    return value;
+  });
+}
+
+function checkVariables(
+  registeredVariables: readonly string[],
+  variables: Readonly<Record<string, string>>,
+  fieldPrefix: string,
+): ComplianceViolation[] {
+  const violations: ComplianceViolation[] = [];
+  const allowed = new Set(registeredVariables);
+  for (const key of Object.keys(variables).sort()) {
+    if (!allowed.has(key)) {
+      violations.push({
+        code: "unapproved_variable",
+        field: `${fieldPrefix}.${key}`,
+        message: `Variable ${key} is not part of the registered template`,
+      });
+    }
+  }
+  for (const key of registeredVariables) {
+    const value = variables[key];
+    if (value === undefined) {
+      violations.push({
+        code: "missing_variable",
+        field: `${fieldPrefix}.${key}`,
+        message: `Registered template variable ${key} is missing`,
+      });
+    } else if (value === "") {
+      violations.push({
+        code: "empty_variable",
+        field: `${fieldPrefix}.${key}`,
+        message: `Registered template variable ${key} is empty`,
+      });
+    }
+  }
+  return violations;
+}
+
+/**
+ * Validates an outbound SMS dispatch against TCCCPR DLT requirements: a
+ * registered entity ID, a valid transactional sender header, a registered
+ * template ID, and variables limited to the approved set. Fails closed on any
+ * missing or malformed regulatory input.
+ */
+export function validateSmsDispatch(
+  input: SmsDispatchInput,
+  registry: SmsDispatchRegistry = SMS_DLT_TEMPLATE_REGISTRY,
+): ComplianceResult {
+  const violations: ComplianceViolation[] = [];
+
+  const entityId = input.dlt_entity_id?.trim() ?? "";
+  if (!entityId) {
+    violations.push({
+      code: "missing_dlt_entity_id",
+      field: "dlt_entity_id",
+      message: "DLT entity ID is required on every outgoing SMS dispatch",
+    });
+  } else if (!DLT_ID_PATTERN.test(entityId)) {
+    violations.push({
+      code: "invalid_dlt_entity_id",
+      field: "dlt_entity_id",
+      message: "DLT entity ID must be the numeric identifier issued by the DLT registry",
+    });
+  }
+
+  const senderId = input.sender_id?.trim() ?? "";
+  if (!senderId) {
+    violations.push({
+      code: "missing_dlt_sender_id",
+      field: "sender_id",
+      message: "DLT sender header is required on every outgoing SMS dispatch",
+    });
+  } else if (!DLT_SENDER_ID_PATTERN.test(senderId)) {
+    violations.push({
+      code: "invalid_dlt_sender_id",
+      field: "sender_id",
+      message: "DLT transactional sender header must be six alphabetic characters",
+    });
+  }
+
+  const templateId = input.dlt_template_id?.trim() ?? "";
+  if (!templateId) {
+    violations.push({
+      code: "missing_dlt_template_id",
+      field: "dlt_template_id",
+      message: "DLT template ID is required on every outgoing SMS dispatch",
+    });
+  }
+
+  const registration = registry[input.template_key];
+  if (!registration) {
+    violations.push({
+      code: "unregistered_template",
+      field: "template_key",
+      message: `Template ${input.template_key} has no registered DLT template`,
+    });
+    return complianceFailure(violations);
+  }
+
+  if (registration.dlt_template_id === "") {
+    violations.push({
+      code: "template_registration_incomplete",
+      field: "dlt_template_id",
+      message: `Template ${input.template_key} has no DLT template ID issued yet`,
+    });
+  } else if (templateId && templateId !== registration.dlt_template_id) {
+    violations.push({
+      code: "dlt_template_id_mismatch",
+      field: "dlt_template_id",
+      message: `DLT template ID does not match the registered ID for ${input.template_key}`,
+    });
+  }
+
+  violations.push(
+    ...checkVariables(registration.variables, input.variables, "variables"),
+  );
+
+  return { compliant: violations.length === 0, violations };
+}
