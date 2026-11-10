@@ -13,7 +13,7 @@ repo should be able to reproduce every screen below without asking questions.
 | Node.js | 24.21.0 | pinned in `package.json` engines |
 | pnpm | 12.6.0 | enabled through corepack |
 | Docker (or Podman) compose | any current | runs PostgreSQL 16 and Redis 7 from `docker-compose.yml` |
-| ClamAV daemon | any with INSTREAM on TCP | required only for the bill-upload step; see section 4 |
+| ClamAV daemon | any with INSTREAM on TCP | required only for the bill-upload step; see section 6 |
 
 One-time setup from the repository root:
 

@@ -13,6 +13,7 @@ must respect before executing any other runbook.
 | [break-glass.md](break-glass.md)               | Non-negotiable boundaries for incident response                                                                                                                                                |
 | [backup-restore.md](backup-restore.md)         | Backup and restore drill, recovery objectives and their limits                                                                                                                                 |
 | [web-rollback.md](web-rollback.md)             | Broken production deployment of the web tier                                                                                                                                                   |
+| [demo-recording.md](demo-recording.md)         | Recording the demo video: repeatable clean slate with `pnpm demo:reset`, seeded accounts and credentials, screen-by-screen journeys and the simulated components list                          |
 
 Continuous status probing uses `scripts/check-status.ts` from the repository
 root:
