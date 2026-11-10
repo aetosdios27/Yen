@@ -9,6 +9,7 @@ import { createServer } from "node:http";
  * Every route is in memory and resets when the server starts.
  */
 const port = Number(process.env.E2E_API_PORT ?? 3939);
+const webOrigin = `http://127.0.0.1:${Number(process.env.E2E_WEB_PORT ?? 3137)}`;
 const fundId = "00000000-0000-4000-8000-0000000000f1";
 const expenseId = "00000000-0000-4000-8000-0000000000e1";
 
@@ -40,10 +41,9 @@ const state = {
 };
 
 const json = (response, status, body) => {
-  const origin = response.req?.headers?.origin ?? "*";
   response.writeHead(status, {
     "content-type": "application/json",
-    "access-control-allow-origin": origin,
+    "access-control-allow-origin": webOrigin,
     "access-control-allow-credentials": "true",
     "access-control-allow-headers":
       "content-type, idempotency-key, authorization, x-request-id, x-approval-token",

@@ -32,11 +32,11 @@ export default defineConfig({
       timeout: 30_000,
     },
     {
-      command: `next start --port ${webPort}`,
+      command: `pnpm run build && pnpm exec next start --port ${webPort}`,
       url: webUrl,
       env: { NEXT_PUBLIC_API_URL: apiUrl, PORT: String(webPort) },
       reuseExistingServer: !process.env.CI,
-      timeout: 30_000,
+      timeout: 120_000,
     },
   ],
 });

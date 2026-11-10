@@ -4,7 +4,10 @@ export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const isDevelopment = process.env.NODE_ENV === "development";
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  const localApi = apiUrl?.startsWith("http:") ? apiUrl : "";
+  const localApi =
+    apiUrl && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/.test(apiUrl)
+      ? new URL(apiUrl).origin
+      : "";
   const policy = [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDevelopment ? " 'unsafe-eval'" : ""}`,
