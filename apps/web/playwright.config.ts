@@ -16,6 +16,7 @@ const browserApiUrl = realBackend
   ? `http://${sharedHost}:${proxyPort}`
   : `http://${stubHost}:${apiPort}`;
 const webUrl = `http://${webHost}:${webPort}`;
+const proxyUrl = `http://${sharedHost}:${proxyPort}`;
 
 /**
  * Two modes:
@@ -48,7 +49,7 @@ export default defineConfig({
   webServer: realBackend
     ? [
         {
-          command: `pnpm --filter @yen/api build && pnpm --filter @yen/api exec node ../../web/e2e/support/real-api-server.mjs`,
+          command: `pnpm --filter @yen/api build && pnpm --filter @yen/api exec node ../web/e2e/support/real-api-server.mjs`,
           url: `${apiUrl}/health`,
           env: {
             NODE_ENV: "development",
