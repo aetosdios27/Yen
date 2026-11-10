@@ -16,9 +16,12 @@ const DLT_ENTITY_ID = "1101234567890123456";
 const DLT_TEMPLATE_ID = "1207160000000000001";
 const DLT_SENDER_ID = "YENTRE";
 
+const otpDltRegistration = SMS_DLT_TEMPLATE_REGISTRY.otp;
+if (!otpDltRegistration) throw new Error("OTP DLT template registration is missing");
+
 const testSmsRegistry: SmsDispatchRegistry = {
   otp: {
-    ...SMS_DLT_TEMPLATE_REGISTRY.otp,
+    ...otpDltRegistration,
     dlt_template_id: DLT_TEMPLATE_ID,
   },
 };
@@ -33,6 +36,9 @@ const validSmsDispatch = {
 };
 
 const testWhatsAppRegistry: WhatsAppDispatchRegistry = WHATSAPP_TEMPLATE_REGISTRY;
+
+const approvalRegistration = WHATSAPP_TEMPLATE_REGISTRY.approval_needed;
+if (!approvalRegistration) throw new Error("approval_needed WhatsApp registration is missing");
 
 const validWhatsAppDispatch = {
   template_key: "approval_needed",
@@ -55,7 +61,7 @@ describe("SMS DLT dispatch compliance", () => {
     });
 
     it("renders the registered OTP body with the code variable", () => {
-      const message = renderDltRegisteredBody(testSmsRegistry.otp, { code: "482913" });
+      const message = renderDltRegisteredBody(otpDltRegistration, { code: "482913" });
       expect(message).toBe(
         "Your Yen club treasury login code is 482913. It is valid for 10 minutes. Do not share this code.",
       );
@@ -100,10 +106,7 @@ describe("SMS DLT dispatch compliance", () => {
     });
 
     it("rejects a dispatch without a DLT sender header", () => {
-      const result = validateSmsDispatch(
-        { ...validSmsDispatch, sender_id: undefined },
-        testSmsRegistry,
-      );
+      const result = validateSmsDispatch({ ...validSmsDispatch, sender_id: null }, testSmsRegistry);
       expect(result.compliant).toBe(false);
       expect(result.violations).toContainEqual(
         expect.objectContaining({ code: "missing_dlt_sender_id", field: "sender_id" }),
@@ -231,7 +234,7 @@ describe("WhatsApp utility template compliance", () => {
 
     it("builds body parameters in registered positional order", () => {
       const parameters = buildWhatsAppBodyParameters(
-        testWhatsAppRegistry.approval_needed,
+        approvalRegistration,
         validWhatsAppDispatch.variables,
       );
       expect(parameters).toEqual([
@@ -287,13 +290,15 @@ describe("WhatsApp utility template compliance", () => {
         },
       };
       for (const [templateKey, registration] of Object.entries(testWhatsAppRegistry)) {
+        const variables = sampleVariables[templateKey];
+        if (!variables) throw new Error(`No sample variables for template ${templateKey}`);
         const result = validateWhatsAppDispatch(
           {
             template_key: templateKey,
             recipient: "+919876543210",
             template_name: registration.template_name,
             language_code: "en",
-            variables: sampleVariables[templateKey],
+            variables,
           },
           testWhatsAppRegistry,
         );
@@ -305,7 +310,7 @@ describe("WhatsApp utility template compliance", () => {
   describe("fail-closed cases", () => {
     it("rejects a dispatch without a template name", () => {
       const result = validateWhatsAppDispatch(
-        { ...validWhatsAppDispatch, template_name: undefined },
+        { ...validWhatsAppDispatch, template_name: null },
         testWhatsAppRegistry,
       );
       expect(result.compliant).toBe(false);
