@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
 
 /** Shared caches keep public fund reads for a minute and may serve them for five more. */
-export const PUBLIC_READ_CACHE_CONTROL = "public, s-maxage=60, stale-while-revalidate=300";
+export const PUBLIC_READ_CACHE_CONTROL =
+  "public, s-maxage=60, stale-while-revalidate=300, stale-if-error=86400";
 export const PRIVATE_READ_CACHE_CONTROL = "private, no-store";
 export const STALE_WARNING = '110 - "Response is stale"';
 
