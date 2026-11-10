@@ -154,7 +154,11 @@ export function FundTimeline({ timeline, fundId, onOpenExplainer, className }: F
                           : "bg-surface text-ink border border-border",
                       )}
                     >
-                      {isDonation ? t("fund.donationItem") : t("fund.expenseItem")}
+                      {entry.type === "refund"
+                        ? t("fund.refundItem")
+                        : isDonation
+                          ? t("fund.donationItem")
+                          : t("fund.expenseItem")}
                     </span>
 
                     {categoryLabel ? (
@@ -166,7 +170,9 @@ export function FundTimeline({ timeline, fundId, onOpenExplainer, className }: F
                     </time>
                   </div>
 
-                  <h3 className="mt-1.5 text-body font-bold text-ink">{entry.title}</h3>
+                  <h3 className="mt-1.5 text-body font-bold text-ink">
+                    {entry.type === "refund" ? t("fund.refundDetail") : entry.title}
+                  </h3>
 
                   {entry.description ? (
                     <p className="mt-1 text-small leading-relaxed text-ink-muted">

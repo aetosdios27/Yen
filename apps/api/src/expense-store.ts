@@ -27,6 +27,7 @@ function decode(row: ExpenseRow | undefined): ExpenseRequest | null {
     typeof row.expense_data === "string"
       ? (JSON.parse(row.expense_data) as ExpenseRequest)
       : row.expense_data;
+  if (!Number.isSafeInteger(expense.amountPaise) || expense.amountPaise <= 0) return null;
   return {
     ...expense,
     payee: expense.payee ?? null,

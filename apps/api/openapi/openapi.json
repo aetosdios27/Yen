@@ -747,9 +747,10 @@
           "utr": { "type": "string", "pattern": "^[0-9]{12}$" },
           "donorDisplayName": { "type": "string" },
           "donorNameChoice": { "type": "string", "enum": ["full", "initials", "anonymous"] },
-          "status": { "type": "string", "enum": ["pledged", "verified", "rejected"] },
+          "status": { "type": "string", "enum": ["pledged", "verified", "rejected", "refunded"] },
           "createdAt": { "type": "string" },
           "verifiedAt": { "type": "string" },
+          "refundedAt": { "type": "string" },
           "proofUrl": { "type": "string" },
           "onChainRoot": { "type": "string" },
           "onChainTxHash": { "type": "string" },
@@ -4467,6 +4468,10 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "itemType": {
+                            "type": "string",
+                            "enum": ["donation", "refund", "expense", "alert"]
+                          },
                           "id": { "type": "string", "format": "uuid" },
                           "occurredAt": { "type": "string", "format": "date-time" },
                           "message": { "type": "string" },

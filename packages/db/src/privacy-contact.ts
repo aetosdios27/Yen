@@ -1,14 +1,15 @@
 import { createHash } from "node:crypto";
+import { normalizePhone } from "@yen/shared";
 import type { Sql } from "./client.js";
 import { normalizeWaitlistContact } from "./waitlist.js";
 
 /** Operator-only: verify control of the contact before calling; never expose as an anonymous API. */
 export async function eraseVerifiedGuestContact(sql: Sql, input: string) {
-  const contact = normalizeWaitlistContact(input);
+  const contact = input.includes("@") ? normalizeWaitlistContact(input) : normalizePhone(input);
   if (!contact) throw new Error("Invalid contact");
   return sql.begin(async (tx) => {
-    const subscriptions = await tx`DELETE FROM fund_subscriptions WHERE lower(contact) = ${contact}
-      OR (contact_type = 'phone' AND ${!contact.includes("@")} AND regexp_replace(contact, '[^0-9]', '', 'g') IN (${contact.slice(1)}, ${contact.startsWith("+91") ? contact.slice(3) : contact.slice(1)})) RETURNING id`;
+    const subscriptions =
+      await tx`DELETE FROM fund_subscriptions WHERE (contact_type = 'phone' AND contact = ${contact}) OR (contact_type = 'email' AND lower(contact) = ${contact}) RETURNING id`;
     const donations =
       await tx`UPDATE donation_pledges SET donor_contact = NULL, donor_display_name = NULL
       WHERE lower(donor_contact) = ${contact} RETURNING id`;

@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import {
   appendEvent,
   eraseVerifiedGuestContact,
@@ -10,12 +11,14 @@ import {
 } from "@yen/db";
 import { chainHead, hashHexSchema, pseudonymIdSchema } from "@yen/eventlog";
 import { PostgresFundSubscriptionStore } from "@yen/notifications";
+import { createPgBoss, ensureQueueSchema } from "@yen/queue";
 import {
   buildIntervalTree,
   fromHex,
   fundIdSchema,
   hash32,
   leafHash,
+  normalizePhone,
   orgIdSchema,
   salt32,
   toHex,
@@ -34,14 +37,36 @@ import { PostgresPrivacyStore } from "./privacy-store.js";
 import { PostgresPublicFundReadStore } from "./public-fund-store.js";
 import { PostgresReceiptStore } from "./receipt-store.js";
 
-async function seedFund(sql: Sql, name = "Sensitive Person Name") {
+async function findPersistedPersonalData(sql: Sql, values: string[]) {
+  const tables = await sql<{ schemaname: string; tablename: string }[]>`
+    SELECT schemaname, tablename FROM pg_tables
+    WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND schemaname NOT LIKE 'pg_toast%'`;
+  const leaks: string[] = [];
+  for (const { schemaname, tablename } of tables) {
+    const rows =
+      await sql`SELECT to_jsonb(t)::text AS data FROM ${sql(`${schemaname}.${tablename}`)} t`;
+    if (
+      rows.some((row) =>
+        values.some((value) =>
+          /^\d+$/.test(value)
+            ? new RegExp(`(?<![0-9])${value}(?![0-9])`).test(String(row.data))
+            : String(row.data).includes(value),
+        ),
+      )
+    )
+      leaks.push(`${schemaname}.${tablename}`);
+  }
+  return leaks;
+}
+
+async function seedFund(sql: Sql, name = "Sensitive Person Name", inputPhone?: string) {
   const ownerId = uuidv7();
   const userId = userIdSchema.parse(uuidv7());
   const orgId = orgIdSchema.parse(uuidv7());
   const fundId = fundIdSchema.parse(uuidv7());
   const pseudonymId = uuidv7();
   const sessionId = uuidv7();
-  const phone = `+91${String(Math.floor(1000000000 + Math.random() * 8999999999))}`;
+  const phone = inputPhone ?? `+91${String(Math.floor(1000000000 + Math.random() * 8999999999))}`;
   const ownerPhone = `+91${String(Math.floor(1000000000 + Math.random() * 8999999999))}`;
   await sql`INSERT INTO users (id, phone, display_name) VALUES (${ownerId}, ${ownerPhone}, 'Fund Owner')`;
   await sql`INSERT INTO users (id, phone, display_name) VALUES (${userId}, ${phone}, ${name})`;
@@ -83,10 +108,11 @@ async function seedFund(sql: Sql, name = "Sensitive Person Name") {
   return { ownerId, userId, fundId, phone, head };
 }
 
-databaseSuite("privacy erasure operations", (sql) => {
+databaseSuite("privacy erasure operations", (sql, url) => {
   beforeAll(async () => {
     await migrate(sql);
     await initLedgerSchema(sql);
+    await ensureQueueSchema(url);
   });
 
   it("dry-runs and erases mutable identity while preserving event bytes and verification", async () => {
@@ -233,8 +259,7 @@ databaseSuite("privacy erasure operations", (sql) => {
     const name = `Erasure Person ${uuidv7()}`;
     const { userId, fundId, phone, head } = await seedFund(sql, name);
     await sql`INSERT INTO fund_subscriptions (id, fund_id, contact, contact_type, unsubscribe_token)
-      VALUES (${uuidv7()}, ${fundId}, ${phone}, 'phone', ${randomBytes(32).toString("hex")}),
-             (${uuidv7()}, ${fundId}, ${phone.slice(3)}, 'phone', ${randomBytes(32).toString("hex")})`;
+      VALUES (${uuidv7()}, ${fundId}, ${phone}, 'phone', ${randomBytes(32).toString("hex")})`;
     const bankAccount = `8844${phone.slice(-8)}`;
     const [mapping] = await sql<
       { pseudonym_id: string }[]
@@ -321,6 +346,29 @@ databaseSuite("privacy erasure operations", (sql) => {
       expect(output).not.toMatch(/\+91[0-9]{10}|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i);
       return bundle;
     };
+    const boss = createPgBoss({ connectionString: url });
+    await boss.start();
+    try {
+      await boss.createQueue("privacy-scan");
+      await boss.createQueue("privacy-scan-dead-letter");
+      const canary = await boss.send("privacy-scan-dead-letter", { phone, name, email });
+      await sql`CREATE SCHEMA privacy_canary`;
+      await sql`CREATE TABLE privacy_canary.payload (t text, v varchar, j json, b jsonb)`;
+      await sql`INSERT INTO privacy_canary.payload VALUES (${phone}, ${name}, ${sql.json({ email })}, ${sql.json({ phone })})`;
+      expect(await findPersistedPersonalData(sql, [email])).toContain("pgboss.job");
+      expect(await findPersistedPersonalData(sql, [phone, name, email])).toContain(
+        "privacy_canary.payload",
+      );
+      await sql`DROP SCHEMA privacy_canary CASCADE`;
+      await sql`DELETE FROM pgboss.job WHERE id = ${canary}`;
+      await boss.send("privacy-scan-dead-letter", { userId, fundId });
+      for (const state of ["created", "completed", "failed"]) {
+        const id = await boss.send("privacy-scan", { userId, fundId });
+        await sql`UPDATE pgboss.job SET state = ${state}::pgboss.job_state WHERE id = ${id}`;
+      }
+    } finally {
+      await boss.stop();
+    }
     const bundleBefore = await inspectPublic();
     await new PostgresPrivacyStore(sql).requestErasure(userId, Date.now(), false);
     await eraseVerifiedGuestContact(sql, email);
@@ -333,26 +381,77 @@ databaseSuite("privacy erasure operations", (sql) => {
       expect(response.status).toBe(200);
       expect(await response.text()).not.toContain(name);
     }
-    const tables = await sql<
-      { tablename: string }[]
-    >`SELECT tablename FROM pg_tables WHERE schemaname = 'public'`;
-    for (const { tablename } of tables) {
-      const rows = await sql`SELECT to_jsonb(t)::text AS data FROM ${sql(tablename)} t`;
-      for (const value of [
+    expect(
+      await findPersistedPersonalData(sql, [
         phone,
         phone.slice(3),
         name,
         email,
         bankAccount,
         `${phone.slice(1)}@upi`,
-      ]) {
-        expect(
-          rows.some((row) => String(row.data).includes(value)),
-          tablename,
-        ).toBe(false);
-      }
-    }
+      ]),
+    ).toEqual([]);
     expect(await verifyStoredChain(sql, fundId, head)).toMatchObject({ ok: true });
+  });
+
+  it("erases only the exact canonical phone and normalizes operator input", async () => {
+    const { userId, fundId } = await seedFund(sql);
+    await sql`UPDATE users SET phone = '+11234567890' WHERE id = ${userId}`;
+    for (const contact of ["+11234567890", "+911234567890", "+449876543210", "+919876543210"]) {
+      await sql`INSERT INTO fund_subscriptions (id, fund_id, contact, contact_type, unsubscribe_token) VALUES (${uuidv7()}, ${fundId}, ${contact}, 'phone', ${uuidv7()})`;
+    }
+    const store = new PostgresPrivacyStore(sql);
+    const preview = await store.requestErasure(userId, Date.now(), true);
+    expect(preview.wouldErase?.subscriptions).toBe(1);
+    await store.requestErasure(userId, Date.now(), false);
+    expect(
+      await sql`SELECT contact FROM fund_subscriptions WHERE fund_id = ${fundId} ORDER BY contact COLLATE "C"`,
+    ).toEqual([
+      { contact: "+449876543210" },
+      { contact: "+911234567890" },
+      { contact: "+919876543210" },
+    ]);
+    await eraseVerifiedGuestContact(sql, "09876543210");
+    expect(
+      await sql`SELECT contact FROM fund_subscriptions WHERE fund_id = ${fundId} ORDER BY contact COLLATE "C"`,
+    ).toEqual([{ contact: "+449876543210" }, { contact: "+911234567890" }]);
+  });
+
+  it("excludes unconsented subscriptions from weekly and instant recipients and never exposes contacts through token routes", async () => {
+    const { fundId } = await seedFund(sql);
+    const store = new PostgresFundSubscriptionStore(sql);
+    const granted = await store.subscribe({ fundId, contact: "consented@example.test" });
+    const legacy = await store.subscribe({ fundId, contact: "unconsented@example.test" });
+    await sql`UPDATE fund_subscriptions SET consent_granted_at = NULL, notice_version = NULL, consent_purpose = NULL WHERE id = ${legacy.id}`;
+    for (const filter of [{ weeklySummary: true }, { instantAlerts: true }]) {
+      expect((await store.getActiveSubscribers(fundId, filter)).map((row) => row.id)).toEqual([
+        granted.id,
+      ]);
+    }
+    const app = createApp({
+      principal: null,
+      fundSubscriptionStore: store,
+      logger: { log: () => undefined },
+    });
+    for (const method of ["GET", "POST"]) {
+      const response = await app.request(
+        `/v1/subscriptions/unsubscribe${method === "GET" ? `?token=${legacy.unsubscribeToken}` : ""}`,
+        method === "POST"
+          ? {
+              method,
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ token: legacy.unsubscribeToken }),
+            }
+          : {},
+      );
+      expect(response.status).toBe(404);
+      const body = await response.text();
+      expect(body).not.toContain(legacy.contact);
+      expect(body).not.toContain(legacy.unsubscribeToken);
+    }
+    expect(
+      await sql`SELECT consent_granted_at FROM fund_subscriptions WHERE id = ${legacy.id}`,
+    ).toEqual([{ consent_granted_at: null }]);
   });
 
   it("allows only the owning fund owner to set logged retention and keeps minimal identity on erasure", async () => {
@@ -523,5 +622,179 @@ databaseSuite("privacy erasure operations", (sql) => {
     ]) {
       expect(inspected).not.toContain(sensitive);
     }
+  });
+});
+
+databaseSuite("canonical subscription migration", (sql) => {
+  it("rejects noncanonical phone writes even for unsubscribed rows", async () => {
+    await migrate(sql);
+    const { fundId } = await seedFund(sql);
+    await expect(
+      sql`INSERT INTO fund_subscriptions (id, fund_id, contact, contact_type, status, unsubscribe_token) VALUES (${uuidv7()}, ${fundId}, '09876543210', 'phone', 'unsubscribed', ${uuidv7()})`,
+    ).rejects.toThrow();
+  });
+  it("normalizes legacy contacts exactly like normalizePhone, deduplicates and rejects noncanonical writes", async () => {
+    await migrate(sql);
+    const { userId, fundId } = await seedFund(sql);
+    await sql`UPDATE users SET phone = '+919876543210' WHERE id = ${userId}`;
+    await sql`ALTER TABLE fund_subscriptions DROP CONSTRAINT IF EXISTS subscription_phone_canonical`;
+    const inputs = [
+      "+919876543210",
+      "919876543210",
+      "09876543210",
+      "9876543210",
+      "+91 98765 43210",
+      "98765-43210",
+      "+11234567890",
+      "11234567890",
+      "+449876543210",
+      "garbage",
+      "-+11234567890",
+      "\u00a0+91 98765 43210\ufeff",
+    ];
+    inputs.push(
+      ...Array.from(
+        { length: 25 },
+        (_, index) => `${String.fromCharCode(0x2000 + index)}+91 98765 43210`,
+      ),
+      "bad",
+      "+1234567",
+      "+1234567890123456",
+      "+01234567890",
+    );
+    const probes: { id: string; input: string }[] = [];
+    for (const input of inputs) {
+      const { fundId: probeFund } = await seedFund(sql);
+      const id = uuidv7();
+      probes.push({ id, input });
+      await sql`INSERT INTO fund_subscriptions (id, fund_id, contact, contact_type, unsubscribe_token) VALUES (${id}, ${probeFund}, ${input}, 'phone', ${uuidv7()})`;
+    }
+    // Duplicate legacy representations exercise collision handling.
+    for (const [index, input] of inputs.entries()) {
+      await sql`INSERT INTO fund_subscriptions (id, fund_id, contact, contact_type, unsubscribe_token) VALUES (${uuidv7()}, ${fundId}, ${input}, 'phone', ${`legacy-${index}`})`;
+    }
+    await sql`UPDATE fund_subscriptions SET status = 'unsubscribed' WHERE fund_id = ${fundId} AND contact = '9876543210'`;
+    const migration = await readFile(
+      new URL("../../../packages/db/migrations/0035_subscription_phone.sql", import.meta.url),
+      "utf8",
+    );
+    await sql`DROP FUNCTION IF EXISTS normalize_subscription_phone(text)`;
+    await sql.unsafe(migration).simple();
+    for (const { id, input } of probes) {
+      const [result] = await sql`SELECT contact FROM fund_subscriptions WHERE id = ${id}`;
+      expect(result?.contact ?? null, JSON.stringify(input)).toBe(normalizePhone(input));
+    }
+    expect(await sql`SELECT 1 FROM pg_proc WHERE proname = 'normalize_subscription_phone'`).toEqual(
+      [],
+    );
+    expect(
+      await sql`SELECT unsubscribe_token, status FROM fund_subscriptions WHERE fund_id = ${fundId} AND contact = '+919876543210'`,
+    ).toEqual([{ unsubscribe_token: "legacy-3", status: "unsubscribed" }]);
+    const rows = await sql<
+      { contact: string | null; status: string }[]
+    >`SELECT contact, status FROM fund_subscriptions WHERE fund_id = ${fundId}`;
+    expect(rows.flatMap((r) => (r.contact === null ? [] : [r.contact])).sort()).toEqual(
+      [...new Set(inputs.map(normalizePhone).filter((v) => v !== null))].sort(),
+    );
+    const subscriptions = new PostgresFundSubscriptionStore(sql);
+    expect(await subscriptions.getByToken("legacy-7")).toBeNull();
+    expect(await subscriptions.getActiveSubscribers(fundId)).toHaveLength(0);
+    expect(rows.filter((r) => r.contact === null)).toEqual([]);
+    for (const input of inputs) {
+      const normalized = normalizePhone(input);
+      if (normalized) expect(rows.some((r) => r.contact === normalized)).toBe(true);
+    }
+    await new PostgresPrivacyStore(sql).requestErasure(userId, Date.now(), false);
+    expect(
+      await sql`SELECT contact FROM fund_subscriptions WHERE fund_id = ${fundId} AND contact IS NOT NULL ORDER BY contact COLLATE "C"`,
+    ).toEqual([{ contact: "+11234567890" }, { contact: "+449876543210" }]);
+    expect(
+      await sql`SELECT count(*)::int AS count FROM fund_subscriptions WHERE fund_id = ${fundId} AND contact IS NULL`,
+    ).toEqual([{ count: 0 }]);
+    await expect(
+      sql`INSERT INTO fund_subscriptions (id, fund_id, contact, contact_type, unsubscribe_token) VALUES (${uuidv7()}, ${fundId}, '09876543210', 'phone', 'bad-write')`,
+    ).rejects.toThrow();
+  });
+});
+
+databaseSuite("phone erasure exact equality", (sql) => {
+  it("never matches a bare-digits international neighbour during withdrawal, preview or erasure", async () => {
+    await migrate(sql);
+    const { userId, fundId } = await seedFund(sql);
+    await sql`UPDATE users SET phone = '+11234567890' WHERE id = ${userId}`;
+    // Bypass the write constraint to prove erasure itself never guesses a legacy destination.
+    await sql`ALTER TABLE fund_subscriptions DROP CONSTRAINT IF EXISTS subscription_phone_canonical`;
+    for (const contact of ["+11234567890", "11234567890", "+449876543210"]) {
+      await sql`INSERT INTO fund_subscriptions (id, fund_id, contact, contact_type, channel, unsubscribe_token) VALUES (${uuidv7()}, ${fundId}, ${contact}, 'phone', 'sms', ${uuidv7()})`;
+    }
+    const store = new PostgresPrivacyStore(sql);
+    await store.withdrawConsent(userId, "notification_sms", Date.now());
+    expect(
+      await sql`SELECT status FROM fund_subscriptions WHERE fund_id = ${fundId} AND contact = '11234567890'`,
+    ).toEqual([{ status: "active" }]);
+    expect((await store.requestErasure(userId, Date.now(), true)).wouldErase?.subscriptions).toBe(
+      1,
+    );
+    await store.requestErasure(userId, Date.now(), false);
+    expect(
+      await sql`SELECT contact FROM fund_subscriptions WHERE fund_id = ${fundId} ORDER BY contact COLLATE "C"`,
+    ).toEqual([{ contact: "+449876543210" }, { contact: "11234567890" }]);
+  });
+});
+
+databaseSuite("authenticated multi-fund erasure", (sql) => {
+  it("authenticates multi-fund phone erasure and preserves international neighbours", async () => {
+    await migrate(sql);
+    const person = await seedFund(sql, "Multi Fund Private Name", "+919876543210");
+    const other = await seedFund(sql, "International Private Name", "+11234567890");
+    const third = await seedFund(sql, "Unrelated Member");
+    const fundIds = [person.fundId, other.fundId, third.fundId];
+    for (const fund of fundIds) {
+      for (const contact of ["+919876543210", "+11234567890", "+449876543210", "+61876543210"]) {
+        await sql`INSERT INTO fund_subscriptions (id, fund_id, contact, contact_type, unsubscribe_token) VALUES (${uuidv7()}, ${fund}, ${contact}, 'phone', ${uuidv7()})`;
+      }
+    }
+    const erase = async (userId: string) => {
+      const app = createApp({
+        principal: { id: userId },
+        privacyStore: new PostgresPrivacyStore(sql),
+        logger: { log: () => undefined },
+      });
+      const response = await app.request("/v1/privacy/erasure-requests", {
+        method: "POST",
+        headers: { "content-type": "application/json", "Idempotency-Key": `erase-${userId}` },
+        body: JSON.stringify({ dryRun: false }),
+      });
+      expect(response.status).toBe(200);
+    };
+    await erase(person.userId);
+    for (const fund of fundIds)
+      expect(
+        await sql`SELECT contact FROM fund_subscriptions WHERE fund_id = ${fund} ORDER BY contact`,
+      ).toEqual([
+        { contact: "+11234567890" },
+        { contact: "+449876543210" },
+        { contact: "+61876543210" },
+      ]);
+    expect(
+      await findPersistedPersonalData(sql, [
+        "+919876543210",
+        "919876543210",
+        "9876543210",
+        "Multi Fund Private Name",
+      ]),
+    ).toEqual([]);
+    await erase(other.userId);
+    for (const fund of fundIds)
+      expect(
+        await sql`SELECT contact FROM fund_subscriptions WHERE fund_id = ${fund} ORDER BY contact`,
+      ).toEqual([{ contact: "+449876543210" }, { contact: "+61876543210" }]);
+    expect(
+      await findPersistedPersonalData(sql, [
+        "+11234567890",
+        "11234567890",
+        "International Private Name",
+      ]),
+    ).toEqual([]);
   });
 });

@@ -46,6 +46,7 @@ const mockSubscribers: FundSubscription[] = [
     unsubscribeToken: "token1",
     createdAt: new Date(),
     updatedAt: new Date(),
+    consentGrantedAt: new Date(),
     unsubscribedAt: null,
   },
   {
@@ -60,6 +61,7 @@ const mockSubscribers: FundSubscription[] = [
     unsubscribeToken: "token2",
     createdAt: new Date(),
     updatedAt: new Date(),
+    consentGrantedAt: new Date(),
     unsubscribedAt: null,
   },
   {
@@ -74,11 +76,35 @@ const mockSubscribers: FundSubscription[] = [
     unsubscribeToken: "token3",
     createdAt: new Date(),
     updatedAt: new Date(),
+    consentGrantedAt: new Date(),
     unsubscribedAt: new Date(),
   },
 ];
 
 describe("Instant Alerts Service", () => {
+  it("does not enqueue instant alerts without recorded consent", async () => {
+    const subscriber = mockSubscribers[0];
+    if (!subscriber) throw new Error("Missing fixture");
+    const tx = {
+      unsafe: async () => {
+        throw new Error("Must not enqueue an unconsented recipient");
+      },
+    };
+    const event = mockEvent("expense.objection_raised", {
+      expense_id: EXPENSE_1,
+      objection_id: OBJECTION_1,
+    });
+    expect(
+      await createAlertsForEvent(
+        tx,
+        event,
+        "Fund",
+        [{ ...subscriber, consentGrantedAt: null }],
+        "https://yen.test",
+      ),
+    ).toEqual([]);
+  });
+
   it("triggers alert on expense.objection_raised", () => {
     const event = mockEvent("expense.objection_raised", {
       expense_id: EXPENSE_1,

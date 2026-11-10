@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useI18n } from "../../i18n";
 import { cn } from "../cn";
-import { QrCodeIcon, ShieldCheckIcon } from "./icons";
+import { QrCodeIcon } from "./icons";
 import type { PublicOrg } from "./types";
 
 export type FundHeaderProps = {
@@ -20,17 +20,29 @@ export function FundHeader({ fundId, name, purpose, org, className }: FundHeader
   return (
     <header className={cn("flex flex-col gap-4 border-b border-border pb-6", className)}>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-verified-border bg-verified-bg px-3 py-1 text-small font-semibold text-verified-ink">
-          <ShieldCheckIcon className="h-4 w-4 shrink-0" />
+        <span
+          className={cn(
+            "inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 py-1 text-small font-semibold",
+            org.verification === "anchored"
+              ? "border-verified-border bg-verified-bg text-verified-ink"
+              : "border-border text-ink-muted",
+          )}
+        >
           <span>{org.name}</span>
-          {org.verified ? (
-            <>
-              <span className="text-small text-verified-ink" aria-hidden="true">
-                ✓
-              </span>
-              <span className="sr-only">({t("fund.verifiedOrg")})</span>
-            </>
+          {org.verification === "anchored" ? (
+            <span className="text-small text-verified-ink" aria-hidden="true">
+              ✓
+            </span>
           ) : null}
+          <span>
+            {t(
+              org.verification === "anchored"
+                ? "fund.verificationAnchored"
+                : org.verification === "bank-matched"
+                  ? "fund.verificationBankMatched"
+                  : "fund.verificationUnverified",
+            )}
+          </span>
         </span>
         {org.legalForm ? (
           <span className="text-small text-ink-muted">· {org.legalForm}</span>
