@@ -217,3 +217,135 @@ The fund record moves `none -> created`. Each nomination moves
 `invited -> pending -> accepted` (or stays `invalid/expired` and can be re-shared from the
 done screen). The fund becomes donation-capable immediately after creation; the 2-of-3 quorum
 only gates expenses (journey 4), not donations.
+
+## Journey 2: Donate via UPI and verify the receipt
+
+Actor: donor, usually arriving from a shared link, never signs in.
+
+Goal: pay the club's UPI, record the 12-digit UPI reference, and end with a receipt whose
+verification link proves the donation is in the public record.
+
+Route flow:
+
+```
+/funds/[fundId]           (public fund page, "Donate via UPI")
+  -> /funds/[fundId]/donate
+     -> receipt ("View receipt certificate")
+        -> /receipts/[id]
+           -> /verify?fundId=...&recordId=...   ("Check live verification record")
+```
+
+### J2-S1 Fund page, donation entry point
+
+Route: `/funds/[fundId]`.
+
+The donor sees the fund name, purpose, money summary and transparency timeline before donating
+(the full page is specified as J5-S1).
+
+- Primary action: `fund.donateCta` ("Donate via UPI"), prominent, links to
+  `/funds/[fundId]/donate`.
+- Secondary action: `fund.howDoIKnow` ("How do I know?"), opens the explainer dialog; it is a
+  trust exit, not a competing next step.
+- Empty state: if the fund has no records yet, the timeline section shows
+  `fund.spendingEmpty` / empty filter copy rather than a blank region.
+- Loading: the page is server rendered; the first paint is the page, not a skeleton.
+- Error state: an unknown fund id renders the app not-found page; there is no fund-specific
+  error copy to translate.
+- Offline/slow network: when the record store cannot be reached, the page renders a saved copy
+  with `fund.savedCopy` ("This is a saved copy from {time}. The fund records could not be
+  refreshed just now.") in a status region. The donate CTA stays available; donations are
+  pledges anyway (J2-S4).
+
+### J2-S2 Choose amount
+
+Route: `/funds/[fundId]/donate`, first view of the donation form.
+
+- Primary action: none until an amount exists; the form advances within the same screen.
+  The submit action of the whole form is "Record my donation" (J2-S4).
+- Secondary action: none.
+- Amount entry: preset rupee chips plus `donate.customAmountLabel` ("Another amount in rupees")
+  with hint `donate.customAmountHint` ("Rupees and paise, for example 750.50").
+- Error states: `donate.amountRequired`, `donate.amountInvalid`,
+  `donate.amountTooLarge` ("Please enter an amount under Rs 10,00,000.") shown inline.
+- Loading/offline: none on this view.
+
+### J2-S3 Pay with the UPI app
+
+Route: `/funds/[fundId]/donate`, second view of the same form.
+
+Shows the club's UPI ID, a QR code labelled `donate.qrLabel` ("Scan to pay {upiId}") and an
+`donate.openUpiApp` ("Open your UPI app") deep link on mobile.
+
+- Primary action: open the UPI app or scan; both are presented, the deep link is the primary
+  button, the QR is the fallback.
+- Secondary action: none. The donor returns from the UPI app to this page with the reference
+  number from their app (`donate.payBody` explains that the app shows a 12-digit reference).
+- Empty/error/offline: not applicable; no network call in this view.
+
+### J2-S4 Record the donation
+
+Route: `/funds/[fundId]/donate`, third view of the same form.
+
+- Primary action: `donate.submit` ("Record my donation"), replaced by `donate.submitting`
+  ("Recording") while in flight.
+- Secondary action: none. The UTR field is required (`donate.utrLabel` "12-digit UPI reference",
+  hint `donate.utrHint`); donor name and receipt contact are optional and labelled as such
+  (`donate.nameLabel`, `donate.contactLabel`).
+- The screen states the honesty rule before submit: `donate.confirmBody` ("We match your
+  reference against the club's bank statement. Until then the donation shows as waiting.").
+- Error states: `donate.utrInvalid` for a malformed reference, `donate.contactInvalid` for a
+  malformed contact, `donate.duplicateUtr` ("This UPI reference is already recorded.") when the
+  same reference was claimed, and `donate.failure` for any other submission failure. Every
+  error keeps the entered values.
+- Loading: the submitting label is the only busy indicator; no route change until the pledge
+  resolves.
+- Offline: submission fails with `donate.failure`; retry is the same button.
+
+### J2-S5 Donation recorded, waiting for the bank
+
+Route: `/funds/[fundId]/donate`, success view.
+
+- Primary action: `donate.viewReceipt` ("View receipt certificate"), links to
+  `/receipts/[id]`.
+- Secondary action: none.
+- Copy: `donate.pendingTitle` ("Donation recorded, waiting for the bank") with
+  `donate.pendingBody` ("We'll confirm this when the bank statement reflects it. Nothing is
+  spendable before that."). This is the most important honesty sentence in the product: the
+  money is not spendable until the bank match.
+
+### J2-S6 Receipt certificate
+
+Route: `/receipts/[id]`.
+
+- Primary action: `receipt.verifyLink` ("Check live verification record"), links to
+  `/verify?fundId=...&recordId=...` when the proof link is present.
+- Secondary actions: `receipt.downloadPdf` / `receipt.downloadSvg`, and
+  `receipt.backToFund` ("Back to fund overview"). Downloads are exits, not next steps.
+- Statuses: pledged shows `receipt.statusPledged` ("Awaiting bank statement"); verified shows
+  `receipt.statusVerified` ("Confirmed by bank") and the certificate title
+  `receipt.verifiedTitle`. A refunded or rejected donation shows its own title
+  (`receipt.refundedTitle`, `receipt.rejectedTitle`).
+- Empty state: not applicable.
+- Error state: an unknown receipt id renders the not-found page.
+- Loading: server rendered, no skeleton.
+- Tax note: the 80G notice (`receipt.taxNoticeTitle`, `receipt.taxNoticeBody`) is always
+  visible on the certificate, in both languages
+  (`receipt.taxNoticeBilingualSecondary` inlines the second language notice).
+
+### J2-S7 Verification record check
+
+Route: `/verify?fundId=...&recordId=...`.
+
+The page auto-runs the check when a record id is present in the query, so the donor's only
+action is reading the outcome. The manual path (typing an id) is specified in journey 5.
+
+- Primary action: none while an outcome is displayed; reading is the task.
+- Secondary action: `verify.backToFund` ("Back to fund").
+- States are the four verification outcomes specified in J5-S3.
+
+### Journey 2 record state machine
+
+Donation record: `pledged -> verified` when the bank statement match lands; `pledged` stays
+visible as awaiting with `receipt.statusPledged`; failure paths are `refunded` or `rejected`.
+Nothing in this journey ever shows a donation as spendable before `verified`. The receipt
+exists from the `pledged` stage onward.
