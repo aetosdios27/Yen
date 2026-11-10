@@ -8,6 +8,13 @@ import { initLedgerSchema } from "../dist/schema.js";
 
 const phase = z.enum(["before", "after"]).parse(process.argv[2]);
 const output = z.string().min(1).parse(process.argv[3]);
+const legacy =
+  phase === "before"
+    ? {
+        schema: await readFile(z.string().min(1).parse(process.argv[4]), "utf8"),
+        migrations: z.string().min(1).parse(process.argv[5]),
+      }
+    : null;
 await mkdir(output, { recursive: true });
 const url = process.env.YEN_TEST_DATABASE_URL;
 if (!url)
@@ -18,11 +25,9 @@ const sql = createSql(z.url().parse(url), { max: 1 });
 try {
   for (const rows of [10000, 50000, 100000]) {
     await sql.unsafe("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
-    if (phase === "before") {
-      if (!process.argv[4] || !process.argv[5])
-        throw new Error("Before requires old schema and migration directory");
-      await migrate(sql, { dir: z.string().min(1).parse(process.argv[5]) });
-      await sql.unsafe(await readFile(z.string().min(1).parse(process.argv[4]), "utf8"));
+    if (legacy) {
+      await migrate(sql, { dir: legacy.migrations });
+      await sql.unsafe(legacy.schema);
     } else {
       await initLedgerSchema(sql);
     }
