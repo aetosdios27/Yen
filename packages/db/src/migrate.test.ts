@@ -525,7 +525,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(35);
+    expect(before).toHaveLength(36);
   });
 
   it("rejects an edited applied file and names it", async () => {
