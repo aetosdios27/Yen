@@ -1,5 +1,6 @@
 import { paise } from "@yen/shared";
 import { describe, expect, it } from "vitest";
+import { type NotificationTemplateId } from "./types.js";
 import { renderNotificationTemplate } from "./templates.js";
 
 describe("Notification templates (EN / HI)", () => {
@@ -230,7 +231,7 @@ describe("Notification templates (EN / HI)", () => {
     const DEVANAGARI = /[\u0900-\u097F]/;
     const escapedTitle = fundTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-    const fixtureData: Record<string, unknown> = {
+    const fixtureData: Record<NotificationTemplateId, unknown> = {
       approval_needed: {
         fund_title: fundTitle,
         expense_id: expenseId,
@@ -278,18 +279,19 @@ describe("Notification templates (EN / HI)", () => {
     };
 
     it("renders every template in Hindi with Devanagari copy distinct from English", () => {
-      for (const templateId of Object.keys(fixtureData)) {
+      const templateIds = Object.keys(fixtureData) as NotificationTemplateId[];
+      for (const templateId of templateIds) {
         const data = fixtureData[templateId];
         const en = renderNotificationTemplate(templateId, data, "en");
         const hi = renderNotificationTemplate(templateId, data, "hi");
-        expect(en.locale, templateId).toBe("en");
-        expect(hi.locale, templateId).toBe("hi");
-        expect(hi.subject, templateId).not.toBe(en.subject);
-        expect(hi.body, templateId).not.toBe(en.body);
-        expect(DEVANAGARI.test(hi.subject), `${templateId} subject`).toBe(true);
-        expect(DEVANAGARI.test(hi.body), `${templateId} body`).toBe(true);
-        expect(en.subject, templateId).toMatch(new RegExp(escapedTitle));
-        expect(hi.subject, templateId).toMatch(new RegExp(escapedTitle));
+        expect(en.locale, String(templateId)).toBe("en");
+        expect(hi.locale, String(templateId)).toBe("hi");
+        expect(hi.subject, String(templateId)).not.toBe(en.subject);
+        expect(hi.body, String(templateId)).not.toBe(en.body);
+        expect(DEVANAGARI.test(hi.subject ?? ""), `${String(templateId)} subject`).toBe(true);
+        expect(DEVANAGARI.test(hi.body), `${String(templateId)} body`).toBe(true);
+        expect(en.subject ?? "", String(templateId)).toMatch(new RegExp(escapedTitle));
+        expect(hi.subject ?? "", String(templateId)).toMatch(new RegExp(escapedTitle));
       }
     });
   });
