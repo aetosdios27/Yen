@@ -540,15 +540,15 @@ export class PostgresAuthStore implements AuthStore {
       VALUES (${phone}, 1, ${new Date(now)}, ${new Date(now)})
       ON CONFLICT (phone) DO UPDATE
       SET attempts = CASE
-            WHEN auth_otp_attempt_limits.window_started_at <= ${new Date(now)} - (${windowMs} * interval '1 millisecond') THEN 1
+            WHEN auth_otp_attempt_limits.window_started_at <= ${new Date(now)}::timestamptz - (${windowMs} * interval '1 millisecond') THEN 1
             ELSE auth_otp_attempt_limits.attempts + 1
           END,
           window_started_at = CASE
-            WHEN auth_otp_attempt_limits.window_started_at <= ${new Date(now)} - (${windowMs} * interval '1 millisecond') THEN ${new Date(now)}
+            WHEN auth_otp_attempt_limits.window_started_at <= ${new Date(now)}::timestamptz - (${windowMs} * interval '1 millisecond') THEN ${new Date(now)}
             ELSE auth_otp_attempt_limits.window_started_at
           END,
           updated_at = ${new Date(now)}
-      WHERE auth_otp_attempt_limits.window_started_at <= ${new Date(now)} - (${windowMs} * interval '1 millisecond')
+      WHERE auth_otp_attempt_limits.window_started_at <= ${new Date(now)}::timestamptz - (${windowMs} * interval '1 millisecond')
          OR auth_otp_attempt_limits.attempts < ${maxAttempts}
       RETURNING phone
     `;

@@ -649,7 +649,7 @@ export class PostgresNotificationStore implements NotificationStore {
              WHEN early_event.provider_status = 'dead_letter' THEN 'failed'
              ELSE COALESCE(early_event.provider_status, 'accepted')
            END,
-           delivered_at = CASE WHEN early_event.provider_status = 'delivered' THEN $4 ELSE NULL END,
+           delivered_at = CASE WHEN early_event.provider_status = 'delivered' THEN $4::timestamptz ELSE NULL END,
            lease_expires_at = NULL,
            claim_token = NULL,
            updated_at = $4
