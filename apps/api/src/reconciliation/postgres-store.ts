@@ -1,6 +1,6 @@
 import { type Sql, uuidv7 } from "@yen/db";
 import { acquireFundLockInTx, reconcilePledge } from "@yen/ledger";
-import { paise } from "@yen/shared";
+import { type DonationStatus, isOutstandingPledge, paise } from "@yen/shared";
 import {
   type DebitAlert,
   type DebitAlertSink,
@@ -504,7 +504,7 @@ export class PostgresReconciliationStore implements ReconciliationStore {
           id: string;
           fund_id: string;
           amount_paise: string;
-          status: string;
+          status: DonationStatus;
         }[]
       >`
         SELECT id, fund_id, amount_paise::text, status
@@ -517,7 +517,7 @@ export class PostgresReconciliationStore implements ReconciliationStore {
         return { kind: "pledge_not_found" };
       }
       const pledge = pledgeRows[0];
-      if (pledge.status !== "pledged") {
+      if (!isOutstandingPledge(pledge.status)) {
         return { kind: "already_matched" };
       }
 

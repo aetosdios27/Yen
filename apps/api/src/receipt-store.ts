@@ -1,4 +1,5 @@
 import type { Sql } from "@yen/db";
+import type { DonationStatus } from "@yen/shared";
 import type { FundStore } from "./dependencies.js";
 
 export interface ReceiptRecord {
@@ -9,8 +10,9 @@ export interface ReceiptRecord {
   readonly utr: string;
   readonly donorDisplayName?: string | null | undefined;
   readonly donorNameChoice?: "full" | "initials" | "anonymous" | undefined;
-  readonly status: "pledged" | "verified" | "rejected";
+  readonly status: DonationStatus;
   readonly createdAt: string;
+  readonly refundedAt?: string | null | undefined;
   readonly verifiedAt?: string | null | undefined;
   readonly proofUrl?: string | undefined;
   readonly onChainRoot?: string | undefined;
@@ -54,7 +56,7 @@ export class PostgresReceiptStore implements ReceiptStore {
       utr: string;
       donor_display_name: string | null;
       donor_name_choice: "full" | "initials" | "anonymous" | null;
-      status: "pledged" | "verified" | "rejected";
+      status: DonationStatus;
       created_at: Date | string;
       verified_at: Date | string | null;
     }
@@ -71,6 +73,13 @@ export class PostgresReceiptStore implements ReceiptStore {
       return null;
     }
 
+    const [refund] = await this.sql<{ occurred_at: Date }[]>`
+      SELECT e.occurred_at FROM fund_events e
+      WHERE e.fund_id = ${row.fund_id} AND e.type = 'donation.rejected'
+        AND e.payload->>'donation_id' = ${row.id}
+        AND EXISTS (SELECT 1 FROM fund_events v WHERE v.fund_id = e.fund_id
+          AND v.type = 'donation.verified' AND v.payload->>'donation_id' = ${row.id} AND v.seq < e.seq)
+      ORDER BY e.seq LIMIT 1`;
     const fund = await this.fundStore?.get(row.fund_id);
     const fundTitle = fund?.fund.name ?? "Community Fund";
     const createdAt =
@@ -97,7 +106,8 @@ export class PostgresReceiptStore implements ReceiptStore {
       status: row.status,
       createdAt,
       verifiedAt,
-      proofUrl: `/verify?donationId=${encodeURIComponent(row.id)}`,
+      ...(refund ? { refundedAt: new Date(refund.occurred_at).toISOString() } : {}),
+      proofUrl: `/verify?fundId=${encodeURIComponent(row.fund_id)}&recordId=${encodeURIComponent(row.id)}`,
     };
   }
 }

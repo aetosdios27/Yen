@@ -12,7 +12,18 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "env": ["NEXT_PUBLIC_API_URL"],
+      "env": [
+        "NEXT_PUBLIC_API_URL",
+        "YEN_BUILD_SHA",
+        "YEN_BUILD_ID",
+        "YEN_RELEASE_TAG",
+        "YEN_PROVENANCE_URL",
+        "YEN_ARTIFACT_DIGEST",
+        "SOURCE_DATE_EPOCH",
+        "TZ",
+        "LC_ALL",
+        "NEXT_TELEMETRY_DISABLED"
+      ],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "typecheck": {
@@ -28,6 +39,13 @@
     "@yen/api-client#test": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/apps/api/openapi/openapi.json"]
+    },
+    "test:a11y": {
+      "dependsOn": ["^build"]
+    },
+    "test:load": {
+      "dependsOn": ["^build"],
+      "cache": false
     },
     "dev": {
       "cache": false,

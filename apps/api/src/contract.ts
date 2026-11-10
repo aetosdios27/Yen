@@ -1,5 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { paiseWire } from "@yen/shared";
+import { donationStatusSchema, fundVerificationSchema, paiseWire } from "@yen/shared";
 import { errorEnvelope } from "./errors.js";
 import {
   fraudAcknowledgementSchema,
@@ -285,7 +285,7 @@ const publicFundIdParams = z.object({
       param: { name: "fundId", in: "path" },
     }),
 });
-const verificationState = z.enum(["bank-matched", "anchored", "unverified"]);
+const verificationState = fundVerificationSchema;
 const alertSeverity = z.enum(["info", "warning", "critical"]);
 const alertTypeWire = z.enum([
   "unapproved_debit",
@@ -298,6 +298,7 @@ const alertTypeWire = z.enum([
   "integrity_check_failure",
 ]);
 const publicTimelineItem = z.object({
+  itemType: z.enum(["donation", "refund", "expense", "alert"]).optional(),
   id: z.string().uuid(),
   occurredAt: z.iso.datetime(),
   message: z.string(),
@@ -315,6 +316,7 @@ export const publicFundSummarySchema = z
     name: z.string(),
     purpose: z.string().nullable(),
     raisedPaise: paiseWire.nullable(),
+    pledgedPaise: paiseWire,
     spentPaise: paiseWire,
     verification: verificationState,
     dataGaps: z.array(z.string()),
@@ -2466,9 +2468,10 @@ export const donorReceiptSchema = z
     utr: z.string().regex(/^[0-9]{12}$/),
     donorDisplayName: z.string().optional(),
     donorNameChoice: z.enum(["full", "initials", "anonymous"]).optional(),
-    status: z.enum(["pledged", "verified", "rejected"]),
+    status: donationStatusSchema,
     createdAt: z.string(),
     verifiedAt: z.string().optional(),
+    refundedAt: z.string().optional(),
     proofUrl: z.string().optional(),
     onChainRoot: z.string().optional(),
     onChainTxHash: z.string().optional(),
@@ -2544,10 +2547,16 @@ export const createFundSubscriptionInput = z
     }),
     contactType: z.enum(["email", "phone"]),
     channel: z.enum(["email", "whatsapp", "sms"]).default("whatsapp"),
+    consent: z.literal(true),
+    whatsappConsent: z.boolean().default(false),
     weeklySummary: z.boolean().default(true),
     instantAlerts: z.boolean().default(true),
   })
   .strict()
+  .refine((input) => input.channel !== "whatsapp" || input.whatsappConsent, {
+    message: "Separate WhatsApp consent is required",
+    path: ["whatsappConsent"],
+  })
   .openapi("CreateFundSubscriptionInput");
 
 export const fundSubscriptionSchema = z

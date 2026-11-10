@@ -15,7 +15,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:sandbox": "vitest run --config vitest.sandbox.config.ts"
   },
   "dependencies": {
     "@yen/db": "workspace:*",

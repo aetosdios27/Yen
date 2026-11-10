@@ -1,4 +1,4 @@
-import type { Paise } from "@yen/shared";
+import type { FundVerificationState, Paise } from "@yen/shared";
 
 export type SpendingCategoryId =
   | "equipment"
@@ -6,6 +6,7 @@ export type SpendingCategoryId =
   | "registration"
   | "logistics"
   | "food"
+  | "facilities"
   | "other";
 
 export type SpendingCategory = {
@@ -31,7 +32,7 @@ export type PublicVerification = {
 
 export type PublicTimelineEntry = {
   readonly id: string;
-  readonly type: "donation" | "expense";
+  readonly type: "donation" | "expense" | "refund";
   readonly title: string;
   readonly description?: string | undefined;
   readonly amount: Paise;
@@ -46,7 +47,7 @@ export type PublicTimelineEntry = {
 export type PublicOrg = {
   readonly id: string;
   readonly name: string;
-  readonly verified: boolean;
+  readonly verification: FundVerificationState;
   readonly legalForm?: string | undefined;
 };
 
@@ -106,7 +107,7 @@ export type RawFundRecord = {
   timeline?:
     | Array<{
         id: string;
-        type: "donation" | "expense";
+        type: "donation" | "expense" | "refund";
         title?: string | undefined;
         description?: string | undefined;
         amount_paise: bigint | string | number;

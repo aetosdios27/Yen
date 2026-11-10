@@ -6,6 +6,16 @@ export type {
   DeliveryStatus,
 } from "./delivery.js";
 export {
+  type DonationStatus,
+  donationStatusSchema,
+  isOutstandingPledge,
+} from "./donation-status.js";
+export {
+  type FundVerificationState,
+  fundVerificationSchema,
+  fundVerificationState,
+} from "./fund-verification.js";
+export {
   calculateGstinChecksum,
   GSTIN_ALPHABET,
   GSTIN_REGEX,
@@ -72,7 +82,7 @@ export {
 } from "./merkle/tree.js";
 export { addPaise, formatInr, type Paise, paise, type paiseBrand, toPaise } from "./paise.js";
 export { paiseWire } from "./paise-wire.js";
-export { type PhoneE164, parsePhoneE164 } from "./phone.js";
+export { normalizePhone, type PhoneE164, parsePhoneE164 } from "./phone.js";
 export { PRIVACY_NOTICE_VERSION } from "./privacy.js";
 export {
   type DonationReceiptStatus,

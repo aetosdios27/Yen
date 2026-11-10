@@ -8,6 +8,9 @@ export type SloDefinition = {
 };
 
 export const SLOS: readonly SloDefinition[] = [
+  { id: "donation_recording", indicator: "availability", objective: 0.995, windowDays: 30 },
+  { id: "event_append", indicator: "availability", objective: 0.999, windowDays: 30 },
+  { id: "public_page_availability", indicator: "availability", objective: 0.995, windowDays: 30 },
   { id: "approval_api_availability", indicator: "availability", objective: 0.995, windowDays: 30 },
   {
     id: "approve_p95_latency",

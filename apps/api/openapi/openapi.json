@@ -747,9 +747,10 @@
           "utr": { "type": "string", "pattern": "^[0-9]{12}$" },
           "donorDisplayName": { "type": "string" },
           "donorNameChoice": { "type": "string", "enum": ["full", "initials", "anonymous"] },
-          "status": { "type": "string", "enum": ["pledged", "verified", "rejected"] },
+          "status": { "type": "string", "enum": ["pledged", "verified", "rejected", "refunded"] },
           "createdAt": { "type": "string" },
           "verifiedAt": { "type": "string" },
+          "refundedAt": { "type": "string" },
           "proofUrl": { "type": "string" },
           "onChainRoot": { "type": "string" },
           "onChainTxHash": { "type": "string" },
@@ -808,10 +809,12 @@
             "enum": ["email", "whatsapp", "sms"],
             "default": "whatsapp"
           },
+          "consent": { "type": "boolean", "enum": [true] },
+          "whatsappConsent": { "type": "boolean", "default": false },
           "weeklySummary": { "type": "boolean", "default": true },
           "instantAlerts": { "type": "boolean", "default": true }
         },
-        "required": ["contact", "contactType"],
+        "required": ["contact", "contactType", "consent"],
         "additionalProperties": false
       },
       "UnsubscribeResult": {
@@ -4142,6 +4145,11 @@
                       "pattern": "^(0|[1-9][0-9]*)$",
                       "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
                     },
+                    "pledgedPaise": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)$",
+                      "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
+                    },
                     "spentPaise": {
                       "type": "string",
                       "pattern": "^(0|[1-9][0-9]*)$",
@@ -4158,6 +4166,7 @@
                     "name",
                     "purpose",
                     "raisedPaise",
+                    "pledgedPaise",
                     "spentPaise",
                     "verification",
                     "dataGaps"
@@ -4459,6 +4468,10 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "itemType": {
+                            "type": "string",
+                            "enum": ["donation", "refund", "expense", "alert"]
+                          },
                           "id": { "type": "string", "format": "uuid" },
                           "occurredAt": { "type": "string", "format": "date-time" },
                           "message": { "type": "string" },

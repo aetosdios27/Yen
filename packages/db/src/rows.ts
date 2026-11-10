@@ -1,4 +1,10 @@
-import { parseFundId, parseOrgId, parsePhoneE164, parseUserId } from "@yen/shared";
+import {
+  donationStatusSchema,
+  parseFundId,
+  parseOrgId,
+  parsePhoneE164,
+  parseUserId,
+} from "@yen/shared";
 import * as z from "zod";
 
 function brandedId<T>(
@@ -246,7 +252,7 @@ export const donationPledgeRowSchema = z.object({
   utr: z.string(),
   donor_display_name: z.string().nullable(),
   donor_contact: z.string().nullable(),
-  status: z.enum(["pledged", "verified", "rejected"]),
+  status: donationStatusSchema,
   created_at: z.date(),
   verified_at: z.date().nullable(),
 });
@@ -293,6 +299,7 @@ export const fundSubscriptionRowSchema = z.object({
   instant_alerts: z.boolean(),
   status: z.enum(["active", "unsubscribed"]),
   unsubscribe_token: z.string(),
+  consent_granted_at: z.date().nullable(),
   created_at: z.date(),
   updated_at: z.date(),
   unsubscribed_at: z.date().nullable(),

@@ -32,21 +32,7 @@ else
   podman exec "$container" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE $source_db" -c "CREATE DATABASE $target_db"
 fi
 DATABASE_URL="$source_url" pnpm --filter @yen/db migrate
-FUND_ID_FILE="$tmpdir/fund-id" DATABASE_URL="$source_url" node --input-type=module <<'JS'
-import { createSql, uuidv7 } from '@yen/db';
-import { initLedgerSchema } from './dist/schema.js';
-import { paise } from '@yen/shared';
-import { recordDonation } from '@yen/ledger';
-const sql = createSql(process.env.DATABASE_URL);
-await initLedgerSchema(sql);
-const user = uuidv7(), org = uuidv7(), fund = uuidv7();
-await sql`INSERT INTO users (id, phone, display_name) VALUES (${user}, '+19999999999', 'Backup drill')`;
-await sql`INSERT INTO orgs (id, name, legal_form, owner_id) VALUES (${org}, 'Backup drill', 'individual', ${user})`;
-await sql`INSERT INTO funds (id, org_id, title, policy_json) VALUES (${fund}, ${org}, 'Backup drill', '{}')`;
-await sql.begin((tx) => recordDonation(tx, { fundId: fund, amount: paise(12345) }));
-await sql.end();
-await import('node:fs/promises').then(({writeFile}) => writeFile(process.env.FUND_ID_FILE, fund));
-JS
+YEN_RESTORE_MANIFEST="$tmpdir/manifest.json" DATABASE_URL="$source_url" node scripts/seed-restore.mjs
 if [[ -n "${YEN_RESTORE_ADMIN_URL:-}" ]]; then
   pg_dump --format=custom --dbname="$source_url" > "$tmpdir/yen.dump"
   restore_started_ns="$(date +%s%N)"
@@ -58,4 +44,4 @@ else
 fi
 restore_elapsed_ms="$(( ($(date +%s%N) - restore_started_ns) / 1000000 ))"
 printf 'Restore measured: %s ms; archive bytes: %s\n' "$restore_elapsed_ms" "$(wc -c < "$tmpdir/yen.dump" | tr -d ' ')"
-YEN_TEST_DATABASE_URL="$target_url" YEN_RESTORE_FUND_ID="$(cat "$tmpdir/fund-id")" node scripts/verify-restored.mjs
+YEN_TEST_DATABASE_URL="$target_url" YEN_RESTORE_MANIFEST="$tmpdir/manifest.json" node scripts/verify-restored.mjs
