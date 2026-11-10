@@ -349,3 +349,121 @@ Donation record: `pledged -> verified` when the bank statement match lands; `ple
 visible as awaiting with `receipt.statusPledged`; failure paths are `refunded` or `rejected`.
 Nothing in this journey ever shows a donation as spendable before `verified`. The receipt
 exists from the `pledged` stage onward.
+
+## Journey 3: Treasurer files an expense request with a camera bill upload
+
+Actor: treasurer on a phone, often standing in a shop with a paper bill.
+
+Goal: end with a submitted expense request, bill photo attached, waiting for co-approver
+review, with the spendable balance already showing the hold.
+
+Route flow:
+
+```
+/funds/[fundId]/treasurer          (dashboard, "New Expense")
+  -> /funds/[fundId]/expenses/new  (form, then camera, then review)
+     -> back to /funds/[fundId]/treasurer (submitted, appears in pending list)
+```
+
+Note: `/funds/[fundId]/dashboard` renders the same treasurer page and is kept as a working
+alias; the canonical route for all copy and tests is `/funds/[fundId]/treasurer`.
+
+### J3-S1 Treasurer dashboard
+
+Route: `/funds/[fundId]/treasurer`.
+
+- Primary action: `treasurer.newExpenseCta` ("New Expense"), sticky full-width bar in the
+  bottom thumb zone on phones (375 px), inline button on desktop.
+- Secondary action: per pending expense, `treasurer.viewExpense` ("Review") linking to
+  `/funds/[fundId]/approvals/[expenseId]` for the treasurer's own visibility; it is a list
+  action, not the screen's next step.
+- Content: `treasurer.totalBalance` and `treasurer.spendableBalance` cards. The spendable
+  number is the one that matters before filing an expense; the difference between the two
+  numbers is the sum of holds, which the expense timeline explains (J4-S2).
+- Empty state: no pending expenses shows the `EmptyState` component with
+  `treasurer.emptyTitle` ("No pending expenses"), `treasurer.emptyDescription` and the "New
+  Expense" action inside the empty region as well, so the empty screen still has one obvious
+  next action.
+- Loading: `treasurer` shows a single status region with `common.loading` and
+  `aria-busy="true"`. The full page is one skeleton, not per-card skeletons, because the
+  dashboard is useless without the balance numbers.
+- Error state: `treasurer.errorTitle` ("Could not load dashboard") with
+  `treasurer.errorDescription` and a `treasurer.retry` button in an alert region.
+- Offline: a persistent status banner `treasurer.offlineNotice` ("You are working offline.
+  Displaying cached data.") with a retry button; the cached balances stay readable.
+
+### J3-S2 New expense form
+
+Route: `/funds/[fundId]/expenses/new`.
+
+- Primary action: `expenseForm.reviewCta` ("Review expense"), advances to the review view of
+  the same form.
+- Secondary action: breadcrumb back to the treasurer dashboard labelled
+  `treasurer.title` ("Treasurer dashboard") in a navigation landmark, plus
+  `expenseForm.editCta` on the review view.
+- Fields: amount (`expenseForm.amountLabel` "Amount (Rs)"), payee name, payee UPI VPA,
+  purpose, optional receipt reference. Each has a hint in plain language
+  (`expenseForm.payeeUpiHint` explains VPA with an example).
+- Error states: per-field inline errors (`expenseForm.amountErrorRequired`, `...Invalid`,
+  `...Positive`, `...Exceeds` with the spendable max interpolated, `expenseForm.payeeNameError`,
+  `expenseForm.payeeUpiError`, `expenseForm.purposeError`). The exceeds error prevents
+  submitting a request the fund cannot cover.
+- Loading: the spendable balance hint appears once the dashboard data arrives; the form is
+  usable before that, the hint simply fills in.
+- Offline: submission fails; the form keeps values and shows a retryable failure.
+
+### J3-S3 Camera bill capture
+
+Route: `/funds/[fundId]/expenses/new` (evidence section of the form).
+
+- Primary action: `evidence.cameraButton` ("Take photo"), opens the device camera via a file
+  input with capture on mobile; `evidence.browseButton` ("Choose file") is the same control for
+  gallery/PDF.
+- Secondary action: none; removing a just-captured photo is an undo, shown as part of the
+  selected-file row (`evidence.fileSelected`).
+- Copy: `evidence.uploadTitle` ("Upload bill or receipt"),
+  `evidence.uploadDescription` ("Attach a photo of the bill or a PDF document (up to 10 MB).").
+- Empty state: `evidence.emptyHeading` ("No bill attached") with
+  `evidence.emptyDescription` before anything is selected.
+- Loading: `evidence.uploading` ("Uploading bill") with `evidence.uploadProgress`
+  ("Uploading: {percent}%") on slow networks; the upload is the slowest step in the journey so
+  the percentage matters.
+- Error states: `evidence.errors.noFile`, `evidence.errors.fileTooLarge`,
+  `evidence.errors.invalidType`, `evidence.errors.uploadFailed` (retry keeps the file). A
+  duplicate document surfaces `evidence.duplicateWarning` as a warning, not a blocker; the same
+  bill genuinely can be paid in two instalments.
+- Offline: upload fails with `evidence.errors.uploadFailed`; the captured photo stays selected
+  for retry.
+
+### J3-S4 Review and submit
+
+Route: `/funds/[fundId]/expenses/new` (review view).
+
+- Primary action: `expenseForm.submitCta` ("Submit expense"), replaced by
+  `expenseForm.submitting` ("Submitting...") while in flight.
+- Secondary action: `expenseForm.editCta` ("Back to edit").
+- Copy: `expenseForm.reviewTitle` ("Review expense request") and `expenseForm.reviewSummary`,
+  which states the consequence: once submitted, approvers must verify with their PIN before
+  release.
+- Error state: submission failure returns to the review view with values intact and a
+  retryable error.
+- Loading: the submitting label only; no route change until the request resolves.
+
+### J3-S5 Submitted confirmation
+
+Route: `/funds/[fundId]/expenses/new` success state, then redirect to
+`/funds/[fundId]/treasurer`.
+
+- Primary action: on the dashboard, the just-submitted request sits at the top of the pending
+  list with its `Review` link.
+- Copy: `expenseForm.submitSuccess` ("Expense request submitted successfully").
+- The pending list entry shows payee, purpose, amount and the `statusSubmitted` label
+  ("Submitted"), so the treasurer can confirm without opening anything.
+
+### Journey 3 record state machine
+
+Expense record: `draft -> submitted -> hold_reserved -> (approved -> settled | rejected)`
+with `hold_reserved` subtracted from spendable immediately at submission. The treasurer's
+dashboard always reflects the hold from the moment the list shows "Submitted". Expiry before
+quorum releases the hold (`expenseTimeline.stateExpired`, "Approval window closed before
+quorum was met").
