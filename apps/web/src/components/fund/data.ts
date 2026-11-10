@@ -70,7 +70,12 @@ export async function getPublicFund(fundId: string): Promise<PublicFund | null> 
       const isItemVerified = item.verified === "anchored";
       return {
         id: item.id,
-        type: "expense",
+        type:
+          item.itemType === "refund"
+            ? "refund"
+            : item.itemType === "donation"
+              ? "donation"
+              : "expense",
         title: item.message,
         description: item.actorDisplayName,
         amount: item.amountPaise ? paise(Number(item.amountPaise)) : paise(0),

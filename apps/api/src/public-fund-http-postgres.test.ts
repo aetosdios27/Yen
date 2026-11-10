@@ -1,5 +1,5 @@
 import { randomInt } from "node:crypto";
-import { migrate, uuidv7 } from "@yen/db";
+import { migrate, publicAnchoredItemsSql, uuidv7 } from "@yen/db";
 import { pseudonymIdSchema } from "@yen/eventlog";
 import { createDraftRequest, getBalances, recordRefund } from "@yen/ledger";
 import { AnchoringWorker, type RootSigner, reconcileAnchors } from "@yen/queue";
@@ -14,6 +14,7 @@ import { PostgresDonationPledgeStore } from "./donation-store.js";
 import { PostgresExpenseStore } from "./expense-store.js";
 import { PostgresFundStore } from "./fund-store.js";
 import { PostgresPublicFundReadStore } from "./public-fund-store.js";
+import { PostgresReceiptStore } from "./receipt-store.js";
 import { PostgresReconciliationStore } from "./reconciliation/postgres-store.js";
 
 const signer = {
@@ -21,6 +22,27 @@ const signer = {
     throw new Error("Fake chain does not sign");
   },
 } satisfies RootSigner;
+// Text-join baseline with the same pledge domain, independent of the optimized joins.
+const originalAnchoredSql = `SELECT DISTINCT CASE WHEN e.type = 'donation.verified' THEN bt.id::text
+        ELSE ex.id::text END AS id
+      FROM fund_events e
+      JOIN bank_transactions bt ON bt.id::text = e.payload->>'bank_transaction_id'
+        AND bt.fund_id = e.fund_id
+      LEFT JOIN expenses ex ON ex.fund_id = e.fund_id AND ex.status = 'reconciled'
+        AND ex.expense_data->>'bankTransactionId' = bt.id::text
+      JOIN anchors a ON a.fund_id = e.fund_id AND e.seq BETWEEN a.from_seq AND a.to_seq
+      WHERE e.fund_id = $1 AND a.status = 'confirmed' AND a.tx_hash IS NOT NULL
+        AND (
+          (e.type = 'donation.verified' AND bt.type = 'credit'
+            AND bt.reconciliation_status IN ('matched', 'manually_matched')
+            AND bt.matched_pledge_id::text = e.payload->>'donation_id'
+            AND EXISTS (SELECT 1 FROM donation_pledges dp
+              WHERE dp.id = bt.matched_pledge_id AND dp.fund_id = bt.fund_id AND dp.status IN ('verified', 'refunded')))
+          OR (e.type = 'bank.debit_seen' AND bt.type = 'debit' AND ex.id IS NOT NULL
+            AND ex.expense_data->>'amountPaise' = bt.amount_paise::text)
+        );
+`;
+
 const alerts = { emit: async () => {} };
 let utrCounter = 800_000_000_000;
 
@@ -42,13 +64,21 @@ databaseSuite("public HTTP financial proof with Postgres stores", (sql) => {
     const bank = new PostgresReconciliationStore(sql, alerts);
     const app = createApp({
       principal: null,
+      sql,
+      receiptStore: new PostgresReceiptStore(sql),
       fundStore: new PostgresFundStore(sql),
       expenseStore: expenses,
       donationPledgeStore: pledges,
       publicFundReadStore: new PostgresPublicFundReadStore(sql),
       reconciliationStore: bank,
     });
+    async function comparePlans() {
+      const original = await sql.unsafe<{ id: string }[]>(originalAnchoredSql, [fundId]);
+      const optimized = await sql.unsafe<{ id: string }[]>(publicAnchoredItemsSql, [fundId]);
+      expect(optimized.map((row) => row.id).sort()).toEqual(original.map((row) => row.id).sort());
+    }
     async function read(route: "summary" | "timeline" | "breakdown") {
+      await comparePlans();
       const response = await app.request(`/v1/funds/${fundId}/public/${route}`);
       expect(response.status).toBe(200);
       return response;
@@ -123,15 +153,103 @@ databaseSuite("public HTTP financial proof with Postgres stores", (sql) => {
     });
   });
 
-  it("excludes a rejected donation after the product refund operation and keeps HTTP totals equal to the ledger", async () => {
+  it("retains both refund movements and a truthful receipt while HTTP totals equal the ledger", async () => {
     const f = await fixture();
     const donation = await f.pledge();
-    await f.credit(donation.utr);
+    const creditId = await f.credit(donation.utr);
+    const chain = new FakeChain();
+    const worker = new AnchoringWorker(sql, chain, signer, alerts);
+    await worker.runFund(f.fundId);
+    chain.blockNumber = 112n;
+    await worker.runFund(f.fundId);
+    await reconcileAnchors(sql, chain, alerts);
+    expect(await f.state(creditId)).toBe("anchored");
+    await sql`UPDATE bank_transactions SET reconciliation_status = 'manually_matched' WHERE id = ${creditId}`;
     await f.totals();
     await sql.begin((tx) =>
       recordRefund(tx, { fundId: f.fundId, donationId: donation.donationId, reason: "cancelled" }),
     );
     expect(await f.totals()).toMatchObject({ raisedPaise: "0", pledgedPaise: "0" });
+    const timeline = z
+      .object({
+        items: z.array(
+          z.object({
+            id: z.string(),
+            itemType: z.string().optional(),
+            amountPaise: z.string().optional(),
+            verified: z.string(),
+          }),
+        ),
+      })
+      .parse(await (await f.read("timeline")).json());
+    expect(timeline.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: creditId, amountPaise: "5000" }),
+        expect.objectContaining({
+          itemType: "refund",
+          amountPaise: "5000",
+          verified: "bank-matched",
+        }),
+      ]),
+    );
+    const receipt = await f.app.request(`/v1/receipts/${donation.donationId}`);
+    expect(await receipt.json()).toMatchObject({
+      status: "refunded",
+      refundedAt: expect.any(String),
+    });
+    await expect(
+      sql.begin((tx) => recordRefund(tx, { fundId: f.fundId, donationId: donation.donationId })),
+    ).rejects.toThrow();
+    const pending = await f.pledge(7000);
+    await expect(
+      sql.begin((tx) => recordRefund(tx, { fundId: f.fundId, donationId: pending.donationId })),
+    ).rejects.toThrow();
+    const unmatched = await f.bank.ingest([
+      {
+        fundId: f.fundId,
+        bankReference: uuidv7(),
+        amountPaise: paise(5000),
+        type: "credit",
+        postedAt: new Date().toISOString(),
+        source: "statement_upload",
+        rawPayload: {},
+      },
+    ]);
+    const candidates = await f.bank.getUnmatchedCredits(f.fundId);
+    expect(JSON.stringify(candidates)).not.toContain(donation.donationId);
+    expect(unmatched.matchedCount).toBe(0);
+    expect(
+      await f.bank.manualMatch({
+        fundId: f.fundId,
+        pledgeId: pending.donationId,
+        bankTransactionId: creditId,
+        reason: "Try reused bank credit",
+      }),
+    ).toMatchObject({ kind: "already_matched" });
+    expect(await f.totals()).toMatchObject({ verification: "bank-matched" });
+    await worker.runFund(f.fundId);
+    chain.blockNumber = 224n;
+    await worker.runFund(f.fundId);
+    await reconcileAnchors(sql, chain, alerts);
+    const anchored = z
+      .object({
+        items: z.array(z.object({ itemType: z.string().optional(), verified: z.string() })),
+      })
+      .parse(await (await f.read("timeline")).json());
+    expect(anchored.items.find((item) => item.itemType === "refund")?.verified).toBe("anchored");
+    expect(await f.totals()).toMatchObject({ verification: "anchored" });
+    const proof = await f.app.request(`/v1/funds/${f.fundId}/records/${donation.donationId}/proof`);
+    expect(proof.status).toBe(200);
+    expect(await proof.json()).toMatchObject({ event: { type: "donation.rejected" } });
+    const bytes = JSON.stringify(timeline);
+    for (const secret of [
+      "Secret Donor Name",
+      "secret@bank",
+      "+919111222333",
+      "9876543210012345",
+      donation.utr,
+    ])
+      expect(bytes).not.toContain(secret);
   });
 
   it("does not borrow another fund's anchor or an earlier interval for a newly matched donation", async () => {
@@ -252,6 +370,15 @@ databaseSuite("public HTTP financial proof with Postgres stores", (sql) => {
     if (!reconciled) throw new Error("Missing reconciled expense");
     await sql`UPDATE expenses SET expense_data = ${JSON.stringify({ ...reconciled, amountPaise: 501 })}::jsonb WHERE id = ${draft.id}`;
     expect(await f.state(draft.id)).toBe("unverified");
+    for (const bad of [undefined, "", "not-a-uuid"]) {
+      await sql`UPDATE expenses SET expense_data = ${JSON.stringify({ ...reconciled, bankTransactionId: bad })}::jsonb WHERE id = ${draft.id}`;
+      expect(await f.state(draft.id)).toBe("unverified");
+    }
+    for (const bad of [undefined, "", "not-a-number"]) {
+      await sql`UPDATE expenses SET expense_data = ${JSON.stringify({ ...reconciled, amountPaise: bad })}::jsonb WHERE id = ${draft.id}`;
+      const response = await f.app.request(`/v1/funds/${f.fundId}/public/timeline`);
+      expect(response.status).toBe(200);
+    }
     await sql`UPDATE expenses SET expense_data = ${JSON.stringify(reconciled)}::jsonb WHERE id = ${draft.id}`;
     const noDebit = createDraftRequest({
       fundId: f.fundId,

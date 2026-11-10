@@ -32,7 +32,7 @@ export type PublicVerification = {
 
 export type PublicTimelineEntry = {
   readonly id: string;
-  readonly type: "donation" | "expense";
+  readonly type: "donation" | "expense" | "refund";
   readonly title: string;
   readonly description?: string | undefined;
   readonly amount: Paise;
@@ -107,7 +107,7 @@ export type RawFundRecord = {
   timeline?:
     | Array<{
         id: string;
-        type: "donation" | "expense";
+        type: "donation" | "expense" | "refund";
         title?: string | undefined;
         description?: string | undefined;
         amount_paise: bigint | string | number;

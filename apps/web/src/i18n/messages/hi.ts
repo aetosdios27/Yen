@@ -200,6 +200,8 @@ export const hi: Messages = {
     viewReceipt: "रसीद प्रमाणपत्र देखें",
   },
   receipt: {
+    refundedTitle: "दान वापस किया गया",
+    rejectedTitle: "दान अस्वीकृत",
     documentTitle: "दान रसीद · Yen",
     title: "दान रसीद",
     verifiedTitle: "प्रमाणित दान प्रमाणपत्र",
@@ -309,6 +311,7 @@ export const hi: Messages = {
     footer: "Yen डिज़ाइन सिस्टम · YEN-13",
   },
   status: {
+    refunded: "दान वापस किया गया",
     verified: "सत्यापित",
     pending: "समीक्षा लंबित",
     unmatched: "कोई स्वीकृति नहीं मिली",
@@ -377,6 +380,8 @@ export const hi: Messages = {
     iosClose: "निर्देश बंद करें",
   },
   fund: {
+    refundItem: "धन वापसी",
+    refundDetail: "दान वापस किया गया",
     title: "सार्वजनिक फ़ंड",
     donateCta: "UPI से दान करें",
     donateQr: "UPI क्यूआर कोड",

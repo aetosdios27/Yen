@@ -134,6 +134,7 @@ export interface FundTimelineRecord {
     readonly occurredAt: string;
     readonly message: string;
     readonly actorDisplayName?: string | undefined;
+    readonly itemType?: "donation" | "refund" | "expense" | "alert" | undefined;
     readonly actorNameChoice?: "full" | "initials" | undefined;
     readonly amountPaise?: string | undefined;
     /** Fund alert items only. */
@@ -533,6 +534,7 @@ export function redactFundReadModel<T extends FundReadRecord>(
       fundId: str(record.fundId),
       items: record.items.map((item) => ({
         id: str(item.id),
+        ...(item.itemType ? { itemType: item.itemType } : {}),
         occurredAt: str(item.occurredAt),
         message: publicText(item.message),
         ...(item.actorDisplayName === undefined

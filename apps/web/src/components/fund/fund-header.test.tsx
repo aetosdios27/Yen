@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { isInaccessible, render } from "@testing-library/react";
 import type { FundVerificationState } from "@yen/shared";
 import { expect, it } from "vitest";
 import { LocaleProvider } from "../../i18n";
@@ -14,7 +14,7 @@ it.each([
 ] satisfies ["en" | "hi", FundVerificationState, string][])(
   "labels %s %s honestly and reserves the checkmark for complete anchoring",
   (locale, verification, label) => {
-    const { container } = render(
+    const { container, getByText } = render(
       <LocaleProvider initialLocale={locale}>
         <FundHeader
           fundId="fund"
@@ -25,6 +25,11 @@ it.each([
       </LocaleProvider>,
     );
     expect(container.textContent).toContain(label);
+    const badge = container.querySelector("header > div:first-child > span");
+    expect(isInaccessible(getByText(label))).toBe(false);
+    expect(badge?.querySelector('[aria-hidden="true"]')?.textContent ?? "").toBe(
+      verification === "anchored" ? "✓" : "",
+    );
     expect(container.textContent?.includes("✓")).toBe(verification === "anchored");
     expect(container.querySelector("header > div:first-child svg")).toBeNull();
   },

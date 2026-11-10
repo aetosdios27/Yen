@@ -6,6 +6,11 @@ export type {
   DeliveryStatus,
 } from "./delivery.js";
 export {
+  type DonationStatus,
+  donationStatusSchema,
+  isOutstandingPledge,
+} from "./donation-status.js";
+export {
   type FundVerificationState,
   fundVerificationSchema,
   fundVerificationState,
