@@ -469,6 +469,11 @@ export const en = {
     message: "You are offline. Yen needs a connection to show records or confirm anything.",
     retry: "Check connection again",
   },
+  errors: {
+    title: "Something went wrong",
+    body: "An unexpected error occurred. The failure was reported to the maintainers.",
+    retry: "Try again",
+  },
   pwa: {
     installTitle: "Install Yen",
     installDescription:

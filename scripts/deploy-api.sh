@@ -139,21 +139,22 @@ image() {
   require_vars AWS_REGION ECR_REPOSITORY
   assume_role image
 
-  local account_id registry_host registry_uri digest
+  local account_id registry_host registry_uri digest sentry_release
   account_id="$(run_capture aws sts get-caller-identity --query 'Account' --output text)"
   registry_host="${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com"
   registry_uri="${registry_host}/${ECR_REPOSITORY}"
+  sentry_release="${SENTRY_RELEASE:-$git_sha}"
 
   if [[ -n "${DRY_RUN:-}" ]]; then
     log "[dry-run] aws ecr get-login-password | docker login --username AWS --password-stdin $registry_host"
-    log "[dry-run] docker build --build-arg YEN_BUILD_SHA=$git_sha --tag $registry_uri:sha-$git_sha ."
+    log "[dry-run] docker build --build-arg YEN_BUILD_SHA=$git_sha --build-arg SENTRY_RELEASE=$sentry_release --tag $registry_uri:sha-$git_sha ."
     log "[dry-run] docker push $registry_uri:sha-$git_sha"
     log "digest=sha256:${DRY_IMAGE_DIGEST:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}"
     return 0
   fi
 
   aws ecr get-login-password | docker login --username AWS --password-stdin "$registry_host"
-  docker build --build-arg YEN_BUILD_SHA="$git_sha" --tag "$registry_uri:sha-$git_sha" .
+  docker build --build-arg YEN_BUILD_SHA="$git_sha" --build-arg SENTRY_RELEASE="$sentry_release" --tag "$registry_uri:sha-$git_sha" .
   docker push "$registry_uri:sha-$git_sha" >/dev/null
   digest="$(docker image inspect --format '{{join .RepoDigests ","}}' "$registry_uri:sha-$git_sha")"
   digest="${digest##*@}"

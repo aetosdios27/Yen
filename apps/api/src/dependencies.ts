@@ -81,6 +81,7 @@ export interface Principal {
 export type ApiEnv = {
   Variables: {
     requestId: string;
+    traceId: string;
     principal: Principal | null;
     session: Session | null;
   };
@@ -609,8 +610,8 @@ export function defaultDependencies(
     readiness: async () => true,
     errorReporter: createErrorReporter({
       dsn: process.env.SENTRY_DSN,
-      release: process.env.RELEASE_SHA,
-      environment: process.env.NODE_ENV,
+      release: process.env.SENTRY_RELEASE ?? process.env.RELEASE_SHA ?? process.env.GIT_COMMIT_SHA,
+      environment: process.env.SENTRY_ENVIRONMENT ?? process.env.NODE_ENV,
     }),
     rateLimits: rateLimits(rateLimitEnv.parse({})),
     pinStore,
