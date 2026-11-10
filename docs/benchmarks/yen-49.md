@@ -25,7 +25,6 @@ The interleaved low-load comparison ran `node packages/ledger/scripts/invariants
 
 Each full result had zero violations. All observed load snapshots for these comparisons are in the TSV. Early contended timings are rejected as comparative evidence. The required original repeated observations were 259.82 and 151.89 seconds at 20k operations, and 482.95 and 683.46 seconds at 40k, using the same runner command with those `--ops` values on fresh schemas; no exact adjacent load snapshot was captured for those early observations.
 
-
 All data below was measured locally. Each diagnostic fixture has one fund and starts with the specified count of balanced entries plus nonexpiring pending holds. It then executes exactly 4,000 donations and 1,000 holds through the product API in transactions of 100 operations. This controlled cost probe is not a randomized invariant-pass claim. Its synthetic history is not an event replay fixture.
 
 | Initial entries | Journal check buffer hits before / after | Donation admission buffer hits before / after | Hold admission buffer hits before / after |
@@ -90,7 +89,6 @@ planning_minutes = hosted_minutes * 1.25 + 10 # 299.568993, chosen 25% padding p
 ```
 
 That leaves about 30 minutes beyond the padded plan within the 330-minute job limit. This is a conservative scheduling model, **not a measured hosted-million result**. The normalization also includes the old code's extra growth at CI's larger dataset. Local SQL accounting was enabled; the hosted service's default configuration differs. The next scheduled main run establishes the hosted result. The workflow regression was red while the scheduled default was smaller, then green after promotion.
-
 
 Local correctness commands:
 

@@ -52,6 +52,7 @@ flowchart LR
 5. **Merkle roots anchor to a public chain (planned).** Periodic root hashes are published to the Polygon Amoy testnet without names or amounts. <!-- claim: CLAIM-10 --> Anyone can verify proofs locally in the browser. <!-- claim: CLAIM-09 -->
 
 <a id="what-we-promise-and-what-we-dont"></a>
+
 ## Guarantees and limits
 
 We only claim what a skeptic can check.
@@ -69,6 +70,7 @@ We only claim what a skeptic can check.
 | Names, phone numbers, and email addresses stay off the chain | That operators cannot inspect database records. Privacy tiers limit what others see                                             |
 
 <a id="tech"></a>
+
 ## Built with
 
 | Component          | Technology                                                                                             |
@@ -84,6 +86,7 @@ We only claim what a skeptic can check.
 | Auth               | Phone OTP, Yen PIN approvals, optional WebAuthn device signatures                                      |
 
 <a id="status"></a>
+
 ## Roadmap
 
 Delivery is structured into six focus areas:
@@ -138,6 +141,7 @@ pnpm dev:full
 ```
 
 `pnpm dev:full` will:
+
 1. Start PostgreSQL 16 (matching CI) and Redis via `docker-compose.yml` with healthchecks and persistent local volumes.
 2. Run database migrations forward (`pnpm db:migrate`).
 3. Seed the complete development dataset (`pnpm db:seed`):
@@ -188,6 +192,7 @@ If production breaks, use the
 
 <a id="how-we-work"></a>
 <a id="security"></a>
+
 ## Contributing and security
 
 Direct pushes to `main` are blocked. Every change needs passing CI checks. <!-- claim: CLAIM-23 --> See [CONTRIBUTING.md](CONTRIBUTING.md) for pull request guidelines and [`.github/rulesets/`](.github/rulesets) for branch protection policies.

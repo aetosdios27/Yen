@@ -58,7 +58,6 @@ pnpm --filter @yen/ledger chaos:restart
 
 The restart drill first writes a batch of committed transactions, restarts the database during the test run, reconnects with a fresh client, then verifies every complete posting and event survived. It does not claim to deterministically interrupt a specific `COMMIT` window; backend termination and transaction-abort tests cover aborted in-flight transactions. A connection interrupted during `COMMIT` has an ambiguous client outcome: reconnect and verify before retrying, and do not automatically retry non-idempotent writes.
 
-
 ### Expanded rehearsal and nightly audit (2026-11-10)
 
 The expanded fixture restored successfully on PostgreSQL 16.15 in Podman: four funds, three anchor intervals, 75 donations, three settled expenses and three pending holds. The archive was 245,277 bytes and the `pg_restore` command took 1,525 ms. All four funds passed chain/replay/ledger verification and all three recomputed roots matched the independent source manifest. This is production-shaped synthetic data, not production-volume data or a complete service recovery. Production RPO/RTO remain operator commitments requiring backup scheduling, retention, freshness monitoring, provisioning and a timed cutover rehearsal.

@@ -52,7 +52,6 @@ The final 1,000-scenario run had zero invariant violations. No ledger/event atom
 - Partner API and production WhatsApp/SMS clients do not exist in this repository. Their policies and the shared wrapper are documented for future clients. ClamAV uses the wrapper, but this game day did not use a live daemon.
 - Anvil was unavailable, so no local EVM deployment or real contract publication was exercised.
 
-
 ## YEN-61 revalidation — 2026-11-10
 
 The nightly seed `1640038382` reproduced a scenario-0 failure on real Postgres 16: the outbox row was `skipped` with “User opted out of this notification channel”. Privacy commit `aacea9c` (#101) made active channel consent mandatory in `PostgresNotificationStore.getUserPreferences`. The randomized fixture enabled preferences but never granted consent. It now records `notification_whatsapp` consent using the current notice version, matching the existing worker-kill fixture. Delivery, provider-effect, single-attempt, ledger, and anchor assertions remain intact.
