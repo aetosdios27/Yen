@@ -138,6 +138,12 @@ export interface PublicFundReadStore {
   anchoredItems(fundId: string): Promise<ReadonlySet<string>>;
 }
 
+/** Head of a public fund's event log, used as the public read validator. */
+export type PublicFundHead = {
+  readonly latestEventHash: string;
+  readonly orgId: string | null;
+};
+
 export class MemoryPublicFundReadStore implements PublicFundReadStore {
   private readonly values = new Map<string, PublicFundDonation[]>();
 
@@ -417,6 +423,7 @@ export interface AppDependencies {
   readonly fundStore?: FundStore | undefined;
   readonly alertStore?: AlertStore | undefined;
   readonly publicReadCache?: PublicReadCache | undefined;
+  readonly publicFundHead?: ((fundId: string) => Promise<PublicFundHead | null>) | undefined;
   readonly approvalProofVerifier: ApprovalProofVerifier;
   readonly donationPledgeStore: DonationPledgeStore;
   readonly publicFundReadStore: PublicFundReadStore;
@@ -425,6 +432,7 @@ export interface AppDependencies {
   readonly fundSubscriptionStore: FundSubscriptionStore;
   readonly displayNameStore: DisplayNameStore;
   readonly pledgeLimit: RateLimit;
+  readonly fundReadMissLimit: RateLimit;
   readonly pledgeBodyLimit: number;
   readonly waitlistLimit: RateLimit;
   readonly waitlistBodyLimit: number;
@@ -589,6 +597,7 @@ export function defaultDependencies(
     fundSubscriptionStore,
     displayNameStore: new MemoryDisplayNameStore(),
     pledgeLimit: { capacity: 10, refillMs: 3600000 },
+    fundReadMissLimit: { capacity: 10, refillMs: 1000 },
     pledgeBodyLimit: 4096,
     waitlistLimit: { capacity: 5, refillMs: 3600000 },
     waitlistBodyLimit: 8192,
