@@ -60,6 +60,24 @@ export {
   settleExpense,
 } from "./operations.js";
 export {
+  type PartnerCreditWebhookEvent,
+  type PartnerDebitWebhookEvent,
+  type PartnerSignatureEnvelope,
+  type PartnerStatementEntry,
+  type PartnerWebhookEvent,
+  partnerAmountPaiseWire,
+  partnerCreditWebhookSchema,
+  partnerDebitWebhookSchema,
+  partnerSignatureEnvelopeSchema,
+  partnerStatementEntrySchema,
+  partnerWebhookEventSchema,
+  toPartnerSignatureEnvelope,
+  toPartnerStatementEntry,
+  toVpaVerificationResult,
+  type VpaVerificationResult,
+  vpaVerificationResultSchema,
+} from "./partner/types.js";
+export {
   InMemoryPayoutKillSwitch,
   MakerCheckerViolationError,
   type PartnerPayoutAdapter,
