@@ -3,14 +3,13 @@ name: Nightly ledger invariants
 on:
   schedule:
     - cron: "23 2 * * *"
-    - cron: "23 3 * * 0"
   workflow_dispatch:
     inputs:
       ops:
         description: Invariant operation count
         type: choice
         options: ["100000", "1000000"]
-        default: "100000"
+        default: "1000000"
         required: true
 
 permissions:
@@ -24,12 +23,12 @@ jobs:
   invariants:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ (github.event.schedule == '23 3 * * 0' || github.event.inputs.ops == '1000000') && 330 || 90 }}
+    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ops == '100000' && 90 || 330 }}
     env:
       YEN_TEST_DATABASE_URL: postgres://postgres:nightly@localhost:5432/postgres
       YEN_RESTORE_ADMIN_URL: postgres://postgres:nightly@localhost:5432/postgres
       NIGHTLY_SEED_BASE: ${{ github.run_id }}
-      NIGHTLY_OPS: ${{ github.event.inputs.ops || (github.event.schedule == '23 3 * * 0' && '1000000' || '100000') }}
+      NIGHTLY_OPS: ${{ github.event.inputs.ops || '1000000' }}
     services:
       postgres:
         image: postgres:16

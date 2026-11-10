@@ -3,27 +3,26 @@ import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { createSql, migrate, uuidv7 } from "@yen/db";
 import { ensureFundAccounts, recordDonation, reserveForExpense } from "@yen/ledger";
 import { paise } from "@yen/shared";
+import { z } from "zod";
 import { initLedgerSchema } from "../dist/schema.js";
 
-const phase = process.argv[2];
-if (!["before", "after"].includes(phase)) throw new Error("Expected before or after");
-const output = process.argv[3];
-if (!output) throw new Error("Expected evidence directory");
+const phase = z.enum(["before", "after"]).parse(process.argv[2]);
+const output = z.string().min(1).parse(process.argv[3]);
 await mkdir(output, { recursive: true });
 const url = process.env.YEN_TEST_DATABASE_URL;
 if (!url)
   throw new Error(
     "Set YEN_TEST_DATABASE_URL to a disposable database; this probe drops its public schema",
   );
-const sql = createSql(url, { max: 1 });
+const sql = createSql(z.url().parse(url), { max: 1 });
 try {
   for (const rows of [10000, 50000, 100000]) {
     await sql.unsafe("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
     if (phase === "before") {
       if (!process.argv[4] || !process.argv[5])
         throw new Error("Before requires old schema and migration directory");
-      await migrate(sql, { dir: process.argv[5] });
-      await sql.unsafe(await readFile(process.argv[4], "utf8"));
+      await migrate(sql, { dir: z.string().min(1).parse(process.argv[5]) });
+      await sql.unsafe(await readFile(z.string().min(1).parse(process.argv[4]), "utf8"));
     } else {
       await initLedgerSchema(sql);
     }

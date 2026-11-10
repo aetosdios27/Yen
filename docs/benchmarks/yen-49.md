@@ -2,7 +2,29 @@
 
 The growing cost was in product admission queries and the deferred journal constraint, not the runner's batch invariant query. The fix indexes each journal and maintains account entry totals and nonexpiring pending-hold totals in the writer's transaction. Expiring holds retain an indexed time-dependent query. The runner keeps its original batch verification and final full verification, and additionally checks projected balances against its operation model after every batch.
 
-A million-operation pass is **not established by this report yet**. Contended wall times are excluded from performance conclusions. Timed comparisons and the full pass require `/proc/loadavg`'s one-minute value below 8; every retained timing must have an adjacent load snapshot. This is the operator's measurement gate, not a performance assertion.
+The full single-fund run completed locally on product head `5546e1a5a113a27723b8b652fedfbcfc3c03efb5` with the original final chain/raw-sum verification and zero invariant violations:
+
+```text
+result ops=1000000 seed=3942630993 donations=799018 holds=200982 duration=3797.10s ops_per_sec=263.36 violations=0
+```
+
+Command: `node packages/ledger/scripts/invariants-load.mjs --ops 1000000 --seed 3942630993 --batch 100`. The [complete result and load log](yen-49-million.txt) records every progress/result checkpoint. The [timing TSV](yen-49-timing.tsv) records every 5,000-operation window, including both repeated comparisons. Node was v24.21.0 (`node --version`) and Postgres was 16.15 (`SHOW server_version`). All recorded one-minute loads for the million pass were 1.08–3.22, below the operator's gate of 8. The wrapper read `/proc/loadavg` immediately before starting and beside every progress/result line, terminating if the gate was exceeded.
+
+Operation generation took 3551.0 seconds; the remaining 246.10 seconds performed the final verification. Median seconds per 5,000 operations by successive quarters of the million pass were 16.7, 16.9, 17.8 and 18.9. Window range was 16.2–25.2 seconds. This is modest index/write cost growth rather than a history scan proportional to fund size. These statistics are calculated from the TSV's `window_s` column in consecutive groups of 50 rows.
+
+The local timing connection retained `pg_stat_statements.track=all` from the server's startup option. `SHOW pg_stat_statements.track` confirmed this after the pass: an attempted `ALTER SYSTEM` setting was overridden by startup configuration. Both timing sides and the million pass used the same SQL-accounting setting. The Node CPU profiler was off. These are measured instrumented runtimes, not uninstrumented throughput claims.
+
+The interleaved low-load comparison ran `node packages/ledger/scripts/invariants-load.mjs --ops 20000 --seed 3942630993 --batch 100` twice per side on fresh schemas, using an isolated build of base `9534a88` and this PR's product build:
+
+| Code   | Repeat | Successive 5k windows, seconds | Full result, seconds |
+| ------ | -----: | ------------------------------ | -------------------: |
+| before |      1 | 18.7, 24.5, 27.5, 32.8         |               108.45 |
+| after  |      1 | 17.3, 16.4, 16.8, 18.5         |                74.58 |
+| before |      2 | 18.7, 23.2, 31.3, 32.1         |               110.50 |
+| after  |      2 | 19.9, 17.1, 22.3, 16.7         |                80.84 |
+
+Each full result had zero violations. All observed load snapshots for these comparisons are in the TSV. Early contended timings are rejected as comparative evidence. The required original repeated observations were 259.82 and 151.89 seconds at 20k operations, and 482.95 and 683.46 seconds at 40k, using the same runner command with those `--ops` values on fresh schemas; no exact adjacent load snapshot was captured for those early observations.
+
 
 All data below was measured locally. Each diagnostic fixture has one fund and starts with the specified count of balanced entries plus nonexpiring pending holds. It then executes exactly 4,000 donations and 1,000 holds through the product API in transactions of 100 operations. This controlled cost probe is not a randomized invariant-pass claim. Its synthetic history is not an event replay fixture.
 
@@ -59,7 +81,16 @@ That log contains:
 result ops=100000 seed=3942630993 donations=80097 holds=19903 duration=1984.91s ops_per_sec=50.38 violations=0
 ```
 
-Subtracting its progress timestamps gives 93.1 seconds for operations 45,000–50,000 and 161.1 seconds for 95,000–100,000. These CI observations cannot calibrate a hosted-million budget against contended local times. Daily scheduling therefore stays at its existing count; a weekly million run has a 330-minute ceiling without claiming a completed hosted pass.
+Subtracting its progress timestamps gives 93.1 seconds for operations 45,000–50,000 and 161.1 seconds for 95,000–100,000. The daily job now runs one million operations with a 330-minute timeout; manual 100k runs retain 90 minutes. This is below the supplied hosted-runner ceiling of 360 minutes. The budget uses the faster local old-code repetition to avoid understating the hosted slowdown:
+
+```python
+slowdown = 1984.91 / (108.45 * 5)             # 3.660507; old CI 100k / local old 20k scaled to 100k
+hosted_minutes = 3797.10 * slowdown / 60      # 231.655195, planning estimate
+planning_minutes = hosted_minutes * 1.25 + 10 # 299.568993, chosen 25% padding plus 10 minutes setup/restore
+```
+
+That leaves about 30 minutes beyond the padded plan within the 330-minute job limit. This is a conservative scheduling model, **not a measured hosted-million result**. The normalization also includes the old code's extra growth at CI's larger dataset. Local SQL accounting was enabled; the hosted service's default configuration differs. The next scheduled main run establishes the hosted result. The workflow regression was red while the scheduled default was smaller, then green after promotion.
+
 
 Local correctness commands:
 
@@ -84,3 +115,15 @@ cat /proc/loadavg
 ```
 
 It reported `ops=5000 seed=3942630993 donations=4025 holds=975 violations=0`. Load snapshots were `26.21 25.32 24.46` before and `19.49 23.91 24.05` after. Its elapsed duration is discarded as performance evidence. This verifies the added batch-model checks and the original full chain/raw-sum verification; it is not the missing million-operation pass.
+
+After the full pass, an independent query on `yen49_timed` confirmed one fund, 2,000,000 events, 799,018 journals, 200,982 holds and 1,598,036 entries:
+
+```sql
+SELECT (SELECT COUNT(*) FROM funds) AS funds,
+  (SELECT COUNT(*) FROM fund_events) AS events,
+  (SELECT COUNT(*) FROM konto_journals) AS donations,
+  (SELECT COUNT(*) FROM konto_holds) AS holds,
+  (SELECT COUNT(*) FROM konto_entries) AS entries;
+```
+
+The existing restore drill also passed after the projection change: source and restored databases both verified 4 funds and 3 anchors. Command: `PATH=/tmp/yen49-evidence/pg16-bin:$PATH YEN_RESTORE_ADMIN_URL=postgres://postgres:yen@127.0.0.1:55549/yen pnpm --filter @yen/ledger backup:restore`. Each PG16 client wrapper runs `podman run --rm -i --network host postgres:16 <tool> "$@"`, reusing the assigned server port. The owner's runbook is unchanged.

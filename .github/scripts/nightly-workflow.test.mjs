@@ -6,15 +6,15 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 const workflow = read("workflows/nightly-invariants.yml");
 const ruleset = JSON.parse(read("rulesets/main.json"));
 
-test("nightly invariants keep the measured scale and run a million operations weekly", () => {
+test("nightly invariants run a million operations with a short manual option", () => {
   assert.match(
     workflow,
-    /^on:\n {2}schedule:\n {4}- cron: "23 2 \* \* \*"\n {4}- cron: "23 3 \* \* 0"\n {2}workflow_dispatch:/m,
+    /^on:\n {2}schedule:\n {4}- cron: "23 2 \* \* \*"\n {2}workflow_dispatch:/m,
   );
   assert.match(workflow, /options: \["100000", "1000000"\]/);
-  assert.match(workflow, /github\.event\.schedule == '23 3 \* \* 0'/);
-  assert.match(workflow, /&& '1000000' \|\| '100000'/);
-  assert.match(workflow, /&& 330 \|\| 90/);
+  assert.match(workflow, /default: "1000000"/);
+  assert.match(workflow, /NIGHTLY_OPS: \$\{\{ github\.event\.inputs\.ops \|\| '1000000' \}\}/);
+  assert.match(workflow, /&& 90 \|\| 330/);
   assert.doesNotMatch(workflow, /&& 360/);
   assert.match(workflow, /if: github\.ref == 'refs\/heads\/main'/);
   assert.match(workflow, /--ops "\$NIGHTLY_OPS"/);
