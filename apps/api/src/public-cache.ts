@@ -11,12 +11,14 @@ const KEY_SEPARATOR = "\u0000";
 export type CachedEntry = {
   readonly body: unknown;
   readonly etag: string;
+  readonly cacheTag?: string;
   readonly storedAt: number;
 };
 
 export type CacheHit<T> = {
   readonly body: T;
   readonly etag: string;
+  readonly cacheTag?: string;
   readonly storedAt: number;
   readonly stale: boolean;
 };
@@ -26,6 +28,11 @@ export type PublicReadCacheOptions = {
   readonly freshMs?: number;
   readonly staleMs?: number;
   readonly maxEntries?: number;
+};
+
+export type CacheEntryMeta = {
+  readonly etag?: string;
+  readonly cacheTag?: string;
 };
 
 /**
@@ -58,11 +65,19 @@ export class PublicReadCache {
     return this.#entries.get(this.#key(fundId, kind));
   }
 
-  write(fundId: string, kind: string, body: unknown): CachedEntry {
+  /** Returns the entry only while it is fresh, without touching the origin. */
+  peekFresh(fundId: string, kind: string): CachedEntry | undefined {
+    const cached = this.read(fundId, kind);
+    if (!cached) return undefined;
+    return this.#clock() - cached.storedAt < this.#freshMs ? cached : undefined;
+  }
+
+  write(fundId: string, kind: string, body: unknown, meta: CacheEntryMeta = {}): CachedEntry {
     const key = this.#key(fundId, kind);
     const entry: CachedEntry = {
       body,
-      etag: etagFor(body),
+      etag: meta.etag ?? etagFor(body),
+      ...(meta.cacheTag ? { cacheTag: meta.cacheTag } : {}),
       storedAt: this.#clock(),
     };
     this.#entries.delete(key);
@@ -87,7 +102,7 @@ export class PublicReadCache {
     fundId: string,
     kind: string,
     produce: () => Promise<T>,
-    options: { revalidate?: boolean } = {},
+    options: { revalidate?: boolean } & CacheEntryMeta = {},
   ): Promise<CacheHit<T>> {
     const key = this.#key(fundId, kind);
     const cached = this.#entries.get(key);
@@ -102,7 +117,7 @@ export class PublicReadCache {
       return { ...shared, body: shared.body as T, stale: false };
     }
 
-    const pending = produce().then((body) => this.write(fundId, kind, body));
+    const pending = produce().then((body) => this.write(fundId, kind, body, options));
     this.#inFlight.set(key, pending);
     try {
       const fresh = await pending;
@@ -130,7 +145,23 @@ export function etagFor(body: unknown): string {
   return `"${crypto.createHash("sha256").update(JSON.stringify(body)).digest("hex")}"`;
 }
 
-/** Reads a lone strong `If-None-Match` value; lists are not used by our clients. */
+/**
+ * Weak validator derived from the fund's latest event hash: any event on the fund
+ * changes it, and the origin can compare it with a single head lookup.
+ */
+export function eventHashEtag(fundId: string, latestEventHash: string): string {
+  return `W/"${fundId}-${latestEventHash}"`;
+}
+
+/** Purge targets for CDNs that support tag-based invalidation. */
+export function fundCacheTags(fundId: string, orgId: string | null | undefined): string {
+  return orgId ? `fund-${fundId}, org-${orgId}` : `fund-${fundId}`;
+}
+
+/** Reserved cache kind holding a fund's latest event hash and org id. */
+export const FUND_HEAD_KIND = "fund-head";
+
+/** Reads a lone `If-None-Match` value; lists are not used by our clients. */
 export function matchesEtag(header: string | undefined, etag: string): boolean {
   if (header === undefined) return false;
   return header.trim() === etag || header.trim() === "*";
