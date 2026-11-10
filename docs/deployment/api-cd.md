@@ -56,3 +56,51 @@ Two GitHub Environments are used, both declared per job:
 Create both environments under Settings -> Environments. Configure required
 reviewers only on `production`. The environment-scoped variables and secrets
 are listed in the setup section below.
+
+## Cloud access through OpenID Connect
+
+No long-lived cloud credentials are stored in GitHub Secrets. Every job that
+touches infrastructure declares `id-token: write` and the deploy script
+exchanges the runner's short-lived OIDC token for temporary cloud
+credentials through `aws sts assume-role-with-web-identity`, with a 900
+second session. The only secret the workflow references is
+`MIGRATION_SECRET_ID`, which is a Secrets Manager identifier, not a
+credential: the database URL it holds is fetched at deploy time inside the
+cloud session and injected into the migration task only.
+
+One-time cloud setup:
+
+1. Create an OIDC identity provider in IAM for
+   `token.actions.githubusercontent.com` if one does not exist yet.
+2. Create two IAM roles, one for staging and one for production, trusting
+   that provider. Scope the trust policy to this repository and branch, for
+   example `repo:aetosdios27/Yen:ref:refs/heads/main`, and to the GitHub
+   environment claim for production. Grant each role only the permissions it
+   needs: ECR push for the image role; ECS, Secrets Manager read, and IAM
+   pass-role for the deploy roles.
+3. Create the ECR repository named by `ECR_REPOSITORY` with immutable tags.
+4. Create the ECS cluster, the API service, and a task definition family for
+   migration one-off tasks (the same container image with a migration
+   entrypoint).
+5. Store the migration `DATABASE_URL` in Secrets Manager.
+
+Then set these repository or environment variables in GitHub:
+
+| Variable | Meaning |
+| --- | --- |
+| `OIDC_ROLE_ARN` | IAM role the job assumes (per environment) |
+| `AWS_REGION` | Cloud region |
+| `ECR_REPOSITORY` | ECR repository for the API image |
+| `ECS_CLUSTER` | ECS cluster for the environment |
+| `ECS_SERVICE` | ECS service backing the API |
+| `ECS_CONTAINER_NAME` | Container name inside the task definition |
+| `ECS_MIGRATION_TASK_DEFINITION` | Task definition family for migration tasks |
+| `ECS_SUBNETS` | Comma separated subnet ids for one-off tasks |
+| `ECS_SECURITY_GROUPS` | Comma separated security group ids |
+| `API_BASE_URL` | Public HTTPS base URL, used by the smoke probes |
+
+And the environment secret:
+
+| Secret | Meaning |
+| --- | --- |
+| `MIGRATION_SECRET_ID` | Secrets Manager id holding the migration `DATABASE_URL` |
