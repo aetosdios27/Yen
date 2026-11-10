@@ -345,3 +345,11 @@ Each README claim that has a row carries a `<!-- claim: CLAIM-ID -->` marker. Th
 - **Test:** `apps/api/src/privacy.test.ts` "records purpose-specific consent and makes withdrawal visible immediately"; `apps/api/src/privacy-postgres.test.ts` "dry-runs and erases mutable identity while preserving event bytes and verification"; `apps/api/src/privacy-postgres.test.ts` "allows only the owning fund owner to set logged retention and keeps minimal identity on erasure"; `apps/api/src/privacy-postgres.test.ts` "records the notice version and immediately disables a withdrawn notification channel"
 - **Reference:** none yet (gap)
 - **Missing:** The API has no self-service web form. Legal basis and statutory retention periods have not been assessed; this engineering work is not legal advice. A message already accepted by a notification provider cannot be recalled.
+
+The public fund badge describes coverage of bank-matched financial items, not the
+organization's identity. With no bank-matched donations or reconciled expenses it
+says “No bank matches yet”. With any such items lacking a confirmed anchor with a
+transaction hash it says “Bank matched · anchoring incomplete”. Only when every
+such item is covered does it say “All bank matches anchored” and show a checkmark.
+Paid expenses that have not been reconciled retain their unverified timeline label
+and prevent a fund with bank matches from showing the anchoring checkmark.

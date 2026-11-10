@@ -18,3 +18,10 @@ Retries are safe only for idempotent operations or operations protected by a sta
 ## Reuse
 
 Construct one `ResilientCall` per dependency and reuse it across calls so breaker state persists. Pass `now`, `random`, and `sleep` in tests for deterministic timing and backoff.
+
+
+## Verification and external delivery limits
+
+`packages/shared/src/resilience.test.ts` tests timeout and attempt caps, capped exponential backoff with full jitter, and breaker cooldown/probe recovery. The WhatsApp Cloud and Exotel local HTTP contract suites each test timeout, a single request on HTTP errors, and suppression of the sixth request after five failed sends. These are deliberately one-attempt policies: enabling jittered retries for ambiguous sends without vendor deduplication could send a notification twice.
+
+The real Postgres SIGKILL and chain outage tests live in `packages/ledger/src/chaos.randomized.test.ts`. Sending rows with an unknown provider outcome are durably dead-lettered for reconciliation, not automatically retried. Exactly-once eventual external delivery remains unproven until the provider supports a stable idempotency key or a reconciliation protocol. The partner API row above is a proposed policy only; `UnconfiguredPayoutAdapter` fails closed and `ReferencePayoutAdapter` is a development stub, not an outbound HTTP integration.

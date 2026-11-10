@@ -51,7 +51,7 @@ jobs:
         run: |
           title='Nightly chaos scenarios failed'
           issue=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number // empty')
-          body="Nightly real Postgres chaos run failed in $GITHUB_RUN_URL. Inspect the logs for the reproducible seed."
+          body="Nightly real Postgres chaos run failed in ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}. Inspect the logs for the reproducible seed."
           if [ -n "$issue" ]; then gh issue comment "$issue" --body "$body"; else gh issue create --title "$title" --body "$body"; fi
       - name: Fail workflow after reporting
         if: steps.chaos.outcome == 'failure'

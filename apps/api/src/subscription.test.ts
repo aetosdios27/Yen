@@ -107,6 +107,23 @@ describe("Fund Subscriptions API", () => {
     }
   });
 
+  it("resubscribes accepted phone forms to one existing row", async () => {
+    const { app, fundSubscriptionStore } = setup();
+    const fundId = await createFund(app);
+    const original = await fundSubscriptionStore.subscribe({ fundId, contact: "+919876543210" });
+    await fundSubscriptionStore.unsubscribe(original.unsubscribeToken);
+    for (const contact of ["9876543210", "09876543210", "+91 98765 43210"]) {
+      const response = await app.request(`/v1/funds/${fundId}/subscriptions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ contact, contactType: "phone", channel: "sms", consent: true }),
+      });
+      expect(response.status).toBe(201);
+      expect(await response.json()).toMatchObject({ id: original.id, status: "active" });
+      expect(await fundSubscriptionStore.getActiveSubscribers(fundId)).toHaveLength(1);
+    }
+  });
+
   it("unsubscribes via POST /v1/subscriptions/unsubscribe", async () => {
     const { app, fundSubscriptionStore } = setup();
     const fundId = await createFund(app);

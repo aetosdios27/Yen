@@ -176,7 +176,11 @@ databaseSuite("migration runner", (sql, url) => {
     const subscriptionConsentSource = await readFile(
       join(defaultDir, "0033_subscription_consent.sql"),
     );
-    const ledgerTotalsSource = await readFile(join(defaultDir, "0034_ledger_totals.sql"));
+    const publicPledgeTotalsSource = await readFile(
+      join(defaultDir, "0036_public_pledge_totals.sql"),
+    );
+    const subscriptionPhoneSource = await readFile(join(defaultDir, "0035_subscription_phone.sql"));
+    const ledgerTotalsSource = await readFile(join(defaultDir, "0037_ledger_totals.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -379,7 +383,27 @@ databaseSuite("migration runner", (sql, url) => {
       },
       {
         version: 34,
-        name: "0034_ledger_totals.sql",
+        name: "0034_money_sampler_indexes.sql",
+        checksum: createHash("sha256")
+          .update(await readFile(join(defaultDir, "0034_money_sampler_indexes.sql"), "utf8"))
+          .digest("hex"),
+        applied_at: expect.any(Date),
+      },
+      {
+        version: 35,
+        name: "0035_subscription_phone.sql",
+        checksum: createHash("sha256").update(subscriptionPhoneSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
+      {
+        version: 36,
+        name: "0036_public_pledge_totals.sql",
+        checksum: createHash("sha256").update(publicPledgeTotalsSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
+      {
+        version: 37,
+        name: "0037_ledger_totals.sql",
         checksum: createHash("sha256").update(ledgerTotalsSource).digest("hex"),
         applied_at: expect.any(Date),
       },
@@ -542,7 +566,8 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(34);
+    expect(before).toHaveLength(37);
+
   });
 
   it("rejects an edited applied file and names it", async () => {

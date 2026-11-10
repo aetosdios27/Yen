@@ -442,7 +442,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
 - **URL:** https://www.postgresql.org/docs/16/trigger-definition.html
 - **What we use it for:** Triggers run in the writer's transaction and roll back with it. Statement triggers with transition tables maintain account totals alongside entries and holds; expiring holds remain a time-dependent query.
-- **Where in this repo:** packages/db/migrations/0034_ledger_totals.sql
+- **Where in this repo:** packages/db/migrations/0037_ledger_totals.sql
 
 <a id="pg-constraints"></a>
 ### Constraints

@@ -71,7 +71,7 @@ export async function createAlertsForEvent(
 
   // Filter subscribers to active recipients who opted into instant alerts
   const activeRecipients = subscribers.filter(
-    (sub) => sub.status === "active" && sub.instantAlerts,
+    (sub) => sub.status === "active" && sub.instantAlerts && sub.consentGrantedAt !== null,
   );
 
   for (const sub of activeRecipients) {

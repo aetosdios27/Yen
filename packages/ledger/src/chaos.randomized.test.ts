@@ -137,6 +137,8 @@ ledgerDatabaseSuite("YEN-61 real randomized crash scenarios", (sql) => {
         quiet_hours_end: "08:00",
         timezone: "UTC",
       });
+      await sql`INSERT INTO consent_records (id, user_id, purpose, notice_version, granted_at)
+        VALUES (${uuidv7()}, ${userId}, 'notification_whatsapp', ${PRIVACY_NOTICE_VERSION}, now())`;
       const chain = new DeterministicChain();
       const signer = {
         getAccount: async () => {

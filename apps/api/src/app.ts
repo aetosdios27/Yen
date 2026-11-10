@@ -34,9 +34,11 @@ import {
   buildIntervalTree,
   type DonorReceiptData,
   fromHex,
+  fundVerificationState,
   generateReceiptPdf,
   generateReceiptSvg,
   hash32,
+  normalizePhone,
   PRIVACY_NOTICE_VERSION,
   paise,
   parseFundId,
@@ -60,7 +62,6 @@ import {
   generateSessionToken,
   hashOtp,
   hashSessionToken,
-  normalizePhone,
   parseDeviceInfo,
   verifyOtp,
 } from "./auth/index.js";
@@ -928,10 +929,11 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   app.openapi(publicFundSummaryRoute, async (c) => {
     const fundId = c.req.valid("param").fundId;
     const { entry, actor, publicTier } = await publicFundContext(fundId, c.get("principal"));
-    const [expenses, donations, pledgedPaise] = await Promise.all([
+    const [expenses, donations, pledgedPaise, anchoredItems] = await Promise.all([
       listFundExpenses(fundId),
       deps.publicFundReadStore.donations(fundId),
       deps.publicFundReadStore.pledgedPaise(fundId),
+      deps.publicFundReadStore.anchoredItems(fundId),
     ]);
     const spentPaise = safePaiseSum(
       expenses
@@ -944,9 +946,23 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       name: entry.fund.name,
       purpose: actor.role === "public" ? null : (entry.fund.purpose ?? null),
       pledgedPaise: String(pledgedPaise),
-      raisedPaise: String(safePaiseSum(donations.map((donation) => donation.amountPaise))),
+      raisedPaise: String(
+        safePaiseSum(donations.map((donation) => (donation.refund ? 0n : donation.amountPaise))),
+      ),
       spentPaise: String(spentPaise),
-      verification: donations.length > 0 ? "bank-matched" : "unverified",
+      verification: fundVerificationState(
+        [
+          ...donations.flatMap((donation) => [
+            donation.id,
+            ...(donation.refund && !donation.refund.anchored ? [donation.refund.id] : []),
+          ]),
+          ...expenses
+            .filter((expense) => expense.status === "reconciled")
+            .map((expense) => expense.id),
+        ],
+        anchoredItems,
+        expenses.some((expense) => expense.status === "paid"),
+      ),
       dataGaps: publicDataGaps,
     });
     setFundReadCache(c, publicTier, body);
@@ -1017,6 +1033,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         }),
     );
     const donationItems = donations.map((donation) => ({
+      itemType: "donation" as const,
       id: donation.id,
       occurredAt: donation.occurredAt,
       message: "A donation was bank matched.",
@@ -1029,6 +1046,22 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       amountPaise: String(donation.amountPaise),
       verified: anchoredItems.has(donation.id) ? ("anchored" as const) : ("bank-matched" as const),
     }));
+    const refundItems = donations.flatMap((donation) =>
+      donation.refund
+        ? [
+            {
+              itemType: "refund" as const,
+              id: donation.refund.id,
+              occurredAt: donation.refund.occurredAt,
+              message: "A bank-matched donation was refunded.",
+              amountPaise: String(donation.amountPaise),
+              verified: donation.refund.anchored
+                ? ("anchored" as const)
+                : ("bank-matched" as const),
+            },
+          ]
+        : [],
+    );
     const alertItems = (await alertStore.listForTimeline(fundId)).map((alert) => ({
       id: alert.id,
       occurredAt: alert.created_at.toISOString(),
@@ -1038,8 +1071,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       title: alert.title,
       verified: "unverified" as const,
     }));
-    const items = [...expenseItems, ...donationItems, ...alertItems].sort((left, right) =>
-      left.occurredAt.localeCompare(right.occurredAt),
+    const items = [...expenseItems, ...donationItems, ...refundItems, ...alertItems].sort(
+      (left, right) => left.occurredAt.localeCompare(right.occurredAt),
     );
     const body = redactFundReadModel(actor, {
       kind: "fund_timeline",
@@ -2013,6 +2046,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         status: receipt.status,
         createdAt: receipt.createdAt,
         ...(receipt.verifiedAt ? { verifiedAt: receipt.verifiedAt } : {}),
+        ...(receipt.refundedAt ? { refundedAt: receipt.refundedAt } : {}),
         proofUrl:
           receipt.proofUrl ?? `/verify?donationId=${encodeURIComponent(receipt.donationId)}`,
         ...(receipt.onChainRoot ? { onChainRoot: receipt.onChainRoot } : {}),
@@ -2042,6 +2076,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       status: receipt.status,
       createdAt: receipt.createdAt,
       verifiedAt: receipt.verifiedAt,
+      refundedAt: receipt.refundedAt,
       proofUrl:
         receipt.proofUrl ??
         `https://yen.org.in/verify?donationId=${encodeURIComponent(receipt.donationId)}`,
@@ -2079,6 +2114,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       status: receipt.status,
       createdAt: receipt.createdAt,
       verifiedAt: receipt.verifiedAt,
+      refundedAt: receipt.refundedAt,
       proofUrl:
         receipt.proofUrl ??
         `https://yen.org.in/verify?donationId=${encodeURIComponent(receipt.donationId)}`,

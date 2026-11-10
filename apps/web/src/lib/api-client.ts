@@ -1,12 +1,18 @@
 import { createYenClient, type YenClient } from "@yen/api-client";
+import { browserApiFetch } from "@yen/shared/browser-tracing";
 
 let defaultClient: YenClient | null = null;
+
+function tracedFetch(input: Request): Promise<Response> {
+  return browserApiFetch(input);
+}
 
 export function getApiClient(baseUrl?: string): YenClient {
   if (baseUrl) {
     return createYenClient({
       baseUrl,
       credentials: "include",
+      fetch: tracedFetch,
     });
   }
 
@@ -19,6 +25,7 @@ export function getApiClient(baseUrl?: string): YenClient {
     defaultClient = createYenClient({
       baseUrl: resolvedUrl,
       credentials: "include",
+      fetch: tracedFetch,
     });
   }
 

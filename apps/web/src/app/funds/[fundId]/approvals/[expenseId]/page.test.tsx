@@ -246,6 +246,7 @@ describe("ApproverPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText("You are working offline. Displaying cached data.")).toBeTruthy();
+      expect(screen.getByText("Ramesh Hardware")).toBeTruthy();
     });
   });
 });

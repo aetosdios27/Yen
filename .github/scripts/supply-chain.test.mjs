@@ -3,13 +3,28 @@ import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const directory = new URL("../workflows/", import.meta.url);
-const externalAllowed = new Set([
-  "pnpm/action-setup",
-  "gitleaks/gitleaks-action",
-  "amannn/action-semantic-pull-request",
-  "anchore/sbom-action",
-  "sigstore/cosign-installer",
-]);
+const settings = readFileSync(
+  new URL("scripts/apply-repo-settings.sh", new URL("../", import.meta.url)),
+  "utf8",
+);
+const externalAllowed = new Set(
+  [...settings.matchAll(/patterns_allowed\[\]=([^'\s]+)@\*/g)].map(([, action]) => action),
+);
+const workflows = readdirSync(directory)
+  .filter((name) => /\.ya?ml$/.test(name))
+  .map((name) => readFileSync(new URL(name, directory), "utf8"));
+
+test("external action allow-list exactly matches actions used by workflows", () => {
+  const used = new Set(
+    workflows.flatMap((source) =>
+      [...source.matchAll(/\buses:\s*([^@\s]+)@/g)]
+        .map(([, action]) => action)
+        .filter((action) => !action.startsWith("actions/") && !action.startsWith("github/")),
+    ),
+  );
+  assert.deepEqual([...externalAllowed].sort(), [...used].sort());
+});
+
 for (const file of readdirSync(directory).filter((name) => /\.ya?ml$/.test(name))) {
   test(`${file}: every action is allow-listed and SHA pinned`, () => {
     const source = readFileSync(new URL(file, directory), "utf8");

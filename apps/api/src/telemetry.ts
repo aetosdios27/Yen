@@ -1,5 +1,6 @@
 import type { Context } from "@opentelemetry/api";
 import { context, metrics, SpanStatusCode, trace } from "@opentelemetry/api";
+import { observeObjective } from "@yen/shared/telemetry";
 
 let requestInstruments:
   | {
@@ -74,6 +75,13 @@ export function runRequestSpan<T>(
   return context.with(trace.setSpan(context.active(), span), operation);
 }
 export function recordRequest(method: string, route: string, status: number, durationMs: number) {
+  if (route.endsWith("/approve")) {
+    observeObjective("approval_api_availability", status < 500);
+    observeObjective("approve_p95_latency", status < 500 && durationMs <= 1000);
+  }
+  if (route.endsWith("/pay"))
+    observeObjective("pay_p95_latency", status < 500 && durationMs <= 1500);
+  if (route.includes("/donations/pledge")) observeObjective("donation_recording", status < 500);
   const attributes = {
     "http.request.method": method,
     "http.route": route,

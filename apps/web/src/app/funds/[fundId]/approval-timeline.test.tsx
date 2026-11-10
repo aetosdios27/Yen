@@ -199,7 +199,7 @@ describe("Approval Timeline Integration & Privacy Verification", () => {
     expect(publicFund).not.toBeNull();
     expect(publicFund?.name).toBe("Cultural Festival Fund");
     expect(publicFund?.money.totalSpent).toBe(paise(75000));
-    expect(publicFund?.org.verified).toBe(true);
+    expect(publicFund?.org.verification).toBe("bank-matched");
     expect(publicFund?.timeline).toHaveLength(1);
     expect(publicFund?.timeline[0]?.title).toBe("Stage audio monitors for cultural festival");
     expect(publicFund?.timeline[0]?.amount).toBe(paise(75000));
@@ -216,7 +216,7 @@ describe("Approval Timeline Integration & Privacy Verification", () => {
       org: {
         id: "org-01",
         name: "Clean Water Trust",
-        verified: true,
+        verification: "anchored",
       },
       money: {
         totalRaised: paise(500000),

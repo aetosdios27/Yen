@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
@@ -46,5 +47,30 @@ test("nightly workflow uses only full-SHA pinned actions", () => {
   assert.equal(usesLines.length, 3);
   for (const line of usesLines) {
     assert.match(line, /^\s*- uses:\s+[\w.-]+\/[\w.-]+@[0-9a-f]{40}\s+#\s+v[\w.-]+$/);
+  }
+});
+
+test("nightly failure reports link to their GitHub Actions run", () => {
+  for (const name of ["nightly-chaos.yml", "nightly-invariants.yml"]) {
+    const source = read(`workflows/${name}`);
+    assert.doesNotMatch(source, /\$GITHUB_RUN_URL/);
+    if (name === "nightly-chaos.yml") {
+      const body = source.split("\n").find((line) => line.trimStart().startsWith("body="));
+      assert.ok(body);
+      const output = execFileSync("bash", ["-eu", "-c", `${body}\nprintf '%s' "$body"`], {
+        env: {
+          GITHUB_SERVER_URL: "https://github.example",
+          GITHUB_REPOSITORY: "org/yen",
+          GITHUB_RUN_ID: "12345",
+        },
+        encoding: "utf8",
+      });
+      assert.match(output, /https:\/\/github\.example\/org\/yen\/actions\/runs\/12345/);
+    } else {
+      assert.match(
+        source,
+        /RUN_URL: \$\{\{ github\.server_url \}\}\/\$\{\{ github\.repository \}\}\/actions\/runs\/\$\{\{ github\.run_id \}\}/,
+      );
+    }
   }
 });
