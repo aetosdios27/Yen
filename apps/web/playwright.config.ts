@@ -25,17 +25,19 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     {
-      command: "node e2e/support/stub-api.mjs",
+      command: "exec node e2e/support/stub-api.mjs",
       url: `${apiUrl}/health`,
       env: { E2E_API_PORT: String(apiPort) },
       reuseExistingServer: !process.env.CI,
+      gracefulShutdown: { signal: "SIGTERM", timeout: 5_000 },
       timeout: 30_000,
     },
     {
-      command: `pnpm run build && pnpm exec next start --port ${webPort}`,
+      command: `pnpm run build && exec node node_modules/next/dist/bin/next start --port ${webPort}`,
       url: webUrl,
       env: { NEXT_PUBLIC_API_URL: apiUrl, PORT: String(webPort) },
       reuseExistingServer: !process.env.CI,
+      gracefulShutdown: { signal: "SIGTERM", timeout: 5_000 },
       timeout: 120_000,
     },
   ],
