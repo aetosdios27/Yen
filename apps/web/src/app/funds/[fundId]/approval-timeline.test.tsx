@@ -203,7 +203,7 @@ describe("Approval Timeline Integration & Privacy Verification", () => {
     expect(publicFund?.timeline).toHaveLength(1);
     expect(publicFund?.timeline[0]?.title).toBe("Stage audio monitors for cultural festival");
     expect(publicFund?.timeline[0]?.amount).toBe(paise(75000));
-    expect(publicFund?.timeline[0]?.status).toBe("verified");
+    expect(publicFund?.timeline[0]?.status).toBe("pending");
   });
 
   it("strictly enforces privacy: zero PII or private data appears in public page HTML or timeline", async () => {

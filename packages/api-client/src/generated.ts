@@ -2039,6 +2039,10 @@ export interface components {
        * @enum {string}
        */
       channel: "email" | "whatsapp" | "sms";
+      /** @enum {boolean} */
+      consent: true;
+      /** @default false */
+      whatsappConsent: boolean;
       /** @default true */
       weeklySummary: boolean;
       /** @default true */
@@ -4352,6 +4356,8 @@ export interface operations {
             purpose: string | null;
             /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
             raisedPaise: string | null;
+            /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
+            pledgedPaise: string;
             /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
             spentPaise: string;
             /** @enum {string} */

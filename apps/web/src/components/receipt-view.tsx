@@ -48,6 +48,8 @@ export interface ReceiptViewProps {
 export function ReceiptView({ receipt, apiUrl = "", onSubscribe }: ReceiptViewProps) {
   const { t } = useI18n();
   const [destination, setDestination] = useState("");
+  const [consent, setConsent] = useState(false);
+  const [whatsappConsent, setWhatsappConsent] = useState(false);
   const [weeklyDigest, setWeeklyDigest] = useState(true);
   const [instantAlerts, setInstantAlerts] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -68,7 +70,7 @@ export function ReceiptView({ receipt, apiUrl = "", onSubscribe }: ReceiptViewPr
     event.preventDefault();
     if (submitting) return;
     const trimmed = destination.trim();
-    if (trimmed === "") return;
+    if (trimmed === "" || !consent || (!trimmed.includes("@") && !whatsappConsent)) return;
 
     setSubmitting(true);
     setSubscribeError(null);
@@ -76,6 +78,8 @@ export function ReceiptView({ receipt, apiUrl = "", onSubscribe }: ReceiptViewPr
     const contactType: "email" | "phone" = trimmed.includes("@") ? "email" : "phone";
     const channel: "email" | "whatsapp" | "sms" = contactType === "email" ? "email" : "whatsapp";
     const payload = {
+      consent: true as const,
+      whatsappConsent,
       contact: trimmed,
       contactType,
       channel,
@@ -268,6 +272,24 @@ export function ReceiptView({ receipt, apiUrl = "", onSubscribe }: ReceiptViewPr
               </label>
             </fieldset>
 
+            <label className="flex items-center gap-3 text-small">
+              <input
+                type="checkbox"
+                checked={consent}
+                onChange={(e) => setConsent(e.target.checked)}
+              />
+              I agree to fund updates under the <Link href="/privacy">Privacy notice</Link>.
+            </label>
+            {!destination.includes("@") && (
+              <label className="flex items-center gap-3 text-small">
+                <input
+                  type="checkbox"
+                  checked={whatsappConsent}
+                  onChange={(e) => setWhatsappConsent(e.target.checked)}
+                />
+                I separately agree to WhatsApp messages.
+              </label>
+            )}
             <Button type="submit" loading={submitting} loadingLabel={t("receipt.subscribing")}>
               {t("receipt.subscribeButton")}
             </Button>

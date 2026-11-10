@@ -100,6 +100,14 @@ describe("PayoutOrchestrator", () => {
     const first = await orchestrator.initiate({ expense: approvedExpense(), initiatorId: maker });
     const retry = await orchestrator.initiate({ expense: approvedExpense(), initiatorId: maker });
 
+    expect(JSON.stringify(first)).not.toContain("vendor@upi");
+    expect(calls[0]?.recipientRef).toBe("vendor@upi");
+    await expect(
+      orchestrator.initiate({
+        expense: { ...approvedExpense(), recipientRef: "other@upi" },
+        initiatorId: maker,
+      }),
+    ).rejects.toThrow("Payout idempotency conflict");
     expect(first.replayed).toBe(false);
     expect(retry.replayed).toBe(true);
     expect(retry.payout).toEqual(first.payout);

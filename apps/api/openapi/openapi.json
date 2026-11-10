@@ -808,10 +808,12 @@
             "enum": ["email", "whatsapp", "sms"],
             "default": "whatsapp"
           },
+          "consent": { "type": "boolean", "enum": [true] },
+          "whatsappConsent": { "type": "boolean", "default": false },
           "weeklySummary": { "type": "boolean", "default": true },
           "instantAlerts": { "type": "boolean", "default": true }
         },
-        "required": ["contact", "contactType"],
+        "required": ["contact", "contactType", "consent"],
         "additionalProperties": false
       },
       "UnsubscribeResult": {
@@ -4142,6 +4144,11 @@
                       "pattern": "^(0|[1-9][0-9]*)$",
                       "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
                     },
+                    "pledgedPaise": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)$",
+                      "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
+                    },
                     "spentPaise": {
                       "type": "string",
                       "pattern": "^(0|[1-9][0-9]*)$",
@@ -4158,6 +4165,7 @@
                     "name",
                     "purpose",
                     "raisedPaise",
+                    "pledgedPaise",
                     "spentPaise",
                     "verification",
                     "dataGaps"

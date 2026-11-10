@@ -315,6 +315,7 @@ export const publicFundSummarySchema = z
     name: z.string(),
     purpose: z.string().nullable(),
     raisedPaise: paiseWire.nullable(),
+    pledgedPaise: paiseWire,
     spentPaise: paiseWire,
     verification: verificationState,
     dataGaps: z.array(z.string()),
@@ -2544,10 +2545,16 @@ export const createFundSubscriptionInput = z
     }),
     contactType: z.enum(["email", "phone"]),
     channel: z.enum(["email", "whatsapp", "sms"]).default("whatsapp"),
+    consent: z.literal(true),
+    whatsappConsent: z.boolean().default(false),
     weeklySummary: z.boolean().default(true),
     instantAlerts: z.boolean().default(true),
   })
   .strict()
+  .refine((input) => input.channel !== "whatsapp" || input.whatsappConsent, {
+    message: "Separate WhatsApp consent is required",
+    path: ["whatsappConsent"],
+  })
   .openapi("CreateFundSubscriptionInput");
 
 export const fundSubscriptionSchema = z

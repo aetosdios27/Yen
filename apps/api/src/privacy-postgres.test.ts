@@ -1,13 +1,24 @@
 import { randomBytes } from "node:crypto";
-import { appendEvent, migrate, type Sql, uuidv7, verifyStoredChain } from "@yen/db";
-import { chainHead, hashHexSchema, pseudonymIdSchema } from "@yen/eventlog";
 import {
+  appendEvent,
+  eraseVerifiedGuestContact,
+  exportAuditBundle,
+  migrate,
+  type Sql,
+  uuidv7,
+  verifyStoredChain,
+} from "@yen/db";
+import { chainHead, hashHexSchema, pseudonymIdSchema } from "@yen/eventlog";
+import { PostgresFundSubscriptionStore } from "@yen/notifications";
+import {
+  buildIntervalTree,
   fromHex,
   fundIdSchema,
   hash32,
   leafHash,
   orgIdSchema,
   salt32,
+  toHex,
   userIdSchema,
 } from "@yen/shared";
 import { beforeAll, expect, it } from "vitest";
@@ -16,10 +27,14 @@ import { initLedgerSchema } from "../../../packages/ledger/src/schema.js";
 import { PostgresNotificationStore } from "../../../packages/notifications/src/store.js";
 import { createApp } from "./app.js";
 import { PostgresDonationPledgeStore } from "./donation-store.js";
+import { PostgresExpenseStore } from "./expense-store.js";
+import { PostgresFundStore } from "./fund-store.js";
 import { devPolicy } from "./policy.js";
 import { PostgresPrivacyStore } from "./privacy-store.js";
+import { PostgresPublicFundReadStore } from "./public-fund-store.js";
+import { PostgresReceiptStore } from "./receipt-store.js";
 
-async function seedFund(sql: Sql) {
+async function seedFund(sql: Sql, name = "Sensitive Person Name") {
   const ownerId = uuidv7();
   const userId = userIdSchema.parse(uuidv7());
   const orgId = orgIdSchema.parse(uuidv7());
@@ -29,21 +44,21 @@ async function seedFund(sql: Sql) {
   const phone = `+91${String(Math.floor(1000000000 + Math.random() * 8999999999))}`;
   const ownerPhone = `+91${String(Math.floor(1000000000 + Math.random() * 8999999999))}`;
   await sql`INSERT INTO users (id, phone, display_name) VALUES (${ownerId}, ${ownerPhone}, 'Fund Owner')`;
-  await sql`INSERT INTO users (id, phone, display_name) VALUES (${userId}, ${phone}, 'Sensitive Person Name')`;
+  await sql`INSERT INTO users (id, phone, display_name) VALUES (${userId}, ${phone}, ${name})`;
   await sql`INSERT INTO orgs (id, name, legal_form, owner_id) VALUES (${orgId}, 'Club', 'society', ${ownerId})`;
   await sql`INSERT INTO funds (id, org_id, title, policy_json) VALUES (${fundId}, ${orgId}, 'Fund', '{}')`;
   await sql`INSERT INTO memberships (fund_id, user_id, role, status) VALUES (${fundId}, ${userId}, 'member', 'active')`;
   await sql`INSERT INTO fund_pseudonyms (pseudonym_id, user_id, fund_id) VALUES (${pseudonymId}, ${userId}, ${fundId})`;
-  await sql`INSERT INTO display_names (fund_id, pseudonym_id, display_name) VALUES (${fundId}, ${pseudonymId}, 'Sensitive Person Name')`;
+  await sql`INSERT INTO display_names (fund_id, pseudonym_id, display_name) VALUES (${fundId}, ${pseudonymId}, ${name})`;
   await sql`INSERT INTO expenses (id, fund_id, status, expense_data, created_at, updated_at)
-    VALUES (${uuidv7()}, ${fundId}, 'draft', ${sql.json({ requesterId: `psn_${pseudonymId}`, description: "Sensitive Person Name reimbursement", recipientRef: "Sensitive Person Name", payee: { identity: { kind: "upi", vpa: `${phone.slice(1)}@upi` }, name: "Sensitive Person Name" }, payeeFingerprint: "fp-sensitive" })}, now(), now())`;
+    VALUES (${uuidv7()}, ${fundId}, 'draft', ${sql.json({ status: "draft", requesterId: `psn_${pseudonymId}`, description: `${name} reimbursement`, recipientRef: name, payee: { identity: { kind: "upi", vpa: `${phone.slice(1)}@upi` }, name: name }, payeeFingerprint: "fp-sensitive" })}, now(), now())`;
   await sql`INSERT INTO donation_pledges (id, fund_id, amount_paise, utr, donor_display_name, donor_contact, status, created_at)
-    VALUES (${uuidv7()}, ${fundId}, 1000, ${String(Math.floor(100000000000 + Math.random() * 899999999999))}, 'Sensitive Person Name', ${phone}, 'pledged', now())`;
+    VALUES (${uuidv7()}, ${fundId}, 1000, ${String(Math.floor(100000000000 + Math.random() * 899999999999))}, ${name}, ${phone}, 'pledged', now())`;
   const salt = randomBytes(32);
   const { createHash } = await import("node:crypto");
   const hash = createHash("sha256").update(salt).update(phone).digest();
   await sql`INSERT INTO display_name_contact_salts (fund_id, salt) VALUES (${fundId}, ${salt})`;
-  await sql`INSERT INTO guest_display_names (fund_id, contact_hash, display_name) VALUES (${fundId}, ${hash}, 'Sensitive Person Name')`;
+  await sql`INSERT INTO guest_display_names (fund_id, contact_hash, display_name) VALUES (${fundId}, ${hash}, ${name})`;
   await sql`INSERT INTO sessions (id, user_id, token_hash, expires_at) VALUES (${sessionId}, ${userId}, ${randomBytes(32).toString("hex")}, now() + interval '1 day')`;
   await sql`INSERT INTO trusted_devices (session_id, user_id, idle_expires_at) VALUES (${sessionId}, ${userId}, now() + interval '1 day')`;
   await sql`INSERT INTO owner_invites (id, fund_id, owner_id, phone, secret_hash, expires_at, created_at)
@@ -54,8 +69,8 @@ async function seedFund(sql: Sql) {
   await sql`INSERT INTO bank_transactions (id, fund_id, bank_reference, amount_paise, type, posted_at,
     narration, counterparty_name, source, raw_payload)
     VALUES (${uuidv7()}, ${fundId}, ${`bank-${userId}`}, 1000, 'credit', now(),
-      ${`payment from ${phone}`}, 'Sensitive Person Name', 'statement_upload',
-      ${sql.json({ phone, donor: "Sensitive Person Name" })})`;
+      ${`payment from ${phone}`}, ${name}, 'statement_upload',
+      ${sql.json({ phone, donor: name })})`;
   const event = await appendEvent(sql, {
     fundId,
     type: "fund.created",
@@ -214,6 +229,132 @@ databaseSuite("privacy erasure operations", (sql) => {
     });
   });
 
+  it("erases subscription contacts and receipt names across every persisted table", async () => {
+    const name = `Erasure Person ${uuidv7()}`;
+    const { userId, fundId, phone, head } = await seedFund(sql, name);
+    await sql`INSERT INTO fund_subscriptions (id, fund_id, contact, contact_type, unsubscribe_token)
+      VALUES (${uuidv7()}, ${fundId}, ${phone}, 'phone', ${randomBytes(32).toString("hex")}),
+             (${uuidv7()}, ${fundId}, ${phone.slice(3)}, 'phone', ${randomBytes(32).toString("hex")})`;
+    const bankAccount = `8844${phone.slice(-8)}`;
+    const [mapping] = await sql<
+      { pseudonym_id: string }[]
+    >`SELECT pseudonym_id FROM fund_pseudonyms WHERE user_id = ${userId}`;
+    if (!mapping) throw new Error("missing mapping");
+    await sql`INSERT INTO expenses (id, fund_id, status, expense_data, created_at, updated_at)
+      VALUES (${uuidv7()}, ${fundId}, 'draft', ${sql.json({
+        status: "draft",
+        requesterId: `psn_${mapping.pseudonym_id}`,
+        payee: {
+          name,
+          identity: { kind: "bank", accountNumber: bankAccount, ifsc: "TEST0000001" },
+        },
+        recipientRef: bankAccount,
+      })}, now(), now())`;
+    const email = `${uuidv7()}@private.example.test`;
+    await sql`INSERT INTO donation_pledges (id, fund_id, amount_paise, utr, donor_contact, donor_display_name, status, created_at)
+      VALUES (${uuidv7()}, ${fundId}, 100, '777777777777', ${email}, ${name}, 'pledged', now())`;
+    await sql`INSERT INTO fund_subscriptions (id, fund_id, contact, contact_type, unsubscribe_token)
+      VALUES (${uuidv7()}, ${fundId}, ${email}, 'email', ${randomBytes(32).toString("hex")})`;
+    await sql`UPDATE funds SET visibility_tier = 'public' WHERE id = ${fundId}`;
+    const [event] = await sql<
+      { hash: string }[]
+    >`SELECT hash FROM fund_events WHERE fund_id = ${fundId}`;
+    if (!event) throw new Error("missing event");
+    const salt = salt32(randomBytes(32));
+    const tree = await buildIntervalTree([
+      {
+        fundId,
+        latestEventHash: hash32(fromHex(event.hash)),
+        events: [{ seq: 1, eventHash: hash32(fromHex(event.hash)), salt }],
+      },
+    ]);
+    const anchorId = uuidv7();
+    await sql`INSERT INTO anchors (id, fund_id, from_seq, to_seq, root, status, tx_hash, chain_id, chain_sequence)
+      VALUES (${anchorId}, ${fundId}, 1, 1, ${toHex(tree.root)}, 'submitted', ${`0x${"ab".repeat(32)}`}, 80002, 1)`;
+    await sql`INSERT INTO anchor_event_salts (anchor_id, fund_id, seq, salt) VALUES (${anchorId}, ${fundId}, 1, ${toHex(salt)})`;
+    const [pledge] = await sql<
+      { id: string }[]
+    >`UPDATE donation_pledges SET status = 'verified', donor_name_choice = 'anonymous' WHERE fund_id = ${fundId} AND donor_contact = ${phone} RETURNING id`;
+    if (!pledge) throw new Error("missing pledge");
+    await sql`UPDATE bank_transactions SET matched_pledge_id = ${pledge.id}, reconciliation_status = 'matched' WHERE fund_id = ${fundId}`;
+    const publicApp = createApp({
+      principal: null,
+      sql,
+      fundStore: new PostgresFundStore(sql),
+      receiptStore: new PostgresReceiptStore(sql),
+      publicFundReadStore: new PostgresPublicFundReadStore(sql),
+      expenseStore: new PostgresExpenseStore(sql),
+      logger: { log: () => undefined },
+    });
+    const inspectPublic = async () => {
+      const bundle = await exportAuditBundle(sql, fundId, anchorId, `0x${"cd".repeat(20)}`);
+      const responses = [];
+      for (const path of [
+        `/v1/funds/${fundId}/audit-bundle`,
+        `/v1/funds/${fundId}/public/timeline`,
+        `/v1/funds/${fundId}/public/summary`,
+        `/v1/funds/${fundId}/public/breakdown`,
+      ]) {
+        const response = await publicApp.request(path);
+        expect(response.status).toBe(200);
+        responses.push(await response.json());
+      }
+      const output = JSON.stringify(
+        {
+          bundle,
+          responses,
+          leaf: toHex(await leafHash(salt, hash32(fromHex(event.hash)))),
+          anchors: await sql`SELECT * FROM anchors WHERE fund_id = ${fundId}`,
+          events: await sql`SELECT * FROM fund_events WHERE fund_id = ${fundId}`,
+        },
+        (_key, value) => (typeof value === "bigint" ? value.toString() : value),
+      );
+      for (const value of [
+        phone,
+        phone.slice(3),
+        name,
+        email,
+        bankAccount,
+        `${phone.slice(1)}@upi`,
+      ])
+        expect(output).not.toContain(value);
+      expect(output).not.toMatch(/\+91[0-9]{10}|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i);
+      return bundle;
+    };
+    const bundleBefore = await inspectPublic();
+    await new PostgresPrivacyStore(sql).requestErasure(userId, Date.now(), false);
+    await eraseVerifiedGuestContact(sql, email);
+    expect(await inspectPublic()).toEqual(bundleBefore);
+    const receipts = await sql<
+      { id: string }[]
+    >`SELECT id FROM donation_pledges WHERE fund_id = ${fundId}`;
+    for (const receipt of receipts) {
+      const response = await publicApp.request(`/v1/receipts/${receipt.id}`);
+      expect(response.status).toBe(200);
+      expect(await response.text()).not.toContain(name);
+    }
+    const tables = await sql<
+      { tablename: string }[]
+    >`SELECT tablename FROM pg_tables WHERE schemaname = 'public'`;
+    for (const { tablename } of tables) {
+      const rows = await sql`SELECT to_jsonb(t)::text AS data FROM ${sql(tablename)} t`;
+      for (const value of [
+        phone,
+        phone.slice(3),
+        name,
+        email,
+        bankAccount,
+        `${phone.slice(1)}@upi`,
+      ]) {
+        expect(
+          rows.some((row) => String(row.data).includes(value)),
+          tablename,
+        ).toBe(false);
+      }
+    }
+    expect(await verifyStoredChain(sql, fundId, head)).toMatchObject({ ok: true });
+  });
+
   it("allows only the owning fund owner to set logged retention and keeps minimal identity on erasure", async () => {
     const { ownerId, userId, fundId, phone } = await seedFund(sql);
     const store = new PostgresPrivacyStore(sql);
@@ -269,6 +410,23 @@ databaseSuite("privacy erasure operations", (sql) => {
       privacyStore: store,
       logger: { log: () => undefined },
     });
+    const subscriptionStore = new PostgresFundSubscriptionStore(sql);
+    const [user] = await sql<{ phone: string }[]>`SELECT phone FROM users WHERE id = ${userId}`;
+    if (!user) throw new Error("missing user");
+    const subscription = await subscriptionStore.subscribe({
+      fundId,
+      contact: user.phone,
+      channel: "sms",
+    });
+    expect(
+      await sql`SELECT notice_version, consent_purpose, consent_granted_at FROM fund_subscriptions WHERE id = ${subscription.id}`,
+    ).toEqual([
+      {
+        notice_version: "2026-10-29",
+        consent_purpose: "notification_sms",
+        consent_granted_at: expect.any(Date),
+      },
+    ]);
     const grant = await app.request("/v1/privacy/consents", {
       method: "POST",
       headers: { "content-type": "application/json", "Idempotency-Key": "privacy-sms-grant" },
@@ -300,6 +458,7 @@ databaseSuite("privacy erasure operations", (sql) => {
       { status: "skipped", claim_token: null },
       { status: "skipped", claim_token: null },
     ]);
+    expect(await subscriptionStore.getActiveSubscribers(fundId)).toHaveLength(0);
     const consents = await store.listConsents(userId);
     expect(consents).toHaveLength(1);
     expect(consents[0]).toMatchObject({

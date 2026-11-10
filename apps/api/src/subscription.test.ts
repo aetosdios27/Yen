@@ -66,6 +66,8 @@ describe("Fund Subscriptions API", () => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
+        consent: true,
+        whatsappConsent: true,
         contact: "+919876543210",
         contactType: "phone",
         channel: "whatsapp",
@@ -85,6 +87,24 @@ describe("Fund Subscriptions API", () => {
     // Ensure PII is not leaked in response
     expect(body.contact).toBeUndefined();
     expect(body.unsubscribeToken).toBeUndefined();
+  });
+
+  it("requires explicit update consent and separate WhatsApp consent", async () => {
+    const { app } = setup();
+    const fundId = await createFund(app);
+    for (const consent of [{}, { consent: true }, { consent: true, whatsappConsent: false }]) {
+      const response = await app.request(`/v1/funds/${fundId}/subscriptions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          contact: "+919876543210",
+          contactType: "phone",
+          channel: "whatsapp",
+          ...consent,
+        }),
+      });
+      expect(response.status).toBe(400);
+    }
   });
 
   it("unsubscribes via POST /v1/subscriptions/unsubscribe", async () => {

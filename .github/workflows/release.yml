@@ -49,15 +49,17 @@ jobs:
       - name: Build twice and compare release artifact
         run: bash scripts/repro-build.sh "$ARTIFACT_DIR"
 
-      - name: Generate CycloneDX SBOM
-        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
-        with:
-          path: .
-          format: cyclonedx-json
-          output-file: ${{ runner.temp }}/sbom.cdx.json
-          syft-version: v1.42.1
-          upload-artifact: false
-          upload-release-assets: false
+      - name: Generate CycloneDX SBOM with checksum-verified Syft
+        run: |
+          archive="$RUNNER_TEMP/syft.tar.gz"
+          curl --fail --location --silent --show-error --retry 3 \
+            https://github.com/anchore/syft/releases/download/v1.42.1/syft_1.42.1_linux_amd64.tar.gz \
+            --output "$archive"
+          # GitHub release asset digest: anchore/syft v1.42.1 linux_amd64.
+          printf '989ded4e772810f93de6ccdc4512f79a6dabb5fb2dd2a9ffc72a80c955e6125a  %s\n' "$archive" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/syft-bin"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/syft-bin" syft
+          "$RUNNER_TEMP/syft-bin/syft" scan dir:. -o "cyclonedx-json=$RUNNER_TEMP/sbom.cdx.json"
 
       - name: Add SBOM and check release assets
         env:
@@ -73,9 +75,54 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  independent-build:
+    name: Independently rebuild on another runner
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      ARTIFACT_DIR: ${{ runner.temp }}/yen-release
+      YEN_RELEASE_TAG: ${{ github.ref_name }}
+      YEN_PROVENANCE_URL: https://github.com/${{ github.repository }}/attestations
+      NEXT_TELEMETRY_DISABLED: "1"
+      TZ: UTC
+      LC_ALL: C
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          cache: true
+
+      - name: Validate release tag and toolchain
+        run: |
+          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+          test "$(node --version)" = "v$(cat .nvmrc)"
+          test "$(pnpm --version)" = "$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).packageManager.split("@").at(-1)')"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build twice and compare release artifact
+        run: bash scripts/repro-build.sh "$ARTIFACT_DIR"
+
+      - name: Upload independently rebuilt checksums
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: yen-independent-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/yen-release/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 1
+
   sign:
     name: Attest and sign release files
-    needs: build
+    needs: [build, independent-build]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -92,13 +139,26 @@ jobs:
           name: yen-release-unsigned-${{ github.run_attempt }}
           path: ${{ runner.temp }}/yen-release
 
+      - name: Download independently rebuilt checksums
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: yen-independent-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/yen-independent
+
+      - name: Require independent archive digest to match before signing
+        run: |
+          head -n 1 "$ARTIFACT_DIR/SHA256SUMS" > "$RUNNER_TEMP/archive-SHA256SUMS"
+          cmp "$RUNNER_TEMP/archive-SHA256SUMS" "$RUNNER_TEMP/yen-independent/SHA256SUMS"
+          cd "$ARTIFACT_DIR"
+          sha256sum --check SHA256SUMS
+
       - name: Attest release files
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
         with:
           subject-path: ${{ runner.temp }}/yen-release/*
 
       - name: Install pinned Cosign
-        uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
         with:
           cosign-release: v3.1.4
 

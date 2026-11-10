@@ -6,6 +6,7 @@ export type SpendingCategoryId =
   | "registration"
   | "logistics"
   | "food"
+  | "facilities"
   | "other";
 
 export type SpendingCategory = {

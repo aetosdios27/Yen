@@ -22,6 +22,7 @@ const CATEGORY_MESSAGE_KEYS: Record<SpendingCategoryId, MessageKey> = {
   registration: "fund.categoryRegistration",
   logistics: "fund.categoryLogistics",
   food: "fund.categoryFood",
+  facilities: "fund.categoryFacilities",
   other: "fund.categoryOther",
 };
 

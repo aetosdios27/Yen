@@ -50,24 +50,8 @@ export function OnboardingWizard() {
   const descriptionId = useId();
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(DRAFT_KEY);
-    if (!stored) return;
-    try {
-      const parsed = JSON.parse(stored) as Partial<OnboardingDraft> & { step?: number };
-      setDraft({
-        ...EMPTY_ONBOARDING_DRAFT,
-        ...parsed,
-        approvers: parsed.approvers ?? EMPTY_ONBOARDING_DRAFT.approvers,
-      });
-      setStep(Math.max(0, Math.min(4, parsed.step ?? 0)));
-    } catch {
-      window.localStorage.removeItem(DRAFT_KEY);
-    }
+    window.localStorage.removeItem(DRAFT_KEY);
   }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...draft, step }));
-  }, [draft, step]);
 
   const next = () => {
     const message = stepError(step, draft);
