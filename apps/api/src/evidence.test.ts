@@ -8,7 +8,11 @@ import { devPolicy } from "./policy.js";
 import { MemoryStorageAdapter } from "./storage.js";
 import { MemoryEvidenceStore, type StoredEvidence } from "./stores.js";
 import { MemoryVirusScannerAdapter } from "./test-utils/memory-virus-scanner.js";
-import { ClamAvVirusScannerAdapter, type VirusScannerAdapter } from "./virus-scanner.js";
+import {
+  ClamAvVirusScannerAdapter,
+  UnconfiguredVirusScannerAdapter,
+  type VirusScannerAdapter,
+} from "./virus-scanner.js";
 
 const FUND_OWNER = { id: "00000000-0000-4000-8000-000000000001" };
 const EXPENSE_ID_1 = "00000000-0000-4000-8000-000000000011";
@@ -91,8 +95,12 @@ async function createTestFund(app: ReturnType<typeof createApp>) {
 }
 
 describe("Evidence Upload API Endpoint", () => {
-  it("rejects uploads when the default app has no malware scanner configured", async () => {
-    const app = createApp({ principal: FUND_OWNER, policy: devPolicy });
+  it("rejects uploads when the app has no malware scanner configured", async () => {
+    const app = createApp({
+      principal: FUND_OWNER,
+      policy: devPolicy,
+      virusScanner: new UnconfiguredVirusScannerAdapter(),
+    });
     const fundId = await createTestFund(app);
     const form = new FormData();
     form.append("file", new File([VALID_PDF_BYTES], "invoice.pdf", { type: "application/pdf" }));
