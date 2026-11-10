@@ -288,7 +288,7 @@ test.describe("real backend journey", () => {
     const upload = await page.request.post(
       `${directApiBase}/v1/funds/${seedFundId}/expenses/${expenseId}/evidence`,
       {
-        headers: apiHeaders(seedSessions.treasurer),
+        headers: { ...apiHeaders(seedSessions.treasurer), "idempotency-key": randomUUID() },
         multipart: {
           file: { name: "bill.png", mimeType: "image/png", buffer: bill },
           vendorName: "Ramesh Electricals",
@@ -313,7 +313,7 @@ test.describe("real backend journey", () => {
         apiBase: browserApiBase,
         pin: e2ePin,
       });
-      expect(result.error ?? "registration failed", result.error).toBeUndefined();
+      expect(result.error).toBeUndefined();
       expect(result.credentialId).not.toBe("");
     } finally {
       await removeVirtualAuthenticator(authenticator);
@@ -339,11 +339,18 @@ test.describe("real backend journey", () => {
     const authenticator = await enableVirtualAuthenticator(page);
     let deviceProof = "";
     try {
+      // Every test boots an empty virtual authenticator, so the approver
+      // registers a passkey again before signing, mirroring a fresh device.
+      const registered = await page.evaluate(registerPasskeyInPage, {
+        apiBase: browserApiBase,
+        pin: e2ePin,
+      });
+      expect(registered.error).toBeUndefined();
       const signed = await page.evaluate(signApprovalInPage, {
         apiBase: browserApiBase,
         actionHash: actionHashHex,
       });
-      expect(signed.error ?? "assertion failed", signed.error).toBeUndefined();
+      expect(signed.error).toBeUndefined();
       deviceProof = signed.deviceProof ?? "";
     } finally {
       await removeVirtualAuthenticator(authenticator);
@@ -373,7 +380,32 @@ test.describe("real backend journey", () => {
 
   test("the treasurer pays and reconciles the expense against the bank", async ({ request }) => {
     await setupPin(seedSessions.treasurer);
-    const bankTransactionId = randomUUID();
+
+    // The pay step links an ingested, unmatched debit for the exact amount,
+    // so the outflow must be on a statement before the payout can be recorded.
+    const debitReference = `e2e-outflow-${randomUUID()}`;
+    const statement = await request.post(`${directApiBase}/v1/reconciliation/statements`, {
+      headers: { ...apiHeaders(seedSessions.treasurer), "idempotency-key": randomUUID() },
+      data: {
+        fundId: seedFundId,
+        csvContent: [
+          "Date,Narration,Ref No.,Deposit,Withdrawal",
+          `01/11/2026,UPI/DR/888888444444/RAMESH/ICIC,${debitReference},,2500.00`,
+        ].join("\n"),
+      },
+    });
+    expect(statement.status()).toBe(200);
+    const debit = (
+      (await statement.json()) as {
+        transactions: Array<{ id: string; type: string; reconciliationStatus: string }>;
+      }
+    ).transactions.find(
+      (transaction) =>
+        transaction.type === "debit" && transaction.reconciliationStatus === "unmatched",
+    );
+    expect(debit, "ingested debit should be unmatched").toBeTruthy();
+    if (!debit) throw new Error("ingested debit should be unmatched");
+    const bankTransactionId = debit.id;
 
     const paid = await request.post(
       `${directApiBase}/v1/funds/${seedFundId}/expenses/${expenseId}/pay`,
