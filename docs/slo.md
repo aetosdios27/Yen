@@ -82,7 +82,8 @@ must permit the web origin via CORS. Browser API requests send `traceparent` and
 a UUID `x-request-id`; the API exports the same request id as `yen.request.id`.
 Transactional enqueues persist only a W3C traceparent under reserved
 `__yenTelemetry`; workers restore the parent before executing the handler.
-No baggage, raw URL, payload, identity, amount, exception message or stack is
+Inbound tracestate and baggage are dropped; only the traceparent is propagated.
+No raw URL, payload, identity, amount, exception message or stack is
 copied into spans. Logs use template routes and the existing structured schema.
 YEN-20 / PR #135 owns additional free-text log redaction and error reporting.
 

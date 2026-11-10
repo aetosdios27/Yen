@@ -22,7 +22,11 @@ it("exports templated request spans without raw path or request data attributes"
   const response = await app.request(
     "/trace-test/secret-personal-id?phone=%2B919876543210&email=private%40example.com&name=Private%20Person&vpa=private%40yenbank",
     {
-      headers: { authorization: "Bearer secret-token" },
+      headers: {
+        authorization: "Bearer secret-token",
+        tracestate: "yen=private@example.com",
+        traceparent: "00-11111111111111111111111111111111-1111111111111111-01",
+      },
     },
   );
   expect(response.status).toBe(200);
@@ -36,6 +40,7 @@ it("exports templated request spans without raw path or request data attributes"
       attributes: span.attributes,
       events: span.events,
       status: span.status,
+      traceState: span.spanContext().traceState?.serialize(),
     })),
   );
   expect(logs.join("\n") + exported).not.toMatch(
