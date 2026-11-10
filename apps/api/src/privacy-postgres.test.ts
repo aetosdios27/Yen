@@ -231,7 +231,8 @@ databaseSuite("privacy erasure operations", (sql) => {
     const name = `Erasure Person ${uuidv7()}`;
     const { userId, fundId, phone, head } = await seedFund(sql, name);
     await sql`INSERT INTO fund_subscriptions (id, fund_id, contact, contact_type, unsubscribe_token)
-      VALUES (${uuidv7()}, ${fundId}, ${phone}, 'phone', ${randomBytes(32).toString("hex")})`;
+      VALUES (${uuidv7()}, ${fundId}, ${phone}, 'phone', ${randomBytes(32).toString("hex")}),
+             (${uuidv7()}, ${fundId}, ${phone.slice(3)}, 'phone', ${randomBytes(32).toString("hex")})`;
     const bankAccount = `8844${phone.slice(-8)}`;
     const [mapping] = await sql<
       { pseudonym_id: string }[]
@@ -289,7 +290,14 @@ databaseSuite("privacy erasure operations", (sql) => {
         },
         (_key, value) => (typeof value === "bigint" ? value.toString() : value),
       );
-      for (const value of [phone, name, email, bankAccount, `${phone.slice(1)}@upi`])
+      for (const value of [
+        phone,
+        phone.slice(3),
+        name,
+        email,
+        bankAccount,
+        `${phone.slice(1)}@upi`,
+      ])
         expect(output).not.toContain(value);
       expect(output).not.toMatch(/\+91[0-9]{10}|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i);
       return bundle;
@@ -311,7 +319,14 @@ databaseSuite("privacy erasure operations", (sql) => {
     >`SELECT tablename FROM pg_tables WHERE schemaname = 'public'`;
     for (const { tablename } of tables) {
       const rows = await sql`SELECT to_jsonb(t)::text AS data FROM ${sql(tablename)} t`;
-      for (const value of [phone, name, email, bankAccount, `${phone.slice(1)}@upi`]) {
+      for (const value of [
+        phone,
+        phone.slice(3),
+        name,
+        email,
+        bankAccount,
+        `${phone.slice(1)}@upi`,
+      ]) {
         expect(
           rows.some((row) => String(row.data).includes(value)),
           tablename,

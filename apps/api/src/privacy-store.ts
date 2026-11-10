@@ -101,7 +101,7 @@ export class PostgresPrivacyStore implements PrivacyStore {
           [userId, new Date(now)],
         );
         await tx`UPDATE fund_subscriptions s SET status = 'unsubscribed', unsubscribed_at = ${new Date(now)}, updated_at = ${new Date(now)}
-          FROM users u WHERE u.id = ${userId} AND s.contact = u.phone AND s.channel = ${channel} AND s.status = 'active'`;
+          FROM users u WHERE u.id = ${userId} AND s.contact_type = 'phone' AND regexp_replace(s.contact, '[^0-9]', '', 'g') IN (ltrim(u.phone, '+'), CASE WHEN u.phone LIKE '+91%' THEN substring(u.phone from 4) ELSE ltrim(u.phone, '+') END) AND s.channel = ${channel} AND s.status = 'active'`;
         await tx`UPDATE notification_outbox SET status = 'skipped', last_error = 'Consent withdrawn',
           claim_token = NULL, lease_expires_at = NULL, updated_at = ${new Date(now)}
           WHERE user_id = ${userId} AND preferred_channel = ${channel}
@@ -202,7 +202,7 @@ export class PostgresPrivacyStore implements PrivacyStore {
           (SELECT count(*)::int FROM sessions WHERE user_id = ${userId} AND revoked_at IS NULL) AS sessions,
           (SELECT count(*)::int FROM sessions WHERE user_id = ${userId}) AS all_sessions,
           (SELECT count(*)::int FROM trusted_devices WHERE user_id = ${userId} AND revoked_at IS NULL) AS trusted_devices,
-          (SELECT count(*)::int FROM fund_subscriptions WHERE contact = ${phone}) AS subscriptions,
+          (SELECT count(*)::int FROM fund_subscriptions WHERE contact_type = 'phone' AND regexp_replace(contact, '[^0-9]', '', 'g') IN (${phone.slice(1)}, ${phone.startsWith("+91") ? phone.slice(3) : phone.slice(1)})) AS subscriptions,
           (SELECT count(*)::int FROM owner_invites WHERE owner_id = ${userId} OR phone = ${phone}) AS invites,
           (SELECT count(*)::int FROM notification_outbox WHERE user_id = ${userId}) AS notifications,
           (SELECT count(*)::int FROM notification_dead_letter WHERE user_id = ${userId}) AS dead_letters,
@@ -281,7 +281,7 @@ export class PostgresPrivacyStore implements PrivacyStore {
       await tx`DELETE FROM notification_dead_letter WHERE user_id = ${userId}`;
       await tx`DELETE FROM notification_outbox WHERE user_id = ${userId}`;
       await tx`DELETE FROM user_notification_preferences WHERE user_id = ${userId}`;
-      await tx`DELETE FROM fund_subscriptions WHERE contact = ${phone}`;
+      await tx`DELETE FROM fund_subscriptions WHERE contact_type = 'phone' AND regexp_replace(contact, '[^0-9]', '', 'g') IN (${phone.slice(1)}, ${phone.startsWith("+91") ? phone.slice(3) : phone.slice(1)})`;
       await tx`DELETE FROM owner_invites WHERE owner_id = ${userId} OR phone = ${phone}`;
       await tx`DELETE FROM user_approval_pins WHERE user_id = ${userId}`;
       // Device credentials are access material. Erasure keeps the users row (it is anonymized,
