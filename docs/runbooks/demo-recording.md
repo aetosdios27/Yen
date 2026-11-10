@@ -350,6 +350,7 @@ The constructor argument is the address of the demo signer key below
 (computed from that exact private key). Then start the worker:
 
 ```sh
+pnpm --filter @yen/queue build
 DATABASE_URL=postgres://postgres:pw@localhost:5432/postgres \
 QUEUE_MIGRATE=true \
 ANCHOR_RPC_URL=http://localhost:8545 \
