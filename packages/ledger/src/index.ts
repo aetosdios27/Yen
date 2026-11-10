@@ -74,6 +74,24 @@ export {
   payoutIdempotencyKey,
 } from "./payout.js";
 export {
+  partnerAmountPaiseWire,
+  partnerCreditWebhookSchema,
+  partnerDebitWebhookSchema,
+  type PartnerCreditWebhookEvent,
+  type PartnerDebitWebhookEvent,
+  type PartnerSignatureEnvelope,
+  partnerSignatureEnvelopeSchema,
+  type PartnerStatementEntry,
+  partnerStatementEntrySchema,
+  type PartnerWebhookEvent,
+  partnerWebhookEventSchema,
+  toPartnerSignatureEnvelope,
+  toPartnerStatementEntry,
+  toVpaVerificationResult,
+  type VpaVerificationResult,
+  vpaVerificationResultSchema,
+} from "./partner/types.js";
+export {
   type FundBalances,
   replayFundEvents,
 } from "./replay.js";
