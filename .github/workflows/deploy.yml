@@ -32,3 +32,44 @@ defaults:
 # long-lived cloud credentials are stored in GitHub Secrets.
 env:
   DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true && '1' || '' }}
+
+jobs:
+  # Builds the API container image once per run and pushes it to ECR under an
+  # immutable digest tag. Every later job promotes this exact digest; nothing
+  # is rebuilt between environments.
+  image:
+    name: Build and push API image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+      ready: ${{ steps.guard.outputs.ready }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The root Dockerfile lands with the API image work. Until then the
+      # pipeline stays green and dormant instead of failing every merge.
+      - name: Require the API image build
+        id: guard
+        run: |
+          if [[ -f Dockerfile ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No root Dockerfile exists yet; skipping the pipeline until the image build lands." >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build, push and record the image digest
+        if: steps.guard.outputs.ready == 'true'
+        id: push
+        env:
+          OIDC_ROLE_ARN: ${{ vars.OIDC_ROLE_ARN }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          GIT_SHA: ${{ github.sha }}
+        run: bash scripts/deploy-api.sh image "$GIT_SHA"
