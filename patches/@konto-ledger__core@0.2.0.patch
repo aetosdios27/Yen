@@ -1,0 +1,94 @@
+diff --git a/dist/index.js b/dist/index.js
+index c68034c894c92f071af38e7eca94db34393ea384..77750f4e636f662c87dac18be2867a4778a82caf 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -144,28 +144,8 @@ async function transferInTx(tx, payload) {
+     const rows = await tx`
+       SELECT
+         ids.id AS account_id,
+-        (COALESCE(s.balance, 0) + COALESCE(e.entry_sum, 0) - COALESCE(h.hold_sum, 0))::text AS balance
++        public.yen_konto_available(ids.id)::text AS balance
+       FROM unnest(${debitAccountIds}::uuid[]) AS ids(id)
+-      LEFT JOIN LATERAL (
+-        SELECT balance, entry_sequence
+-        FROM konto_balance_snapshots
+-        WHERE account_id = ids.id
+-        ORDER BY entry_sequence DESC
+-        LIMIT 1
+-      ) s ON true
+-      LEFT JOIN LATERAL (
+-        SELECT SUM(amount) as entry_sum
+-        FROM konto_entries
+-        WHERE account_id = ids.id
+-          AND (s.entry_sequence IS NULL OR entry_sequence > s.entry_sequence)
+-      ) e ON true
+-      LEFT JOIN LATERAL (
+-        SELECT SUM(amount) as hold_sum
+-        FROM konto_holds
+-        WHERE account_id = ids.id
+-          AND status = 'PENDING'
+-          AND (expires_at IS NULL OR NOW() <= expires_at)
+-      ) h ON true
+     `;
+     for (const r of rows) {
+       balances.set(r.account_id, BigInt(r.balance));
+@@ -260,28 +240,8 @@ async function hold(db, payload) {
+     const rows = await tx`
+         SELECT
+           ids.id AS account_id,
+-          (COALESCE(s.balance, 0) + COALESCE(e.entry_sum, 0) - COALESCE(h.hold_sum, 0))::text AS balance
++          public.yen_konto_available(ids.id)::text AS balance
+         FROM unnest(ARRAY[${parsed.accountId}]::uuid[]) AS ids(id)
+-        LEFT JOIN LATERAL (
+-          SELECT balance, entry_sequence
+-          FROM konto_balance_snapshots
+-          WHERE account_id = ids.id
+-          ORDER BY entry_sequence DESC
+-          LIMIT 1
+-        ) s ON true
+-        LEFT JOIN LATERAL (
+-          SELECT SUM(amount) as entry_sum
+-          FROM konto_entries
+-          WHERE account_id = ids.id
+-            AND (s.entry_sequence IS NULL OR entry_sequence > s.entry_sequence)
+-        ) e ON true
+-        LEFT JOIN LATERAL (
+-          SELECT SUM(amount) as hold_sum
+-          FROM konto_holds
+-          WHERE account_id = ids.id
+-            AND status = 'PENDING'
+-            AND (expires_at IS NULL OR NOW() <= expires_at)
+-        ) h ON true
+     `;
+     const currentBalance = rows[0] ? BigInt(rows[0].balance) : 0n;
+     const senderType = locked.find((r) => r.id === parsed.accountId)?.account_type;
+@@ -345,28 +305,8 @@ async function commitHoldInTx(tx, holdId, metadata) {
+   const rows = await tx`
+       SELECT
+         ids.id AS account_id,
+-        (COALESCE(s.balance, 0) + COALESCE(e.entry_sum, 0) - COALESCE(h.hold_sum, 0))::text AS balance
++        public.yen_konto_available(ids.id, ${holdId})::text AS balance
+       FROM unnest(ARRAY[${internalHold.account_id}]::uuid[]) AS ids(id)
+-      LEFT JOIN LATERAL (
+-        SELECT balance, entry_sequence
+-        FROM konto_balance_snapshots
+-        WHERE account_id = ids.id
+-        ORDER BY entry_sequence DESC
+-        LIMIT 1
+-      ) s ON true
+-      LEFT JOIN LATERAL (
+-        SELECT SUM(amount) as entry_sum
+-        FROM konto_entries
+-        WHERE account_id = ids.id
+-          AND (s.entry_sequence IS NULL OR entry_sequence > s.entry_sequence)
+-      ) e ON true
+-      LEFT JOIN LATERAL (
+-        SELECT SUM(amount) as hold_sum
+-        FROM konto_holds
+-        WHERE account_id = ids.id AND id != ${holdId}
+-          AND status = 'PENDING'
+-          AND (expires_at IS NULL OR NOW() <= expires_at)
+-      ) h ON true
+   `;
+   const currentBalance = rows[0] ? BigInt(rows[0].balance) : 0n;
+   if (currentBalance < amountBig) {

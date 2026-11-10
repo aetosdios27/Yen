@@ -3,6 +3,7 @@ name: Nightly ledger invariants
 on:
   schedule:
     - cron: "23 2 * * *"
+    - cron: "23 3 * * 0"
   workflow_dispatch:
     inputs:
       ops:
@@ -23,12 +24,12 @@ jobs:
   invariants:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ops == '1000000' && 360 || 90 }}
+    timeout-minutes: ${{ (github.event.schedule == '23 3 * * 0' || github.event.inputs.ops == '1000000') && 330 || 90 }}
     env:
       YEN_TEST_DATABASE_URL: postgres://postgres:nightly@localhost:5432/postgres
       YEN_RESTORE_ADMIN_URL: postgres://postgres:nightly@localhost:5432/postgres
       NIGHTLY_SEED_BASE: ${{ github.run_id }}
-      NIGHTLY_OPS: ${{ github.event.inputs.ops || '100000' }}
+      NIGHTLY_OPS: ${{ github.event.inputs.ops || (github.event.schedule == '23 3 * * 0' && '1000000' || '100000') }}
     services:
       postgres:
         image: postgres:16

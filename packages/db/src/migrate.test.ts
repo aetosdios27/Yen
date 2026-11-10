@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -41,6 +41,40 @@ databaseSuite("migration runner", (sql, url) => {
   });
   afterEach(async () => {
     await rm(dir, { recursive: true, force: true });
+  });
+
+  it("backfills ledger totals on upgrade and preserves them on repeated migrate", async () => {
+    for (const name of await readdir(defaultDir)) {
+      if (name.endsWith(".sql") && name < "0034_") {
+        await copyFile(join(defaultDir, name), join(dir, name));
+      }
+    }
+    await migrate(sql, { dir });
+    const legacySchema = await readFile(
+      new URL("../../ledger/src/schema.sql", import.meta.url),
+      "utf8",
+    );
+    await sql.unsafe(legacySchema);
+    await sql`DROP INDEX idx_entries_journal`;
+    const accounts = await sql`INSERT INTO konto_accounts (name, currency)
+      VALUES ('upgrade-bank', 'INR'), ('upgrade-revenue', 'INR') RETURNING id`;
+    const bank = accounts[0]?.id;
+    const revenue = accounts[1]?.id;
+    await sql.begin(async (tx) => {
+      const journals =
+        await tx`INSERT INTO konto_journals (account_id) VALUES (${bank}) RETURNING id`;
+      await tx`INSERT INTO konto_entries (entry_sequence, journal_id, account_id, amount)
+        VALUES (0, ${journals[0]?.id}, ${bank}, 1000), (0, ${journals[0]?.id}, ${revenue}, -1000)`;
+    });
+    await sql`INSERT INTO konto_holds (account_id, recipient_id, amount) VALUES (${bank}, ${revenue}, 250)`;
+    await migrate(sql);
+    expect(await sql`SELECT yen_konto_available(${bank})::text AS available`).toEqual([
+      { available: "750" },
+    ]);
+    await migrate(sql);
+    expect(await sql`SELECT yen_konto_available(${bank})::text AS available`).toEqual([
+      { available: "750" },
+    ]);
   });
 
   it("creates the app tables and records the file checksums", async () => {
@@ -142,6 +176,7 @@ databaseSuite("migration runner", (sql, url) => {
     const subscriptionConsentSource = await readFile(
       join(defaultDir, "0033_subscription_consent.sql"),
     );
+    const ledgerTotalsSource = await readFile(join(defaultDir, "0034_ledger_totals.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -342,6 +377,12 @@ databaseSuite("migration runner", (sql, url) => {
         checksum: createHash("sha256").update(subscriptionConsentSource).digest("hex"),
         applied_at: expect.any(Date),
       },
+      {
+        version: 34,
+        name: "0034_ledger_totals.sql",
+        checksum: createHash("sha256").update(ledgerTotalsSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
     ]);
   });
 
@@ -501,7 +542,7 @@ databaseSuite("migration runner", (sql, url) => {
     const before = records.parse(await sql`SELECT * FROM schema_migrations`);
     await run();
     expect(records.parse(await sql`SELECT * FROM schema_migrations`)).toEqual(before);
-    expect(before).toHaveLength(33);
+    expect(before).toHaveLength(34);
   });
 
   it("rejects an edited applied file and names it", async () => {
