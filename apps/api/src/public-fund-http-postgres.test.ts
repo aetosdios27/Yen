@@ -238,7 +238,9 @@ databaseSuite("public HTTP financial proof with Postgres stores", (sql) => {
       .parse(await (await f.read("timeline")).json());
     expect(anchored.items.find((item) => item.itemType === "refund")?.verified).toBe("anchored");
     expect(await f.totals()).toMatchObject({ verification: "anchored" });
-    const proof = await f.app.request(`/v1/funds/${f.fundId}/records/${donation.donationId}/proof`);
+    const proof = await f.app.request(
+      `/v1/funds/${f.fundId}/records/${timeline.items.find((item) => item.itemType === "refund")?.id}/proof`,
+    );
     expect(proof.status).toBe(200);
     expect(await proof.json()).toMatchObject({ event: { type: "donation.rejected" } });
     const bytes = JSON.stringify(timeline);
