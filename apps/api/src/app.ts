@@ -65,7 +65,7 @@ import {
   verifyOtp,
 } from "./auth/index.js";
 import { registerOwnerInviteRoutes } from "./auth/invite-routes.js";
-import { buildInfo } from "./build-info.js";
+import { getBuildInfo } from "./build-info.js";
 import {
   ALLOWED_EVIDENCE_MIME_TYPES,
   acknowledgeAlertRoute,
@@ -435,7 +435,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     return c.json({ status: "received" as const }, 201);
   });
   app.openapi(healthRoute, (c) => c.json({ status: "ok" as const }, 200));
-  app.openapi(versionRoute, (c) => c.json(buildInfo, 200));
+  app.openapi(versionRoute, (c) => c.json(getBuildInfo(), 200));
   app.openapi(readyRoute, async (c) => {
     if (deps.isShuttingDown()) throw new ReadinessError();
     try {

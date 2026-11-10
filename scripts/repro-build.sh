@@ -23,6 +23,7 @@ fi
 source_commit="$(git -C "$root" rev-parse HEAD)"
 source_tree="$(git -C "$root" rev-parse 'HEAD^{tree}')"
 source_date_epoch="$(git -C "$root" show -s --format=%ct "$source_commit")"
+dependency_store="$(pnpm store path)"
 release_tag="${YEN_RELEASE_TAG:-local-${source_commit:0:12}}"
 if [[ ! "$release_tag" =~ ^[A-Za-z0-9._-]+$ ]]; then
   echo "YEN_RELEASE_TAG contains unsupported characters." >&2
@@ -47,17 +48,29 @@ build_once() {
   local artifact="$2"
   (
     cd "$directory"
+    export HOME="$directory/.build-home"
+    export TMPDIR="$directory/.build-tmp"
+    mkdir -p "$HOME" "$TMPDIR"
     export TZ=UTC
     export LC_ALL=C
     export SOURCE_DATE_EPOCH="$source_date_epoch"
     export YEN_BUILD_SHA="$source_commit"
     export YEN_BUILD_ID="$source_tree"
     export YEN_RELEASE_TAG="$release_tag"
-    export YEN_PROVENANCE_URL="${YEN_PROVENANCE_URL:-}"
+    export YEN_PROVENANCE_URL="https://github.com/aetosdios27/Yen/attestations"
+    unset YEN_ARTIFACT_DIGEST NEXT_PUBLIC_API_URL
+    export TURBO_TELEMETRY_DISABLED=1
     export NEXT_TELEMETRY_DISABLED=1
     export TURBO_CACHE_DIR="$directory/.turbo"
-    pnpm install --frozen-lockfile
-    pnpm turbo run build --filter=@yen/api --filter=@yen/web --filter=@yen/verifier
+    pnpm install --frozen-lockfile --store-dir "$dependency_store"
+    pnpm turbo run build --force --filter=@yen/api --filter=@yen/web --filter=@yen/verifier
+    node scripts/release-manifest.mjs
+    node --input-type=module -e '
+      const { buildInfo } = await import("./apps/api/dist/build-info.js");
+      if (buildInfo.gitSha !== process.env.YEN_BUILD_SHA || buildInfo.releaseTag !== process.env.YEN_RELEASE_TAG) {
+        throw new Error("Release metadata did not survive the build");
+      }
+    '
     if rg --hidden --text --files-with-matches --fixed-strings "$directory" \
       apps/api/dist apps/web/.next packages/verifier/dist \
       --glob '!**/cache/**' --glob '!**/trace' --glob '!**/trace-build'; then
@@ -68,7 +81,7 @@ build_once() {
       --exclude=apps/web/.next/cache \
       --exclude=apps/web/.next/trace \
       --exclude=apps/web/.next/trace-build -cf "$artifact" \
-      apps/api/dist apps/api/openapi/openapi.json apps/web/.next packages/verifier/dist
+      apps/api/dist apps/api/openapi/openapi.json apps/web/.next packages/verifier/dist release.json packages/shared/src/registry/abi.ts
   )
 }
 
