@@ -16,6 +16,7 @@ import {
   PUBLIC_READ_CACHE_CONTROL,
   PublicReadCache,
 } from "./public-cache.js";
+import { signPartnerWebhook } from "./reconciliation/webhook-signature.js";
 import { MemoryRateLimitStore } from "./stores.js";
 
 const owner = { id: "00000000-0000-4000-8000-000000000001", role: "owner" as const };
@@ -27,6 +28,7 @@ const startedAt = Date.parse("2026-11-01T00:00:00.000Z");
 const hashOne = "a".repeat(64);
 const hashTwo = "b".repeat(64);
 const orgIdFor = (fundId: string) => `org-${fundId.slice(-2)}`;
+const webhookSecret = "partner-webhook-secret-for-invalidation-tests";
 
 const expense = (fundId: string) =>
   ({
@@ -125,6 +127,7 @@ function fixture(options: FixtureOptions = {}) {
     rateLimitStore,
     clientIp: () => ip,
     fundReadMissLimit: options.missLimit ?? { capacity: 10, refillMs: 60_000 },
+    partnerWebhookSecret: webhookSecret,
     ...(options.auditBundleProvider ? { auditBundleProvider: options.auditBundleProvider } : {}),
   } satisfies Partial<AppDependencies>;
 
@@ -424,6 +427,65 @@ describe("public fund privacy leakage matrix", () => {
     expect(response.headers.get("etag")).toBeNull();
     expect(response.headers.get("cache-tag")).toBeNull();
     expect(apps.cache.read(fundA, "summary")).toBeUndefined();
+  });
+
+  it("drops cached public reads when a statement upload writes events", async () => {
+    const apps = fixture();
+    await createPublicFunds(apps);
+    await apps.publicApp.request(summaryUrl(fundA));
+    await apps.publicApp.request(summaryUrl(fundB));
+    expect(apps.cache.read(fundA, "summary")).toBeDefined();
+
+    const upload = await apps.ownerApp.request("/v1/reconciliation/statements", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        fundId: fundA,
+        csvContent:
+          "Date,Narration,Chq/Ref No,Value Dt,Withdrawal Amt,Deposit Amt,Closing Balance\n28/10/2026,UPI/CR/123456789012/DONATION,123456789012,28/10/2026,,500.00,10500.00",
+      }),
+    });
+    expect(upload.status).toBe(200);
+    expect(apps.cache.read(fundA, "summary")).toBeUndefined();
+    expect(apps.cache.read(fundA, FUND_HEAD_KIND)).toBeUndefined();
+    expect(apps.cache.read(fundB, "summary")).toBeDefined();
+  });
+
+  it("drops cached public reads when a partner webhook writes events", async () => {
+    const apps = fixture();
+    await createPublicFunds(apps);
+    await apps.publicApp.request(summaryUrl(fundA));
+    expect(apps.cache.read(fundA, "summary")).toBeDefined();
+
+    const body = JSON.stringify({
+      event: "virtual_account.credited",
+      timestamp: "2026-11-01T00:01:00.000Z",
+      data: {
+        fund_id: fundA,
+        bank_reference: "REF123",
+        amount_paise: 50000,
+        type: "credit",
+        posted_at: "2026-11-01T00:01:00.000Z",
+        utr: "123456789012",
+      },
+    });
+    const timestamp = "1793491260";
+    const response = await apps.publicApp.request("/v1/reconciliation/webhooks/partner", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-webhook-timestamp": timestamp,
+        "x-webhook-signature": signPartnerWebhook(
+          webhookSecret,
+          timestamp,
+          new TextEncoder().encode(body),
+        ),
+      },
+      body,
+    });
+    expect(response.status).toBe(200);
+    expect(apps.cache.read(fundA, "summary")).toBeUndefined();
+    expect(apps.cache.read(fundA, FUND_HEAD_KIND)).toBeUndefined();
   });
 
   it("aligns audit bundle reads with the shared public cache policy", async () => {
