@@ -163,3 +163,78 @@ this) so a slow rollout does not fail spuriously, then fails hard. A failed
 staging smoke test stops the run before production migration and production
 deploy are ever considered. The probes run last in each environment, so a
 green run means a reachable, ready service serving the expected commit.
+
+## One command rollback
+
+Rollback routes the ECS service back to an earlier, already registered task
+definition revision. Nothing is rebuilt and no migration runs:
+
+```sh
+# staging, to the previous revision
+bash scripts/deploy-api.sh rollback staging
+
+# production, to an explicit revision
+bash scripts/deploy-api.sh rollback production 41
+```
+
+With no explicit revision the command targets the revision before the one
+currently serving. It refuses to target a revision that is not older than
+the current one, and it waits for service stability with the same circuit
+breaker configuration as a forward deploy.
+
+Rollback is for application failures, not for undoing a schema migration.
+If a migration corrupts data, restore from a backup following
+[`docs/runbooks/backup-restore.md`](../runbooks/backup-restore.md).
+
+Verifiability: the selftest includes the rollback path offline (it asserts
+the service is pointed at the previous revision and that a non-older
+revision is refused), and every subcommand accepts a dry run:
+
+```sh
+DRY_RUN=1 bash scripts/deploy-api.sh rollback staging
+```
+
+A dry run prints the exact commands it would run, including the
+`update-service` call with the target revision, without touching the cloud.
+
+## Validating without deploying
+
+Three levels, all runnable without a cloud account:
+
+1. Offline selftest, the strongest check, exercises the real code paths
+   against fakes, including the migration failure negative test:
+
+   ```sh
+   bash scripts/deploy-api.sh selftest
+   ```
+
+2. Dry run of any subcommand prints the infrastructure plan instead of
+   executing it:
+
+   ```sh
+   DRY_RUN=1 bash scripts/deploy-api.sh deploy staging sha256:...
+   ```
+
+   The same dry run is available from GitHub by dispatching the workflow
+   with the `dry_run` input set to true. A dry run of the workflow skips the
+   smoke probes, since nothing was deployed.
+
+3. Workflow syntax check with actionlint, if installed:
+
+   ```sh
+   actionlint .github/workflows/deploy.yml
+   ```
+
+## Operating notes
+
+- The migration job and the deploy job of the same environment both run
+  under the same GitHub Environment, so both inherit the same variables and
+  the same reviewer requirement on production.
+- The deploy uses the ECS deployment circuit breaker with
+  `rollback=true`: if replacement tasks fail to become healthy, ECS rolls
+  the service back to the previous task definition on its own, and the
+  script fails with a pointer to the rollback command.
+- One image build per run, one digest through staging and production: there
+  is no drift between what staging tested and what production promotes.
+- Rollouts are serialized per branch by the workflow concurrency group and
+  never cancelled mid-flight.
