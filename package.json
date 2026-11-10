@@ -13,6 +13,7 @@
     "privacy:erase-contact": "tsx packages/db/src/privacy-contact-cli.ts",
     "db:seed": "tsx scripts/seed.ts",
     "db:reset": "tsx scripts/db-reset.ts",
+    "demo:reset": "tsx scripts/demo-reset.ts",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "check": "biome ci .",
