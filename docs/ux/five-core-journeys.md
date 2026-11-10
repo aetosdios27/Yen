@@ -467,3 +467,104 @@ with `hold_reserved` subtracted from spendable immediately at submission. The tr
 dashboard always reflects the hold from the moment the list shows "Submitted". Expiry before
 quorum releases the hold (`expenseTimeline.stateExpired`, "Approval window closed before
 quorum was met").
+
+## Journey 4: Co-approver reviews a claim and authorizes release
+
+Actor: co-approver, arriving from a WhatsApp deep link, often on a phone, often minutes after
+the treasurer filed the request.
+
+Goal: end with the co-approver's authorization recorded (or a reasoned rejection) without
+ever seeing a technical word about signatures or cryptography.
+
+Route flow:
+
+```
+WhatsApp message with /funds/[fundId]/approvals/[expenseId]
+  -> J4-S1 request landing (read-only summary)
+     -> J4-S2 authorize (PIN dialog, device-signed)
+        -> J4-S4 outcome (toast + settled timeline)
+     or -> J4-S3 reject (reason dialog)
+        -> J4-S4 outcome
+```
+
+### J4-S1 Request landing
+
+Route: `/funds/[fundId]/approvals/[expenseId]`.
+
+- Content: amount as the largest element, payee, payee UPI VPA, purpose, requester and time,
+  receipts (`approver.receipts` "Receipts & evidence" or `approver.noReceipts`), and the
+  `ExpenseTimeline` ("Request progress") that shows how many of the required approvals have
+  landed so far.
+- Primary action: `approver.approveCta` ("Approve"), in a sticky bottom action bar on phones
+  next to the danger action.
+- Secondary action: `approver.rejectCta` ("Reject"), same bar. Both are visible together; a
+  reviewer must be able to say no as easily as yes.
+- The header notice `approver.fastDecisionNotice` ("Fast decision: Review details and approve
+  or reject below.") tells the reviewer the two actions are the whole task.
+- Empty state: not applicable; the deep link always targets one expense.
+- Loading: status region with `common.loading` and `aria-busy="true"` while the expense is
+  fetched.
+- Error state: alert region with the failure text and a retry button; "Expense not found" for
+  a dead or wrong link, plus the breadcrumb back to the treasurer dashboard.
+- Offline: status banner `treasurer.offlineNotice` with retry; the summary stays readable from
+  the initial fetch.
+
+### J4-S2 Authorize (approval PIN dialog, device-signed)
+
+Route: same, dialog over the request.
+
+- Primary action: `approver.pinSubmit` ("Confirm approval"), replaced by
+  `approver.pinSubmitting` ("Approving...").
+- Secondary action: `approver.cancel` ("Cancel"), which returns to the request unchanged.
+- Dialog title: `approver.pinModalTitle` ("Enter 6-digit approval PIN"). Description:
+  `approver.pinModalDescription` ("Your PIN signs the cryptographic approval for this expense
+  release."). Note for reviewers of this spec: this sentence is the last place the word
+  "cryptographic" appears; it is scheduled for replacement by a plain-language sentence in a
+  copy pass, tracked with the usability findings (task T4).
+- Device binding: the PIN alone never authorizes a new device. New devices confirm by OTP, and
+  on supporting devices the approval action is additionally signed by a WebAuthn passkey
+  credential bound to the action (see `docs/REFERENCES.md`, WebAuthn section: Yen uses WebAuthn
+  as an optional device-signing factor on top of the PIN, with the challenge tied to the action
+  hash). Users experience this as "your phone confirms it is really you"; no copy mentions the
+  protocol by name.
+- Error states: `approver.pinError` (format), `approver.pinIncorrectAttemptsRemaining`
+  (counts down remaining attempts), `approver.pinLockoutNotice` (30 minute temporary lock),
+  `approver.pinPermanentLockoutNotice` (admin reset required),
+  `approver.pinCoolingOffNotice` (24 hour cooling-off after a PIN reset). Lockouts are shown
+  inside the dialog, never as toasts that vanish.
+- Loading: the submitting label; the dialog blocks double submission.
+
+### J4-S3 Reject with reason
+
+Route: same, dialog over the request.
+
+- Primary action: `approver.rejectSubmit` ("Confirm rejection").
+- Secondary action: `approver.cancel`.
+- Copy: `approver.rejectModalTitle` plus `approver.rejectModalDescription` ("A rejection reason
+  is mandatory and will be recorded in the audit log."). The reason field enforces
+  `approver.rejectReasonError` ("Reason is required (at least 5 characters)").
+- The rejection reason becomes part of the public record (journey 5 timeline), which is why it
+  is mandatory and free-text.
+
+### J4-S4 Outcome
+
+Route: same, after the dialog closes.
+
+- Success toast: `approver.approvedSuccess` ("Expense successfully approved") with payee and
+  purpose; rejection toast: `approver.rejectedSuccess` with the recorded reason.
+- The timeline updates in place to `stateApprovals` ("Approvals ({approved} of {quorum})"),
+  `stateSettled` ("Settled & paid") or `stateRejected`.
+- Already-decided deep links (a second approver opening a settled request) show
+  `approver.alreadyApproved` / `approver.alreadyRejected` as a status banner instead of the
+  action bar; there is nothing to do and the screen says so.
+- The quorum outcome (second and final approval) is what releases the hold; the treasurer
+  sees the balance change on the dashboard without any action.
+
+### Journey 4 record state machine
+
+Approval count on the expense: `0 -> 1 -> quorum(2)`. Each authorization is
+`pin_prompt -> verifying -> recorded` or blocked by
+`format_error | attempts_remaining | temporary_lockout | permanent_lockout | cooling_off`.
+Expense-level: `submitted -> hold_reserved -> approved -> settled`, or
+`hold_reserved -> rejected` (reason recorded), or expiry releasing the hold. A settled or
+rejected expense is terminal and its deep link renders the already-decided banner.
