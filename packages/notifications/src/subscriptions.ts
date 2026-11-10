@@ -110,7 +110,7 @@ export class PostgresFundSubscriptionStore implements FundSubscriptionStore {
   async getByToken(token: string): Promise<FundSubscription | null> {
     const rows = await this.sql<FundSubscriptionRow[]>`
       SELECT * FROM fund_subscriptions
-      WHERE unsubscribe_token = ${token}
+      WHERE unsubscribe_token = ${token} AND consent_granted_at IS NOT NULL
     `;
     const row = rows[0];
     return row ? this.mapRow(row) : null;

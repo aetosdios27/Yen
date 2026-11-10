@@ -444,7 +444,7 @@ databaseSuite("privacy erasure operations", (sql, url) => {
             }
           : {},
       );
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(404);
       const body = await response.text();
       expect(body).not.toContain(legacy.contact);
       expect(body).not.toContain(legacy.unsubscribeToken);
