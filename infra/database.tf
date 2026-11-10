@@ -85,7 +85,7 @@ resource "aws_db_instance" "yen_staging" {
   multi_az               = false
   publicly_accessible    = false
 
-  storage_encrypted = true
+  storage_encrypted     = true
   copy_tags_to_snapshot = true
 
   # Point-in-time recovery: retained PITR window plus a fixed maintenance
@@ -94,8 +94,8 @@ resource "aws_db_instance" "yen_staging" {
   backup_window           = "18:00-19:00"
   maintenance_window      = "sun:19:30-sun:20:30"
 
-  deletion_protection     = true
-  skip_final_snapshot     = true
+  deletion_protection      = true
+  skip_final_snapshot      = true
   delete_automated_backups = false
 
   performance_insights_enabled = false
