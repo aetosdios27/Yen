@@ -293,6 +293,7 @@ export const fundSubscriptionRowSchema = z.object({
   instant_alerts: z.boolean(),
   status: z.enum(["active", "unsubscribed"]),
   unsubscribe_token: z.string(),
+  consent_granted_at: z.date().nullable(),
   created_at: z.date(),
   updated_at: z.date(),
   unsubscribed_at: z.date().nullable(),

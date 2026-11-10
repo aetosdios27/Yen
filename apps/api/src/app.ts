@@ -37,6 +37,7 @@ import {
   generateReceiptPdf,
   generateReceiptSvg,
   hash32,
+  normalizePhone,
   PRIVACY_NOTICE_VERSION,
   paise,
   parseFundId,
@@ -60,7 +61,6 @@ import {
   generateSessionToken,
   hashOtp,
   hashSessionToken,
-  normalizePhone,
   parseDeviceInfo,
   verifyOtp,
 } from "./auth/index.js";

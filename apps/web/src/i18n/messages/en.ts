@@ -209,6 +209,10 @@ export const en = {
     viewReceipt: "View receipt certificate",
   },
   receipt: {
+    consentUpdates: "I agree to fund updates under the {notice}.",
+    privacyNotice: "Privacy notice",
+    consentWhatsapp: "I separately agree to WhatsApp messages.",
+
     documentTitle: "Donation Receipt · Yen",
     title: "Donation Receipt",
     verifiedTitle: "Verified Donation Certificate",
