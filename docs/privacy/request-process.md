@@ -11,8 +11,10 @@ and record that review; shipping tests does not constitute approval.
    separate challenge. Never infer ownership from a display name. Limit staff access.
 3. For an account, use authenticated `/v1/privacy/erasure-requests` with `dryRun`
    first, then execute. Explain any explicitly marked legal-retention exception.
-   Correction uses the existing authenticated profile/display-name flows; verify the
-   changed contact before moving any guest record to it.
+   For an account-name correction, update `users.display_name` and the
+   `display_names` rows joined through that account's `fund_pseudonyms` in a
+   restricted support transaction. Verify both old and new phone contacts before
+   changing a phone or moving any associated contact records.
 4. For verified guest contact erasure, put the normalized contact in a private file
    readable only by the operator and run against the app database:
 
