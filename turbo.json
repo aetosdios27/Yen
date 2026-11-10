@@ -40,6 +40,13 @@
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/apps/api/openapi/openapi.json"]
     },
+    "test:a11y": {
+      "dependsOn": ["^build"]
+    },
+    "test:load": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
     "dev": {
       "cache": false,
       "persistent": true

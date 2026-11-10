@@ -1,7 +1,10 @@
 import { createSql, type Sql } from "@yen/db";
+import { traceJob } from "@yen/shared/telemetry";
 import { type JobResult, PgBoss, type Queue, type WorkOptions } from "pg-boss";
-import { observePgBossErrors } from "./boss.js";
+import { logQueueError, observePgBossErrors } from "./boss.js";
 import { DEFAULT_QUEUES, DEFAULT_SCHEMA } from "./config.js";
+import { unwrapJobPayload } from "./envelope.js";
+import { sampleMoneyTelemetry } from "./telemetry.js";
 import type { DeadLetterJob, Job, JobHandler, QueuePolicy, WorkerRuntimeOptions } from "./types.js";
 
 interface HandlerRegistration {
@@ -35,6 +38,8 @@ export class WorkerRuntime {
     const migrate = options.migrate ?? false;
     this.boss = observePgBossErrors(
       new PgBoss({
+        // Library failure spans include raw exception messages; Yen emits id-only spans.
+        openTelemetry: { enabled: false },
         connectionString: options.connectionString,
         schema,
         migrate,
@@ -115,15 +120,16 @@ export class WorkerRuntime {
         await this.boss.work(queueName, workOptions, async (jobs) => {
           const results: JobResult[] = [];
           for (const rawJob of jobs) {
+            const { payload, carrier } = unwrapJobPayload(rawJob.data);
             const job: Job<unknown> = {
               id: rawJob.id,
               name: rawJob.name,
-              data: rawJob.data,
+              data: payload,
               retryCount: rawJob.retryCount,
               expireInSeconds: rawJob.expireInSeconds,
             };
             try {
-              await handler(job);
+              await traceJob(carrier, () => handler(job));
               results.push({ id: rawJob.id, status: "completed" });
             } catch (err) {
               results.push({
@@ -140,6 +146,13 @@ export class WorkerRuntime {
         });
       }
 
+      // pg-boss schedules one durable job per database/schema, shared by all workers.
+      const samplerQueue = "yen-money-telemetry";
+      await this.boss.createQueue(samplerQueue, { policy: "singleton" });
+      await this.boss.schedule(samplerQueue, "* * * * *");
+      await this.boss.work(samplerQueue, { localConcurrency: 1 }, async () => {
+        await sampleMoneyTelemetry(this.sql, this.options.schema ?? DEFAULT_SCHEMA);
+      });
       this.setupSignalHandlers();
       this.isStarted = true;
     } catch (err) {
@@ -175,8 +188,8 @@ export class WorkerRuntime {
     const onSignal = async (signal: string) => {
       try {
         await this.stop();
-      } catch (err) {
-        process.stderr.write(`Error during graceful shutdown on ${signal}: ${String(err)}\n`);
+      } catch (error) {
+        logQueueError(`Worker shutdown failed on ${signal}`, error);
       }
     };
 
@@ -217,7 +230,7 @@ export class WorkerRuntime {
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
-      data: r.data,
+      data: unwrapJobPayload(r.data).payload,
       retryCount: r.retry_count,
       state: r.state,
       createdOn: new Date(r.created_on),

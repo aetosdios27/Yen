@@ -675,7 +675,7 @@ databaseSuite("canonical subscription migration", (sql) => {
     }
     await sql`UPDATE fund_subscriptions SET status = 'unsubscribed' WHERE fund_id = ${fundId} AND contact = '9876543210'`;
     const migration = await readFile(
-      new URL("../../../packages/db/migrations/0034_subscription_phone.sql", import.meta.url),
+      new URL("../../../packages/db/migrations/0035_subscription_phone.sql", import.meta.url),
       "utf8",
     );
     await sql`DROP FUNCTION IF EXISTS normalize_subscription_phone(text)`;

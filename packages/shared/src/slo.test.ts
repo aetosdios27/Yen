@@ -3,6 +3,9 @@ import { BURN_ALERT_THRESHOLDS, calculateBurnRate, emitBurnRateAlert, SLOS } fro
 
 it("loads typed SLO definitions for each money path", () => {
   expect(SLOS.map(({ id }) => id)).toEqual([
+    "donation_recording",
+    "event_append",
+    "public_page_availability",
     "approval_api_availability",
     "approve_p95_latency",
     "pay_p95_latency",
