@@ -31,6 +31,7 @@ The five fund roles are `owner`, `treasurer`, `approver`, `auditor`, and `member
 ## Use typed rows
 
 `createSql(url, options)` returns a postgres.js client with configurable pool settings:
+
 - `max`: maximum connection pool size (default: 10 connections).
 - `idleTimeout`: idle connection timeout in seconds before reaping (default: 20 seconds).
 - `connectTimeout`: connection acquisition timeout in seconds (default: 10 seconds).
@@ -65,6 +66,7 @@ Postgres `bigint` values remain JavaScript `bigint`, including values beyond `Nu
 ## Fund event log persistence
 
 The `fund_events` table stores the hash-chained business events for each fund, defined by migration `0003_fund_events.sql`:
+
 - `fund_id uuid NOT NULL REFERENCES funds(id)`
 - `seq bigint NOT NULL CHECK (seq >= 1)`
 - `type text NOT NULL`
@@ -80,6 +82,7 @@ The `fund_events` table stores the hash-chained business events for each fund, d
 ### Database-enforced integrity
 
 Integrity is enforced in PostgreSQL triggers and functions:
+
 1. **Advisory lock and gapless sequence**: A BEFORE INSERT trigger takes a per-fund advisory lock (`pg_advisory_xact_lock` on the fund ID) for the duration of the transaction. It requires `seq` = 1 and `prev_hash` = 64 zeroes for the first event, and `seq = previous + 1` and `prev_hash = previous hash` for subsequent events.
 2. **Monotonic time**: The insert trigger requires `occurred_at >= previous occurred_at`.
 3. **Payload schema enforcement**: The insert trigger independently validates `payload` against the 24 event schemas. Payloads must contain only allowed keys and supported types (strings, safe integers).
@@ -200,6 +203,7 @@ All hot-path database queries in Yen (fund reads, membership lookups, event appe
 ### Contract for future feature PRs
 
 Every future pull request that introduces or modifies a hot-path database query must adhere to the following contract:
+
 1. **Register the query**: Add an entry to `INITIAL_HOT_PATH_QUERIES` in [`src/query-registry.ts`](src/query-registry.ts) or call `registerHotPathQuery()`.
    - Specify `id`, `name`, `category` (`fund_reads`, `membership_lookups`, `event_append`, `donation_lists`, `expense_lists`, etc.).
    - Define `sqlTemplate` and `explain` function using tagged template literals (`sql\`EXPLAIN (FORMAT JSON) ...\``).
@@ -226,6 +230,7 @@ Every future pull request that introduces or modifies a hot-path database query 
 ## Foreign-key indexing discipline
 
 In PostgreSQL, foreign key constraints (`REFERENCES`) enforce referential integrity but do **not** automatically create indexes on the referencing columns ([PostgreSQL 16 Foreign Keys](https://www.postgresql.org/docs/16/ddl-constraints.html#DDL-CONSTRAINTS-FK)). Without an index whose leading columns match the foreign key:
+
 - Deletes or updates on the referenced parent table require full sequential scans on the referencing child table to verify referential integrity.
 - Heavy row-level table locks during parent updates cause severe concurrency bottlenecks.
 
@@ -246,6 +251,7 @@ When query statement logging is enabled, PostgreSQL can record client bind param
 ### 1. Bind parameter suppression (`log_parameter_max_length` & `log_parameter_max_length_on_error`)
 
 By default, PostgreSQL allows bind parameter values to be logged in full (`-1`). To ensure sensitive query parameters never enter server logs:
+
 - Set `log_parameter_max_length = 0` to completely disable logging of bind parameter values for non-error statement logs ([PostgreSQL 16 What to Log](https://www.postgresql.org/docs/16/runtime-config-logging.html#GUC-LOG-PARAMETER-MAX-LENGTH)).
 - Set `log_parameter_max_length_on_error = 0` to disable logging of bind parameter values when statement errors occur ([PostgreSQL 16 What to Log](https://www.postgresql.org/docs/16/runtime-config-logging.html#GUC-LOG-PARAMETER-MAX-LENGTH-ON-ERROR)).
 
@@ -258,12 +264,14 @@ log_parameter_max_length_on_error = 0
 ### 2. `log_min_duration_statement`
 
 Logs the SQL statement text and elapsed wall-clock duration for any execution exceeding the configured threshold in milliseconds ([PostgreSQL 16 Error Reporting and Logging](https://www.postgresql.org/docs/16/runtime-config-logging.html#GUC-LOG-MIN-DURATION-STATEMENT)). Because bind parameters are suppressed via `log_parameter_max_length = 0`, only the query template and execution duration are recorded.
+
 - **Staging**: `log_min_duration_statement = 250` (250ms) to detect slow or unindexed query patterns during integration testing and QA.
 - **Production**: `log_min_duration_statement = 1000` (1000ms / 1s) to capture query regressions while avoiding excessive I/O log volume under high transactions per second.
 
 ### 3. `auto_explain` privacy policy
 
 The `auto_explain` extension automatically logs query execution plans of slow statements directly to the PostgreSQL log ([PostgreSQL 16 auto_explain Documentation](https://www.postgresql.org/docs/16/auto-explain.html)).
+
 - **Production Policy: Keep `auto_explain` disabled.** Execution plans and plan node filters can print literal parameter values and scan keys into log files, creating a personal data leak risk. In production environments, `pg_stat_statements` must be used instead.
 - **Staging Policy: Enable only on scrubbed synthetic datasets.** If execution plan profiling is required during testing, `auto_explain` may only be enabled in environments running scrubbed or synthetic data:
 
@@ -280,6 +288,7 @@ The `auto_explain` extension automatically logs query execution plans of slow st
 ### 4. `pg_stat_statements` (Preferred Production Profiling)
 
 The `pg_stat_statements` module tracks aggregate execution statistics across all query patterns ([PostgreSQL 16 pg_stat_statements Documentation](https://www.postgresql.org/docs/16/pgstatstatements.html)). Unlike raw plan logging, `pg_stat_statements` normalizes statements by replacing constant literals with query parameter symbols (`$1`, `$2`), inherently preventing personal data exposure while tracking execution counts, total times, mean times, and buffer statistics.
+
 - Installation:
 
   ```sql

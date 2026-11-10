@@ -285,7 +285,6 @@ Each README claim that has a row carries a `<!-- claim: CLAIM-ID -->` marker. Th
 - **Reference:** none yet (gap)
 - **Mutation:** Added `receive() external payable {}`. "testRejectsNativeCurrencyAndUnknownCalls" failed.
 
-
 ### CLAIM-28 Per-fund pseudonyms isolate identity across funds
 
 - **Status:** enforced

@@ -393,6 +393,7 @@ one check.
 ### Stateless Process Audit and Known Exceptions
 
 The API server process is strictly stateless; nothing required to survive a restart or maintain correctness across instances lives in process memory. The following are known exceptions:
+
 1. **Idempotency store (`MemoryIdempotencyStore`)**: Process-memory store by default; being migrated to Postgres in YEN-55.
 2. **Rate limit store (`MemoryRateLimitStore`)**: Process-memory store by default; being migrated to Postgres in YEN-55.
 3. **Funds resource (`funds` Map)**: In-memory foundation stub from YEN-15; domain persistence in Postgres in YEN-26/31.
@@ -401,11 +402,13 @@ The API server process is strictly stateless; nothing required to survive a rest
 ### Postgres Connection Pool and PgBouncer Settings
 
 Database connection pool parameters are validated in `env.ts` with explicit defaults:
+
 - `DATABASE_POOL_MAX`: Maximum active connections (default `10`, range `1–1000`).
 - `DATABASE_POOL_IDLE_TIMEOUT_SECONDS`: Idle connection reap timeout (default `20`, range `0–86400`).
 - `DATABASE_POOL_ACQUIRE_TIMEOUT_SECONDS`: Connection acquisition timeout (default `10`, range `1–300`).
 
 PgBouncer transaction-mode considerations:
+
 - Startup parameters enforce UTC sessions without runtime `SET` leaks.
 - Named prepared statements are disabled by passing `prepare: false` to `createSql` when connecting through PgBouncer without `max_prepared_statements` enabled.
 - Locks: Transaction-scoped advisory locks (`pg_advisory_xact_lock`) are safe in transaction pooling mode; session-scoped advisory locks are not.
@@ -413,6 +416,7 @@ PgBouncer transaction-mode considerations:
 ### HTTP Limits, Timeouts, and Slow-Client Protection
 
 Node HTTP server settings tuned to mitigate slow-client attacks (Slowloris):
+
 - `SERVER_HEADERS_TIMEOUT_MS`: Time allowed to receive complete request headers (default `20000` ms, range `1000–300000`, must exceed `SERVER_KEEP_ALIVE_TIMEOUT_MS`).
 - `SERVER_REQUEST_TIMEOUT_MS`: Maximum duration for entire HTTP request receipt (default `15000` ms, range `1000–600000`).
 - `SERVER_KEEP_ALIVE_TIMEOUT_MS`: Inactivity timeout before closing idle keep-alive sockets (default `5000` ms, range `0–60000`).
@@ -430,6 +434,7 @@ Node HTTP server settings tuned to mitigate slow-client attacks (Slowloris):
 ### Graceful Shutdown Lifecycle
 
 Lifecycle management is handled by `createServerLifecycle` in `lifecycle.ts`:
+
 - Listens for `SIGTERM` and `SIGINT`.
 - Sets the shutdown flag immediately: `/ready` returns `503` from that moment, while `/health` stays `200`.
 - Closes the HTTP server (`server.close()`) to refuse new incoming connections.

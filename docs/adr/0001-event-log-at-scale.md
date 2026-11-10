@@ -13,6 +13,7 @@
 Yen is a transparency platform for community money in India. The fundamental trust model requires every financial operation on a fund (donations, expenses, policy changes, membership updates, bank transactions) to be captured in an append-only, tamper-evident hash chain ([Schneier and Kelsey](../../docs/REFERENCES.md#schneier-kelsey); [Crosby and Wallach](../../docs/REFERENCES.md#crosby-wallach)).
 
 Each event envelope comprises:
+
 - `fund_id` (UUIDv7 / UUID)
 - `seq` (gapless 64-bit integer, starting at 1 per fund)
 - `type` (strict event type string)
@@ -27,6 +28,7 @@ Each event envelope comprises:
 To guarantee that events cannot fork, skip sequences, or link to conflicting predecessors, the append path uses transaction-scoped PostgreSQL advisory locks keyed by fund ID (`pg_advisory_xact_lock(yen_fund_lock_key(fund_id))`) ([PostgreSQL Explicit Locking](../../docs/REFERENCES.md#pg-locking)).
 
 An in-flight migration (`packages/db/migrations/0003_fund_events.sql`) is currently being implemented as a single unpartitioned table with `PRIMARY KEY (fund_id, seq)` and row-level insert triggers. Before the first production row exists, we must decide:
+
 1. **Partitioning layout:** Should `fund_events` be hash-partitioned by `fund_id` or remain a single unpartitioned table? If partitioned, what modulus should be used, how can partitions be added without rewriting data, and what PostgreSQL constraints apply?
 2. **Append contention and isolation:** What is the per-fund advisory lock hold time, what happens under high-concurrency contention on a hot fund, and are unrelated funds strictly isolated from that contention?
 3. **Index plan:** How do the three operational read shapes (latest event, sequence range, full chain stream) perform on the layout?
@@ -61,6 +63,7 @@ Following the benchmark reporting discipline ([The USE Method](../../docs/REFERE
 ### 3.1. Append Path: Hot Fund Contention vs. Spread Funds Scaling
 
 Every append transaction executes through `appendEvent` (@yen/db, YEN-21):
+
 1. `SELECT pg_advisory_xact_lock(yen_fund_lock_key($fund_id))`
 2. `SELECT seq, hash, occurred_at FROM fund_events WHERE fund_id = $fund_id ORDER BY seq DESC LIMIT 1`
 3. Node application builds next chained event via `makeNextEvent`
@@ -69,6 +72,7 @@ Every append transaction executes through `appendEvent` (@yen/db, YEN-21):
 6. `COMMIT` (releases advisory lock and syncs WAL)
 
 We tested concurrency levels $C \in \{1, 4, 8, 16\}$ for:
+
 - **Hot Fund Workload:** All $C$ concurrent workers repeatedly append to the same single fund.
 - **Spread Funds Workload:** Workers distribute appends randomly across 50 distinct funds.
 
@@ -104,6 +108,7 @@ We tested concurrency levels $C \in \{1, 4, 8, 16\}$ for:
 ### 3.2. Hot-Fund Isolation Test (with Stated Bound)
 
 To test whether a viral campaign on Fund A can cause head-of-line blocking or degrade latency on unrelated Fund B:
+
 - **Background load:** 8 concurrent worker connections continuously hammered Fund A under maximum advisory lock contention.
 - **Probe load:** An independent client executed 100 appends to Fund B.
 
@@ -210,6 +215,7 @@ Using `verifyChainStream` from `@yen/eventlog` with synthetic events generated b
 ### Decision 1: Hash Partitioning by `fund_id` with 32 Partitions on Day 1
 
 We decide to define `fund_events` as a **declarative hash-partitioned table by `fund_id` with 32 partitions** (`MODULUS 32, REMAINDER 0..31`) from Day 1:
+
 1. **Constraint Compatibility:** PostgreSQL requires that any unique or primary key constraint on a partitioned table include all partition key columns ([PostgreSQL Table Partitioning](../../docs/REFERENCES.md#pg-partition); [PostgreSQL Constraints](../../docs/REFERENCES.md#pg-constraints)). The primary key `(fund_id, seq)` includes `fund_id`, satisfying this constraint natively.
 2. **Foreign Key Support:** PostgreSQL 16 fully supports foreign key constraints on partitioned tables referencing `funds(id)`, as verified in our container tests.
 3. **Partition Capacity:** At 32 partitions, a monorepo holding 100,000,000 events across 10,000 funds holds an average of 3.1M events (~750 MB) per partition table and B-tree index. This keeps B-tree depths at $\le 3$ and ensures autovacuum operations run concurrently per partition without locking the entire event store.
@@ -228,6 +234,7 @@ A `BEFORE INSERT ... FOR EACH ROW` trigger on a partitioned table fires after th
 ### Decision 3: Index Plan Standardized on `PRIMARY KEY (fund_id, seq)`
 
 No secondary index shall be created for fund event ordering.
+
 - `PRIMARY KEY (fund_id, seq)` serves:
   - Latest event lookup via `ORDER BY seq DESC LIMIT 1` (Backward Index Scan: 0.017 ms).
   - Sequence ranges via `seq BETWEEN $1 AND $2` (Index Scan: 0.036 ms).
@@ -238,6 +245,7 @@ No secondary index shall be created for fund event ordering.
 
 Because hash partitioning distributes rows by `fund_id`, any query filtering by global timestamp (`occurred_at > $ts`) must scan all 32 partitions.
 We decide that anchoring must never perform whole-table timestamp scans. Instead, anchoring must use either:
+
 1. **Per-fund checkpointing:** `WHERE fund_id = $1 AND seq > $last_anchored_seq ORDER BY seq ASC LIMIT $batch`, which uses the primary key index scan on exactly 1 partition (0.215 ms, 71 buffer hits).
 2. **Transactional Outbox / Pending Anchor Table:** Staged in the same transaction as `appendEvent` ([Transactionally Staged Job Drains in Postgres](../../docs/REFERENCES.md#brandur-job-drain); YEN-62):
 
@@ -269,6 +277,7 @@ We decide that anchoring must never perform whole-table timestamp scans. Instead
 ### Decision 5: Retention and Cold-Storage Archival
 
 Yen is a public transparency ledger:
+
 1. **Zero Deletion Policy:** Direct `UPDATE`, `DELETE`, and `TRUNCATE` operations are rejected by database triggers and revoked from all application roles ([PostgreSQL CREATE TRIGGER](../../docs/REFERENCES.md#pg-trigger); [PostgreSQL Privileges](../../docs/REFERENCES.md#pg-privileges)).
 2. **Cold Storage Strategy (not decided here):** Under hash partitioning a partition holds many funds, so detaching one partition would archive a slice of every fund, including active ones. Whole-partition detach is therefore not an archival tool for closed funds. Archiving closed funds needs either a copy of their rows to object storage with the original rows kept (nothing is deleted), or a different partitioning key. Decide this when retention is first needed, and keep it out of the migration for now. Object storage with a retention lock is the likely home for copies, to be confirmed against the provider chosen.
 3. **Verification Decoupling:** Verification against on-chain checkpoints only requires streaming raw event envelopes. Because `verifyChainStream` operates on any `AsyncIterable`, auditors can verify cold-storage files directly in Node or the browser without placing any query load on PostgreSQL.
@@ -367,6 +376,7 @@ REVOKE UPDATE, DELETE, TRUNCATE ON fund_events FROM PUBLIC;
 ## 7. References
 
 All external design claims cite verified entries in [docs/REFERENCES.md](../../docs/REFERENCES.md):
+
 - [PostgreSQL Table Partitioning](../../docs/REFERENCES.md#pg-partition)
 - [PostgreSQL Explicit Locking](../../docs/REFERENCES.md#pg-locking)
 - [PostgreSQL Constraints](../../docs/REFERENCES.md#pg-constraints)

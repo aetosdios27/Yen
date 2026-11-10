@@ -9,6 +9,7 @@ This document describes the account recovery architecture and operational proced
 In Yen, users authenticate using their phone number via WhatsApp-first and SMS one-time passwords (OTP). There are no static passwords.
 
 Because Yen manages community funds and transparent financial records, account access must be strictly guarded against:
+
 - **SIM-swap fraud**: An attacker fraudulently ports or reissues a victim's SIM card to intercept OTPs.
 - **Recycled phone numbers**: Telecom operators in India reassign inactive prepaid mobile numbers after 90 days. A new subscriber receiving a recycled number must not gain access to a previous user's private records or administrative privileges.
 - **Social engineering**: Attackers impersonating legitimate treasurers or approvers to hijack fund controls.
@@ -42,12 +43,14 @@ For the MVP, Yen implements a **support-assisted account recovery process** back
 ### Step 1: Request Initiation
 
 The user initiates an account recovery request via Yen's support channel (`support@yen.org` or authorized in-app support chat):
+
 - Provides their previous phone number and new E.164 phone number.
 - Provides their community name / fund name they participate in.
 
 ### Step 2: Identity & Authorization Verification
 
 Before any phone number modification in the database:
+
 1. **Regular Members / Donors**:
    - Verification via secondary registered email address or proof of recent bank contribution to the fund.
 2. **Fund Approvers & Treasurers (Elevated Roles)**:
@@ -84,6 +87,7 @@ An authorized support operator executes the phone re-link using the administrati
 ## 3. Recycled Phone Number Protection
 
 When a telecom reassigns a dormant phone number to a new subscriber:
+
 - If an account has been completely inactive for > 180 days with no active sessions or transactions, a first-time login with a recycled number triggers a safety check.
 - If the new subscriber cannot verify past fund details, a fresh user profile is created, disassociating the recycled phone from the stale account.
 

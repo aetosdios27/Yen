@@ -31,6 +31,7 @@ If any percentile or error rate breaches the defined budget threshold, the runne
 ### Scenario 1: Read-Heavy
 
 Exercises high-throughput read routes in round-robin fashion:
+
 - `GET /health` (Process liveness)
 - `GET /v1/funds/{fundId}` (Fund financial summary and target)
 - `GET /funds/{fundId}` (Server-rendered public fund transparency view)
@@ -38,6 +39,7 @@ Exercises high-throughput read routes in round-robin fashion:
 ### Scenario 2: Write-Heavy (Donation Pledges)
 
 Exercises the donation pledge creation path:
+
 - `POST /v1/funds/{fundId}/donations/pledge`
 - **Dynamic Per-Request Generation:**
   - Distinct UUID `Idempotency-Key` header on every request.
@@ -47,6 +49,7 @@ Exercises the donation pledge creation path:
 ### Scenario 3: Auth / Session Validation
 
 Exercises authenticated session verification under load:
+
 - `GET /v1/me` with `Authorization: Bearer <session-token>`.
 - Asserts auth cache efficiency and sub-50ms p95 response time.
 
