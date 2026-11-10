@@ -8,7 +8,7 @@ import {
 import type { KontoQueryExecutor, KontoTransactionExecutor } from "@konto-ledger/types";
 import { uuidv7 } from "@yen/db";
 import { type Event, type PseudonymId, parsePseudonymId } from "@yen/eventlog";
-import type { Paise } from "@yen/shared";
+import type { DonationStatus, Paise } from "@yen/shared";
 import { ensureFundAccounts, getFundAccountIds } from "./accounts.js";
 import {
   acquireFundLockInTx,
@@ -487,7 +487,7 @@ export async function reconcilePledge(
       id: string;
       fund_id: string;
       amount_paise: string;
-      status: string;
+      status: DonationStatus;
       utr: string;
     }[]
   >`
@@ -504,11 +504,14 @@ export async function reconcilePledge(
       `Pledge ${input.pledgeId} belongs to fund ${pledge.fund_id}, not ${input.fundId}`,
     );
   }
-  if (pledge.status === "rejected") {
-    return { kind: "pledge_rejected" };
-  }
-  if (pledge.status === "verified") {
-    const verifiedRows = await tx<FundEventRow[]>`
+  switch (pledge.status) {
+    case "rejected":
+    case "refunded":
+      return { kind: "pledge_rejected" };
+    case "pledged":
+      break;
+    case "verified": {
+      const verifiedRows = await tx<FundEventRow[]>`
       SELECT fund_id, seq, version, type, actor, occurred_at, payload, prev_hash, hash
       FROM fund_events
       WHERE fund_id = ${input.fundId}
@@ -516,16 +519,22 @@ export async function reconcilePledge(
         AND (payload->>'donation_id') = ${input.pledgeId}
       LIMIT 1
     `;
-    if (verifiedRows[0]) {
-      return {
-        kind: "reconciled",
-        pledgeId: input.pledgeId,
-        bankTransactionId: input.bankTransactionId,
-        journalId: existingJournals[0]?.id ?? "existing",
-        verifiedEvent: parseFundEventRow(verifiedRows[0]),
-        duplicate: true,
-      };
+      if (verifiedRows[0]) {
+        return {
+          kind: "reconciled",
+          pledgeId: input.pledgeId,
+          bankTransactionId: input.bankTransactionId,
+          journalId: existingJournals[0]?.id ?? "existing",
+          verifiedEvent: parseFundEventRow(verifiedRows[0]),
+          duplicate: true,
+        };
+      }
+      throw new Error("Verified pledge is missing its verification event");
     }
+  }
+  if (pledge.status !== "pledged") {
+    const exhaustive: never = pledge.status;
+    throw new Error(`Unknown pledge status: ${exhaustive}`);
   }
 
   const amountBig = BigInt(pledge.amount_paise);
@@ -1196,6 +1205,13 @@ export async function recordRefund(
     }),
   );
 
+  const updated = await tx`UPDATE donation_pledges SET status = 'refunded'
+    WHERE id = ${input.donationId} AND fund_id = ${input.fundId} AND status = 'verified' RETURNING id`;
+  if (updated.length !== 1) {
+    const existing = await tx`SELECT id FROM donation_pledges WHERE id = ${input.donationId}`;
+    if (existing.length !== 0) throw new Error("Only verified pledges may be refunded");
+  }
+
   return {
     journalId,
     rejectedEvent,
@@ -1217,8 +1233,8 @@ export async function getBalances(
   >`
     SELECT
       a.id AS account_id,
-      COALESCE(e.entries_sum, 0)::text AS entries_sum,
-      COALESCE(h.holds_sum, 0)::text AS holds_sum
+      COALESCE(t.entries_total, 0)::text AS entries_sum,
+      (COALESCE(t.pending_nonexpiring, 0) + COALESCE(h.holds_sum, 0))::text AS holds_sum
     FROM (
       SELECT ${accounts.bankId}::uuid AS id
       UNION ALL SELECT ${accounts.donationsId}::uuid
@@ -1227,17 +1243,12 @@ export async function getBalances(
       UNION ALL SELECT ${accounts.pledgedReceivableId}::uuid
       UNION ALL SELECT ${accounts.donationsPendingId}::uuid
     ) a
-    LEFT JOIN (
-      SELECT account_id, SUM(amount) AS entries_sum
-      FROM konto_entries
-      GROUP BY account_id
-    ) e ON e.account_id = a.id
-    LEFT JOIN (
-      SELECT account_id, SUM(amount) AS holds_sum
+    LEFT JOIN konto_account_totals t ON t.account_id = a.id
+    LEFT JOIN LATERAL (
+      SELECT SUM(amount) AS holds_sum
       FROM konto_holds
-      WHERE status = 'PENDING'
-      GROUP BY account_id
-    ) h ON h.account_id = a.id
+      WHERE account_id = a.id AND status = 'PENDING' AND expires_at IS NOT NULL
+    ) h ON true
   `;
 
   const byId = new Map(

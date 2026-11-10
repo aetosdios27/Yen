@@ -71,6 +71,8 @@ function fixture(options: { gate?: Promise<void> } = {}) {
   } as AppDependencies["expenseStore"];
 
   const publicFundReadStore: PublicFundReadStore = {
+    pledgedPaise: async () => 0n,
+    anchoredItems: async () => new Set<string>(),
     donations: async () => {
       reads.donations += 1;
       if (failOrigin) throw new Error("statement store unavailable");

@@ -55,8 +55,45 @@ export interface Logger {
   log(entry: LogEntry): void;
 }
 
+const REDACTIONS: readonly (readonly [RegExp, string])[] = [
+  [/(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/gi, "[redacted:authorization]"],
+  [
+    /("?\b(?:password|passwd|pin|otp|token|secret|api[_-]?key|vpa|utr|account)\b"?\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s,;&}]+)/gi,
+    "$1[redacted]",
+  ],
+  [/\b[a-zA-Z0-9._-]{2,}@[a-zA-Z][a-zA-Z0-9.-]{1,}\b/g, "[redacted:vpa]"],
+  [/\+?\d{10,15}/g, "[redacted:number]"],
+];
+
+/**
+ * Scrubs free text before it reaches the log stream. Log entries carry only
+ * templated routes and error class names today; this is the second line of
+ * defence for the day a caller passes something it read from a request.
+ */
+export function redactLogText(value: string): string {
+  return REDACTIONS.reduce(
+    (text, [pattern, replacement]) => text.replace(pattern, replacement),
+    value,
+  );
+}
+
+function redactEntry(entry: LogEntry): LogEntry {
+  switch (entry.event) {
+    case "http_request":
+      return { ...entry, route: redactLogText(entry.route) };
+    case "http_failure":
+      return {
+        ...entry,
+        route: redactLogText(entry.route),
+        errorName: redactLogText(entry.errorName),
+      };
+    case "http_overloaded":
+      return { ...entry, route: redactLogText(entry.route) };
+  }
+}
+
 export function serializeRequestLog(entry: LogEntry): string {
-  return JSON.stringify(logEntry.parse(entry));
+  return JSON.stringify(logEntry.parse(redactEntry(entry)));
 }
 
 export const jsonLogger: Logger = {

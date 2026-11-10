@@ -366,6 +366,38 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/funds/{fundId}/audit-bundle": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getPublicAuditBundle"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/funds/{fundId}/records/{recordId}/proof": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getPublicRecordProof"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/funds/{fundId}/public/expenses/{expenseId}": {
     parameters: {
       query?: never;
@@ -1973,9 +2005,10 @@ export interface components {
       /** @enum {string} */
       donorNameChoice?: "full" | "initials" | "anonymous";
       /** @enum {string} */
-      status: "pledged" | "verified" | "rejected";
+      status: "pledged" | "verified" | "rejected" | "refunded";
       createdAt: string;
       verifiedAt?: string;
+      refundedAt?: string;
       proofUrl?: string;
       onChainRoot?: string;
       onChainTxHash?: string;
@@ -2007,6 +2040,10 @@ export interface components {
        * @enum {string}
        */
       channel: "email" | "whatsapp" | "sms";
+      /** @enum {boolean} */
+      consent: true;
+      /** @default false */
+      whatsappConsent: boolean;
       /** @default true */
       weeklySummary: boolean;
       /** @default true */
@@ -2460,11 +2497,30 @@ export interface operations {
           "application/json": {
             /** @enum {string} */
             status: "ok";
+            /** @description One entry per probed dependency, so a degraded dependency is named */
+            checks: {
+              name: string;
+              /** @enum {string} */
+              status: "ok" | "fail" | "skipped";
+            }[];
           };
         };
       };
       /** @description Internal failure; no private error information */
       500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description A recorded runtime fault or a shutdown in progress */
+      503: {
         headers: {
           /** @description Request correlation ID */
           "x-request-id": string;
@@ -2524,6 +2580,12 @@ export interface operations {
           "application/json": {
             /** @enum {string} */
             status: "ok";
+            /** @description One entry per probed dependency, so a degraded dependency is named */
+            checks: {
+              name: string;
+              /** @enum {string} */
+              status: "ok" | "fail" | "skipped";
+            }[];
           };
         };
       };
@@ -4327,6 +4389,8 @@ export interface operations {
             /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
             raisedPaise: string | null;
             /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
+            pledgedPaise: string;
+            /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
             spentPaise: string;
             /** @enum {string} */
             verification: "bank-matched" | "anchored" | "unverified";
@@ -4573,6 +4637,8 @@ export interface operations {
             /** Format: uuid */
             fundId: string;
             items: {
+              /** @enum {string} */
+              itemType?: "donation" | "refund" | "expense" | "alert";
               /** Format: uuid */
               id: string;
               /** Format: date-time */
@@ -4621,6 +4687,248 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  getPublicAuditBundle: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Canonical FundId UUID; inaccessible funds return 404 */
+        fundId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Canonical audit bundle v1 for fund interval */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Representation validator for public-tier responses */
+          etag?: string;
+          /** @description Public short shared cache; authenticated tiers are private and no-store */
+          "cache-control"?: string;
+          /** @description Separates the public and signed-in representations of one URL */
+          vary?: string;
+          /** @description When the stale copy was refreshed, set only when the origin is unavailable */
+          "x-yen-data-as-of"?: string;
+          /** @description RFC 7234 warning when the response is served stale */
+          warning?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** @enum {string} */
+            format: "yen/audit-bundle/v1";
+            /** Format: uuid */
+            fund_id: string;
+            chain: {
+              start_seq: number;
+              start_hash: string;
+            };
+            events: {
+              [key: string]: unknown;
+            }[];
+            roots: {
+              [key: string]: unknown;
+            }[];
+            anchor: {
+              chain_id: number;
+              contract_address: string;
+              tx_hash: string;
+              root: string;
+              sequence: number;
+            };
+          };
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  getPublicRecordProof: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Canonical FundId UUID */
+        fundId: string;
+        /** @description Record, expense, or donation identifier */
+        recordId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Record cryptographic proof and anchor status */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Representation validator for public-tier responses */
+          etag?: string;
+          /** @description Public short shared cache; authenticated tiers are private and no-store */
+          "cache-control"?: string;
+          /** @description Separates the public and signed-in representations of one URL */
+          vary?: string;
+          /** @description When the stale copy was refreshed, set only when the origin is unavailable */
+          "x-yen-data-as-of"?: string;
+          /** @description RFC 7234 warning when the response is served stale */
+          warning?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            recordId: string;
+            /** Format: uuid */
+            fundId: string;
+            /** @enum {string} */
+            status: "anchored" | "pending";
+            event: {
+              [key: string]: unknown;
+            };
+            salt?: string;
+            latestEventHash?: string;
+            eventProof?: {
+              index: number;
+              size: number;
+              path: string[];
+            };
+            fundProof?: {
+              index: number;
+              size: number;
+              path: string[];
+            };
+            anchor?: {
+              chainId: number;
+              contractAddress: string;
+              txHash: string;
+              root: string;
+              sequence: number;
+            };
+            pendingWindow?: {
+              message: string;
+              estimatedAnchorMinutes: number;
+            };
+          };
+        };
       };
       /** @description Resource not found */
       404: {

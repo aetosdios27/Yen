@@ -16,7 +16,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 | Testing and failure handling         |       4 |
 | Benchmarking and latency             |       1 |
 | SRE and observability                |       5 |
-| PostgreSQL                           |      15 |
+| PostgreSQL                           |      16 |
 | Authentication and approvals         |       9 |
 | Messaging providers                  |       2 |
 | Blockchain anchoring                 |       2 |
@@ -436,6 +436,14 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 - **What we use it for:** statement_timeout bounds statement execution, while lock_timeout applies to individual lock waits. These settings are references for future operational configuration, not asserted Yen defaults.
 - **Where in this repo:** packages/db/README.md
 
+<a id="pg-triggers"></a>
+### Overview of Trigger Behavior
+
+- **Source:** PostgreSQL Global Development Group; PostgreSQL 16 documentation, 2023.
+- **URL:** https://www.postgresql.org/docs/16/trigger-definition.html
+- **What we use it for:** Triggers run in the writer's transaction and roll back with it. Statement triggers with transition tables maintain account totals alongside entries and holds; expiring holds remain a time-dependent query.
+- **Where in this repo:** packages/db/migrations/0037_ledger_totals.sql
+
 <a id="pg-constraints"></a>
 ### Constraints
 
@@ -625,7 +633,7 @@ ADRs and design-heavy pull requests must cite relevant entries here, explain wha
 
 - **Source:** Reproducible Builds project; documentation, undated (accessed 2026).
 - **URL:** https://reproducible-builds.org/docs/
-- **What we use it for:** Reproducible Builds describes controlling timestamps, time zones, locales, build paths and other variable inputs. Yen sets a fixed build environment and compares release archives from two clean worktrees on one host; that check is not an independent or cross-platform rebuild.
+- **What we use it for:** Reproducible Builds describes controlling timestamps, time zones, locales, build paths and other variable inputs. Yen sets a fixed build environment and compares release archives from two clean worktrees with separate HOME/TMPDIR directories. The release workflow also compares another runner’s archive digest before signing; that configured gate is not evidence of a completed two-machine or cross-platform rebuild.
 - **Where in this repo:** scripts/repro-build.sh; docs/verify-release.md
 
 <a id="source-date-epoch"></a>

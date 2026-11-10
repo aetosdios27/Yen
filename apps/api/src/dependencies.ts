@@ -1,12 +1,12 @@
 import { randomBytes } from "node:crypto";
-import type { AppendEventInput, StoredFundEvent, WaitlistEntry } from "@yen/db";
+import type { AppendEventInput, Sql, StoredFundEvent, WaitlistEntry } from "@yen/db";
 import { uuidv7 } from "@yen/db";
 import { type PseudonymId, parsePseudonymId } from "@yen/eventlog";
 import { type ApprovalProofVerifier, type ExpenseStore, InMemoryExpenseStore } from "@yen/ledger";
 import { type FundSubscriptionStore, MemoryFundSubscriptionStore } from "@yen/notifications";
 import type { FundRole } from "@yen/policy";
 import { failClosedPayeeVerifier, type PayeeVerifier } from "@yen/policy";
-import type { DeliveryProvider } from "@yen/shared";
+import type { AuditBundle, DeliveryProvider } from "@yen/shared";
 import { paise } from "@yen/shared";
 import type { Context } from "hono";
 import { type AlertStore, MemoryAlertStore } from "./alert-store.js";
@@ -20,8 +20,10 @@ import {
 import { rateLimitEnv, rateLimits } from "./config.js";
 import { type DeviceSignatureConfig, DeviceSignatureService } from "./device-signature/service.js";
 import { type DeviceSignatureStore, MemoryDeviceSignatureStore } from "./device-signature/store.js";
+import { createErrorReporter, type ErrorReporter } from "./error-reporter.js";
 import { PostgresEvidenceStore } from "./evidence-store-postgres.js";
 import type { PostgresExpenseObjectionStore } from "./expense-objections.js";
+import type { HealthReport } from "./health.js";
 import { jsonLogger, type Logger } from "./logging.js";
 import { MemoryPayeeProfileStore, type PayeeProfileStore } from "./payee-rules/profile-store.js";
 import {
@@ -113,6 +115,11 @@ export interface DonationPledgeStore {
 }
 
 export interface PublicFundDonation {
+  readonly refund?: {
+    readonly id: string;
+    readonly occurredAt: string;
+    readonly anchored: boolean;
+  };
   readonly id: string;
   readonly occurredAt: string;
   readonly amountPaise: bigint;
@@ -123,6 +130,8 @@ export interface PublicFundDonation {
 export interface PublicFundReadStore {
   /** Confirmed credits only. Pledges are deliberately excluded until bank matched. */
   donations(fundId: string): Promise<readonly PublicFundDonation[]>;
+  pledgedPaise(fundId: string): Promise<bigint>;
+  anchoredItems(fundId: string): Promise<ReadonlySet<string>>;
 }
 
 export class MemoryPublicFundReadStore implements PublicFundReadStore {
@@ -130,6 +139,14 @@ export class MemoryPublicFundReadStore implements PublicFundReadStore {
 
   async donations(fundId: string) {
     return this.values.get(fundId) ?? [];
+  }
+
+  async pledgedPaise(_fundId: string) {
+    return 0n;
+  }
+
+  async anchoredItems(_fundId: string): Promise<ReadonlySet<string>> {
+    return new Set();
   }
 
   set(fundId: string, donations: readonly PublicFundDonation[]) {
@@ -378,8 +395,15 @@ export class MemoryFundStore implements FundStore {
   }
 }
 
+export interface AuditBundleProvider {
+  getAuditBundle(fundId: string): Promise<AuditBundle | null>;
+  getRecordProof(fundId: string, recordId: string): Promise<Record<string, unknown> | null>;
+}
+
 export interface AppDependencies {
   readonly waitlistStore: WaitlistStore;
+  readonly sql?: Sql | undefined;
+  readonly auditBundleProvider?: AuditBundleProvider | undefined;
   readonly expenseStore: ExpenseStore;
   readonly payeeProfileStore: PayeeProfileStore;
   readonly payeeFingerprintSalt: string;
@@ -416,6 +440,9 @@ export interface AppDependencies {
   readonly clientIp: (context: Context<ApiEnv>) => string;
   readonly corsOrigins: string[];
   readonly readiness: () => Promise<boolean>;
+  readonly health?: (() => Promise<HealthReport>) | undefined;
+  readonly runtimeFault?: (() => string | null) | undefined;
+  readonly errorReporter?: ErrorReporter | undefined;
   readonly rateLimits: { readonly ip: RateLimit; readonly principal: RateLimit };
   readonly pinStore: PinStore;
   readonly actionTokenStore: ActionTokenStore;
@@ -551,6 +578,11 @@ export function defaultDependencies(
     clientIp: () => "unknown",
     corsOrigins: [],
     readiness: async () => true,
+    errorReporter: createErrorReporter({
+      dsn: process.env.SENTRY_DSN,
+      release: process.env.RELEASE_SHA,
+      environment: process.env.NODE_ENV,
+    }),
     rateLimits: rateLimits(rateLimitEnv.parse({})),
     pinStore,
     actionTokenStore,

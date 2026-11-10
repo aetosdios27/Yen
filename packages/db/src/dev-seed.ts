@@ -156,7 +156,7 @@ export async function ensureDevTables(sql: Sql): Promise<void> {
       utr text NOT NULL UNIQUE CHECK (utr ~ '^[0-9]{12}$'),
       donor_display_name text,
       donor_contact text,
-      status text NOT NULL DEFAULT 'pledged' CHECK (status IN ('pledged', 'verified', 'rejected')),
+      status text NOT NULL DEFAULT 'pledged' CHECK (status IN ('pledged', 'verified', 'rejected', 'refunded')),
       created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
       verified_at timestamptz
     );

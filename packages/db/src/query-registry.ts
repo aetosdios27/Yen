@@ -1,4 +1,5 @@
 import type { Sql } from "./client.js";
+import { publicAnchoredItemsSql, publicPledgedPaiseSql } from "./public-fund-queries.js";
 
 /**
  * Categories of hot-path queries in Yen.
@@ -65,6 +66,34 @@ export type RegisteredHotPathQuery = {
 };
 
 const INITIAL_HOT_PATH_QUERIES: RegisteredHotPathQuery[] = [
+  {
+    id: "public_fund_anchored_items",
+    name: "Public fund confirmed financial coverage",
+    category: "fund_reads",
+    sqlTemplate: publicAnchoredItemsSql,
+    explain: (sql, ctx) =>
+      sql.unsafe(`EXPLAIN (FORMAT JSON, VERBOSE) ${publicAnchoredItemsSql}`, [ctx.fundId]),
+    expectedPlan: {
+      targetTable: "fund_events",
+      expectedIndex: "fund_events_pkey",
+      disallowSeqScan: true,
+      maxCost: 2500,
+    },
+  },
+  {
+    id: "public_fund_pledged_paise",
+    name: "Public fund outstanding pledge total",
+    category: "fund_reads",
+    sqlTemplate: publicPledgedPaiseSql,
+    explain: (sql, ctx) =>
+      sql.unsafe(`EXPLAIN (FORMAT JSON, VERBOSE) ${publicPledgedPaiseSql}`, [ctx.fundId]),
+    expectedPlan: {
+      targetTable: "donation_pledges",
+      expectedIndex: "donation_pledges_outstanding_fund_idx",
+      disallowSeqScan: true,
+      maxCost: 260,
+    },
+  },
   {
     id: "fund_read_by_id",
     name: "Fund read by ID",

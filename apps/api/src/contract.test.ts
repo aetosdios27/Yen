@@ -1,9 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { z } from "@hono/zod-openapi";
+import { normalizePhone } from "@yen/shared";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { expect, it } from "vitest";
 import { createApp } from "./app.js";
-import { DevStubOtpDeliveryProvider, normalizePhone } from "./auth/index.js";
+import { DevStubOtpDeliveryProvider } from "./auth/index.js";
 import { rotateSessionResponse, verifyOtpResponse } from "./contract.js";
 import { ApiError, errorCode, errorStatus } from "./errors.js";
 import { devPolicy } from "./policy.js";
@@ -562,7 +563,9 @@ it("validates every documented status and sent header against the committed Open
       path.includes("/reconciliation") ||
       path.includes("/debit-review") ||
       path.startsWith("/v1/receipts") ||
-      path.includes("/subscriptions")
+      path.includes("/subscriptions") ||
+      path.endsWith("/audit-bundle") ||
+      path.includes("/records/")
     )
       continue;
     for (const [method, operation] of Object.entries(methods)) {
@@ -605,16 +608,21 @@ it("validates every documented status and sent header against the committed Open
             method,
             path === "/ready"
               ? await createApp({ ...base, readiness: async () => false }).request("/ready")
-              : await createApp({
-                  ...base,
-                  rateLimitStore: {
-                    consume: async () => ({
-                      allowed: false,
-                      overloaded: true,
-                      retryAfterSeconds: 1,
-                    }),
-                  },
-                }).request("/v1/me"),
+              : path === "/health"
+                ? await createApp({
+                    ...base,
+                    runtimeFault: () => "unhandled_rejection",
+                  }).request("/health")
+                : await createApp({
+                    ...base,
+                    rateLimitStore: {
+                      consume: async () => ({
+                        allowed: false,
+                        overloaded: true,
+                        retryAfterSeconds: 1,
+                      }),
+                    },
+                  }).request("/v1/me"),
           );
         } else if (status === "429") {
           await check(path, method, await rateLimited.request("/v1/me"));

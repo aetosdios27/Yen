@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { OpenAPIHono, type z } from "@hono/zod-openapi";
-import { type AlertRow, normalizeWaitlistContact } from "@yen/db";
-import { payloadSchemas } from "@yen/eventlog";
+import { type AlertRow, exportAuditBundle, normalizeWaitlistContact } from "@yen/db";
+import { type Event, parsePseudonymId, payloadSchemas } from "@yen/eventlog";
 import {
   BankTransactionMismatchError,
   createDraftRequest,
@@ -31,15 +31,22 @@ import {
   redactFundReadModel,
 } from "@yen/policy";
 import {
+  buildIntervalTree,
   type DonorReceiptData,
+  fromHex,
+  fundVerificationState,
   generateReceiptPdf,
   generateReceiptSvg,
+  hash32,
+  normalizePhone,
   PRIVACY_NOTICE_VERSION,
   paise,
   parseFundId,
   parseGstin,
   RECEIPT_DISCLAIMER_EN,
   RECEIPT_DISCLAIMER_HI,
+  salt32,
+  toHex,
 } from "@yen/shared";
 import type { Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -55,12 +62,11 @@ import {
   generateSessionToken,
   hashOtp,
   hashSessionToken,
-  normalizePhone,
   parseDeviceInfo,
   verifyOtp,
 } from "./auth/index.js";
 import { registerOwnerInviteRoutes } from "./auth/invite-routes.js";
-import { buildInfo } from "./build-info.js";
+import { getBuildInfo } from "./build-info.js";
 import {
   ALLOWED_EVIDENCE_MIME_TYPES,
   acknowledgeAlertRoute,
@@ -100,9 +106,13 @@ import {
   payExpenseRoute,
   pledgeDonationRoute,
   principalSchema,
+  publicAuditBundleRoute,
+  type publicAuditBundleSchema,
   publicFundBreakdownRoute,
   publicFundSummaryRoute,
   publicFundTimelineRoute,
+  publicRecordProofRoute,
+  type publicRecordProofSchema,
   readyRoute,
   reconcileExpenseRoute,
   rejectExpenseRoute,
@@ -141,6 +151,7 @@ import { registerDeviceSignatureRoutes } from "./device-signature/routes.js";
 import { DeviceSignatureFailure, DeviceSignatureService } from "./device-signature/service.js";
 import { ApiError, errorBody, errorStatus, ReadinessError, StoreError } from "./errors.js";
 import { registerFundVisibilityRoute } from "./fund-routes.js";
+import { collectHealth, type HealthReport } from "./health.js";
 import { getVerifiedEvidenceObject } from "./integrity-job.js";
 import { logMethod } from "./logging.js";
 import {
@@ -324,13 +335,18 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         : error instanceof HTTPException && error.status === 400
           ? new ApiError("validation_failed")
           : new ApiError("internal");
+    const status = error instanceof ReadinessError ? 503 : errorStatus[failure.code];
+    if (status >= 500) {
+      deps.errorReporter?.capture(error, {
+        requestId: c.get("requestId"),
+        route: routePath(c, -1) || "unmatched",
+        status,
+      });
+    }
     if (error && typeof error === "object" && "retryAfterSeconds" in error) {
       c.header("retry-after", String((error as { retryAfterSeconds: number }).retryAfterSeconds));
     }
-    return c.json(
-      errorBody(failure, c.get("requestId")),
-      error instanceof ReadinessError ? 503 : errorStatus[failure.code],
-    );
+    return c.json(errorBody(failure, c.get("requestId")), status);
   });
   app.notFound((c) =>
     c.json(errorBody(new ApiError("not_found"), c.get("requestId")), errorStatus.not_found),
@@ -436,16 +452,38 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     });
     return c.json({ status: "received" as const }, 201);
   });
-  app.openapi(healthRoute, (c) => c.json({ status: "ok" as const }, 200));
-  app.openapi(versionRoute, (c) => c.json(buildInfo, 200));
+  // Liveness answers from process state only, so a database outage never restarts
+  // a container that is serving fine. /ready below carries the dependency checks.
+  app.openapi(healthRoute, (c) => {
+    if ((deps.runtimeFault?.() ?? null) !== null) throw new ReadinessError();
+    return c.json(
+      { status: "ok" as const, checks: [{ name: "process", status: "ok" as const }] },
+      200,
+    );
+  });
+  app.openapi(versionRoute, (c) => c.json(getBuildInfo(), 200));
   app.openapi(readyRoute, async (c) => {
     if (deps.isShuttingDown()) throw new ReadinessError();
+    let report: HealthReport;
     try {
-      if (!(await deps.readiness()) || deps.isShuttingDown()) throw new ReadinessError();
+      report =
+        deps.health === undefined
+          ? await collectHealth(
+              [{ name: "database", run: deps.readiness }],
+              () => deps.runtimeFault?.() ?? null,
+            )
+          : await deps.health();
     } catch {
       throw new ReadinessError();
     }
-    return c.json({ status: "ok" as const }, 200);
+    if (report.status !== "ok" || deps.isShuttingDown()) throw new ReadinessError();
+    return c.json(
+      {
+        status: "ok" as const,
+        checks: report.checks.map((check) => ({ name: check.name, status: check.status })),
+      },
+      200,
+    );
   });
   app.openapi(meRoute, async (c) => {
     const principal = c.get("principal");
@@ -916,8 +954,17 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       body: hit.body,
     };
   };
+  const setFundReadCache = (c: Context<ApiEnv>, publicTier: boolean, body: unknown) => {
+    if (!publicTier) {
+      c.header("cache-control", "private, no-store");
+      return;
+    }
+    const serialized = JSON.stringify(body);
+    const etag = `"${crypto.createHash("sha256").update(serialized).digest("hex")}"`;
+    c.header("etag", etag);
+    c.header("cache-control", "public, s-maxage=30, max-age=0, must-revalidate");
+  };
   const publicDataGaps = [
-    "The event log and anchoring query are not connected; timeline entries are derived from expense records.",
     "Authenticated member assignments are not loaded into sessions; donor and member access requires a role-bearing principal.",
   ];
   const listFundExpenses = async (fundId: string) => deps.expenseStore.list(fundId);
@@ -947,9 +994,11 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const fundId = c.req.valid("param").fundId;
     const { entry, actor, publicTier } = await publicFundContext(fundId, c.get("principal"));
     const read = await fundRead(c, { fundId, kind: "summary", publicTier }, async () => {
-      const [expenses, donations] = await Promise.all([
+      const [expenses, donations, pledgedPaise, anchoredItems] = await Promise.all([
         listFundExpenses(fundId),
         deps.publicFundReadStore.donations(fundId),
+        deps.publicFundReadStore.pledgedPaise(fundId),
+        deps.publicFundReadStore.anchoredItems(fundId),
       ]);
       const spentPaise = safePaiseSum(
         expenses
@@ -961,15 +1010,31 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         fundId,
         name: entry.fund.name,
         purpose: actor.role === "public" ? null : (entry.fund.purpose ?? null),
-        raisedPaise: String(safePaiseSum(donations.map((donation) => donation.amountPaise))),
+        pledgedPaise: String(pledgedPaise),
+        raisedPaise: String(
+          safePaiseSum(donations.map((donation) => (donation.refund ? 0n : donation.amountPaise))),
+        ),
         spentPaise: String(spentPaise),
-        verification: donations.length > 0 ? "bank-matched" : "unverified",
+        verification: fundVerificationState(
+          [
+            ...donations.flatMap((donation) => [
+              donation.id,
+              ...(donation.refund && !donation.refund.anchored ? [donation.refund.id] : []),
+            ]),
+            ...expenses
+              .filter((expense) => expense.status === "reconciled")
+              .map((expense) => expense.id),
+          ],
+          anchoredItems,
+          expenses.some((expense) => expense.status === "paid"),
+        ),
         dataGaps: publicDataGaps,
       });
     });
     if (read.notModified) return c.body(null, 304);
     return c.json(read.body, 200);
   });
+
   app.openapi(publicFundBreakdownRoute, async (c) => {
     const fundId = c.req.valid("param").fundId;
     const { actor, publicTier } = await publicFundContext(fundId, c.get("principal"));
@@ -989,9 +1054,10 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const fundId = c.req.valid("param").fundId;
     const { actor, publicTier } = await publicFundContext(fundId, c.get("principal"));
     const read = await fundRead(c, { fundId, kind: "timeline", publicTier }, async () => {
-      const [expenses, donations] = await Promise.all([
+      const [expenses, donations, anchoredItems] = await Promise.all([
         listFundExpenses(fundId),
         deps.publicFundReadStore.donations(fundId),
+        deps.publicFundReadStore.anchoredItems(fundId),
       ]);
       const officeholderNamesShown = await deps.displayNameStore.officeholderNamesShown(fundId);
       const expenseItems = await Promise.all(
@@ -1029,11 +1095,15 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
               ...(expense.status === "paid" || expense.status === "reconciled"
                 ? { amountPaise: String(expense.amountPaise) }
                 : {}),
-              verified: "unverified" as const,
+              verified:
+                expense.status === "reconciled" && anchoredItems.has(expense.id)
+                  ? ("anchored" as const)
+                  : ("unverified" as const),
             };
           }),
       );
       const donationItems = donations.map((donation) => ({
+        itemType: "donation" as const,
         id: donation.id,
         occurredAt: donation.occurredAt,
         message: "A donation was bank matched.",
@@ -1044,8 +1114,26 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
               actorNameChoice: donation.donorNameChoice,
             }),
         amountPaise: String(donation.amountPaise),
-        verified: "bank-matched" as const,
+        verified: anchoredItems.has(donation.id)
+          ? ("anchored" as const)
+          : ("bank-matched" as const),
       }));
+      const refundItems = donations.flatMap((donation) =>
+        donation.refund
+          ? [
+              {
+                itemType: "refund" as const,
+                id: donation.refund.id,
+                occurredAt: donation.refund.occurredAt,
+                message: "A bank-matched donation was refunded.",
+                amountPaise: String(donation.amountPaise),
+                verified: donation.refund.anchored
+                  ? ("anchored" as const)
+                  : ("bank-matched" as const),
+              },
+            ]
+          : [],
+      );
       const alertItems = (await alertStore.listForTimeline(fundId)).map((alert) => ({
         id: alert.id,
         occurredAt: alert.created_at.toISOString(),
@@ -1055,8 +1143,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         title: alert.title,
         verified: "unverified" as const,
       }));
-      const items = [...expenseItems, ...donationItems, ...alertItems].sort((left, right) =>
-        left.occurredAt.localeCompare(right.occurredAt),
+      const items = [...expenseItems, ...donationItems, ...refundItems, ...alertItems].sort(
+        (left, right) => left.occurredAt.localeCompare(right.occurredAt),
       );
       return redactFundReadModel(actor, {
         kind: "fund_timeline",
@@ -1068,6 +1156,232 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     if (read.notModified) return c.body(null, 304);
     return c.json(read.body, 200);
   });
+
+  app.openapi(publicAuditBundleRoute, async (c) => {
+    const fundId = c.req.valid("param").fundId;
+    const { publicTier } = await publicFundContext(fundId, c.get("principal"));
+    const parsed = parseFundId(fundId);
+    if (!parsed.ok) throw new ApiError("not_found");
+
+    const contractAddress =
+      process.env.REGISTRY_CONTRACT_ADDRESS &&
+      /^0x[0-9a-fA-F]{40}$/.test(process.env.REGISTRY_CONTRACT_ADDRESS)
+        ? process.env.REGISTRY_CONTRACT_ADDRESS
+        : "0x0000000000000000000000000000000000000000";
+
+    if (deps.sql) {
+      const anchors = await deps.sql<
+        Array<{
+          id: string;
+          from_seq: number | string;
+          to_seq: number | string;
+          root: string;
+          chain_id: number | string;
+          chain_sequence: number | string;
+          tx_hash: string | null;
+        }>
+      >`
+        SELECT id, from_seq, to_seq, root, chain_id, chain_sequence, tx_hash
+        FROM anchors
+        WHERE fund_id = ${fundId} AND status IN ('submitted', 'confirmed')
+        ORDER BY to_seq DESC
+        LIMIT 1
+      `;
+      const latestAnchor = anchors[0];
+      if (latestAnchor?.tx_hash) {
+        try {
+          const bundle = await exportAuditBundle(
+            deps.sql,
+            parsed.value,
+            latestAnchor.id,
+            contractAddress,
+          );
+          setFundReadCache(c, publicTier, bundle);
+          return c.json(bundle as unknown as z.infer<typeof publicAuditBundleSchema>, 200);
+        } catch {
+          throw new ApiError("not_found");
+        }
+      }
+      throw new ApiError("not_found");
+    }
+
+    if (deps.auditBundleProvider) {
+      const bundle = await deps.auditBundleProvider.getAuditBundle(fundId);
+      if (bundle) {
+        setFundReadCache(c, publicTier, bundle);
+        return c.json(bundle as unknown as z.infer<typeof publicAuditBundleSchema>, 200);
+      }
+    }
+
+    throw new ApiError("not_found");
+  });
+
+  app.openapi(publicRecordProofRoute, async (c) => {
+    const { fundId, recordId } = c.req.valid("param");
+    const { publicTier } = await publicFundContext(fundId, c.get("principal"));
+    const parsed = parseFundId(fundId);
+    if (!parsed.ok) throw new ApiError("not_found");
+
+    const contractAddress =
+      process.env.REGISTRY_CONTRACT_ADDRESS &&
+      /^0x[0-9a-fA-F]{40}$/.test(process.env.REGISTRY_CONTRACT_ADDRESS)
+        ? process.env.REGISTRY_CONTRACT_ADDRESS
+        : "0x0000000000000000000000000000000000000000";
+
+    if (deps.sql) {
+      const eventRows = await deps.sql<
+        Array<{
+          fund_id: string;
+          seq: number | string;
+          type: string;
+          version: number;
+          actor: string;
+          occurred_at: Date | string;
+          payload: Record<string, unknown>;
+          prev_hash: string;
+          hash: string;
+        }>
+      >`
+        SELECT fund_id, seq, type, version, actor, occurred_at, payload, prev_hash, hash
+        FROM fund_events
+        WHERE fund_id = ${fundId}
+          AND (
+            seq::text = ${recordId}
+            OR hash = ${recordId}
+            OR payload->>'expense_id' = ${recordId}
+            OR payload->>'donation_id' = ${recordId}
+          )
+        ORDER BY seq DESC
+        LIMIT 1
+      `;
+      const eventRow = eventRows[0];
+      if (eventRow) {
+        const eventSeq = Number(eventRow.seq);
+        const occurredAt =
+          eventRow.occurred_at instanceof Date
+            ? eventRow.occurred_at.toISOString()
+            : String(eventRow.occurred_at);
+        const parsedEvent: Event = {
+          fund_id: eventRow.fund_id,
+          seq: eventSeq,
+          type: eventRow.type,
+          version: eventRow.version,
+          actor: parsePseudonymId(eventRow.actor),
+          occurred_at: occurredAt,
+          payload: eventRow.payload,
+          prev_hash: eventRow.prev_hash,
+          hash: eventRow.hash,
+        } as Event;
+
+        const anchorRows = await deps.sql<
+          Array<{
+            id: string;
+            from_seq: number | string;
+            to_seq: number | string;
+            root: string;
+            chain_id: number | string;
+            chain_sequence: number | string;
+            tx_hash: string | null;
+            status: string;
+          }>
+        >`
+          SELECT id, from_seq, to_seq, root, chain_id, chain_sequence, tx_hash, status
+          FROM anchors
+          WHERE fund_id = ${fundId}
+            AND ${eventSeq} BETWEEN from_seq AND to_seq
+            AND status IN ('submitted', 'confirmed')
+          LIMIT 1
+        `;
+        const anchor = anchorRows[0];
+        if (anchor?.tx_hash) {
+          const fromSeq = Number(anchor.from_seq);
+          const toSeq = Number(anchor.to_seq);
+          const intervalEventRows = await deps.sql<Array<{ seq: number | string; hash: string }>>`
+            SELECT seq, hash FROM fund_events
+            WHERE fund_id = ${fundId} AND seq BETWEEN ${fromSeq} AND ${toSeq}
+            ORDER BY seq ASC
+          `;
+          const saltRows = await deps.sql<Array<{ seq: number | string; salt: string }>>`
+            SELECT seq, salt FROM anchor_event_salts
+            WHERE anchor_id = ${anchor.id} AND fund_id = ${fundId}
+            ORDER BY seq ASC
+          `;
+          const saltMap = new Map<number, string>(
+            saltRows.map((s: { seq: number | string; salt: string }) => [Number(s.seq), s.salt]),
+          );
+          const eventSalt = saltMap.get(eventSeq);
+          const lastIntervalEvent = intervalEventRows.at(-1);
+
+          if (
+            eventSalt &&
+            lastIntervalEvent &&
+            intervalEventRows.length === toSeq - fromSeq + 1 &&
+            saltRows.length === intervalEventRows.length
+          ) {
+            const tree = await buildIntervalTree([
+              {
+                fundId: parsed.value,
+                latestEventHash: hash32(fromHex(lastIntervalEvent.hash)),
+                events: intervalEventRows.map((e: { seq: number | string; hash: string }) => ({
+                  seq: Number(e.seq),
+                  eventHash: hash32(fromHex(e.hash)),
+                  salt: salt32(fromHex(saltMap.get(Number(e.seq)) ?? "00".repeat(32))),
+                })),
+              },
+            ]);
+            const proof = await tree.prove(parsed.value, eventSeq);
+            if (proof) {
+              const body = {
+                recordId,
+                fundId,
+                status: "anchored" as const,
+                event: parsedEvent,
+                salt: eventSalt,
+                latestEventHash: toHex(proof.latestEventHash),
+                eventProof: { ...proof.eventProof, path: proof.eventProof.path.map(toHex) },
+                fundProof: { ...proof.fundProof, path: proof.fundProof.path.map(toHex) },
+                anchor: {
+                  chainId: Number(anchor.chain_id),
+                  contractAddress,
+                  txHash: anchor.tx_hash,
+                  root: anchor.root,
+                  sequence: Number(anchor.chain_sequence),
+                },
+              };
+              setFundReadCache(c, publicTier, body);
+              return c.json(body, 200);
+            }
+          }
+        }
+
+        // Real event exists in fund_events, but not anchored yet => pending
+        const body = {
+          recordId,
+          fundId,
+          status: "pending" as const,
+          event: parsedEvent,
+          pendingWindow: {
+            message: "Sealed in tamper-evident event log; awaiting next scheduled batch anchor",
+            estimatedAnchorMinutes: 10,
+          },
+        };
+        setFundReadCache(c, publicTier, body);
+        return c.json(body, 200);
+      }
+      throw new ApiError("not_found");
+    }
+
+    if (deps.auditBundleProvider) {
+      const proof = await deps.auditBundleProvider.getRecordProof(fundId, recordId);
+      if (proof) {
+        setFundReadCache(c, publicTier, proof);
+        return c.json(proof as unknown as z.infer<typeof publicRecordProofSchema>, 200);
+      }
+    }
+
+    throw new ApiError("not_found");
+  });
+
   app.openapi(publicExpenseDetailRoute, async (c) => {
     const { fundId, expenseId } = c.req.valid("param");
     const { actor, publicTier, expense, proofs } = await publicExpenseContext(
@@ -1817,6 +2131,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         status: receipt.status,
         createdAt: receipt.createdAt,
         ...(receipt.verifiedAt ? { verifiedAt: receipt.verifiedAt } : {}),
+        ...(receipt.refundedAt ? { refundedAt: receipt.refundedAt } : {}),
         proofUrl:
           receipt.proofUrl ?? `/verify?donationId=${encodeURIComponent(receipt.donationId)}`,
         ...(receipt.onChainRoot ? { onChainRoot: receipt.onChainRoot } : {}),
@@ -1846,6 +2161,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       status: receipt.status,
       createdAt: receipt.createdAt,
       verifiedAt: receipt.verifiedAt,
+      refundedAt: receipt.refundedAt,
       proofUrl:
         receipt.proofUrl ??
         `https://yen.org.in/verify?donationId=${encodeURIComponent(receipt.donationId)}`,
@@ -1883,6 +2199,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       status: receipt.status,
       createdAt: receipt.createdAt,
       verifiedAt: receipt.verifiedAt,
+      refundedAt: receipt.refundedAt,
       proofUrl:
         receipt.proofUrl ??
         `https://yen.org.in/verify?donationId=${encodeURIComponent(receipt.donationId)}`,
@@ -1910,10 +2227,18 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     if (!deps.policy.canDonate(resource)) throw new ApiError("not_found");
 
     const input = c.req.valid("json");
+    const contact =
+      input.contactType === "phone" ? normalizePhone(input.contact) : input.contact.toLowerCase();
+    if (
+      !contact ||
+      (input.contactType === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) ||
+      (input.contactType === "email") !== (input.channel === "email")
+    )
+      throw new ApiError("validation_failed");
     const subStore = deps.fundSubscriptionStore ?? new MemoryFundSubscriptionStore();
     const sub = await subStore.subscribe({
       fundId: id.value,
-      contact: input.contact,
+      contact,
       channel: input.channel,
       weeklySummary: input.weeklySummary,
       instantAlerts: input.instantAlerts,
