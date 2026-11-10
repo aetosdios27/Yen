@@ -293,6 +293,70 @@ rollback() {
   log "Rollback complete: $env_name serves $family:$target_revision"
 }
 
+# Post-deployment probes against a live environment:
+#   1. HTTPS reachability of /health
+#   2. /ready reports every dependency ok
+#   3. /version reports the deployed commit SHA
+# Retries for two minutes so a slow rollout does not fail the probe, then
+# fails hard so the workflow stops before production promotion.
+probe_url() {
+  local url=$1
+  curl --silent --show-error --connect-timeout 5 --max-time 10 \
+    --write-out '%{http_code}' --output /dev/null "$url" 2>/dev/null
+}
+
+smoke() {
+  local base_url=${1:?usage: smoke <base-url> <git-sha>}
+  local expected_sha=${2:?usage: smoke <base-url> <git-sha>}
+  [[ "$expected_sha" =~ ^[0-9a-f]{40}$ ]] || fail "git sha must be a full 40 character commit sha"
+  base_url="${base_url%/}"
+  [[ -n "$base_url" ]] || fail "base url is required"
+  # Plain HTTP is only acceptable for the selftest servers on loopback.
+  if [[ ! "$base_url" =~ ^https:// ]] && [[ "$base_url" != *127.0.0.1* && "$base_url" != *localhost* ]]; then
+    fail "base url must use HTTPS, got: $base_url"
+  fi
+
+  local deadline=$((SECONDS + 120))
+  local http_code
+  while :; do
+    http_code="$(probe_url "$base_url/health" || true)"
+    if [[ "$http_code" =~ ^2 ]]; then
+      log "reachable: $base_url/health returned $http_code"
+      break
+    fi
+    if ((SECONDS >= deadline)); then
+      fail "$base_url/health unreachable, last status: ${http_code:-none}"
+    fi
+    sleep 10
+  done
+
+  while :; do
+    if curl --fail --silent --show-error --max-time 10 "$base_url/ready" 2>/dev/null \
+      | jq -e '.status == "ok"' >/dev/null; then
+      log "ready: $base_url/ready reports every dependency ok"
+      break
+    fi
+    if ((SECONDS >= deadline)); then
+      fail "$base_url/ready never reported status ok"
+    fi
+    sleep 10
+  done
+
+  local deployed_sha
+  while :; do
+    deployed_sha="$(curl --fail --silent --show-error --max-time 10 "$base_url/version" 2>/dev/null \
+      | jq -e -r '.gitSha // empty' || true)"
+    if [[ "$deployed_sha" == "$expected_sha" ]]; then
+      log "commit: $base_url/version reports the deployed commit $deployed_sha"
+      return 0
+    fi
+    if ((SECONDS >= deadline)); then
+      fail "deployed commit is '${deployed_sha:-none}' but expected '$expected_sha'"
+    fi
+    sleep 10
+  done
+}
+
 main() {
   local cmd=${1:-}
   [[ -n "$cmd" ]] || { usage; exit 1; }
