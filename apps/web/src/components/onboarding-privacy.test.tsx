@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { expect, it, vi } from "vitest";
+import { LocaleProvider } from "../i18n";
 import { EMPTY_ONBOARDING_DRAFT } from "../lib/onboarding";
 import { OnboardingWizard, serializeOnboardingDraft } from "./onboarding-wizard";
 
@@ -11,7 +12,9 @@ it("resumes non-personal fields after remount and clamps to the first incomplete
   const user = userEvent.setup();
   const first = render(
     <StrictMode>
-      <OnboardingWizard />
+      <LocaleProvider initialLocale="en">
+        <OnboardingWizard />
+      </LocaleProvider>
     </StrictMode>,
   );
   await user.type(screen.getByLabelText(/Club or organisation name/i), "Community Club");
@@ -20,7 +23,9 @@ it("resumes non-personal fields after remount and clamps to the first incomplete
   first.unmount();
   render(
     <StrictMode>
-      <OnboardingWizard />
+      <LocaleProvider initialLocale="en">
+        <OnboardingWizard />
+      </LocaleProvider>
     </StrictMode>,
   );
   expect(screen.getByLabelText<HTMLInputElement>(/purpose/i).value).toBe("Community garden");
@@ -43,7 +48,9 @@ it("scrubs old personal fields on load and never persists typed payment or appro
   );
   const first = render(
     <StrictMode>
-      <OnboardingWizard />
+      <LocaleProvider initialLocale="en">
+        <OnboardingWizard />
+      </LocaleProvider>
     </StrictMode>,
   );
   expect(JSON.parse(localStorage.getItem(key) ?? "null")).toMatchObject({
@@ -81,7 +88,9 @@ it("scrubs old personal fields on load and never persists typed payment or appro
   first.unmount();
   render(
     <StrictMode>
-      <OnboardingWizard />
+      <LocaleProvider initialLocale="en">
+        <OnboardingWizard />
+      </LocaleProvider>
     </StrictMode>,
   );
   expect(screen.getByText("Step 3 of 5: Payment")).toBeDefined();
@@ -102,7 +111,9 @@ it("removes the saved non-personal draft when onboarding completes", async () =>
   try {
     render(
       <StrictMode>
-        <OnboardingWizard />
+        <LocaleProvider initialLocale="en">
+          <OnboardingWizard />
+        </LocaleProvider>
       </StrictMode>,
     );
     const user = userEvent.setup();

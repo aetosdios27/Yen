@@ -37,6 +37,7 @@ const IDENTICAL_BY_DESIGN = new Set([
   "expenseForm.payeeUpiPlaceholder",
   "auth.phonePlaceholder",
   "auth.otpPlaceholder",
+  "onboarding.payment.vpa",
 ]);
 
 const PLACEHOLDER = /\{\w+\}/g;
