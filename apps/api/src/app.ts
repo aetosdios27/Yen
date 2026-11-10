@@ -940,7 +940,12 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       c.header("cache-control", PRIVATE_READ_CACHE_CONTROL);
       return { notModified: false, body };
     }
-    const hit = await publicReadCache.load(options.fundId, options.kind, produce);
+    const revalidate =
+      c.req
+        .header("cache-control")
+        ?.split(",")
+        .some((directive) => directive.trim().toLowerCase() === "no-cache") ?? false;
+    const hit = await publicReadCache.load(options.fundId, options.kind, produce, { revalidate });
     c.header("cache-control", PUBLIC_READ_CACHE_CONTROL);
     c.header("etag", hit.etag);
     // A signed-in visitor gets the private view at the same URL, so caches must not mix them.

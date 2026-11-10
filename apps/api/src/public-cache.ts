@@ -82,11 +82,16 @@ export class PublicReadCache {
    * Returns a fresh entry, or reads the origin once for every concurrent caller.
    * When the origin fails inside the stale window the last good entry is served.
    */
-  async load<T>(fundId: string, kind: string, produce: () => Promise<T>): Promise<CacheHit<T>> {
+  async load<T>(
+    fundId: string,
+    kind: string,
+    produce: () => Promise<T>,
+    options: { revalidate?: boolean } = {},
+  ): Promise<CacheHit<T>> {
     const key = this.#key(fundId, kind);
     const cached = this.#entries.get(key);
     const now = this.#clock();
-    if (cached && now - cached.storedAt < this.#freshMs) {
+    if (!options.revalidate && cached && now - cached.storedAt < this.#freshMs) {
       return { ...cached, body: cached.body as T, stale: false };
     }
 
@@ -102,7 +107,7 @@ export class PublicReadCache {
       const fresh = await pending;
       return { ...fresh, body: fresh.body as T, stale: false };
     } catch (error) {
-      if (cached && now - cached.storedAt < this.#freshMs + this.#staleMs) {
+      if (!options.revalidate && cached && now - cached.storedAt < this.#freshMs + this.#staleMs) {
         return { ...cached, body: cached.body as T, stale: true };
       }
       throw error;

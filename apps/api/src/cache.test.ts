@@ -166,6 +166,17 @@ describe("public fund read caching", () => {
     expect(reads.donations).toBe(1);
   });
 
+  it("revalidates no-cache reads and refuses a stale fallback when validation fails", async () => {
+    const apps = fixture();
+    await createTwoFunds(apps);
+    await apps.publicApp.request(summaryUrl(fundA));
+    const headers = { "cache-control": "no-cache" };
+    expect((await apps.publicApp.request(summaryUrl(fundA), { headers })).status).toBe(200);
+    expect(apps.reads.donations).toBe(2);
+    apps.failOrigin(true);
+    expect((await apps.publicApp.request(summaryUrl(fundA), { headers })).status).toBe(500);
+  });
+
   it("keeps the signed-in view private and out of the shared cache", async () => {
     const apps = fixture();
     const { publicApp, ownerApp, cache } = apps;
