@@ -6,13 +6,13 @@ This note documents the public fund read delivery path: the CDN cache headers, t
 
 Anonymous responses on the public fund pages (`/public/summary`, `/public/breakdown`, `/public/timeline`, public expense reads, audit bundle, record proofs) carry:
 
-| Header | Value | Meaning |
-| --- | --- | --- |
-| `Cache-Control` | `public, s-maxage=60, stale-while-revalidate=300, stale-if-error=86400` | Shared caches keep a copy for 60 seconds, may serve it stale for 300 more while revalidating in the background, and may serve it for a day when the origin is failing. |
-| `ETag` | `W/"<fundId>-<latestEventHash>"` | Weak validator derived from the head of the fund's event log. Any appended event rotates it. |
-| `Cache-Tag` | `fund-<fundId>, org-<orgId>` | Purge targets. Tags are emitted even when the validator falls back to a body hash in memory mode. |
-| `Vary` | `authorization, cookie` | A signed in visitor gets the private view at the same URL, so shared caches must never mix them. |
-| `Warning`, `X-Yen-Data-As-Of` | `110 - "Response is stale"`, ISO timestamp | Present only when the origin served the last good copy after a failure inside the stale window. |
+| Header                        | Value                                                                   | Meaning                                                                                                                                                                |
+| ----------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Cache-Control`               | `public, s-maxage=60, stale-while-revalidate=300, stale-if-error=86400` | Shared caches keep a copy for 60 seconds, may serve it stale for 300 more while revalidating in the background, and may serve it for a day when the origin is failing. |
+| `ETag`                        | `W/"<fundId>-<latestEventHash>"`                                        | Weak validator derived from the head of the fund's event log. Any appended event rotates it.                                                                           |
+| `Cache-Tag`                   | `fund-<fundId>, org-<orgId>`                                            | Purge targets. Tags are emitted even when the validator falls back to a body hash in memory mode.                                                                      |
+| `Vary`                        | `authorization, cookie`                                                 | A signed in visitor gets the private view at the same URL, so shared caches must never mix them.                                                                       |
+| `Warning`, `X-Yen-Data-As-Of` | `110 - "Response is stale"`, ISO timestamp                              | Present only when the origin served the last good copy after a failure inside the stale window.                                                                        |
 
 Authenticated responses never carry public cache headers: they are stamped `private, no-store` and are never written to the public cache or tagged for CDN purge. Requests for a private fund from an anonymous visitor answer `404` with no cache headers at all.
 

@@ -142,10 +142,10 @@ function fixture(options: FixtureOptions = {}) {
     ownerApp,
     secondOwnerApp,
     donorApp,
-  privateOwnerApp,
-  cache,
-  fundStore,
-  reads,
+    privateOwnerApp,
+    cache,
+    fundStore,
+    reads,
     advance: (milliseconds: number) => {
       now += milliseconds;
     },
