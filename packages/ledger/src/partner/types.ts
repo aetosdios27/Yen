@@ -137,6 +137,38 @@ export function toPartnerSignatureEnvelope(input: {
 }
 
 /**
+ * Result of verifying that a VPA belongs to the expected beneficiary before
+ * a payout is initiated (or a donation is matched). The partner resolves the
+ * VPA's registered name; Yen compares it against the expected beneficiary
+ * name it already holds. `unavailable` covers partner outages and must be
+ * treated as fail-closed by callers (do not pay against an unverified VPA).
+ */
+export const vpaVerificationResultSchema = z.object({
+  vpa: z.string().trim().min(1).max(256),
+  status: z.enum(["matched", "mismatched", "not_found", "unavailable"]),
+  /** Name registered against the VPA at the partner, if resolved. */
+  registeredName: z.string().trim().min(1).max(120).optional(),
+  /** Beneficiary name Yen expected when it queued the verification. */
+  expectedName: z.string().trim().min(1).max(120).optional(),
+  verifiedAt: z.string().datetime(),
+  provider: z.string().trim().min(1).max(64),
+});
+
+export type VpaVerificationResult = z.infer<typeof vpaVerificationResultSchema>;
+
+/**
+ * Builds a validated VPA verification result, rejecting impossible states
+ * such as a match with no registered name or a mismatch with no names to
+ * compare. Fail-closed statuses carry no silent defaults.
+ */
+export function toVpaVerificationResult(input: VpaVerificationResult): VpaVerificationResult {
+  if (input.status === "matched" && input.registeredName === undefined) {
+    throw new RangeError("A matched VPA verification must include the registered name");
+  }
+  return vpaVerificationResultSchema.parse(input);
+}
+
+/**
  * Builds a normalized statement entry from a validated partner webhook event,
  * coercing the wire paise string into a branded safe integer via the exact
  * decimal text (no float parsing anywhere on this path).
