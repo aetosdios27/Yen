@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
-import { ClamAvVirusScannerAdapter } from "./virus-scanner.js";
+import { ClamAvVirusScannerAdapter, LocalDemoVirusScannerAdapter } from "./virus-scanner.js";
 
 const servers: Array<{
   readonly server: Server;
@@ -129,5 +129,60 @@ describe("ClamAV INSTREAM adapter", () => {
       maxSizeBytes: 1024,
     }).scan({ objectKey: "opaque", data: new Uint8Array([1]) });
     expect(result.status).toBe("quarantined");
+  });
+});
+
+describe("Local demo scanner adapter", () => {
+  function withNodeEnv(value: string | undefined, run: () => void) {
+    const original = process.env.NODE_ENV;
+    if (value === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = value;
+    try {
+      run();
+    } finally {
+      if (original === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = original;
+    }
+  }
+
+  it("reports clean with a demo signature version and warns on every scan", async () => {
+    const warnings: string[] = [];
+    const adapter = new LocalDemoVirusScannerAdapter((message) => warnings.push(message));
+    const first = await adapter.scan({
+      objectKey: "funds/x/evidence/1",
+      data: new Uint8Array([1, 2, 3]),
+      mimeType: "application/pdf",
+    });
+    const second = await adapter.scan({
+      objectKey: "funds/x/evidence/2",
+      data: new Uint8Array([4]),
+      mimeType: "image/jpeg",
+    });
+    expect(first).toEqual({
+      status: "clean",
+      scannerName: "LocalDemoScanner",
+      signatureVersion: "local-demo",
+    });
+    expect(second).toEqual(first);
+    expect(warnings).toHaveLength(2);
+    expect(warnings[0]).toContain("funds/x/evidence/1");
+    expect(warnings[0]).toContain("CLAMAV_HOST");
+  });
+
+  it("refuses construction in production", () => {
+    withNodeEnv("production", () => {
+      expect(() => new LocalDemoVirusScannerAdapter()).toThrow(
+        "The local demo malware scanner is not allowed in production",
+      );
+    });
+  });
+
+  it("constructs outside production", () => {
+    withNodeEnv("development", () => {
+      expect(new LocalDemoVirusScannerAdapter()).toBeInstanceOf(LocalDemoVirusScannerAdapter);
+    });
+    withNodeEnv(undefined, () => {
+      expect(new LocalDemoVirusScannerAdapter()).toBeInstanceOf(LocalDemoVirusScannerAdapter);
+    });
   });
 });
