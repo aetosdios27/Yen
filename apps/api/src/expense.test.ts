@@ -105,6 +105,7 @@ describe("Expense Requests API Routes (YEN-30)", () => {
     const input = {
       amountPaise: "45000",
       description: "Sound equipment for annual gathering",
+      category: "Equipment",
       recipientRef: "rcpt_sound_01",
     };
 
@@ -118,6 +119,7 @@ describe("Expense Requests API Routes (YEN-30)", () => {
     expect(body1.requesterId).toMatch(/^psn_[0-9a-f-]{36}$/);
     expect(body1.amountPaise).toBe("45000");
     expect(body1.status).toBe("draft");
+    expect(body1.category).toBe("Equipment");
     expect(body1.holdId).toBeNull();
     expect(body1.approvalsCount).toBe(0);
 

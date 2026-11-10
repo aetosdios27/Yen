@@ -13,6 +13,7 @@ const VALID_CATEGORIES: readonly SpendingCategoryId[] = [
   "registration",
   "logistics",
   "food",
+  "facilities",
   "other",
 ];
 
@@ -52,7 +53,8 @@ export async function getPublicFund(fundId: string): Promise<PublicFund | null> 
     const spendingCategories: SpendingCategory[] = (breakdown?.categories ?? []).map((cat) => {
       const catSpent = Number(cat.spentPaise);
       const percentage = totalBreakdown > 0 ? Math.round((catSpent * 100) / totalBreakdown) : 0;
-      const rawCategory = cat.category.toLowerCase();
+      const category = cat.category.toLowerCase();
+      const rawCategory = category === "catering" ? "food" : category;
       const id: SpendingCategoryId = VALID_CATEGORIES.includes(rawCategory as SpendingCategoryId)
         ? (rawCategory as SpendingCategoryId)
         : "other";
@@ -68,7 +70,7 @@ export async function getPublicFund(fundId: string): Promise<PublicFund | null> 
       summary.verification === "bank-matched" || summary.verification === "anchored";
 
     const timelineEntries: PublicTimelineEntry[] = (timeline?.items ?? []).map((item) => {
-      const isItemVerified = item.verified === "bank-matched" || item.verified === "anchored";
+      const isItemVerified = item.verified === "anchored";
       return {
         id: item.id,
         type: "expense",

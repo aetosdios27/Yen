@@ -421,6 +421,7 @@ export const hi: Messages = {
     categoryRegistration: "पंजीकरण और शुल्क",
     categoryLogistics: "व्यवस्था और सामग्री",
     categoryFood: "खान-पान और अल्पाहार",
+    categoryFacilities: "सुविधाएँ",
     categoryOther: "अन्य खर्च",
     emptyFilter: "इस फ़िल्टर से कोई रिकॉर्ड नहीं मिला।",
     checkRecord: "इस रिकॉर्ड की जांच करें",

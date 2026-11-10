@@ -1,7 +1,11 @@
 import { randomInt } from "node:crypto";
-import { migrate, uuidv7 } from "@yen/db";
+import { appendEvent, migrate, uuidv7 } from "@yen/db";
+import { payloadSchemas, pseudonymIdSchema } from "@yen/eventlog";
+import { getBalances, pledgeDonation, reconcilePledge } from "@yen/ledger";
+import { fundIdSchema, paise } from "@yen/shared";
 import { beforeAll, expect, it } from "vitest";
 import { databaseSuite } from "../../../packages/db/src/test/database.js";
+import { initLedgerSchema } from "../../../packages/ledger/src/schema.js";
 import { PostgresPublicFundReadStore } from "./public-fund-store.js";
 
 let nextUtr = 100_000_000_000;
@@ -11,6 +15,7 @@ databaseSuite("Postgres public fund read store", (sql) => {
 
   beforeAll(async () => {
     await migrate(sql);
+    await initLedgerSchema(sql);
   });
 
   async function fund(): Promise<string> {
@@ -128,6 +133,7 @@ databaseSuite("Postgres public fund read store", (sql) => {
       matchedPledgeId: otherPledge,
     });
 
+    expect(await store().pledgedPaise(fundA)).toBe(700n);
     expect(await store().donations(fundA)).toEqual([
       {
         id: includedId,
@@ -137,6 +143,104 @@ databaseSuite("Postgres public fund read store", (sql) => {
         donorNameChoice: "full",
       },
     ]);
+  });
+
+  it("keeps public totals equal to ledger balances across pledge reconciliation", async () => {
+    const fundId = await fund();
+    const result = await sql.begin((tx) =>
+      pledgeDonation(tx, { fundId, amount: paise(5000), utr: String(nextUtr++) }),
+    );
+    if (result.kind !== "pledged") throw new Error("Expected pledge");
+    const before = await getBalances(sql, fundId);
+    expect(await store().pledgedPaise(fundId)).toBe(before.pledgedPaise);
+    expect(await store().donations(fundId)).toEqual([]);
+    expect(before.availablePaise).toBe(0n);
+    const bankId = await bankTransaction({
+      fundId,
+      type: "credit",
+      amountPaise: 5000,
+      postedAt: "2026-10-28T01:00:00.000Z",
+      reconciliationStatus: "unmatched",
+      matchedPledgeId: null,
+    });
+    await sql.begin((tx) =>
+      reconcilePledge(tx, {
+        fundId,
+        pledgeId: result.donationId,
+        bankTransactionId: bankId,
+        matchMethod: "manual",
+        matchConfidence: 1,
+        auditReason: "Confirmed",
+      }),
+    );
+    const after = await getBalances(sql, fundId);
+    const total = (await store().donations(fundId)).reduce(
+      (sum, item) => sum + item.amountPaise,
+      0n,
+    );
+    expect(total).toBe(after.donationsPaise);
+    expect(total).toBe(after.availablePaise);
+    expect(await store().pledgedPaise(fundId)).toBe(after.pledgedPaise);
+  });
+
+  it("requires a confirmed anchor over the matching financial event for donations and reconciled expenses", async () => {
+    const fundId = fundIdSchema.parse(await fund());
+    const pledgeId = await pledge(fundId, "verified", { name: "Donor", choice: "initials" }, 1500);
+    const creditId = await bankTransaction({
+      fundId,
+      type: "credit",
+      amountPaise: 1500,
+      postedAt: "2026-10-28T01:00:00.000Z",
+      reconciliationStatus: "matched",
+      matchedPledgeId: pledgeId,
+    });
+    const debitId = await bankTransaction({
+      fundId,
+      type: "debit",
+      amountPaise: 500,
+      postedAt: "2026-10-28T02:00:00.000Z",
+      reconciliationStatus: "unmatched",
+      matchedPledgeId: null,
+    });
+    const expenseId = uuidv7();
+    await sql`INSERT INTO expenses (id, fund_id, status, expense_data, created_at, updated_at)
+      VALUES (${expenseId}, ${fundId}, 'paid', ${sql.json({ bankTransactionId: debitId, amountPaise: 500 })}, now(), now())`;
+    const common = {
+      fund_id: fundId,
+      version: 1 as const,
+      actor: pseudonymIdSchema.parse(`psn_${uuidv7()}`),
+      occurred_at: "2026-10-28T02:00:00.000Z",
+    };
+    await appendEvent(sql, {
+      ...common,
+      type: "donation.verified",
+      payload: payloadSchemas["donation.verified"].parse({
+        donation_id: pledgeId,
+        bank_transaction_id: creditId,
+      }),
+    });
+    await appendEvent(sql, {
+      ...common,
+      type: "bank.debit_seen",
+      payload: payloadSchemas["bank.debit_seen"].parse({
+        bank_transaction_id: debitId,
+        amount_paise: 500,
+      }),
+    });
+    expect(await store().anchoredItems(fundId)).toEqual(new Set());
+    const anchorId = uuidv7();
+    await sql`INSERT INTO anchors (id, fund_id, from_seq, to_seq, root, status, chain_id, chain_sequence)
+      VALUES (${anchorId}, ${fundId}, 1, 2, ${"a".repeat(64)}, 'pending', 80002, 1)`;
+    expect(await store().anchoredItems(fundId)).toEqual(new Set());
+    await sql`UPDATE anchors SET status = 'submitted', tx_hash = ${`0x${"b".repeat(64)}`} WHERE id = ${anchorId}`;
+    expect(await store().anchoredItems(fundId)).toEqual(new Set());
+    await sql`UPDATE anchors SET status = 'confirmed', confirmed_at = now() WHERE id = ${anchorId}`;
+    expect(await store().anchoredItems(fundId)).toEqual(new Set([creditId]));
+    await sql`UPDATE expenses SET status = 'reconciled' WHERE id = ${expenseId}`;
+    expect(await store().anchoredItems(fundId)).toEqual(new Set([creditId, expenseId]));
+    await sql`UPDATE bank_transactions SET reconciliation_status = 'unmatched' WHERE id = ${creditId}`;
+    expect(await store().anchoredItems(fundId)).toEqual(new Set([expenseId]));
+    expect(await store().anchoredItems(await fund())).toEqual(new Set());
   });
 
   it("returns an empty list for a fund with no bank-matched donations", async () => {

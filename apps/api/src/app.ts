@@ -900,7 +900,6 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     c.header("cache-control", "public, s-maxage=30, max-age=0, must-revalidate");
   };
   const publicDataGaps = [
-    "The event log and anchoring query are not connected; timeline entries are derived from expense records.",
     "Authenticated member assignments are not loaded into sessions; donor and member access requires a role-bearing principal.",
   ];
   const listFundExpenses = async (fundId: string) => deps.expenseStore.list(fundId);
@@ -929,9 +928,10 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   app.openapi(publicFundSummaryRoute, async (c) => {
     const fundId = c.req.valid("param").fundId;
     const { entry, actor, publicTier } = await publicFundContext(fundId, c.get("principal"));
-    const [expenses, donations] = await Promise.all([
+    const [expenses, donations, pledgedPaise] = await Promise.all([
       listFundExpenses(fundId),
       deps.publicFundReadStore.donations(fundId),
+      deps.publicFundReadStore.pledgedPaise(fundId),
     ]);
     const spentPaise = safePaiseSum(
       expenses
@@ -943,6 +943,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       fundId,
       name: entry.fund.name,
       purpose: actor.role === "public" ? null : (entry.fund.purpose ?? null),
+      pledgedPaise: String(pledgedPaise),
       raisedPaise: String(safePaiseSum(donations.map((donation) => donation.amountPaise))),
       spentPaise: String(spentPaise),
       verification: donations.length > 0 ? "bank-matched" : "unverified",
@@ -967,9 +968,10 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   app.openapi(publicFundTimelineRoute, async (c) => {
     const fundId = c.req.valid("param").fundId;
     const { actor, publicTier } = await publicFundContext(fundId, c.get("principal"));
-    const [expenses, donations] = await Promise.all([
+    const [expenses, donations, anchoredItems] = await Promise.all([
       listFundExpenses(fundId),
       deps.publicFundReadStore.donations(fundId),
+      deps.publicFundReadStore.anchoredItems(fundId),
     ]);
     const officeholderNamesShown = await deps.displayNameStore.officeholderNamesShown(fundId);
     const expenseItems = await Promise.all(
@@ -1007,7 +1009,10 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
             ...(expense.status === "paid" || expense.status === "reconciled"
               ? { amountPaise: String(expense.amountPaise) }
               : {}),
-            verified: "unverified" as const,
+            verified:
+              expense.status === "reconciled" && anchoredItems.has(expense.id)
+                ? ("anchored" as const)
+                : ("unverified" as const),
           };
         }),
     );
@@ -1022,7 +1027,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
             actorNameChoice: donation.donorNameChoice,
           }),
       amountPaise: String(donation.amountPaise),
-      verified: "bank-matched" as const,
+      verified: anchoredItems.has(donation.id) ? ("anchored" as const) : ("bank-matched" as const),
     }));
     const alertItems = (await alertStore.listForTimeline(fundId)).map((alert) => ({
       id: alert.id,

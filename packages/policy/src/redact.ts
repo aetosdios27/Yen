@@ -110,6 +110,7 @@ export interface FundSummaryRecord {
   readonly name: string;
   readonly purpose: string | null;
   readonly raisedPaise: string | null;
+  readonly pledgedPaise: string;
   readonly spentPaise: string;
   readonly verification: FundVerificationState;
   readonly dataGaps: readonly string[];
@@ -505,6 +506,7 @@ export function redactFundReadModel<T extends FundReadRecord>(
       fundId: str(record.fundId),
       name: publicText(record.name),
       purpose: record.purpose === null ? null : publicText(record.purpose),
+      pledgedPaise: paiseString(record.pledgedPaise),
       raisedPaise: record.raisedPaise === null ? null : paiseString(record.raisedPaise),
       spentPaise: paiseString(record.spentPaise),
       verification: verificationState(record.verification),

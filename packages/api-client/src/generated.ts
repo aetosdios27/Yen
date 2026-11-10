@@ -4353,6 +4353,8 @@ export interface operations {
             /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
             raisedPaise: string | null;
             /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
+            pledgedPaise: string;
+            /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
             spentPaise: string;
             /** @enum {string} */
             verification: "bank-matched" | "anchored" | "unverified";

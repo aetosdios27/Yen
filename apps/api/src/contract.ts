@@ -315,6 +315,7 @@ export const publicFundSummarySchema = z
     name: z.string(),
     purpose: z.string().nullable(),
     raisedPaise: paiseWire.nullable(),
+    pledgedPaise: paiseWire,
     spentPaise: paiseWire,
     verification: verificationState,
     dataGaps: z.array(z.string()),

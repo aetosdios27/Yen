@@ -4142,6 +4142,11 @@
                       "pattern": "^(0|[1-9][0-9]*)$",
                       "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
                     },
+                    "pledgedPaise": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)$",
+                      "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
+                    },
                     "spentPaise": {
                       "type": "string",
                       "pattern": "^(0|[1-9][0-9]*)$",
@@ -4158,6 +4163,7 @@
                     "name",
                     "purpose",
                     "raisedPaise",
+                    "pledgedPaise",
                     "spentPaise",
                     "verification",
                     "dataGaps"

@@ -434,6 +434,7 @@ export const en = {
     categoryRegistration: "Registration & Fees",
     categoryLogistics: "Logistics & Materials",
     categoryFood: "Food & Refreshments",
+    categoryFacilities: "Facilities",
     categoryOther: "Other expenses",
     emptyFilter: "No records match this filter.",
     checkRecord: "Check this record",
