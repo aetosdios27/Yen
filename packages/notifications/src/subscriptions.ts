@@ -17,6 +17,7 @@ export interface FundSubscription {
   readonly createdAt: Date;
   readonly updatedAt: Date;
   readonly unsubscribedAt: Date | null;
+  readonly consentGrantedAt: Date | null;
 }
 
 export interface SubscribeInput {
@@ -109,7 +110,7 @@ export class PostgresFundSubscriptionStore implements FundSubscriptionStore {
   async getByToken(token: string): Promise<FundSubscription | null> {
     const rows = await this.sql<FundSubscriptionRow[]>`
       SELECT * FROM fund_subscriptions
-      WHERE unsubscribe_token = ${token}
+      WHERE unsubscribe_token = ${token} AND consent_granted_at IS NOT NULL
     `;
     const row = rows[0];
     return row ? this.mapRow(row) : null;
@@ -144,6 +145,7 @@ export class PostgresFundSubscriptionStore implements FundSubscriptionStore {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       unsubscribedAt: row.unsubscribed_at,
+      consentGrantedAt: row.consent_granted_at,
     };
   }
 }
@@ -163,6 +165,7 @@ export class MemoryFundSubscriptionStore implements FundSubscriptionStore {
         channel,
         weeklySummary: input.weeklySummary ?? existing.weeklySummary,
         instantAlerts: input.instantAlerts ?? existing.instantAlerts,
+        consentGrantedAt: new Date(),
         status: "active",
         unsubscribedAt: null,
         updatedAt: new Date(),
@@ -179,6 +182,7 @@ export class MemoryFundSubscriptionStore implements FundSubscriptionStore {
       channel,
       weeklySummary: input.weeklySummary ?? true,
       instantAlerts: input.instantAlerts ?? true,
+      consentGrantedAt: new Date(),
       status: "active",
       unsubscribeToken: generateUnsubscribeToken(),
       createdAt: new Date(),

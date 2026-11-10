@@ -143,8 +143,9 @@ databaseSuite("migration runner", (sql, url) => {
       join(defaultDir, "0033_subscription_consent.sql"),
     );
     const publicPledgeTotalsSource = await readFile(
-      join(defaultDir, "0035_public_pledge_totals.sql"),
+      join(defaultDir, "0036_public_pledge_totals.sql"),
     );
+    const subscriptionPhoneSource = await readFile(join(defaultDir, "0035_subscription_phone.sql"));
     const applied = records.parse(await sql`SELECT * FROM schema_migrations ORDER BY version`);
     expect(applied).toEqual([
       {
@@ -355,7 +356,13 @@ databaseSuite("migration runner", (sql, url) => {
       },
       {
         version: 35,
-        name: "0035_public_pledge_totals.sql",
+        name: "0035_subscription_phone.sql",
+        checksum: createHash("sha256").update(subscriptionPhoneSource).digest("hex"),
+        applied_at: expect.any(Date),
+      },
+      {
+        version: 36,
+        name: "0036_public_pledge_totals.sql",
         checksum: createHash("sha256").update(publicPledgeTotalsSource).digest("hex"),
         applied_at: expect.any(Date),
       },

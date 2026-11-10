@@ -293,7 +293,11 @@ export function ReceiptView({ receipt, apiUrl = "", onSubscribe }: ReceiptViewPr
                 checked={consent}
                 onChange={(e) => setConsent(e.target.checked)}
               />
-              I agree to fund updates under the <Link href="/privacy">Privacy notice</Link>.
+              <span>
+                {t("receipt.consentUpdates").split("{notice}")[0]}
+                <Link href="/privacy">{t("receipt.privacyNotice")}</Link>
+                {t("receipt.consentUpdates").split("{notice}")[1]}
+              </span>
             </label>
             {!destination.includes("@") && (
               <label className="flex items-center gap-3 text-small">
@@ -302,7 +306,7 @@ export function ReceiptView({ receipt, apiUrl = "", onSubscribe }: ReceiptViewPr
                   checked={whatsappConsent}
                   onChange={(e) => setWhatsappConsent(e.target.checked)}
                 />
-                I separately agree to WhatsApp messages.
+                {t("receipt.consentWhatsapp")}
               </label>
             )}
             <Button type="submit" loading={submitting} loadingLabel={t("receipt.subscribing")}>

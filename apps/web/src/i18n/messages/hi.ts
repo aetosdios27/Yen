@@ -202,6 +202,10 @@ export const hi: Messages = {
   receipt: {
     refundedTitle: "दान वापस किया गया",
     rejectedTitle: "दान अस्वीकृत",
+    consentUpdates: "{notice} के अनुसार फंड के अपडेट पाने के लिए मेरी सहमति है।",
+    privacyNotice: "गोपनीयता सूचना",
+    consentWhatsapp: "WhatsApp संदेशों के लिए मेरी अलग से सहमति है।",
+
     documentTitle: "दान रसीद · Yen",
     title: "दान रसीद",
     verifiedTitle: "प्रमाणित दान प्रमाणपत्र",
