@@ -102,6 +102,41 @@ export type PartnerStatementEntry = z.infer<typeof partnerStatementEntrySchema> 
 };
 
 /**
+ * Signature envelope carried by partner webhook headers. The partner signs
+ * the exact raw request bytes with HMAC-SHA256 over "v1.<unix-seconds>.<body>"
+ * (see apps/api webhook-signature.ts for the verification implementation).
+ * The envelope schema is the transport-agnostic shape Yen stores for audit.
+ */
+export const partnerSignatureEnvelopeSchema = z.object({
+  scheme: z.literal("hmac-sha256-v1"),
+  keyId: z.string().trim().min(1).max(64),
+  /** Unix epoch seconds as a canonical unsigned decimal string. */
+  timestamp: z.string().regex(/^(?:0|[1-9][0-9]{0,11})$/),
+  /** Lowercase hex HMAC-SHA256 digest (64 chars). */
+  signature: z.string().regex(/^[0-9a-f]{64}$/),
+});
+
+export type PartnerSignatureEnvelope = z.infer<typeof partnerSignatureEnvelopeSchema>;
+
+/**
+ * Builds a validated signature envelope from verified webhook headers. Call
+ * only after HMAC verification succeeds; this type records what was trusted,
+ * it does not perform the trust decision.
+ */
+export function toPartnerSignatureEnvelope(input: {
+  keyId: string;
+  timestamp: string;
+  signature: string;
+}): PartnerSignatureEnvelope {
+  return partnerSignatureEnvelopeSchema.parse({
+    scheme: "hmac-sha256-v1",
+    keyId: input.keyId,
+    timestamp: input.timestamp,
+    signature: input.signature,
+  });
+}
+
+/**
  * Builds a normalized statement entry from a validated partner webhook event,
  * coercing the wire paise string into a branded safe integer via the exact
  * decimal text (no float parsing anywhere on this path).
