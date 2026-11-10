@@ -19,13 +19,15 @@ jobs:
     permissions:
       contents: read
     env:
-      ARTIFACT_DIR: ${{ runner.temp }}/yen-release
       YEN_RELEASE_TAG: ${{ github.ref_name }}
       YEN_PROVENANCE_URL: https://github.com/${{ github.repository }}/attestations
       NEXT_TELEMETRY_DISABLED: "1"
       TZ: UTC
       LC_ALL: C
     steps:
+      - name: Initialize release artifact directory
+        run: echo "ARTIFACT_DIR=$RUNNER_TEMP/yen-release" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -82,13 +84,15 @@ jobs:
     permissions:
       contents: read
     env:
-      ARTIFACT_DIR: ${{ runner.temp }}/yen-release
       YEN_RELEASE_TAG: ${{ github.ref_name }}
       YEN_PROVENANCE_URL: https://github.com/${{ github.repository }}/attestations
       NEXT_TELEMETRY_DISABLED: "1"
       TZ: UTC
       LC_ALL: C
     steps:
+      - name: Initialize release artifact directory
+        run: echo "ARTIFACT_DIR=$RUNNER_TEMP/yen-release" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -130,9 +134,11 @@ jobs:
       id-token: write
       attestations: write
     env:
-      ARTIFACT_DIR: ${{ runner.temp }}/yen-release
       YEN_RELEASE_TAG: ${{ github.ref_name }}
     steps:
+      - name: Initialize release artifact directory
+        run: echo "ARTIFACT_DIR=$RUNNER_TEMP/yen-release" >> "$GITHUB_ENV"
+
       - name: Download unsigned release files
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
@@ -184,9 +190,11 @@ jobs:
     permissions:
       contents: write
     env:
-      ARTIFACT_DIR: ${{ runner.temp }}/yen-release
       YEN_RELEASE_TAG: ${{ github.ref_name }}
     steps:
+      - name: Initialize release artifact directory
+        run: echo "ARTIFACT_DIR=$RUNNER_TEMP/yen-release" >> "$GITHUB_ENV"
+
       - name: Download signed release files
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
