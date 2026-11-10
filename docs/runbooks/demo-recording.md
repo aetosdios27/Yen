@@ -207,3 +207,75 @@ The seeded expenses reference evidence only as metadata (`motors_invoice.pdf`,
 working bill inspection on camera, upload a fixture to the expense created in
 Journey 1 and inspect that expense in Journey 2.
 
+## 6. Journey 1: treasurer views the fund and submits an expense with a bill
+
+Persona: Aarav Sharma (treasurer). Cookie:
+`yen_mock_session_treasurer_token`.
+
+### Before rolling
+
+Start a local ClamAV daemon for the upload step; without a configured scanner
+the upload endpoint fails closed by design (`UnconfiguredVirusScannerAdapter`,
+`apps/api/src/virus-scanner.ts`). Any ClamAV build exposing the INSTREAM TCP
+protocol works, for example:
+
+```sh
+docker run -d --name yen-clamav -p 3310:3310 clamav/clamav
+```
+
+Then restart `pnpm dev:full` with the scanner address so the API mounts
+`ClamAvVirusScannerAdapter`:
+
+```sh
+CLAMAV_HOST=localhost pnpm dev:full
+```
+
+`CLAMAV_PORT` defaults to 3310. If the scanner is not running, skip the upload
+step and say so on camera: rejecting unscanned uploads is a product feature,
+not a bug.
+
+### Shots
+
+1. Fund view. Open http://localhost:3000/funds/01940000-0000-7000-8000-000000000002
+   (`apps/web/src/app/funds/[fundId]/page.tsx`, `PublicFundView`). Show the
+   fund header (RoboCup 2026 Asia Fund), money summary (4,65,000.00 INR
+   balance against the 10,00,000.00 INR target) and the spending breakdown.
+   Narrate that donors see this same page.
+2. Treasurer console. Click through to
+   http://localhost:3000/funds/01940000-0000-7000-8000-000000000002/treasurer.
+   Show the spendable balance, the pending expense list (the seeded 25,000 INR
+   battery expense) and the paid history.
+3. New expense. Click "New expense", landing on
+   `/funds/01940000-0000-7000-8000-000000000002/expenses/new`. Fill the form:
+   - Amount (INR): `12500.00`
+   - Payee name: `Robu.in Innovation Labs`
+   - Payee UPI VPA: `robu@ybl`
+   - Purpose: `SBT kit and sensors for regional round`
+   - Receipt / Bill reference: `Invoice #1042` (optional)
+4. Review and submit. Click "Review expense", verify the summary screen, then
+   "Submit expense". The app creates the request
+   (`POST /v1/funds/{fundId}/expenses`) and immediately submits it
+   (`POST /v1/funds/{fundId}/expenses/{expenseId}/submit`), then redirects to
+   the treasurer console where the new request sits in the pending list.
+5. Capture the expense ID: the pending list links each row to
+   `/funds/{fundId}/approvals/{expenseId}`. Copy that URL for Journey 2.
+6. Bill upload. Attach the fixture to the new expense (this is the same call
+   the `EvidenceUpload` component makes; the component lives in
+   `apps/web/src/components/evidence-upload.tsx` and is exported but not yet
+   mounted on a page, so the recording uses the API call):
+
+   ```sh
+   curl -s -X POST \
+     http://localhost:3001/v1/funds/01940000-0000-7000-8000-000000000002/expenses/EXPENSE_ID/evidence \
+     -b 'yen_session=yen_mock_session_treasurer_token' \
+     -F 'file=@assets/demo-fixtures/bill.jpg;type=image/jpeg' \
+     -F 'vendorName=Robu.in Innovation Labs' \
+     -F 'invoiceNumber=1042'
+   ```
+
+   The response echoes `evidenceId`, the server-computed `fileSha256`,
+   `duplicateDetected: false` and the clean `scan` result. Show the terminal
+   with the response; narrate that the hash is pinned before any approver
+   sees the file.
+
+
