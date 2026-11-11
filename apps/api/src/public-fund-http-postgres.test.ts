@@ -74,6 +74,9 @@ databaseSuite("public HTTP financial proof with Postgres stores", (sql) => {
         new PostgresPublicFundHeadStore(sql),
       ),
       reconciliationStore: bank,
+      // The state proofs below read no-cache repeatedly, which consumes the
+      // per ip miss budget; these tests prove ledger states, not origin protection.
+      fundReadMissLimit: { capacity: 1000, refillMs: 1000 },
     });
     async function comparePlans() {
       const original = await sql.unsafe<{ id: string }[]>(originalAnchoredSql, [fundId]);
