@@ -65,7 +65,8 @@ const server = createServer((request, response) => {
         response.setHeader(name, value);
       }
     }
-    response.writeHead(upstreamResponse.statusCode ?? 502, corsHeaders);
+    const status = upstreamResponse.statusCode;
+    response.writeHead(Number.isInteger(status) && status >= 200 && status <= 599 ? status : 502, corsHeaders);
     upstreamResponse.pipe(response);
   });
   upstream.on("error", () => {
