@@ -130,6 +130,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Build outside the Playwright webServer so a failing tsc prints its
+      # diagnostics in this job log instead of dying silently behind a
+      # captured pipe.
+      - name: Build the API bundle
+        run: pnpm --filter @yen/api build
+
       - name: Install Playwright browsers
         run: pnpm --filter @yen/web exec playwright install --with-deps chromium webkit
 
@@ -137,6 +143,7 @@ jobs:
         env:
           E2E_BACKEND: real
           E2E_DATABASE_URL: postgres://postgres:pw@localhost:5432/postgres
+          E2E_PREBUILT_API: "true"
         run: pnpm --filter @yen/web e2e
 
       - name: Upload the Playwright report on failure

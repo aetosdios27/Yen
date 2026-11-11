@@ -17,6 +17,7 @@ const browserApiUrl = realBackend
   : `http://${stubHost}:${apiPort}`;
 const webUrl = `http://${webHost}:${webPort}`;
 const proxyUrl = `http://${sharedHost}:${proxyPort}`;
+const startRealApi = "pnpm --filter @yen/api exec node ../web/e2e/support/real-api-server.mjs";
 
 /**
  * Two modes:
@@ -49,7 +50,13 @@ export default defineConfig({
   webServer: realBackend
     ? [
         {
-          command: `pnpm --filter @yen/api build && pnpm --filter @yen/api exec node ../web/e2e/support/real-api-server.mjs`,
+          // CI builds the API in its own workflow step (E2E_PREBUILT_API) so a
+          // failing tsc shows its diagnostics in the job log; local real-mode
+          // runs build here first.
+          command:
+            process.env.E2E_PREBUILT_API === "true"
+              ? startRealApi
+              : `pnpm --filter @yen/api build && ${startRealApi}`,
           url: `${apiUrl}/health`,
           env: {
             NODE_ENV: "development",
