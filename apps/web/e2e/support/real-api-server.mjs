@@ -99,10 +99,15 @@ const server = createServer(async (request, response) => {
     );
     response.end(Buffer.from(await upstreamResponse.arrayBuffer()));
   } catch (error) {
+    // The response stays generic; handler failures go to stderr so they show
+    // up in the Playwright webServer log instead of the browser.
+    process.stderr.write(
+      `e2e real api handler error: ${error instanceof Error ? (error.stack ?? String(error)) : String(error)}\n`,
+    );
     if (!response.headersSent) {
       response.writeHead(500, { "content-type": "application/json" });
     }
-    response.end(JSON.stringify({ error: { code: "internal", detail: String(error) } }));
+    response.end(JSON.stringify({ error: { code: "internal" } }));
   }
 });
 
