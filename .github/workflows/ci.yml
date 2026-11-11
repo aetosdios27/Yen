@@ -132,9 +132,9 @@ jobs:
 
       # Build outside the Playwright webServer so a failing tsc prints its
       # diagnostics in this job log instead of dying silently behind a
-      # captured pipe.
+      # captured pipe. Turbo builds the API's workspace dependencies first.
       - name: Build the API bundle
-        run: pnpm --filter @yen/api build
+        run: pnpm exec turbo run build --filter=@yen/api
 
       - name: Install Playwright browsers
         run: pnpm --filter @yen/web exec playwright install --with-deps chromium webkit
