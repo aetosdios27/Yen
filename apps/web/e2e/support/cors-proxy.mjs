@@ -48,7 +48,13 @@ const server = createServer((request, response) => {
   });
 
   upstream.on("response", (upstreamResponse) => {
-    const responseHeaders = { ...upstreamResponse.headers, ...corsHeaders };
+    // Only forward upstream headers whose names are valid RFC 7230 tokens.
+    const responseHeaders = { ...corsHeaders };
+    for (const [name, value] of Object.entries(upstreamResponse.headers)) {
+      if (/^[a-z0-9!#$%&'*+.^_`|~-]+$/i.test(name)) {
+        responseHeaders[name] = value;
+      }
+    }
     response.writeHead(upstreamResponse.statusCode ?? 502, responseHeaders);
     upstreamResponse.pipe(response);
   });
