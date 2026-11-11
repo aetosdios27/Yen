@@ -59,14 +59,13 @@ const server = createServer((request, response) => {
   });
 
   upstream.on("response", (upstreamResponse) => {
-    const responseHeaders = { ...corsHeaders };
     for (const name of forwardedResponseHeaders) {
       const value = upstreamResponse.headers[name];
       if (value !== undefined) {
-        responseHeaders[name] = value;
+        response.setHeader(name, value);
       }
     }
-    response.writeHead(upstreamResponse.statusCode ?? 502, responseHeaders);
+    response.writeHead(upstreamResponse.statusCode ?? 502, corsHeaders);
     upstreamResponse.pipe(response);
   });
   upstream.on("error", () => {
