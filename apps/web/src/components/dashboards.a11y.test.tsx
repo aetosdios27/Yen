@@ -1,9 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { paise } from "@yen/shared";
 import { describe, expect, it, vi } from "vitest";
 import { LocaleProvider } from "../i18n";
-import { expectNoA11yViolations } from "../test/a11y";
+import * as apiClientModule from "../lib/api-client";
+import { expectNoA11yViolations, runAxe } from "../test/a11y";
 import { ApprovalPinModal } from "./approval-pin-modal";
 import { ExpenseForm } from "./expense-form";
 import { ExpenseTimeline } from "./expense-timeline";
@@ -177,4 +178,73 @@ describe("Dashboard and Approver A11y & Navigation", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     expect(handleClose).toHaveBeenCalledTimes(1);
   });
+
+  it.each(["en", "hi"] as const)(
+    "treasurer dashboard passes axe checks in %s with pending expenses",
+    async (locale) => {
+      vi.spyOn(apiClientModule, "getApiClient").mockReturnValue({
+        GET: vi.fn().mockImplementation((path: string) => {
+          if (path.includes("/summary")) {
+            return Promise.resolve({
+              response: { status: 200 },
+              data: {
+                fundId: "demo-fund",
+                name: "उत्सव निधि 2026",
+                raisedPaise: "50000000",
+                spentPaise: "18000000",
+                verification: "bank-matched",
+                dataGaps: [],
+              },
+            });
+          }
+          if (path.includes("/expenses")) {
+            return Promise.resolve({
+              response: { status: 200 },
+              data: [
+                {
+                  id: "exp-101",
+                  fundId: "demo-fund",
+                  amountPaise: "125000",
+                  description: "मोटर और एन्कोडर की खरीद",
+                  recipientRef: "हार्डवेयर स्टोर (store@upi)",
+                  status: "submitted",
+                  evidence: [{ evidenceId: "evi-1" }],
+                  approvalsCount: 1,
+                  approvals: [
+                    {
+                      approverId: "usr-appr-1",
+                      approverName: "आशा राव",
+                      approvedAt: "2026-10-28 10:15 AM",
+                    },
+                  ],
+                  createdAt: "2026-10-28 09:30 AM",
+                  submittedAt: "2026-10-28 09:35 AM",
+                },
+              ],
+            });
+          }
+          return Promise.resolve({ response: { status: 404 } });
+        }),
+        POST: vi.fn(),
+      } as unknown as apiClientModule.YenClient);
+
+      try {
+        const { default: TreasurerPage } = await import("../app/funds/[fundId]/treasurer/page");
+        const { container } = render(
+          <LocaleProvider initialLocale={locale}>
+            <main>
+              <TreasurerPage params={Promise.resolve({ fundId: "demo-fund" })} />
+            </main>
+          </LocaleProvider>,
+        );
+        await waitFor(() => {
+          expect(screen.getByRole("list")).toBeDefined();
+        });
+        expect(await runAxe(container)).toHaveNoViolations();
+      } finally {
+        vi.restoreAllMocks();
+      }
+    },
+    20_000,
+  );
 });

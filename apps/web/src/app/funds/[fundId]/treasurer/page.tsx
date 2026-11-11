@@ -174,7 +174,7 @@ export default function TreasurerPage({ params }: TreasurerPageProps) {
                         <span className="text-body font-bold text-ink">{expense.payeeName}</span>
                         <StatusBadge status="pending" />
                       </div>
-                      <p className="mt-1 truncate text-small text-ink-muted">{expense.purpose}</p>
+                      <p className="mt-1 text-small text-ink-muted">{expense.purpose}</p>
                       <time
                         dateTime={expense.createdAt}
                         className="mt-1 block text-small text-ink-muted"

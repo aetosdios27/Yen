@@ -4,6 +4,7 @@ import { type DonationStatus, paise } from "@yen/shared";
 import Link from "next/link";
 import { type FormEvent, useState } from "react";
 import { useI18n } from "../i18n";
+import { formatDateTime } from "../lib/format";
 import { Button } from "./button";
 import { Input } from "./input";
 import { Money } from "./money";
@@ -47,7 +48,7 @@ export interface ReceiptViewProps {
 }
 
 export function ReceiptView({ receipt, apiUrl = "", onSubscribe }: ReceiptViewProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [destination, setDestination] = useState("");
   const [consent, setConsent] = useState(false);
   const [whatsappConsent, setWhatsappConsent] = useState(false);
@@ -72,16 +73,7 @@ export function ReceiptView({ receipt, apiUrl = "", onSubscribe }: ReceiptViewPr
     const exhaustive: never = receipt.status;
     throw new Error(`Unknown receipt status: ${exhaustive}`);
   })();
-  const formattedDate = new Date(receipt.refundedAt ?? receipt.occurredAt).toLocaleDateString(
-    "en-IN",
-    {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    },
-  );
+  const formattedDate = formatDateTime(receipt.refundedAt ?? receipt.occurredAt, locale);
 
   async function handleSubscribe(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

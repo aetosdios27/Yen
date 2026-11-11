@@ -13,6 +13,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LocaleProvider } from "../../i18n";
 import { en } from "../../i18n/messages/en";
+import { hi } from "../../i18n/messages/hi";
 import type { RecordProofData } from "../../lib/verifier";
 import VerifyPage from "./page";
 
@@ -235,6 +236,35 @@ describe("VerifyPage Component (page.tsx)", () => {
     expect(screen.getByText("₹85,000.00")).toBeDefined();
   }, 20_000);
 
+  it("renders the verified outcome fully in Hindi, including result labels", async () => {
+    const { validProof, bundle } = await createFixtureData();
+    mockValidProofFetch(validProof, bundle);
+
+    render(
+      <LocaleProvider initialLocale="hi">
+        <VerifyPage />
+      </LocaleProvider>,
+    );
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText(hi.verify.enterRecordIdLabel), validProof.recordId);
+    await user.type(screen.getByLabelText(hi.verify.fundIdLabel), validProof.fundId);
+    await user.click(screen.getByRole("button", { name: hi.verify.verifyButton }));
+
+    await waitFor(() => {
+      expect(screen.getByText(hi.verify.outcomeVerified)).toBeDefined();
+    });
+
+    expect(screen.getByText(hi.verify.amountLabel)).toBeDefined();
+    expect(screen.getByText(hi.verify.dateRecordedLabel)).toBeDefined();
+    expect(screen.getByText(hi.verify.sealStatusLabel)).toBeDefined();
+    expect(screen.getByText(hi.verify.sealVerified)).toBeDefined();
+    expect(screen.getByText(hi.verify.passDetail)).toBeDefined();
+    expect(screen.getByText("₹85,000.00")).toBeDefined();
+    const headlines = screen.getAllByRole("heading", { level: 2 });
+    expect(headlines.some((node) => node.textContent?.includes("को लिखा गया था"))).toBe(true);
+  }, 20_000);
+
   it("auto-verifies when recordId and fundId are present in URL search parameters", async () => {
     const { validProof, bundle } = await createFixtureData();
     mockSearchParams = new URLSearchParams({
@@ -289,7 +319,7 @@ describe("VerifyPage Component (page.tsx)", () => {
       expect(screen.getByText(en.verify.outcomeFailed)).toBeDefined();
     });
 
-    expect(screen.getByText("Verification failed: record was altered")).toBeDefined();
+    expect(screen.getByText("Verification failed: record was altered or invalid")).toBeDefined();
   }, 20_000);
 
   it("handles pending unanchored records with plain-language notice", async () => {
@@ -349,7 +379,7 @@ describe("VerifyPage Component (page.tsx)", () => {
     fireEvent.change(fileInput, { target: { files: [file] } });
 
     await waitFor(() => {
-      expect(screen.getByText("Audit Bundle Verified: 1 record(s) intact")).toBeDefined();
+      expect(screen.getByText("Audit bundle verified: 1 record(s) intact")).toBeDefined();
     });
 
     expect(screen.getByText(en.verify.downloadBundleJson)).toBeDefined();
@@ -381,7 +411,7 @@ describe("VerifyPage Component (page.tsx)", () => {
     expect(screen.getByText(en.verify.technicalInspectionTitle)).toBeDefined();
     expect(screen.getByText(en.verify.canonicalHashLabel)).toBeDefined();
     expect(screen.getByText(en.verify.declaredHashLabel)).toBeDefined();
-    expect(screen.getByText("Raw Event Record")).toBeDefined();
+    expect(screen.getByText("Raw event record")).toBeDefined();
   }, 20_000);
 
   it("renders skipped unverified outcome when RPC is unreachable", async () => {

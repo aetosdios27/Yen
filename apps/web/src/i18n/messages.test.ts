@@ -48,6 +48,50 @@ function placeholders(value: string): string[] {
   return [...value.matchAll(PLACEHOLDER)].map((match) => match[0] ?? "").sort();
 }
 
+/** Acronyms, brand names and unit symbols that stay Latin in Hindi copy. */
+const LATIN_ALLOWED_IN_HINDI = new Set([
+  "API",
+  "CSV",
+  "DPDP",
+  "GitHub",
+  "ID",
+  "INV",
+  "iPhone",
+  "JPEG",
+  "JSON",
+  "MB",
+  "OTP",
+  "PDF",
+  "PIN",
+  "PNG",
+  "QR",
+  "SMS",
+  "SVG",
+  "UPI",
+  "UTR",
+  "VPA",
+  "WebP",
+  "WhatsApp",
+  "Yen",
+  "YEN",
+  "px",
+  "email",
+]);
+
+const EMAIL_LIKE = /[\w.+-]+@[\w.-]+/g;
+const CODE_TOKEN = /[\w-]*\d[\w-]*/g;
+const LATIN_WORD = /[A-Za-z]{2,}/g;
+
+/** English words that leaked into a Hindi string, ignoring placeholders and examples. */
+function leakedEnglishWords(value: string): string[] {
+  const withoutPlaceholders = value.replace(PLACEHOLDER, " ");
+  const withoutEmails = withoutPlaceholders.replace(EMAIL_LIKE, " ");
+  const withoutCodes = withoutEmails.replace(CODE_TOKEN, " ");
+  return [...withoutCodes.matchAll(LATIN_WORD)]
+    .map((match) => match[0] ?? "")
+    .filter((word) => !LATIN_ALLOWED_IN_HINDI.has(word));
+}
+
 describe("message catalogue", () => {
   it("has the expected locales", () => {
     expect(LOCALES).toEqual(["en", "hi", "en-XA"]);
@@ -83,6 +127,42 @@ describe("message catalogue", () => {
     for (const [key, value] of enMessages) {
       expect(placeholders(hiMessages.get(key) ?? ""), key).toEqual(placeholders(value));
       expect(placeholders(pseudoMessages.get(key) ?? ""), key).toEqual(placeholders(value));
+    }
+  });
+
+  it("has no untranslated English words in Hindi copy", () => {
+    for (const [key, value] of hiMessages) {
+      if (IDENTICAL_BY_DESIGN.has(key)) {
+        continue;
+      }
+      expect(leakedEnglishWords(value), key).toEqual([]);
+    }
+  });
+
+  it("covers every core flow area in every locale", () => {
+    const coreFlowKeys = [
+      "expenseTimeline.title",
+      "expenseTimeline.stateApprovals",
+      "expenseTimeline.stateRejectedDesc",
+      "fund.spendingTitle",
+      "fund.categoryEquipment",
+      "fund.categoryFood",
+      "fund.filterExpenses",
+      "approver.pinModalTitle",
+      "approver.pinError",
+      "approver.rejectReasonError",
+      "verify.technicalInspectionTitle",
+      "verify.outcomeFailed",
+      "verify.offlineNotice",
+      "donate.customAmountLabel",
+      "donate.failure",
+      "evidence.title",
+      "status.unmatched",
+      "status.rejected",
+    ];
+    for (const key of coreFlowKeys) {
+      expect(enMessages.has(key), `en missing ${key}`).toBe(true);
+      expect(hiMessages.has(key), `hi missing ${key}`).toBe(true);
     }
   });
 
