@@ -23,6 +23,17 @@ const corsHeaders = {
   "access-control-max-age": "600",
 };
 
+const forwardedResponseHeaders = [
+  "cache-control",
+  "content-type",
+  "etag",
+  "location",
+  "retry-after",
+  "set-cookie",
+  "warning",
+  "x-yen-data-as-of",
+];
+
 const server = createServer((request, response) => {
   if (request.method === "OPTIONS") {
     response.writeHead(204, corsHeaders);
@@ -48,10 +59,10 @@ const server = createServer((request, response) => {
   });
 
   upstream.on("response", (upstreamResponse) => {
-    // Only forward upstream headers whose names are valid RFC 7230 tokens.
     const responseHeaders = { ...corsHeaders };
-    for (const [name, value] of Object.entries(upstreamResponse.headers)) {
-      if (/^[a-z0-9!#$%&'*+.^_`|~-]+$/i.test(name)) {
+    for (const name of forwardedResponseHeaders) {
+      const value = upstreamResponse.headers[name];
+      if (value !== undefined) {
         responseHeaders[name] = value;
       }
     }
