@@ -99,6 +99,63 @@ jobs:
       - name: Accessibility (axe, zero violations)
         run: pnpm turbo run test:a11y --filter=@yen/web
 
+  e2e:
+    name: E2E matrix (real backend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: pw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          cache: true
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - run: pnpm install --frozen-lockfile
+
+      # Build outside the Playwright webServer so a failing tsc prints its
+      # diagnostics in this job log instead of dying silently behind a
+      # captured pipe. Turbo builds each app's workspace dependency closure,
+      # including @yen/api-client for the Next.js web build.
+      - name: Build the API bundle
+        run: pnpm exec turbo run build --filter=@yen/api --filter=@yen/api-client
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @yen/web exec playwright install --with-deps chromium webkit
+
+      - name: Run the Playwright matrix against the real backend
+        env:
+          E2E_BACKEND: real
+          E2E_DATABASE_URL: postgres://postgres:pw@localhost:5432/postgres
+          E2E_PREBUILT_API: "true"
+        run: pnpm --filter @yen/web e2e
+
+      - name: Upload the Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7
+          if-no-files-found: ignore
+
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest
@@ -251,7 +308,7 @@ jobs:
   gate:
     name: CI Gate
     if: always()
-    needs: [verify, secrets, dependency-review, pr-checks, foundry]
+    needs: [verify, secrets, dependency-review, pr-checks, foundry, e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -260,11 +317,12 @@ jobs:
           NEEDS: ${{ toJSON(needs) }}
         run: |
           echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
-          # verify, secrets, and foundry always run; the others are skipped outside pull requests.
+          # verify, secrets, foundry, and e2e always run; the others are skipped outside pull requests.
           echo "$NEEDS" | jq -e '
             (.verify.result == "success") and
             (.secrets.result == "success") and
             (.foundry.result == "success") and
+            (.e2e.result == "success") and
             (.["dependency-review"].result | IN("success", "skipped")) and
             (.["pr-checks"].result | IN("success", "skipped"))
           ' > /dev/null

@@ -1,10 +1,22 @@
 import { expect, test } from "@playwright/test";
+import { isRealBackend } from "./support/backend";
+import { hostCanDispatchInput } from "./support/host";
 
 const fundId = "00000000-0000-4000-8000-0000000000f1";
 const expenseId = "00000000-0000-4000-8000-0000000000e1";
 const apiUrl = `http://127.0.0.1:${process.env.E2E_API_PORT ?? 3939}`;
 
+test.skip(isRealBackend, "these journeys run against the seeded stub API");
+
 test.describe("club lifecycle", () => {
+  test.beforeEach(async ({ browserName, page, request }) => {
+    test.skip(
+      browserName === "webkit" && !(await hostCanDispatchInput(page)),
+      "this host cannot dispatch WebKit pointer input",
+    );
+    await request.post(`${apiUrl}/__reset`);
+  });
+
   test("a visitor sees the fund balance and how the money was spent", async ({ page }) => {
     await page.goto(`/funds/${fundId}`);
 
