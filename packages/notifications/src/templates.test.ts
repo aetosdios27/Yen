@@ -1,7 +1,7 @@
 import { paise } from "@yen/shared";
 import { describe, expect, it } from "vitest";
-import { type NotificationTemplateId } from "./types.js";
 import { renderNotificationTemplate } from "./templates.js";
+import type { NotificationTemplateId } from "./types.js";
 
 describe("Notification templates (EN / HI)", () => {
   const fundTitle = "Community Water Fund";
