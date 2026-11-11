@@ -184,6 +184,7 @@ import type {
   ExpenseResource,
   ExpenseView,
   FundAction,
+  FundRecord,
   FundResource,
 } from "./policy.js";
 import { DEFAULT_OBJECTION_WINDOW_HOURS, redactActionReceipt as redactReceipt } from "./policy.js";
@@ -194,6 +195,9 @@ import {
   PrivacyUnavailableError,
 } from "./privacy-store.js";
 import {
+  eventHashEtag,
+  FUND_HEAD_KIND,
+  fundCacheTags,
   matchesEtag,
   PRIVATE_READ_CACHE_CONTROL,
   PUBLIC_READ_CACHE_CONTROL,
@@ -931,6 +935,65 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     return { ...fundContext, expense, proofs };
   };
   type FundReadOptions = { fundId: string; kind: string; publicTier: boolean };
+  const isNoCacheRequest = (c: Context<ApiEnv>) =>
+    c.req
+      .header("cache-control")
+      ?.split(",")
+      .some((directive) => directive.trim().toLowerCase() === "no-cache") ?? false;
+  const headReader = deps.publicFundHead;
+  // The head lookup must never block a page: when it fails the page path still
+  // runs and can fall back to the last good copy inside the stale window.
+  const fundHead = async (fundId: string) => {
+    if (!headReader) return null;
+    try {
+      const hit = await publicReadCache.load(fundId, FUND_HEAD_KIND, () => headReader(fundId));
+      return hit.body;
+    } catch {
+      return null;
+    }
+  };
+  const setPublicReadHeaders = (c: Context<ApiEnv>, etag: string | undefined, cacheTag: string) => {
+    c.header("cache-control", PUBLIC_READ_CACHE_CONTROL);
+    c.header("cache-tag", cacheTag);
+    // A signed-in visitor gets the private view at the same URL, so caches must not mix them.
+    c.header("vary", "authorization, cookie");
+    if (etag) c.header("etag", etag);
+  };
+  // Answers conditional anonymous reads before the fund context: a fresh cache
+  // entry costs zero queries and a matching event hash costs one head lookup.
+  const conditionalPublicRead = async (
+    c: Context<ApiEnv>,
+    options: { fundId: string; kind: string },
+  ): Promise<boolean> => {
+    if (c.get("principal")) return false;
+    const ifNoneMatch = c.req.header("if-none-match");
+    if (ifNoneMatch === undefined || isNoCacheRequest(c)) return false;
+    const fresh = publicReadCache.peekFresh(options.fundId, options.kind);
+    if (fresh) {
+      if (!matchesEtag(ifNoneMatch, fresh.etag)) return false;
+      setPublicReadHeaders(c, fresh.etag, fresh.cacheTag ?? fundCacheTags(options.fundId, null));
+      return true;
+    }
+    const head = await fundHead(options.fundId);
+    if (!head) return false;
+    const etag = eventHashEtag(options.fundId, head.latestEventHash);
+    if (!matchesEtag(ifNoneMatch, etag)) return false;
+    setPublicReadHeaders(c, etag, fundCacheTags(options.fundId, head.orgId));
+    return true;
+  };
+  // Only origin reads consume miss budget: single-flight joiners, cache hits and
+  // 304 answers never reach the guarded produce.
+  const requireMissBudget = async (c: Context<ApiEnv>) => {
+    const result = await deps.rateLimitStore.consume(
+      JSON.stringify(["fund_cache_miss", deps.clientIp(c)]),
+      deps.fundReadMissLimit,
+      deps.clock(),
+    );
+    if (!result.allowed) {
+      c.header("retry-after", String(result.retryAfterSeconds));
+      throw new ApiError(result.overloaded ? "overloaded" : "rate_limited");
+    }
+  };
   const fundRead = async <T>(
     c: Context<ApiEnv>,
     options: FundReadOptions,
@@ -941,26 +1004,47 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       c.header("cache-control", PRIVATE_READ_CACHE_CONTROL);
       return { notModified: false, body };
     }
-    const revalidate =
-      c.req
-        .header("cache-control")
-        ?.split(",")
-        .some((directive) => directive.trim().toLowerCase() === "no-cache") ?? false;
-    const hit = await publicReadCache.load(options.fundId, options.kind, produce, { revalidate });
-    c.header("cache-control", PUBLIC_READ_CACHE_CONTROL);
-    c.header("etag", hit.etag);
-    // A signed-in visitor gets the private view at the same URL, so caches must not mix them.
-    c.header("vary", "authorization, cookie");
+    const revalidate = isNoCacheRequest(c);
+    const ifNoneMatch = c.req.header("if-none-match");
+    const head = await fundHead(options.fundId);
+    if (!revalidate && head) {
+      const etag = eventHashEtag(options.fundId, head.latestEventHash);
+      if (matchesEtag(ifNoneMatch, etag)) {
+        setPublicReadHeaders(c, etag, fundCacheTags(options.fundId, head.orgId));
+        return { notModified: true, body: undefined as T };
+      }
+    }
+    const meta = head
+      ? {
+          etag: eventHashEtag(options.fundId, head.latestEventHash),
+          cacheTag: fundCacheTags(options.fundId, head.orgId),
+        }
+      : { cacheTag: fundCacheTags(options.fundId, null) };
+    const hit = await publicReadCache.load(
+      options.fundId,
+      options.kind,
+      async () => {
+        await requireMissBudget(c);
+        return produce();
+      },
+      { revalidate, ...meta },
+    );
+    setPublicReadHeaders(c, hit.etag, hit.cacheTag ?? meta.cacheTag);
     if (hit.stale) {
       c.header("x-yen-data-as-of", new Date(hit.storedAt).toISOString());
       c.header("warning", STALE_WARNING);
     }
     return {
-      notModified: matchesEtag(c.req.header("if-none-match"), hit.etag),
+      notModified: matchesEtag(ifNoneMatch, hit.etag),
       body: hit.body,
     };
   };
-  const setFundReadCache = (c: Context<ApiEnv>, publicTier: boolean, body: unknown) => {
+  const setFundReadCache = (
+    c: Context<ApiEnv>,
+    publicTier: boolean,
+    body: unknown,
+    entry: FundRecord,
+  ) => {
     if (!publicTier) {
       c.header("cache-control", "private, no-store");
       return;
@@ -968,7 +1052,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const serialized = JSON.stringify(body);
     const etag = `"${crypto.createHash("sha256").update(serialized).digest("hex")}"`;
     c.header("etag", etag);
-    c.header("cache-control", "public, s-maxage=30, max-age=0, must-revalidate");
+    c.header("cache-tag", fundCacheTags(entry.fund.id, entry.orgId));
+    c.header("cache-control", PUBLIC_READ_CACHE_CONTROL);
   };
   const publicDataGaps = [
     "Authenticated member assignments are not loaded into sessions; donor and member access requires a role-bearing principal.",
@@ -998,6 +1083,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   };
   app.openapi(publicFundSummaryRoute, async (c) => {
     const fundId = c.req.valid("param").fundId;
+    if (await conditionalPublicRead(c, { fundId, kind: "summary" })) return c.body(null, 304);
     const { entry, actor, publicTier } = await publicFundContext(fundId, c.get("principal"));
     const read = await fundRead(c, { fundId, kind: "summary", publicTier }, async () => {
       const [expenses, donations, pledgedPaise, anchoredItems] = await Promise.all([
@@ -1043,6 +1129,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
   app.openapi(publicFundBreakdownRoute, async (c) => {
     const fundId = c.req.valid("param").fundId;
+    if (await conditionalPublicRead(c, { fundId, kind: "breakdown" })) return c.body(null, 304);
     const { actor, publicTier } = await publicFundContext(fundId, c.get("principal"));
     const read = await fundRead(c, { fundId, kind: "breakdown", publicTier }, async () => {
       const expenses = await listFundExpenses(fundId);
@@ -1058,6 +1145,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   });
   app.openapi(publicFundTimelineRoute, async (c) => {
     const fundId = c.req.valid("param").fundId;
+    if (await conditionalPublicRead(c, { fundId, kind: "timeline" })) return c.body(null, 304);
     const { actor, publicTier } = await publicFundContext(fundId, c.get("principal"));
     const read = await fundRead(c, { fundId, kind: "timeline", publicTier }, async () => {
       const [expenses, donations, anchoredItems] = await Promise.all([
@@ -1165,7 +1253,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
   app.openapi(publicAuditBundleRoute, async (c) => {
     const fundId = c.req.valid("param").fundId;
-    const { publicTier } = await publicFundContext(fundId, c.get("principal"));
+    const { entry, publicTier } = await publicFundContext(fundId, c.get("principal"));
     const parsed = parseFundId(fundId);
     if (!parsed.ok) throw new ApiError("not_found");
 
@@ -1202,7 +1290,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
             latestAnchor.id,
             contractAddress,
           );
-          setFundReadCache(c, publicTier, bundle);
+          setFundReadCache(c, publicTier, bundle, entry);
           return c.json(bundle as unknown as z.infer<typeof publicAuditBundleSchema>, 200);
         } catch {
           throw new ApiError("not_found");
@@ -1214,7 +1302,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     if (deps.auditBundleProvider) {
       const bundle = await deps.auditBundleProvider.getAuditBundle(fundId);
       if (bundle) {
-        setFundReadCache(c, publicTier, bundle);
+        setFundReadCache(c, publicTier, bundle, entry);
         return c.json(bundle as unknown as z.infer<typeof publicAuditBundleSchema>, 200);
       }
     }
@@ -1224,7 +1312,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
 
   app.openapi(publicRecordProofRoute, async (c) => {
     const { fundId, recordId } = c.req.valid("param");
-    const { publicTier } = await publicFundContext(fundId, c.get("principal"));
+    const { entry, publicTier } = await publicFundContext(fundId, c.get("principal"));
     const parsed = parseFundId(fundId);
     if (!parsed.ok) throw new ApiError("not_found");
 
@@ -1354,7 +1442,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
                   sequence: Number(anchor.chain_sequence),
                 },
               };
-              setFundReadCache(c, publicTier, body);
+              setFundReadCache(c, publicTier, body, entry);
               return c.json(body, 200);
             }
           }
@@ -1371,7 +1459,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
             estimatedAnchorMinutes: 10,
           },
         };
-        setFundReadCache(c, publicTier, body);
+        setFundReadCache(c, publicTier, body, entry);
         return c.json(body, 200);
       }
       throw new ApiError("not_found");
@@ -1380,7 +1468,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     if (deps.auditBundleProvider) {
       const proof = await deps.auditBundleProvider.getRecordProof(fundId, recordId);
       if (proof) {
-        setFundReadCache(c, publicTier, proof);
+        setFundReadCache(c, publicTier, proof, entry);
         return c.json(proof as unknown as z.infer<typeof publicRecordProofSchema>, 200);
       }
     }
@@ -2796,6 +2884,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     }
 
     const result = await deps.reconciliationStore.ingest(transactions);
+    // Ingest can append fund events and this path bypasses fundCacheInvalidation.
+    publicReadCache.invalidateFund(id.value);
     const wireTransactions = result.transactions.map((t) => ({
       ...t,
       amountPaise: String(t.amountPaise),
@@ -2820,6 +2910,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const raw = c.req.valid("json");
     const parsed = normalizePartnerWebhook(raw);
     const result = await deps.reconciliationStore.ingest([parsed]);
+    publicReadCache.invalidateFund(parsed.fundId);
     const summary = result.transactions[0];
 
     return c.json(

@@ -42,6 +42,10 @@ const fundReadHeaders = {
     schema: { type: "string" as const },
     description: "Public short shared cache; authenticated tiers are private and no-store",
   },
+  "cache-tag": {
+    schema: { type: "string" as const },
+    description: "Purge targets for tag based CDN invalidation, absent on authenticated views",
+  },
   vary: {
     schema: { type: "string" as const },
     description: "Separates the public and signed-in representations of one URL",

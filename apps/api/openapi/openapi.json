@@ -4177,6 +4177,10 @@
                 "schema": { "type": "string" },
                 "description": "Public short shared cache; authenticated tiers are private and no-store"
               },
+              "cache-tag": {
+                "schema": { "type": "string" },
+                "description": "Purge targets for tag based CDN invalidation, absent on authenticated views"
+              },
               "vary": {
                 "schema": { "type": "string" },
                 "description": "Separates the public and signed-in representations of one URL"
@@ -4254,6 +4258,10 @@
               "cache-control": {
                 "schema": { "type": "string" },
                 "description": "Public short shared cache; authenticated tiers are private and no-store"
+              },
+              "cache-tag": {
+                "schema": { "type": "string" },
+                "description": "Purge targets for tag based CDN invalidation, absent on authenticated views"
               },
               "vary": {
                 "schema": { "type": "string" },
@@ -4393,6 +4401,10 @@
                 "schema": { "type": "string" },
                 "description": "Public short shared cache; authenticated tiers are private and no-store"
               },
+              "cache-tag": {
+                "schema": { "type": "string" },
+                "description": "Purge targets for tag based CDN invalidation, absent on authenticated views"
+              },
               "vary": {
                 "schema": { "type": "string" },
                 "description": "Separates the public and signed-in representations of one URL"
@@ -4457,6 +4469,10 @@
               "cache-control": {
                 "schema": { "type": "string" },
                 "description": "Public short shared cache; authenticated tiers are private and no-store"
+              },
+              "cache-tag": {
+                "schema": { "type": "string" },
+                "description": "Purge targets for tag based CDN invalidation, absent on authenticated views"
               },
               "vary": {
                 "schema": { "type": "string" },
@@ -4596,6 +4612,10 @@
                 "schema": { "type": "string" },
                 "description": "Public short shared cache; authenticated tiers are private and no-store"
               },
+              "cache-tag": {
+                "schema": { "type": "string" },
+                "description": "Purge targets for tag based CDN invalidation, absent on authenticated views"
+              },
               "vary": {
                 "schema": { "type": "string" },
                 "description": "Separates the public and signed-in representations of one URL"
@@ -4684,6 +4704,10 @@
               "cache-control": {
                 "schema": { "type": "string" },
                 "description": "Public short shared cache; authenticated tiers are private and no-store"
+              },
+              "cache-tag": {
+                "schema": { "type": "string" },
+                "description": "Purge targets for tag based CDN invalidation, absent on authenticated views"
               },
               "vary": {
                 "schema": { "type": "string" },
@@ -4822,6 +4846,10 @@
               "cache-control": {
                 "schema": { "type": "string" },
                 "description": "Public short shared cache; authenticated tiers are private and no-store"
+              },
+              "cache-tag": {
+                "schema": { "type": "string" },
+                "description": "Purge targets for tag based CDN invalidation, absent on authenticated views"
               },
               "vary": {
                 "schema": { "type": "string" },
@@ -5010,6 +5038,10 @@
               "cache-control": {
                 "schema": { "type": "string" },
                 "description": "Public short shared cache; authenticated tiers are private and no-store"
+              },
+              "cache-tag": {
+                "schema": { "type": "string" },
+                "description": "Purge targets for tag based CDN invalidation, absent on authenticated views"
               },
               "vary": {
                 "schema": { "type": "string" },

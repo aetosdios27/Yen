@@ -39,6 +39,7 @@ export type FundView = z.infer<typeof fundSchema>;
 export interface FundRecord {
   readonly owner: string;
   readonly fund: FundView;
+  readonly orgId?: string;
 }
 export type FundAction =
   | "fund:create"

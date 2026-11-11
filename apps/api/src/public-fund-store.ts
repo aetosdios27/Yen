@@ -1,5 +1,10 @@
-import { publicAnchoredItemsSql, publicPledgedPaiseSql, type Sql } from "@yen/db";
-import type { PublicFundDonation, PublicFundReadStore } from "./dependencies.js";
+import {
+  publicAnchoredItemsSql,
+  publicFundHeadSql,
+  publicPledgedPaiseSql,
+  type Sql,
+} from "@yen/db";
+import type { PublicFundDonation, PublicFundHead, PublicFundReadStore } from "./dependencies.js";
 
 type DonationRow = {
   readonly refund_id: string | null;
@@ -65,5 +70,21 @@ export class PostgresPublicFundReadStore implements PublicFundReadStore {
       donorDisplayName: row.donor_display_name,
       donorNameChoice: row.donor_name_choice,
     }));
+  }
+}
+
+/**
+ * Reads the latest event hash of a public fund in one indexed query, so
+ * conditional requests can be answered with a 304 without the full page read.
+ */
+export class PostgresPublicFundHeadStore {
+  constructor(private readonly sql: Sql) {}
+
+  async get(fundId: string): Promise<PublicFundHead | null> {
+    const rows = await this.sql.unsafe<{ hash: string; org_id: string }[]>(publicFundHeadSql, [
+      fundId,
+    ]);
+    const row = rows[0];
+    return row ? { latestEventHash: row.hash, orgId: row.org_id } : null;
   }
 }
