@@ -1,4 +1,5 @@
 import { type ExpenseRequest, InMemoryExpenseStore } from "@yen/ledger";
+import type { AuditBundle } from "@yen/shared";
 import { describe, expect, it } from "vitest";
 import { createApp } from "./app.js";
 import {
@@ -502,7 +503,7 @@ describe("public fund privacy leakage matrix", () => {
         root: "0".repeat(64),
         sequence: 1,
       },
-    };
+    } satisfies AuditBundle;
     const apps = fixture({
       auditBundleProvider: {
         getAuditBundle: async () => bundle,
