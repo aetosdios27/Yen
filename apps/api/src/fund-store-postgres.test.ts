@@ -51,7 +51,7 @@ databaseSuite("Postgres fund store", (sql, url) => {
   it("keeps funds, owner membership, pseudonym, ledger accounts, and event after store restart", async () => {
     const { userId, fundId, record } = await createFund();
     const restarted = new PostgresFundStore(secondSql);
-    expect(await restarted.get(fundId)).toEqual(record);
+    expect(await restarted.get(fundId)).toEqual({ ...record, orgId: expect.any(String) });
     expect(await restarted.rolesFor(fundId, userId)).toEqual(["owner"]);
     expect(
       await sql`SELECT count(*)::int AS count FROM fund_events WHERE fund_id = ${fundId}`,
