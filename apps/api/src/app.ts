@@ -1499,8 +1499,12 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       ]);
     }
   };
-  const fundPolicyFor = async (fundId: string) =>
-    (await deps.fundStore?.getPolicy?.(fundId)) ?? defaultFundPolicy;
+  const fundPolicyFor = async (fundId: string): Promise<FundPolicy> => {
+    const policy = (await deps.fundStore?.getPolicy?.(fundId)) ?? defaultFundPolicy;
+    return deps.objectionWindowSeconds === undefined
+      ? policy
+      : { ...policy, objectionWindowHours: deps.objectionWindowSeconds / 3600 };
+  };
 
   const toExpenseView = (exp: ExpenseRequest): z.infer<typeof expenseSchema> => ({
     id: exp.id,

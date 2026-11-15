@@ -56,6 +56,49 @@ it("treats development as explicit only when NODE_ENV is literally set", async (
   expect(isExplicitDevelopment({ NODE_ENV: "test" }, config("test"))).toBe(false);
 });
 
+it("shortens the objection window only in explicit development", async () => {
+  const { resolveObjectionWindowOverride } = await import("./server-bootstrap.js");
+  expect(resolveObjectionWindowOverride({ OBJECTION_WINDOW_SECONDS: "5" }, true)).toBe(5);
+  expect(resolveObjectionWindowOverride({ OBJECTION_WINDOW_SECONDS: "172800" }, true)).toBe(172800);
+  expect(resolveObjectionWindowOverride({}, true)).toBeUndefined();
+  expect(resolveObjectionWindowOverride({ OBJECTION_WINDOW_SECONDS: "" }, true)).toBeUndefined();
+});
+
+it.each([
+  ["NODE_ENV unset", undefined],
+  ["NODE_ENV=test", "test"],
+  ["NODE_ENV=production", "production"],
+])("ignores the objection window override with %s", async (_label, nodeEnv) => {
+  const { isExplicitDevelopment, resolveObjectionWindowOverride } = await import(
+    "./server-bootstrap.js"
+  );
+  const processEnv: NodeJS.ProcessEnv = { OBJECTION_WINDOW_SECONDS: "5" };
+  if (nodeEnv !== undefined) processEnv.NODE_ENV = nodeEnv;
+  const config = { PORT: 3001, NODE_ENV: nodeEnv ?? "development" } as Parameters<
+    typeof isExplicitDevelopment
+  >[1];
+  expect(
+    resolveObjectionWindowOverride(processEnv, isExplicitDevelopment(processEnv, config)),
+  ).toBeUndefined();
+});
+
+it.each(["0", "-5", "1.5", "5s", "abc", "0x10", "172801", "99999999999999999999"])(
+  "rejects objection window override %s in development",
+  async (value) => {
+    const { resolveObjectionWindowOverride } = await import("./server-bootstrap.js");
+    expect(() => resolveObjectionWindowOverride({ OBJECTION_WINDOW_SECONDS: value }, true)).toThrow(
+      "OBJECTION_WINDOW_SECONDS",
+    );
+  },
+);
+
+it("does not read an invalid override outside explicit development", async () => {
+  const { resolveObjectionWindowOverride } = await import("./server-bootstrap.js");
+  expect(
+    resolveObjectionWindowOverride({ OBJECTION_WINDOW_SECONDS: "abc" }, false),
+  ).toBeUndefined();
+});
+
 it("permits memory stores outside production when explicitly enabled", () => {
   expect(useMemoryStore({ NODE_ENV: "development", YEN_ALLOW_MEMORY_STORES: "true" })).toBe(true);
 });

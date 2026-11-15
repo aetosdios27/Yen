@@ -218,6 +218,10 @@ The seed script creates six personas. Sign in as any of them from the browser at
 
 The simulated code only exists when the API is started with `NODE_ENV=development` set explicitly (the `apps/api` `dev` script does this, so `pnpm dev:full` works with no `.env`). That switch also enables the membership-based development policy, local-only fallbacks for `PAYEE_FINGERPRINT_SALT` and `PIN_HMAC_SECRET`, and CORS for the web origin (`WEB_PORT`, default 3000). An unset `NODE_ENV` gets none of these and behaves like production: deny-all policy, no simulated code, no default CORS. The dev OTP stub also refuses to construct when `NODE_ENV=production`.
 
+### Shortened Objection Window (Development Only)
+
+After the approval quorum, an expense normally waits out a 48 hour donor objection window before it can be approved and paid. `pnpm dev:full` sets `OBJECTION_WINDOW_SECONDS=5` so the demo does not wait two days. The API reads the variable only when `NODE_ENV=development` is set explicitly; with `NODE_ENV` unset, `test` or `production` it is not read and the policy window (48 hours by default) always applies. A value must be a whole number of seconds from 1 to 172800 and anything else stops the API at startup. Set `OBJECTION_WINDOW_SECONDS` yourself to use a different value, for example `OBJECTION_WINDOW_SECONDS=30 pnpm dev:full`.
+
 The shared design system lives in `apps/web`; open `http://localhost:3000/design-system` for its 375 px review page. See [`apps/web/README.md`](apps/web/README.md) for tokens, components, language switching and accessibility checks.
 
 ## Deployment

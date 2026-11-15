@@ -460,6 +460,8 @@ export interface AppDependencies {
   readonly privacyStore: PrivacyStore;
   readonly otpDeliveryProvider: DeliveryProvider;
   readonly simulateOtpDelivery: boolean;
+  /** Development-only: objection window in seconds, set from the explicit-development check. */
+  readonly objectionWindowSeconds?: number | undefined;
   readonly otpCooldownMs: number;
   readonly otpExpiryMs: number;
   readonly otpMaxAttempts: number;
