@@ -275,6 +275,7 @@ export default function ApproverPage({ params }: ApproverPageProps) {
             submittedAt={expense.submittedAt}
             holdReservedAt={expense.holdReservedAt}
             approvals={expense.approvals}
+            approvalsCount={expense.approvalsCount}
             requiredQuorum={expense.requiredQuorum}
             settledAt={expense.settledAt}
             rejectedAt={expense.rejectedAt}

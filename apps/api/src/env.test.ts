@@ -157,6 +157,17 @@ it("requires a valid database URL in production", async () => {
   await expect(import("./env.js")).rejects.toThrow("DATABASE_URL");
 });
 
+it("accepts bare origins and rejects paths in CORS_ORIGINS", async () => {
+  vi.stubEnv("PORT", "3001");
+  vi.stubEnv("CORS_ORIGINS", "http://localhost:3000,https://yen.example");
+  const { env } = await import("./env.js");
+  expect(env.CORS_ORIGINS).toBe("http://localhost:3000,https://yen.example");
+
+  vi.resetModules();
+  vi.stubEnv("CORS_ORIGINS", "https://yen.example/app");
+  await expect(import("./env.js")).rejects.toThrow("CORS_ORIGINS");
+});
+
 it("requires a ClamAV host in production", async () => {
   vi.stubEnv("PORT", "3001");
   vi.stubEnv("NODE_ENV", "production");

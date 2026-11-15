@@ -57,6 +57,7 @@ import { routePath } from "hono/route";
 import { type AlertStore, MemoryAlertStore } from "./alert-store.js";
 import {
   AuthPinOtpVerifier,
+  DevStubOtpDeliveryProvider,
   generateOtpCode,
   generateSalt,
   generateSessionToken,
@@ -293,11 +294,13 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         allowHeaders: [
           "Content-Type",
           "Idempotency-Key",
+          "X-Approval-Token",
           "X-Request-Id",
           "Traceparent",
           "Tracestate",
         ],
         exposeHeaders: ["X-Request-Id", "X-Trace-Id", "Retry-After", "Idempotent-Replayed"],
+        credentials: true,
       }),
     );
   }
@@ -642,6 +645,10 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         channel,
         resendAfterSeconds: Math.ceil(deps.otpCooldownMs / 1000),
         expiresAt: new Date(expiresAt).toISOString(),
+        ...(deps.simulateOtpDelivery &&
+        deps.otpDeliveryProvider instanceof DevStubOtpDeliveryProvider
+          ? { simulatedDelivery: { code } }
+          : {}),
       },
       200,
     );

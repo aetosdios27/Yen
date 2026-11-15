@@ -80,6 +80,7 @@ export {
   findForeignKeysWithoutIndices,
   verifyAllMigrationsForeignKeys,
 } from "./foreign-keys.js";
+export { LEDGER_SCHEMA_SQL } from "./ledger-schema.js";
 export { migrate } from "./migrate.js";
 export { eraseVerifiedGuestContact } from "./privacy-contact.js";
 export {

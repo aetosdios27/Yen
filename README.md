@@ -147,7 +147,7 @@ pnpm dev:full
 3. Seed the complete development dataset (`pnpm db:seed`):
    - **Demo Organization**: IIT Delhi Robotics Club
    - **Active Fund**: RoboCup 2026 Asia Fund with payee VPA (`iitd.robotics@sbi`) and UPI details
-   - **Users & Personas**: 1 treasurer, 2 approvers, and 3 donors with valid mock sessions
+   - **Users & Personas**: 1 treasurer, 2 approvers, and 3 donors who sign in through the login screen
    - **Expense Requests**: 3 realistic requests (1 approved with invoice evidence, 1 pending approval, 1 paid)
    - **Double-Entry Ledger**: Initial verified balance (₹4,65,000) with double-entry zero-sum invariant
    - **Append-Only Event Log**: 23 chained audit events verified by database triggers
@@ -186,18 +186,25 @@ Production refuses the demo scanner: `CLAMAV_HOST` is required there.
 | `pnpm docker:down` | Stop running development containers                              |
 | `pnpm verify`      | Run Biome lint/format checks, typecheck, test suites, and build  |
 
-### Demo Personas and Mock Sessions
+### Demo Personas and Sign-In
 
-The seed script creates ready-to-use personas with valid mock sessions:
+The seed script creates six personas. Sign in as any of them from the browser at `http://localhost:3000/login`; no devtools or curl is needed.
 
-| Persona        | Name            | Phone (E.164)   | Role        | Mock Session Token                 |
-| -------------- | --------------- | --------------- | ----------- | ---------------------------------- |
-| **Treasurer**  | Aarav Sharma    | `+919876543210` | `treasurer` | `yen_mock_session_treasurer_token` |
-| **Approver 1** | Priya Verma     | `+919876543211` | `approver`  | `yen_mock_session_approver1_token` |
-| **Approver 2** | Rohan Iyer      | `+919876543212` | `approver`  | `yen_mock_session_approver2_token` |
-| **Donor 1**    | Ananya Sen      | `+919876543213` | `member`    | `yen_mock_session_donor1_token`    |
-| **Donor 2**    | Vikram Malhotra | `+919876543214` | `member`    | `yen_mock_session_donor2_token`    |
-| **Donor 3**    | Sunita Rao      | `+919876543215` | `member`    | `yen_mock_session_donor3_token`    |
+| Persona        | Name            | Phone (E.164)   | Role        |
+| -------------- | --------------- | --------------- | ----------- |
+| **Treasurer**  | Aarav Sharma    | `+919876543210` | `treasurer` |
+| **Approver 1** | Priya Verma     | `+919876543211` | `approver`  |
+| **Approver 2** | Rohan Iyer      | `+919876543212` | `approver`  |
+| **Donor 1**    | Ananya Sen      | `+919876543213` | `member`    |
+| **Donor 2**    | Vikram Malhotra | `+919876543214` | `member`    |
+| **Donor 3**    | Sunita Rao      | `+919876543215` | `member`    |
+
+1. Enter the persona's phone number and press **Send code**. Delivery is simulated in development: no message is sent, and the login screen shows the code with a "Simulated delivery" notice and fills it in for you.
+2. Press **Verify and continue**.
+3. The first time a persona signs in after a reset, create an approval PIN (the demo PIN is `482613`). Later sign-ins ask for the same PIN to unlock the device.
+4. Use **Sign out** in the header to switch to another persona.
+
+The simulated code only exists when the API is started with `NODE_ENV=development` set explicitly (the `apps/api` `dev` script does this, so `pnpm dev:full` works with no `.env`). That switch also enables the membership-based development policy, local-only fallbacks for `PAYEE_FINGERPRINT_SALT` and `PIN_HMAC_SECRET`, and CORS for the web origin (`WEB_PORT`, default 3000). An unset `NODE_ENV` gets none of these and behaves like production: deny-all policy, no simulated code, no default CORS. The dev OTP stub also refuses to construct when `NODE_ENV=production`.
 
 The shared design system lives in `apps/web`; open `http://localhost:3000/design-system` for its 375 px review page. See [`apps/web/README.md`](apps/web/README.md) for tokens, components, language switching and accessibility checks.
 

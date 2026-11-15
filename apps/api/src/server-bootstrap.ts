@@ -18,7 +18,7 @@ import { createClientIpResolver, type TrustedProxyHeader } from "./client-ip.js"
 import { rateLimits } from "./config.js";
 import { createDatabaseReady } from "./database-ready.js";
 import { createDeliveryWebhookApp } from "./delivery-webhooks.js";
-import { DefaultInFlightTracker } from "./dependencies.js";
+import { DEV_PIN_HMAC_SECRET, DefaultInFlightTracker, selectPolicy } from "./dependencies.js";
 import { PostgresDeviceSignatureStore } from "./device-signature/store.js";
 import { PostgresDisplayNameStore } from "./display-name-store.js";
 import { PostgresDonationPledgeStore } from "./donation-store.js";
@@ -51,6 +51,28 @@ function requiredDeliverySetting(value: string | undefined, name: string): strin
   return value;
 }
 
+const DEV_PAYEE_FINGERPRINT_SALT = "development-only-payee-fingerprint-salt-change-me";
+
+/**
+ * Local-development conveniences (simulated OTP delivery, development policy,
+ * local secrets, default CORS origins) require NODE_ENV=development to be set
+ * explicitly; the schema default for an unset NODE_ENV does not count.
+ */
+export function isExplicitDevelopment(env: NodeJS.ProcessEnv, config: ServerConfig): boolean {
+  return env.NODE_ENV === "development" && config.NODE_ENV === "development";
+}
+
+export function resolveCorsOrigins(config: ServerConfig, explicitDevelopment: boolean): string[] {
+  if (config.CORS_ORIGINS) {
+    return config.CORS_ORIGINS.split(",")
+      .map((origin) => origin.trim())
+      .filter((origin) => origin.length > 0);
+  }
+  if (!explicitDevelopment) return [];
+  const port = config.WEB_PORT ?? 3000;
+  return [`http://localhost:${port}`, `http://127.0.0.1:${port}`];
+}
+
 export interface ServerConfig {
   readonly NODE_ENV: "development" | "test" | "production";
   readonly PORT: number;
@@ -63,6 +85,8 @@ export interface ServerConfig {
   readonly OTP_HASH_KEY?: string | undefined;
   readonly PARTNER_WEBHOOK_SECRET?: string | undefined;
   readonly PAYEE_FINGERPRINT_SALT?: string | undefined;
+  readonly CORS_ORIGINS?: string | undefined;
+  readonly WEB_PORT?: number | undefined;
   readonly DELIVERY_PROVIDER?: "stub" | "external" | undefined;
   readonly WHATSAPP_API_BASE_URL?: string | undefined;
   readonly WHATSAPP_API_VERSION?: string | undefined;
@@ -178,6 +202,7 @@ export async function startServer(
   options: { readonly registerSignals?: boolean } = {},
 ): Promise<StartedServer> {
   const resolvedConfig = config ?? (await import("./env.js")).env;
+  const explicitDevelopment = isExplicitDevelopment(process.env, resolvedConfig);
   validateProductionDeliveryConfig(resolvedConfig);
   const memory = useMemoryStore(resolvedConfig);
   if (resolvedConfig.NODE_ENV === "production" && !resolvedConfig.DATABASE_URL) {
@@ -190,7 +215,9 @@ export async function startServer(
         connectTimeout: resolvedConfig.DATABASE_POOL_ACQUIRE_TIMEOUT_SECONDS,
       })
     : undefined;
-  const payeeFingerprintSalt = resolvedConfig.PAYEE_FINGERPRINT_SALT;
+  const payeeFingerprintSalt =
+    resolvedConfig.PAYEE_FINGERPRINT_SALT ??
+    (explicitDevelopment ? DEV_PAYEE_FINGERPRINT_SALT : undefined);
   if (payeeFingerprintSalt !== undefined && payeeFingerprintSalt.length < 32) {
     await sql?.end({ timeout: 1 });
     throw new Error("PAYEE_FINGERPRINT_SALT must contain at least 32 characters");
@@ -380,6 +407,12 @@ export async function startServer(
     ...(sql ? { privacyStore: new PostgresPrivacyStore(sql) } : {}),
     ...(sql ? { pinStore: new PostgresPinStore(sql) } : {}),
     ...(sql ? { deviceSignatureStore: new PostgresDeviceSignatureStore(sql) } : {}),
+    policy: selectPolicy(explicitDevelopment),
+    simulateOtpDelivery: explicitDevelopment,
+    ...(explicitDevelopment && !process.env.PIN_HMAC_SECRET
+      ? { pinSecret: DEV_PIN_HMAC_SECRET }
+      : {}),
+    corsOrigins: resolveCorsOrigins(resolvedConfig, explicitDevelopment),
     otpHashKey: resolvedConfig.OTP_HASH_KEY ?? "development-only-otp-hash-key-change-me",
     partnerWebhookSecret: resolvedConfig.PARTNER_WEBHOOK_SECRET ?? null,
     otpDeliveryProvider: createOtpDeliveryProvider(

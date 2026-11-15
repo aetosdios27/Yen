@@ -161,6 +161,14 @@ export async function createExpenseRequest(
       amountPaise: String(submission.amountPaise),
       description: submission.purpose,
       recipientRef,
+      ...(submission.payeeUpi
+        ? {
+            payee: {
+              identity: { kind: "upi" as const, vpa: submission.payeeUpi },
+              name: submission.payeeName,
+            },
+          }
+        : {}),
     },
   });
 
