@@ -73,10 +73,10 @@ const server = createServer((request, response) => {
       response.setHeader("x-yen-data-as-of", upstreamResponse.headers["x-yen-data-as-of"]);
     }
     const status = upstreamResponse.statusCode;
-    response.writeHead(
-      Number.isInteger(status) && status >= 200 && status <= 599 ? status : 502,
-      corsHeaders,
-    );
+    response.statusCode = Number.isInteger(status) && status >= 200 && status <= 599 ? status : 502;
+    for (const [name, value] of Object.entries(corsHeaders)) {
+      response.setHeader(name, value);
+    }
     upstreamResponse.pipe(response);
   });
   upstream.on("error", () => {
