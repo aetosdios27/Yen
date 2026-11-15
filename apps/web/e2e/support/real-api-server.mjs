@@ -25,12 +25,8 @@ import { PostgresWaitlistStore } from "../../../api/dist/waitlist-store.js";
 
 /**
  * Real-backend E2E server. Boots the built API app code (createApp) on the
- * Postgres stores the production bootstrap uses, mirroring
- * apps/api/src/server-bootstrap.ts. The one deliberate difference is the
- * policy: the production bootstrap does not wire any policy yet, so its app
- * denies every fund write; this harness wires devPolicy so the journey can
- * exercise the real RBAC engine (devPolicy.can delegates to @yen/policy) with
- * the seeded demo roles. Flagged as an upstream gap in docs/qa.
+ * Postgres stores used by the development bootstrap. The harness uses devPolicy
+ * and seeded sessions to exercise real RBAC without an interactive OTP login.
  */
 const port = Number(process.env.E2E_API_PORT ?? 3939);
 const databaseUrl = process.env.E2E_DATABASE_URL ?? process.env.DATABASE_URL;

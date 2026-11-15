@@ -7,7 +7,9 @@ type AxeViolation = { id: string; impact: string | null; nodes: unknown[] };
 const blockedImpact = new Set(["critical", "serious"]);
 
 async function seriousViolations(page: Page): Promise<AxeViolation[]> {
-  const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag21aa"]).analyze();
+  const results = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+    .analyze();
   return results.violations.filter((violation) => blockedImpact.has(violation.impact ?? ""));
 }
 

@@ -23,17 +23,6 @@ const corsHeaders = {
   "access-control-max-age": "600",
 };
 
-const forwardedResponseHeaders = [
-  "cache-control",
-  "content-type",
-  "etag",
-  "location",
-  "retry-after",
-  "set-cookie",
-  "warning",
-  "x-yen-data-as-of",
-];
-
 const server = createServer((request, response) => {
   if (request.method === "OPTIONS") {
     response.writeHead(204, corsHeaders);
@@ -59,11 +48,29 @@ const server = createServer((request, response) => {
   });
 
   upstream.on("response", (upstreamResponse) => {
-    for (const name of forwardedResponseHeaders) {
-      const value = upstreamResponse.headers[name];
-      if (value !== undefined) {
-        response.setHeader(name, value);
-      }
+    if (upstreamResponse.headers["cache-control"] !== undefined) {
+      response.setHeader("cache-control", upstreamResponse.headers["cache-control"]);
+    }
+    if (upstreamResponse.headers["content-type"] !== undefined) {
+      response.setHeader("content-type", upstreamResponse.headers["content-type"]);
+    }
+    if (upstreamResponse.headers.etag !== undefined) {
+      response.setHeader("etag", upstreamResponse.headers.etag);
+    }
+    if (upstreamResponse.headers.location !== undefined) {
+      response.setHeader("location", upstreamResponse.headers.location);
+    }
+    if (upstreamResponse.headers["retry-after"] !== undefined) {
+      response.setHeader("retry-after", upstreamResponse.headers["retry-after"]);
+    }
+    if (upstreamResponse.headers["set-cookie"] !== undefined) {
+      response.setHeader("set-cookie", upstreamResponse.headers["set-cookie"]);
+    }
+    if (upstreamResponse.headers.warning !== undefined) {
+      response.setHeader("warning", upstreamResponse.headers.warning);
+    }
+    if (upstreamResponse.headers["x-yen-data-as-of"] !== undefined) {
+      response.setHeader("x-yen-data-as-of", upstreamResponse.headers["x-yen-data-as-of"]);
     }
     const status = upstreamResponse.statusCode;
     response.writeHead(

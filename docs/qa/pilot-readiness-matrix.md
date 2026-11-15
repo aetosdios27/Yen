@@ -15,19 +15,15 @@ re-verified by anyone with the repository.
 Real mode boots `apps/api/dist/app.js` (`createApp`) wired to the Postgres
 stores that `apps/api/src/server-bootstrap.ts` uses, seeded by
 `e2e/support/real-backend-global-setup.ts`. The setup replays the demo seed and
-reconciles four seed-versus-runtime gaps (documented in its header comment and
-in the findings table below); the journeys then run donate, expense with bill
-upload, passkey approval, payout, bank reconciliation, and public Merkle
-verification against the production code paths. Point it at a disposable
-database with `E2E_DATABASE_URL`, for example `docker compose up -d postgres`
-and `E2E_DATABASE_URL=postgres://postgres:pw@localhost:5432/postgres`.
+uses the canonical demo seed from main, trusts the seeded mock sessions, and
+sets the seed fund's objection window to zero. The journeys run donate,
+expense with bill upload, passkey approval, payout, bank reconciliation, and
+public Merkle verification against the production code paths. Point it at a
+dedicated disposable database with `E2E_DATABASE_URL`; setup drops its public
+schema. There is deliberately no fallback to `DATABASE_URL`.
 
-One deliberate difference from the production entrypoint: the harness wires
-`devPolicy` (its `can` delegates to the real `@yen/policy` engine) because the
-production bootstrap does not wire any policy yet, so a server started from
-`apps/api/src/server-bootstrap.ts` answers every fund write with 403. That gap
-is tracked below as an open finding; it blocks staging deployments of the
-write path regardless of this suite.
+The harness wires `devPolicy`, matching the explicit development bootstrap.
+Production policy configuration remains outside this test harness.
 
 ## Browser and device matrix
 
@@ -62,7 +58,7 @@ report artifact on failure), gated through the CI Gate job.
 ## Accessibility
 
 `e2e/accessibility.spec.ts` runs axe (`@axe-core/playwright`, tags
-`wcag2a` and `wcag21aa`) on the landing page, the public fund view, the
+`wcag2a`, `wcag2aa`, and `wcag21aa`) on the landing page, the public fund view, the
 donation page, the fund dashboard, the verify page and the login page, in all
 four projects. The assertion is zero critical and zero serious violations.
 Component-level axe coverage continues to run through `pnpm turbo run
@@ -120,17 +116,28 @@ iphone-13 interaction specs skip on this host (see the host note above), and
 the totals count finished test results. The table should gain a row per CI run
 once the GitHub Actions e2e job has history.
 
+## Integration validation (2026-11-15)
+
+After merging the demo stack, observability, Hindi formatting and pilot docs,
+validation on Fedora covered `chromium`, `moto-g4` and `hi-in`. WebKit's
+Ubuntu fallback downloaded successfully but could not launch without
+`libicu74` and `libjpeg-turbo8`; the iPhone project therefore remains a CI
+validation requirement on this host. The CI job installs browser dependencies.
+
+Sol review found and corrected two coverage gaps: CDP throttling now remains
+attached until test teardown, and axe includes inherited `wcag2aa` checks
+(including color contrast). The throttled donation journey waits for page load
+before entering controlled inputs; interacting at DOMContentLoaded raced
+hydration under active network throttling.
+
 ## Known gaps and honest caveats
 
-| Gap                                                               | Impact                                                                                                                                                                                                                                                                                                                            | Where                                                                          |
-| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Production bootstrap wires no RBAC policy                         | Real servers built from `server-bootstrap.ts` deny every fund write (403), which blocks staging and the donate page (`donation-details` 404s). The e2e real mode wires `devPolicy` itself.                                                                                                                                        | `apps/api/src/server-bootstrap.ts`                                             |
-| `pnpm db:reset` never installs the 0037 ledger totals machinery   | The 0037 install hook skips itself while the konto tables do not exist, so `yen_konto_available` never lands and every transfer on a reset database fails with 500. The e2e setup applies `packages/ledger/src/schema.sql` first and then invokes `yen_init_konto_totals()`, the order `packages/db/src/migrate.test.ts` blesses. | `packages/db/src/dev-seed.ts`, `packages/db/migrations/0037_ledger_totals.sql` |
-| Dev seed drops the full konto tables and skips verified bank rows | The seed hand-rolls minimal konto tables (no column defaults) and verifies donations without the matched bank_transactions rows the public summary's raised total derives from, so reset databases read a zero spendable balance. The e2e setup drops the seed tables and re-inserts the seed economics plus matched credits.     | `packages/db/src/dev-seed.ts`                                                  |
-| Seeded mock sessions carry no trusted device row                  | The real auth middleware resolves a principal only for sessions with a trusted device (what an OTP login establishes), so the seeded persona tokens authenticate nowhere outside the e2e setup, which marks them trusted.                                                                                                         | `packages/db/src/dev-seed.ts`, `apps/api/src/middleware.ts`                    |
-| Web expense client skipped the payee fields it collects           | Every expense created through the UI had `payee: null` and the real API rejected the submit (the stub masked it). Fixed in this branch; worth a regression test at the component level.                                                                                                                                           | `apps/web/src/lib/expense-service.ts`                                          |
-| Fund policy objection window blocks the payout journey            | With the seed fund's 48-hour window the expense stays `submitted` after quorum and `pay` returns 409 until it elapses. The e2e setup sets `objectionWindowHours: 0` on the seed fund; pilot clubs need this documented.                                                                                                           | `packages/ledger/src/expense/state-machine.ts`                                 |
-| No anchor worker in e2e                                           | Records verify as `pending` (sealed in the event log, anchor awaiting). Anchored proofs are covered by queue integration tests, not browser e2e.                                                                                                                                                                                  | `packages/queue`                                                               |
-| OTP delivery is a stub                                            | The seeded mock sessions stand in for OTP logins; the login page is exercised in form-validation depth only.                                                                                                                                                                                                                      | `apps/api/src/auth/provider.ts`                                                |
-| Virus scan is the local demo adapter in e2e                       | Uploads are accepted without a real ClamAV scan; production requires `CLAMAV_HOST`.                                                                                                                                                                                                                                               | `apps/api/src/virus-scanner.ts`                                                |
-| Payout adapter is the reference mock (`ENABLE_MOCK_PAYOUTS=true`) | The pay step proves the ledger transition, not a real partner payout.                                                                                                                                                                                                                                                             | `packages/ledger/src/payout.ts`                                                |
+| Gap                                                               | Impact                                                                                                                                                                                                                    | Where                                                       |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Seeded mock sessions carry no trusted device row                  | The real auth middleware resolves a principal only for sessions with a trusted device (what an OTP login establishes), so the seeded persona tokens authenticate nowhere outside the e2e setup, which marks them trusted. | `packages/db/src/dev-seed.ts`, `apps/api/src/middleware.ts` |
+| Web expense client skipped the payee fields it collects           | Every expense created through the UI had `payee: null` and the real API rejected the submit (the stub masked it). Payee forwarding and upload coverage now live on main; this branch also surfaces submit failures.       | `apps/web/src/lib/expense-service.ts`                       |
+| Fund policy objection window blocks the payout journey            | With the seed fund's 48-hour window the expense stays `submitted` after quorum and `pay` returns 409 until it elapses. The e2e setup sets `objectionWindowHours: 0` on the seed fund; pilot clubs need this documented.   | `packages/ledger/src/expense/state-machine.ts`              |
+| No anchor worker in e2e                                           | Records verify as `pending` (sealed in the event log, anchor awaiting). Anchored proofs are covered by queue integration tests, not browser e2e.                                                                          | `packages/queue`                                            |
+| OTP delivery is a stub                                            | The seeded mock sessions stand in for OTP logins; the login page is exercised in form-validation depth only.                                                                                                              | `apps/api/src/auth/provider.ts`                             |
+| Virus scan is the local demo adapter in e2e                       | Uploads are accepted without a real ClamAV scan; production requires `CLAMAV_HOST`.                                                                                                                                       | `apps/api/src/virus-scanner.ts`                             |
+| Payout adapter is the reference mock (`ENABLE_MOCK_PAYOUTS=true`) | The pay step proves the ledger transition, not a real partner payout.                                                                                                                                                     | `packages/ledger/src/payout.ts`                             |

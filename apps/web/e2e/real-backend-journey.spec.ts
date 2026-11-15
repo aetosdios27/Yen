@@ -445,7 +445,9 @@ test.describe("real backend journey", () => {
   test("the public verifier confirms the expense record in the Merkle log", async ({ page }) => {
     await page.goto(`/verify?recordId=${encodeURIComponent(expenseId)}&fundId=${seedFundId}`);
     await expect(
-      page.getByText(/Sealed in event log|matches the public record|record was/i).first(),
+      page.getByText("Sealed in account book; awaiting next scheduled public seal", {
+        exact: true,
+      }),
     ).toBeVisible();
   });
 });

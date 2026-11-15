@@ -34,29 +34,18 @@ export async function removeVirtualAuthenticator(
   await authenticator.cdp.detach();
 }
 
-export function setHardwareCpuThrottling(page: Page, rate: number): Promise<void> {
-  return withCdp(page, (cdp) => cdp.send("Emulation.setCPUThrottlingRate", { rate }));
+export function setHardwareCpuThrottling(cdp: CDPSession, rate: number): Promise<unknown> {
+  return cdp.send("Emulation.setCPUThrottlingRate", { rate });
 }
 
 export function setSlowNetworkConditions(
-  page: Page,
+  cdp: CDPSession,
   conditions: { downloadThroughput: number; uploadThroughput: number; latency: number },
-): Promise<void> {
-  return withCdp(page, (cdp) =>
-    cdp.send("Network.emulateNetworkConditions", {
-      offline: false,
-      latency: conditions.latency,
-      downloadThroughput: conditions.downloadThroughput,
-      uploadThroughput: conditions.uploadThroughput,
-    }),
-  );
-}
-
-async function withCdp(page: Page, run: (cdp: CDPSession) => Promise<unknown>): Promise<void> {
-  const cdp = await page.context().newCDPSession(page);
-  try {
-    await run(cdp);
-  } finally {
-    await cdp.detach();
-  }
+): Promise<unknown> {
+  return cdp.send("Network.emulateNetworkConditions", {
+    offline: false,
+    latency: conditions.latency,
+    downloadThroughput: conditions.downloadThroughput,
+    uploadThroughput: conditions.uploadThroughput,
+  });
 }

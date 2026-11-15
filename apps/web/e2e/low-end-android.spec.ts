@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { type CDPSession, expect, test } from "@playwright/test";
 import { fundId } from "./support/backend";
 import {
   setHardwareCpuThrottling,
@@ -14,9 +14,17 @@ import {
 test.describe("moto g4 low-end profile", () => {
   test.skip(({ browserName }) => browserName !== "chromium", "CDP throttling is Chromium only");
 
+  let cdp: CDPSession | undefined;
+
+  test.afterEach(async () => {
+    await cdp?.detach();
+    cdp = undefined;
+  });
+
   test.beforeEach(async ({ page }) => {
-    await setHardwareCpuThrottling(page, 4);
-    await setSlowNetworkConditions(page, {
+    cdp = await page.context().newCDPSession(page);
+    await setHardwareCpuThrottling(cdp, 4);
+    await setSlowNetworkConditions(cdp, {
       latency: 150,
       downloadThroughput: Math.floor((1.6 * 1024 * 1024) / 8),
       uploadThroughput: Math.floor((750 * 1024) / 8),
@@ -30,8 +38,9 @@ test.describe("moto g4 low-end profile", () => {
   });
 
   test("donation flow completes under throttling", async ({ page }) => {
+    test.setTimeout(60_000);
     const utr = `${(Date.now() % 900_000_000_000) + 100_000_000_000}`;
-    await page.goto(`/funds/${fundId}/donate`, { waitUntil: "domcontentloaded" });
+    await page.goto(`/funds/${fundId}/donate`);
     await page.getByRole("button", { name: "₹500", exact: true }).click();
     await page.getByLabel("12-digit UPI reference").fill(utr);
     await page.getByRole("button", { name: "Record my donation" }).click();
