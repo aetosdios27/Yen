@@ -10,6 +10,7 @@ import {
 } from "@yen/shared";
 import type { Sql } from "./client.js";
 import { type AppendEventInput, appendEvent } from "./events.js";
+import { LEDGER_SCHEMA_SQL } from "./ledger-schema.js";
 import { migrate } from "./migrate.js";
 
 export interface DevSeedUser {
@@ -92,6 +93,10 @@ export const SEED_CONSTANTS = {
   bankTx2Id: "01940000-0000-7000-8000-000000000082",
   bankTx3Id: "01940000-0000-7000-8000-000000000083",
   bankTx4PaidExpenseId: "01940000-0000-7000-8000-000000000084",
+  bankAccountId: "b167160a-591c-5f23-b3df-d09ee4967037",
+  donationsAccountId: "aa5cdcb3-e489-5b81-b551-bcdc194f7b7e",
+  expensesAccountId: "7097f9ff-6952-556a-9170-2c3d77ec2707",
+  pendingSpendAccountId: "a6feba69-a66a-5546-b128-57fa401f57e2",
 } as const;
 
 function asPseudonymId(id: string): PseudonymId {
@@ -112,6 +117,8 @@ const asEvidenceId = (id: string): EvidenceId => id as unknown as EvidenceId;
 const asBankTxId = (id: string): BankTransactionId => id as unknown as BankTransactionId;
 
 export async function ensureDevTables(sql: Sql): Promise<void> {
+  await sql.unsafe(LEDGER_SCHEMA_SQL);
+  await sql`SELECT yen_init_konto_totals()`;
   await sql.unsafe(`
     CREATE TABLE IF NOT EXISTS sessions (
       id uuid PRIMARY KEY,
@@ -161,38 +168,6 @@ export async function ensureDevTables(sql: Sql): Promise<void> {
       verified_at timestamptz
     );
     CREATE INDEX IF NOT EXISTS donation_pledges_fund_id_idx ON donation_pledges(fund_id, created_at DESC);
-
-    CREATE TABLE IF NOT EXISTS konto_accounts (
-      id uuid PRIMARY KEY,
-      name text NOT NULL UNIQUE,
-      account_type text NOT NULL CHECK (account_type IN ('ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE')),
-      currency text NOT NULL CHECK (currency ~ '^[A-Z]{3}$'),
-      metadata jsonb,
-      created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS konto_journals (
-      id uuid PRIMARY KEY,
-      account_id uuid NOT NULL REFERENCES konto_accounts(id),
-      description text,
-      metadata jsonb,
-      idempotency_key text,
-      created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(account_id, idempotency_key)
-    );
-    CREATE INDEX IF NOT EXISTS konto_journals_account_id_idx ON konto_journals(account_id);
-
-    CREATE TABLE IF NOT EXISTS konto_entries (
-      id uuid PRIMARY KEY,
-      entry_sequence bigint NOT NULL UNIQUE,
-      journal_id uuid NOT NULL REFERENCES konto_journals(id),
-      account_id uuid NOT NULL REFERENCES konto_accounts(id),
-      amount bigint NOT NULL CHECK (amount != 0),
-      created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE INDEX IF NOT EXISTS konto_entries_journal_id_idx ON konto_entries(journal_id);
-    CREATE INDEX IF NOT EXISTS konto_entries_account_id_idx ON konto_entries(account_id);
   `);
 }
 
@@ -404,6 +379,24 @@ export async function seedDevDatabase(sql: Sql): Promise<DevSeedResult> {
     `;
   }
 
+  const creditBankTransactionIds = [C.bankTx1Id, C.bankTx2Id, C.bankTx3Id];
+  for (const [index, d] of donations.entries()) {
+    const bankTransactionId = creditBankTransactionIds[index];
+    await sql`
+      INSERT INTO bank_transactions (
+        id, fund_id, bank_reference, utr, amount_paise, type, posted_at, counterparty_name,
+        source, raw_payload, reconciliation_status, matched_pledge_id, matched_at,
+        match_confidence, match_method
+      ) VALUES (
+        ${bankTransactionId ?? ""}, ${d.fundId}, ${`seed-credit-${d.utr}`}, ${d.utr},
+        ${d.amountPaise}, 'credit', ${d.verifiedAt}::timestamptz, ${d.donorDisplayName},
+        'statement_upload', ${sql.json({ seed: true })}, 'matched', ${d.id},
+        ${d.verifiedAt}::timestamptz, 1.00, 'exact_utr'
+      )
+      ON CONFLICT (id) DO NOTHING
+    `;
+  }
+
   // 6. Insert 3 Expense Requests (1 approved with evidence, 1 pending approval, 1 paid)
   const exp1: DevSeedExpense = {
     id: C.expense1ApprovedId,
@@ -506,10 +499,7 @@ export async function seedDevDatabase(sql: Sql): Promise<DevSeedResult> {
   `;
 
   // 7. Konto Ledger Double-Entry Records
-  const bankAccountId = "01940000-0000-7000-8000-000000000031";
-  const donationsAccountId = "01940000-0000-7000-8000-000000000032";
-  const expensesAccountId = "01940000-0000-7000-8000-000000000033";
-  const pendingSpendAccountId = "01940000-0000-7000-8000-000000000034";
+  const { bankAccountId, donationsAccountId, expensesAccountId, pendingSpendAccountId } = C;
 
   await sql`
     INSERT INTO konto_accounts (id, name, account_type, currency)
@@ -535,13 +525,13 @@ export async function seedDevDatabase(sql: Sql): Promise<DevSeedResult> {
   // Journal 1 Entries (Donations Inflow: +₹5,00,000 Asset Bank, -₹5,00,000 Revenue Donations, zero-sum)
   // Journal 2 Entries (Paid Expense: +₹35,000 Expense, -₹35,000 Asset Bank, zero-sum)
   await sql`
-    INSERT INTO konto_entries (id, entry_sequence, journal_id, account_id, amount)
+    INSERT INTO konto_entries (id, journal_id, account_id, amount)
     VALUES
-      (gen_random_uuid(), 1, ${journal1Id}, ${bankAccountId}, 50000000),
-      (gen_random_uuid(), 2, ${journal1Id}, ${donationsAccountId}, -50000000),
-      (gen_random_uuid(), 3, ${journal2Id}, ${expensesAccountId}, 3500000),
-      (gen_random_uuid(), 4, ${journal2Id}, ${bankAccountId}, -3500000)
-    ON CONFLICT (entry_sequence) DO NOTHING
+      ('01940000-0000-7000-8000-0000000000e1', ${journal1Id}, ${bankAccountId}, 50000000),
+      ('01940000-0000-7000-8000-0000000000e2', ${journal1Id}, ${donationsAccountId}, -50000000),
+      ('01940000-0000-7000-8000-0000000000e3', ${journal2Id}, ${expensesAccountId}, 3500000),
+      ('01940000-0000-7000-8000-0000000000e4', ${journal2Id}, ${bankAccountId}, -3500000)
+    ON CONFLICT (id) DO NOTHING
   `;
 
   // 8. Chained Append-Only Event Log
