@@ -32,6 +32,7 @@ import { createServerLifecycle, type ServerLifecycle, shutdownOnSignal } from ".
 import { startObservability } from "./observability.js";
 import { PostgresPayeeProfileStore } from "./payee-rules/profile-store.js";
 import { PostgresPinStore } from "./pin/index.js";
+import { DEFAULT_OBJECTION_WINDOW_HOURS } from "./policy.js";
 import { PostgresPrivacyStore } from "./privacy-store.js";
 import { PostgresPublicFundReadStore } from "./public-fund-store.js";
 import { PostgresReceiptStore } from "./receipt-store.js";
@@ -60,6 +61,30 @@ const DEV_PAYEE_FINGERPRINT_SALT = "development-only-payee-fingerprint-salt-chan
  */
 export function isExplicitDevelopment(env: NodeJS.ProcessEnv, config: ServerConfig): boolean {
   return env.NODE_ENV === "development" && config.NODE_ENV === "development";
+}
+
+/**
+ * Development-only shortcut for demos: shortens the donor objection window to this many
+ * seconds. Anywhere but explicit development the variable is not read at all, so production,
+ * test and an unset NODE_ENV always keep the policy window.
+ */
+export function resolveObjectionWindowOverride(
+  env: NodeJS.ProcessEnv,
+  explicitDevelopment: boolean,
+): number | undefined {
+  const raw = env.OBJECTION_WINDOW_SECONDS;
+  if (!explicitDevelopment || raw === undefined || raw === "") return undefined;
+  const seconds = /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
+  if (
+    !Number.isSafeInteger(seconds) ||
+    seconds < 1 ||
+    seconds > DEFAULT_OBJECTION_WINDOW_HOURS * 3600
+  ) {
+    throw new Error(
+      `OBJECTION_WINDOW_SECONDS must be a whole number of seconds between 1 and ${DEFAULT_OBJECTION_WINDOW_HOURS * 3600}`,
+    );
+  }
+  return seconds;
 }
 
 export function resolveCorsOrigins(config: ServerConfig, explicitDevelopment: boolean): string[] {
@@ -214,6 +239,12 @@ export async function startServer(
 ): Promise<StartedServer> {
   const resolvedConfig = config ?? (await import("./env.js")).env;
   const explicitDevelopment = isExplicitDevelopment(process.env, resolvedConfig);
+  const objectionWindowSeconds = resolveObjectionWindowOverride(process.env, explicitDevelopment);
+  if (objectionWindowSeconds !== undefined) {
+    console.warn(
+      `Development only: donor objection window shortened to ${objectionWindowSeconds} seconds (OBJECTION_WINDOW_SECONDS)`,
+    );
+  }
   validateProductionDeliveryConfig(resolvedConfig);
   const memory = useMemoryStore(resolvedConfig);
   if (resolvedConfig.NODE_ENV === "production" && !resolvedConfig.DATABASE_URL) {
@@ -420,6 +451,7 @@ export async function startServer(
     ...(sql ? { deviceSignatureStore: new PostgresDeviceSignatureStore(sql) } : {}),
     policy: selectPolicy(explicitDevelopment),
     simulateOtpDelivery: explicitDevelopment,
+    ...(objectionWindowSeconds === undefined ? {} : { objectionWindowSeconds }),
     ...(explicitDevelopment && !process.env.PIN_HMAC_SECRET
       ? { pinSecret: DEV_PIN_HMAC_SECRET }
       : {}),

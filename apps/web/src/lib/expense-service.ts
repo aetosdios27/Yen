@@ -4,7 +4,7 @@ import type {
   ExpenseTimelineApproval,
   ExpenseTimelineStatus,
 } from "../components/expense-timeline";
-import { getApiClient } from "./api-client";
+import { getApiBaseUrl, getApiClient } from "./api-client";
 
 export interface DashboardExpenseItem {
   readonly id: string;
@@ -42,6 +42,10 @@ export function toDashboardExpenseItem(exp: {
   amountPaise: string | number | bigint;
   description?: string;
   recipientRef?: string;
+  payee?: {
+    name?: string | undefined;
+    identity?: { kind: string; vpa?: string | undefined };
+  } | null;
   status: string;
   holdId?: string | null;
   approvalsCount?: number;
@@ -56,9 +60,9 @@ export function toDashboardExpenseItem(exp: {
   requesterId?: string;
   evidence?: readonly { evidenceId: string }[];
 }): DashboardExpenseItem {
-  let payeeName = exp.recipientRef ?? "Payee";
-  let payeeUpi = "";
-  const match = exp.recipientRef?.match(/^(.*?)\s*\(([^)]+@[^)]+)\)$/);
+  let payeeName = exp.payee?.name ?? exp.recipientRef ?? "Payee";
+  let payeeUpi = exp.payee?.identity?.vpa ?? "";
+  const match = exp.payee ? null : exp.recipientRef?.match(/^(.*?)\s*\(([^)]+@[^)]+)\)$/);
   if (match) {
     payeeName = match[1]?.trim() ?? payeeName;
     payeeUpi = match[2]?.trim() ?? "";
@@ -143,14 +147,54 @@ export async function fetchFundTreasurerData(fundId: string): Promise<FundTreasu
   };
 }
 
+export interface ExpenseEvidenceItem {
+  readonly evidenceId: string;
+  readonly fileName: string;
+  readonly mimeType: string;
+  readonly fileSha256: string;
+}
+
+async function uploadExpenseBill(
+  fundId: string,
+  expenseId: string,
+  file: File,
+  vendorName: string,
+): Promise<void> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("vendorName", vendorName);
+  const res = await fetch(`${getApiBaseUrl()}/v1/funds/${fundId}/expenses/${expenseId}/evidence`, {
+    method: "POST",
+    headers: { "Idempotency-Key": crypto.randomUUID() },
+    body: form,
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as {
+      error?: { message?: string; details?: { message?: string }[] };
+    } | null;
+    throw new Error(
+      body?.error?.details?.[0]?.message ?? body?.error?.message ?? "Bill upload failed",
+    );
+  }
+}
+
+export async function fetchExpenseEvidence(
+  fundId: string,
+  expenseId: string,
+): Promise<readonly ExpenseEvidenceItem[]> {
+  const res = await getApiClient().GET("/v1/funds/{fundId}/expenses/{expenseId}/evidence", {
+    params: { path: { fundId, expenseId } },
+  });
+  return res.data?.evidence ?? [];
+}
+
 export async function createExpenseRequest(
   fundId: string,
   submission: ValidatedExpenseSubmission,
 ): Promise<DashboardExpenseItem> {
   const client = getApiClient();
-  const recipientRef = submission.payeeUpi
-    ? `${submission.payeeName} (${submission.payeeUpi})`
-    : submission.payeeName;
+  const recipientRef = submission.payeeUpi || submission.payeeName;
 
   const createRes = await client.POST("/v1/funds/{fundId}/expenses", {
     params: {
@@ -174,6 +218,15 @@ export async function createExpenseRequest(
 
   if (createRes.error || !createRes.data) {
     throw new Error(createRes.error?.error?.message ?? "Failed to create expense request");
+  }
+
+  if (submission.receiptFile) {
+    await uploadExpenseBill(
+      fundId,
+      createRes.data.id,
+      submission.receiptFile,
+      submission.payeeName,
+    );
   }
 
   const submitRes = await client.POST("/v1/funds/{fundId}/expenses/{expenseId}/submit", {
