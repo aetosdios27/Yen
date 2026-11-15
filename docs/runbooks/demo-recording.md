@@ -80,17 +80,16 @@ Fund ID (used in URLs and curl calls throughout this runbook):
 01940000-0000-7000-8000-000000000002
 ```
 
-Seeded accounts. All six have active mock sessions valid for one year from
-seed time, stored as SHA-256 token hashes in the `sessions` table:
+Seeded accounts. Sign in as any of them from the browser (section 4):
 
-| Persona         | Role           | Phone (E.164) | Locale | Mock session token                 |
-| --------------- | -------------- | ------------- | ------ | ---------------------------------- |
-| Aarav Sharma    | treasurer      | +919876543210 | en     | `yen_mock_session_treasurer_token` |
-| Priya Verma     | approver       | +919876543211 | en     | `yen_mock_session_approver1_token` |
-| Rohan Iyer      | approver       | +919876543212 | hi     | `yen_mock_session_approver2_token` |
-| Ananya Sen      | member (donor) | +919876543213 | en     | `yen_mock_session_donor1_token`    |
-| Vikram Malhotra | member (donor) | +919876543214 | en     | `yen_mock_session_donor2_token`    |
-| Sunita Rao      | member (donor) | +919876543215 | hi     | `yen_mock_session_donor3_token`    |
+| Persona         | Role           | Phone (E.164) | Locale |
+| --------------- | -------------- | ------------- | ------ |
+| Aarav Sharma    | treasurer      | +919876543210 | en     |
+| Priya Verma     | approver       | +919876543211 | en     |
+| Rohan Iyer      | approver       | +919876543212 | hi     |
+| Ananya Sen      | member (donor) | +919876543213 | en     |
+| Vikram Malhotra | member (donor) | +919876543214 | en     |
+| Sunita Rao      | member (donor) | +919876543215 | hi     |
 
 Seeded donations (all verified against bank transactions in the seed):
 
@@ -115,62 +114,71 @@ Seeded expenses:
 
 - OTPs are not seeded. Every code is generated at request time by
   `generateOtpCode()` in `apps/api/src/auth/crypto.ts` (cryptographically
-  random, six digits). In local development the code is handed to
-  `DevStubOtpDeliveryProvider` (`apps/api/src/auth/provider.ts`), which keeps
-  it in memory only. No OTP is printed to the console or retrievable through
-  any endpoint, so the `/login` OTP screen cannot be completed locally. That
-  is why recording uses the seeded mock sessions below instead of typing an
-  OTP on camera.
-- PINs are not seeded either. Each persona used in an approval flow needs a
-  one-time PIN setup call (section 4). The recording PIN used throughout this
-  runbook is `482613`; it passes `validatePin` in `apps/api/src/pin/rules.ts`
-  (six digits, not a common PIN, no repeating pattern, no ascending or
-  descending run, not derived from the seeded phone numbers or user IDs).
+  random, six digits), hashed at rest and checked by the real verify route with
+  its normal rate limits. In local development the code is handed to
+  `DevStubOtpDeliveryProvider` (`apps/api/src/auth/provider.ts`) instead of
+  WhatsApp or SMS, and the send response carries it as `simulatedDelivery.code`.
+  The login screen shows it under a "Simulated delivery" notice and fills it
+  in. The stub refuses to construct when `NODE_ENV=production`, so production
+  never returns a code.
+- PINs are not seeded. Each persona creates its PIN on first sign-in after a
+  reset (section 4). The recording PIN used throughout this runbook is
+  `482613`; it passes `validatePin` in `apps/api/src/pin/rules.ts` (six
+  digits, not a common PIN, no repeating pattern, no ascending or descending
+  run, not derived from the seeded phone numbers or user IDs). Later sign-ins
+  of the same persona unlock the device with the same PIN.
 - Passkeys (WebAuthn) are optional in the product and are not used in this
   recording; approvals are authorized with the PIN, which is the default
   flow in the approval modal.
 
 ## 4. Signing in for each take
 
-The API reads the session from the `yen_session` cookie or an
-`Authorization: Bearer` header (`apps/api/src/middleware.ts`). Because cookies
-are not port-scoped, a cookie set on any `localhost` page is sent to the API on
-`localhost:3001`. Sign in per persona as follows.
+Everything is done in the browser; no devtools or curl.
 
-1. Seed the session cookie in the browser. Open http://localhost:3001/health
-   in a tab, open the browser console and run:
+1. Open http://localhost:3000/login, enter the persona's phone number from
+   section 3 and press **Send code**. The screen shows a "Simulated delivery"
+   notice with the code and fills it in.
+2. Press **Verify and continue**.
+3. PIN step. After a `pnpm demo:reset` the persona has no PIN yet, so the
+   screen asks to create one: enter `482613` twice. This is also what makes
+   the browser a trusted device (the API only unlocks authenticated routes for
+   a session once the PIN is created or entered, `isPendingDeviceAuthRoute` in
+   `apps/api/src/middleware.ts`). Do this once per persona before recording,
+   not on camera. On later sign-ins the screen asks for the existing PIN to
+   unlock the device.
+4. The header now reads "Signed in as <name>". To switch persona press
+   **Sign out** and repeat from step 1. Use a separate browser profile per
+   persona if two personas must stay signed in side by side.
 
-   ```js
-   document.cookie = "yen_session=yen_mock_session_treasurer_token; path=/; max-age=86400";
-   ```
+The trusted device has a 7-day idle timeout and a 30-day absolute lifetime, so
+a full recording session fits comfortably.
 
-   Substitute the matching token from the table in section 3 for each persona.
+### Terminal session for the API-only shots
 
-2. Trust the device once per persona (before recording, not on camera). A
-   session only becomes a trusted device after PIN setup
-   (`isPendingDeviceAuthRoute` in `apps/api/src/middleware.ts` allows
-   `/v1/auth/pin/setup` through), which is also what unlocks all
-   authenticated routes:
+The bill upload and evidence shots call the API directly and need a bearer
+token for the persona. After the persona has created its PIN in the browser,
+obtain one from the same endpoints the login screen uses:
 
-   ```sh
-   curl -s -X POST http://localhost:3001/v1/auth/pin/setup \
-     -H 'Content-Type: application/json' \
-     -b 'yen_session=yen_mock_session_treasurer_token' \
-     -d '{"pin":"482613"}'
-   # {"status":"created","isSet":true}
-   ```
+```sh
+yen_token() { # usage: yen_token <phone>, prints a trusted bearer token
+  local api=http://localhost:3001 jar; jar=$(mktemp)
+  local code token
+  code=$(curl -s -c "$jar" -X POST "$api/v1/auth/otp/send" -H 'Content-Type: application/json' \
+    -d "{\"phone\":\"$1\",\"channel\":\"sms\"}" | sed -n 's/.*"code":"\([0-9]*\)".*/\1/p')
+  token=$(curl -s -b "$jar" -c "$jar" -X POST "$api/v1/auth/otp/verify" -H 'Content-Type: application/json' \
+    -d "{\"phone\":\"$1\",\"code\":\"$code\"}" | sed -n 's/.*"token":"\([0-9a-f]*\)".*/\1/p')
+  curl -s -X POST "$api/v1/auth/device/unlock" -H "Authorization: Bearer $token" \
+    -H 'Content-Type: application/json' -d '{"pin":"482613"}' > /dev/null
+  echo "$token"
+}
+YEN_TOKEN=$(yen_token +919876543210)   # treasurer
+```
 
-   Repeat with `yen_mock_session_approver2_token` for Rohan Iyer and any other
-   persona that appears on camera. The trusted device then has a 7-day idle
-   timeout and a 30-day absolute lifetime, so a full recording session fits
-   comfortably.
+Confirm authentication works before rolling:
 
-3. Confirm authentication works before rolling:
-
-   ```sh
-   curl -s http://localhost:3001/v1/me \
-     -b 'yen_session=yen_mock_session_treasurer_token'
-   ```
+```sh
+curl -s http://localhost:3001/v1/me -H "Authorization: Bearer $YEN_TOKEN"
+```
 
 ## 5. Sample files
 
@@ -209,8 +217,7 @@ Journey 1 and inspect that expense in Journey 2.
 
 ## 6. Journey 1: treasurer views the fund and submits an expense with a bill
 
-Persona: Aarav Sharma (treasurer). Cookie:
-`yen_mock_session_treasurer_token`.
+Persona: Aarav Sharma (treasurer), signed in as in section 4.
 
 ### Before rolling
 
@@ -238,13 +245,14 @@ not a bug.
 
 1. Fund view. Open http://localhost:3000/funds/01940000-0000-7000-8000-000000000002
    (`apps/web/src/app/funds/[fundId]/page.tsx`, `PublicFundView`). Show the
-   fund header (RoboCup 2026 Asia Fund), money summary (4,65,000.00 INR
-   balance against the 10,00,000.00 INR target) and the spending breakdown.
+   fund header (RoboCup 2026 Asia Fund), money summary (5,00,000.00 INR
+   raised from the three seeded, bank-matched donations) and the spending
+   breakdown.
    Narrate that donors see this same page.
 2. Treasurer console. Click through to
    http://localhost:3000/funds/01940000-0000-7000-8000-000000000002/treasurer.
-   Show the spendable balance, the pending expense list (the seeded 25,000 INR
-   battery expense) and the paid history.
+   Show the spendable balance and the pending expense list (empty until the
+   next step creates a request).
 3. New expense. Click "New expense", landing on
    `/funds/01940000-0000-7000-8000-000000000002/expenses/new`. Fill the form:
    - Amount (INR): `12500.00`
@@ -267,7 +275,7 @@ not a bug.
    ```sh
    curl -s -X POST \
      http://localhost:3001/v1/funds/01940000-0000-7000-8000-000000000002/expenses/EXPENSE_ID/evidence \
-     -b 'yen_session=yen_mock_session_treasurer_token' \
+     -H "Authorization: Bearer $YEN_TOKEN" \
      -F 'file=@assets/demo-fixtures/bill.jpg;type=image/jpeg' \
      -F 'vendorName=Robu.in Innovation Labs' \
      -F 'invoiceNumber=1042'
@@ -280,8 +288,8 @@ not a bug.
 
 ## 7. Journey 2: co-approver reviews the expense and approves with the PIN
 
-Persona: Rohan Iyer (co-approver, hi locale). Cookie:
-`yen_mock_session_approver2_token`, PIN `482613` (set up once in section 4).
+Persona: Rohan Iyer (co-approver, hi locale), signed in as in section 4, PIN
+`482613`.
 
 ### Shots
 
@@ -300,7 +308,7 @@ Persona: Rohan Iyer (co-approver, hi locale). Cookie:
 
    ```sh
    curl -s http://localhost:3001/v1/funds/01940000-0000-7000-8000-000000000002/expenses/EXPENSE_ID/evidence \
-     -b 'yen_session=yen_mock_session_approver2_token'
+     -H "Authorization: Bearer $(yen_token +919876543212)"
    ```
 
    The response lists each evidence item with its `fileSha256`, size and MIME
@@ -314,8 +322,8 @@ Persona: Rohan Iyer (co-approver, hi locale). Cookie:
    `POST /v1/funds/{fundId}/expenses/{expenseId}/approve`. Show the success
    toast and the timeline updating to 1 of 2 approvals.
 4. Reach quorum. Repeat steps 1 to 3 as Priya Verma
-   (`yen_mock_session_approver1_token`, her own PIN setup call in section 4)
-   on the same expense. The expense status flips to approved once the second
+   (sign out, then sign in with `+919876543211` as in section 4) on the same
+   expense. The expense status flips to approved once the second
    approval lands. Point out that a single approver can never release money.
 5. Lockout safety net (optional b-roll). If you want to show it, type a wrong
    PIN once and narrate the error copy; five consecutive failures lock
@@ -433,10 +441,10 @@ Recording tips:
 - Record at 1440x900 or larger; the UI is mobile-first, so consider a 390 px
   wide browser window for one app shot to show the phone layout.
 - Reset between every retake: `pnpm demo:reset`, restart `pnpm dev:full`,
-  repeat the section 4 sign-in steps, then re-record the affected journey only.
-- The seeded pending expense `01940000-0000-7000-8000-000000000062` (25,000
-  INR, battery packs) is a backup approval target if the Journey 1 retakes
-  pile up: it starts every reset in `submitted` state with zero approvals.
+  sign in again as in section 4, then re-record the affected journey only.
+- The three seeded expenses live in the `expense_requests` table, which the
+  API does not read; the treasurer console and approval screens list only
+  expenses created through the app (Journey 1). Create a fresh one per take.
 
 ## 11. Troubleshooting
 
@@ -444,7 +452,7 @@ Recording tips:
 | ---------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | Upload returns 503 "malware scanner is unavailable"        | No ClamAV daemon at `CLAMAV_HOST`                                                 | Start the daemon (section 6) or record without the upload step         |
 | Upload returns 400 on a valid-looking file                 | Declared MIME type does not match the file magic bytes                            | Keep the original extension and pass `;type=image/jpeg` in curl        |
-| `/v1/me` returns 401 with the seeded cookie                | The session is not a trusted device yet                                           | Run the `/v1/auth/pin/setup` call from section 4 for that persona      |
+| `/v1/me` returns 401 right after sign-in                   | The session is not a trusted device yet                                           | Finish the PIN step on the login screen (section 4)                    |
 | PIN modal rejects the PIN                                  | PIN violates the rules in `apps/api/src/pin/rules.ts`                             | Use `482613` or another non-pattern six-digit PIN                      |
 | Worker exits immediately with "Invalid worker environment" | Missing `DATABASE_URL`, or `ANCHOR_ALLOW_LOCAL_SIGNER` not `true` with no KMS key | Export the full env block from section 8                               |
 | Verify page says "proof data is incomplete"                | No anchor has landed yet (worker not running or discovery job not fired)          | Wait for the 5-minute discovery tick or record the pending-state story |

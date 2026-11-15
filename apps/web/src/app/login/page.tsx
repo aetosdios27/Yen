@@ -4,10 +4,12 @@ import Link from "next/link";
 import { type FormEvent, useEffect, useState } from "react";
 import { Button } from "../../components/button";
 import { Input } from "../../components/input";
+import { SESSION_CHANGED_EVENT } from "../../components/session-nav";
 import { StatusBadge } from "../../components/status-badge";
 import { useDocumentTitle, useI18n } from "../../i18n";
 
-type Step = "phone" | "otp" | "success";
+type Step = "phone" | "otp" | "pin" | "success";
+type PinMode = "setup" | "unlock";
 
 export default function LoginPage() {
   const { t } = useI18n();
@@ -17,6 +19,10 @@ export default function LoginPage() {
   const [phone, setPhone] = useState("");
   const [channel, setChannel] = useState<"whatsapp" | "sms">("whatsapp");
   const [otp, setOtp] = useState("");
+  const [simulatedCode, setSimulatedCode] = useState<string | null>(null);
+  const [pinMode, setPinMode] = useState<PinMode>("unlock");
+  const [pin, setPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
@@ -56,6 +62,9 @@ export default function LoginPage() {
       const data = await res.json().catch(() => ({}));
 
       if (res.ok) {
+        const simulated: unknown = data.simulatedDelivery?.code;
+        setSimulatedCode(typeof simulated === "string" ? simulated : null);
+        setOtp(typeof simulated === "string" ? simulated : "");
         setStep("otp");
         setCooldownRemaining(data.resendCooldownSeconds ?? 60);
         setErrorMessage(null);
@@ -100,7 +109,14 @@ export default function LoginPage() {
       await res.json().catch(() => ({}));
 
       if (res.ok) {
-        setStep("success");
+        const statusRes = await fetch(`${apiUrl}/v1/auth/pin/status`, { credentials: "include" });
+        if (!statusRes.ok) {
+          setErrorMessage(t("auth.errorGeneric"));
+          return;
+        }
+        const status = await statusRes.json().catch(() => ({}));
+        setPinMode(status.isSet === true ? "unlock" : "setup");
+        setStep("pin");
         setErrorMessage(null);
       } else if (res.status === 410) {
         setErrorMessage(t("auth.errorOtpExpired"));
@@ -117,9 +133,54 @@ export default function LoginPage() {
     }
   };
 
+  const handleSubmitPin = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!/^\d{6}$/.test(pin)) {
+      setErrorMessage(t("auth.errorPinFormat"));
+      return;
+    }
+    if (pinMode === "setup" && pin !== confirmPin) {
+      setErrorMessage(t("auth.errorPinMismatch"));
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
+      const path = pinMode === "setup" ? "/v1/auth/pin/setup" : "/v1/auth/device/unlock";
+      const res = await fetch(`${apiUrl}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ pin }),
+      });
+
+      if (res.ok) {
+        window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));
+        setStep("success");
+        setErrorMessage(null);
+      } else if (res.status === 400) {
+        setErrorMessage(t("auth.errorPinRejected"));
+      } else if (res.status === 401) {
+        setErrorMessage(t("auth.errorPinWrong"));
+      } else if (res.status === 429) {
+        setErrorMessage(t("auth.errorRateLimited"));
+      } else {
+        setErrorMessage(t("auth.errorGeneric"));
+      }
+    } catch {
+      setErrorMessage(t("auth.errorGeneric"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleChangePhone = () => {
     setStep("phone");
     setOtp("");
+    setSimulatedCode(null);
     setErrorMessage(null);
   };
 
@@ -183,6 +244,15 @@ export default function LoginPage() {
             <p className="text-body text-ink-muted">{t("auth.otpIntro", { phone })}</p>
           </div>
 
+          {simulatedCode ? (
+            <p
+              role="status"
+              className="rounded-control border-2 border-unmatched-border bg-unmatched-bg p-3 text-small font-medium text-unmatched-ink"
+            >
+              {t("auth.simulatedDeliveryNotice", { code: simulatedCode })}
+            </p>
+          ) : null}
+
           <form onSubmit={handleVerifyOtp} className="flex flex-col gap-5" noValidate>
             <Input
               id="otp-input"
@@ -235,6 +305,68 @@ export default function LoginPage() {
                 {t("auth.changePhone")}
               </button>
             </div>
+          </form>
+        </>
+      )}
+
+      {step === "pin" && (
+        <>
+          <div className="flex flex-col gap-2">
+            <h1 className="text-display font-bold tracking-tight text-ink">
+              {pinMode === "setup" ? t("auth.pinSetupTitle") : t("auth.pinUnlockTitle")}
+            </h1>
+            <p className="text-body text-ink-muted">
+              {pinMode === "setup" ? t("auth.pinSetupIntro") : t("auth.pinUnlockIntro")}
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmitPin} className="flex flex-col gap-5" noValidate>
+            <Input
+              id="pin-input"
+              label={t("auth.pinLabel")}
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={6}
+              autoComplete={pinMode === "setup" ? "new-password" : "current-password"}
+              autoFocus
+              value={pin}
+              onChange={(e) => {
+                setPin(e.target.value);
+                if (errorMessage) setErrorMessage(null);
+              }}
+              {...(errorMessage && pinMode === "unlock" ? { error: errorMessage } : {})}
+              required
+            />
+
+            {pinMode === "setup" ? (
+              <Input
+                id="pin-confirm-input"
+                label={t("auth.pinConfirmLabel")}
+                type="password"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                autoComplete="new-password"
+                value={confirmPin}
+                onChange={(e) => {
+                  setConfirmPin(e.target.value);
+                  if (errorMessage) setErrorMessage(null);
+                }}
+                {...(errorMessage ? { error: errorMessage } : {})}
+                required
+              />
+            ) : null}
+
+            <Button
+              type="submit"
+              variant="primary"
+              loading={loading}
+              loadingLabel={t("auth.pinSubmitting")}
+              className="w-full"
+            >
+              {pinMode === "setup" ? t("auth.pinSetupSubmit") : t("auth.pinUnlockSubmit")}
+            </Button>
           </form>
         </>
       )}

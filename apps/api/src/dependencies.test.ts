@@ -2,8 +2,14 @@ import { createSql } from "@yen/db";
 import { InMemoryExpenseStore } from "@yen/ledger";
 import { describe, expect, it } from "vitest";
 import { createApp } from "./app.js";
-import { defaultDependencies, selectVirusScanner, validatePinSecret } from "./dependencies.js";
+import {
+  defaultDependencies,
+  selectPolicy,
+  selectVirusScanner,
+  validatePinSecret,
+} from "./dependencies.js";
 import { PostgresEvidenceStore } from "./evidence-store-postgres.js";
+import { denyAllPolicy, devPolicy } from "./policy.js";
 import { MemoryStorageAdapter, type StorageAdapter } from "./storage.js";
 import { MemoryEvidenceStore } from "./stores.js";
 import { ClamAvVirusScannerAdapter, LocalDemoVirusScannerAdapter } from "./virus-scanner.js";
@@ -175,6 +181,24 @@ describe("virus scanner selection", () => {
 
   it("refuses the demo fallback in production", () => {
     expect(() => selectVirusScanner({ NODE_ENV: "production" })).toThrow("CLAMAV_HOST");
+  });
+
+  it("derives a local PIN secret only for development", () => {
+    withEnv({ NODE_ENV: "development", PIN_HMAC_SECRET: undefined }, () => {
+      expect(defaultDependencies().pinSecret).toMatch(/^development-only-/);
+    });
+    withEnv({ NODE_ENV: "test", PIN_HMAC_SECRET: undefined }, () => {
+      expect(defaultDependencies().pinSecret).toBeNull();
+    });
+    withEnv({ NODE_ENV: "development", PIN_HMAC_SECRET: "e".repeat(40) }, () => {
+      expect(defaultDependencies().pinSecret).toBe("e".repeat(40));
+    });
+  });
+
+  it("keeps the deny-all policy in production and uses the membership policy elsewhere", () => {
+    expect(selectPolicy({ NODE_ENV: "production" })).toBe(denyAllPolicy);
+    expect(selectPolicy({ NODE_ENV: "development" })).toBe(devPolicy);
+    expect(selectPolicy({ NODE_ENV: "test" })).toBe(devPolicy);
   });
 
   it("defaults to the demo scanner in non-production dependencies", () => {

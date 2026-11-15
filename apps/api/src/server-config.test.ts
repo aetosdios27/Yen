@@ -17,6 +17,31 @@ it("fails closed when production delivery providers are missing", async () => {
   ).toThrow("WHATSAPP_API_BASE_URL");
 });
 
+it("allows the local web origin in development and nothing by default elsewhere", async () => {
+  const { resolveCorsOrigins } = await import("./server-bootstrap.js");
+  const base = { PORT: 3001 } as Parameters<typeof resolveCorsOrigins>[0];
+  expect(resolveCorsOrigins({ ...base, NODE_ENV: "development" })).toEqual([
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+  ]);
+  expect(resolveCorsOrigins({ ...base, NODE_ENV: "development", WEB_PORT: 3100 })).toEqual([
+    "http://localhost:3100",
+    "http://127.0.0.1:3100",
+  ]);
+  expect(resolveCorsOrigins({ ...base, NODE_ENV: "production" })).toEqual([]);
+  expect(resolveCorsOrigins({ ...base, NODE_ENV: "test" })).toEqual([]);
+});
+
+it("takes explicit CORS origins in any environment", async () => {
+  const { resolveCorsOrigins } = await import("./server-bootstrap.js");
+  const config = {
+    PORT: 3001,
+    NODE_ENV: "production",
+    CORS_ORIGINS: "https://app.yen.example, https://yen.example",
+  } as Parameters<typeof resolveCorsOrigins>[0];
+  expect(resolveCorsOrigins(config)).toEqual(["https://app.yen.example", "https://yen.example"]);
+});
+
 it("permits memory stores outside production when explicitly enabled", () => {
   expect(useMemoryStore({ NODE_ENV: "development", YEN_ALLOW_MEMORY_STORES: "true" })).toBe(true);
 });

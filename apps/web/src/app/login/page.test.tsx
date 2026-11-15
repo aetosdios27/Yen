@@ -161,29 +161,65 @@ describe("LoginPage", () => {
     });
   });
 
-  it("completes verification and transitions to success view", async () => {
+  function jsonResponse(status: number, body: unknown) {
+    return { ok: status >= 200 && status < 300, status, json: async () => body };
+  }
+
+  async function signInUntilPinStep(responses: ReturnType<typeof jsonResponse>[]) {
+    const fetchMock = vi.fn();
+    for (const response of responses) fetchMock.mockResolvedValueOnce(response);
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <LocaleProvider initialLocale="en">
+        <LoginPage />
+      </LocaleProvider>,
+    );
+
+    fireEvent.change(screen.getByLabelText("Phone number"), {
+      target: { value: "9876543210" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send code" }));
+    await waitFor(() => {
+      expect(screen.getByLabelText("6-digit code")).toBeTruthy();
+    });
+    fireEvent.change(screen.getByLabelText("6-digit code"), { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "Verify and continue" }));
+    return fetchMock;
+  }
+
+  const sentOk = jsonResponse(200, { status: "sent", resendAfterSeconds: 60 });
+  const verifiedOk = jsonResponse(200, { status: "authenticated", session: { id: "s" } });
+
+  it("shows the simulated code notice and prefills the code when delivery is simulated", async () => {
     vi.stubGlobal(
       "fetch",
       vi
         .fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 200,
-          json: async () => ({ ok: true, channel: "sms", resendCooldownSeconds: 60 }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 200,
-          json: async () => ({
-            user: { id: "019488a0-0000-7000-8000-000000000001", phone: "+919876543210" },
-            session: {
-              id: "019488a0-0000-7000-8000-000000000002",
-              expiresAt: "2026-10-29T00:00:00Z",
-            },
-          }),
-        }),
+        .mockResolvedValueOnce(
+          jsonResponse(200, { status: "sent", simulatedDelivery: { code: "654321" } }),
+        ),
+    );
+    render(
+      <LocaleProvider initialLocale="en">
+        <LoginPage />
+      </LocaleProvider>,
     );
 
+    fireEvent.change(screen.getByLabelText("Phone number"), {
+      target: { value: "9876543210" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send code" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("status").textContent).toBe(
+        "Simulated delivery: no message was sent from this environment. Your code is 654321.",
+      );
+    });
+    expect((screen.getByLabelText("6-digit code") as HTMLInputElement).value).toBe("654321");
+  });
+
+  it("shows no simulated notice when the API does not simulate delivery", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(sentOk));
     render(
       <LocaleProvider initialLocale="en">
         <LoginPage />
@@ -198,15 +234,82 @@ describe("LoginPage", () => {
     await waitFor(() => {
       expect(screen.getByLabelText("6-digit code")).toBeTruthy();
     });
+    expect(screen.queryByRole("status")).toBeNull();
+    expect((screen.getByLabelText("6-digit code") as HTMLInputElement).value).toBe("");
+  });
 
-    fireEvent.change(screen.getByLabelText("6-digit code"), {
-      target: { value: "123456" },
+  it("unlocks the device with the existing PIN and then shows the success view", async () => {
+    const fetchMock = await signInUntilPinStep([
+      sentOk,
+      verifiedOk,
+      jsonResponse(200, { isSet: true, status: "active" }),
+      jsonResponse(200, { status: "unlocked" }),
+    ]);
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { level: 1, name: "Enter your PIN" })).toBeTruthy();
     });
-    fireEvent.click(screen.getByRole("button", { name: "Verify and continue" }));
+    expect(screen.queryByLabelText("Confirm PIN")).toBeNull();
+    fireEvent.change(screen.getByLabelText("6-digit PIN"), { target: { value: "482613" } });
+    fireEvent.click(screen.getByRole("button", { name: "Unlock and continue" }));
 
     await waitFor(() => {
       expect(screen.getByRole("heading", { level: 1, name: "Welcome" })).toBeTruthy();
       expect(screen.getByText("You are signed in to Yen.")).toBeTruthy();
+    });
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining("/v1/auth/device/unlock"),
+      expect.objectContaining({ body: JSON.stringify({ pin: "482613" }), credentials: "include" }),
+    );
+  });
+
+  it("creates a PIN for a first sign-in and requires both entries to match", async () => {
+    const fetchMock = await signInUntilPinStep([
+      sentOk,
+      verifiedOk,
+      jsonResponse(200, { isSet: false, status: "not_set" }),
+      jsonResponse(201, { status: "created", isSet: true }),
+    ]);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { level: 1, name: "Create your approval PIN" }),
+      ).toBeTruthy();
+    });
+    fireEvent.change(screen.getByLabelText("6-digit PIN"), { target: { value: "482613" } });
+    fireEvent.change(screen.getByLabelText("Confirm PIN"), { target: { value: "482614" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create PIN and continue" }));
+    await waitFor(() => {
+      expect(screen.getByText("The two PINs do not match.")).toBeTruthy();
+    });
+
+    fireEvent.change(screen.getByLabelText("Confirm PIN"), { target: { value: "482613" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create PIN and continue" }));
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { level: 1, name: "Welcome" })).toBeTruthy();
+    });
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining("/v1/auth/pin/setup"),
+      expect.objectContaining({ body: JSON.stringify({ pin: "482613" }) }),
+    );
+  });
+
+  it("reports a wrong PIN without leaving the PIN step", async () => {
+    await signInUntilPinStep([
+      sentOk,
+      verifiedOk,
+      jsonResponse(200, { isSet: true, status: "active" }),
+      jsonResponse(401, { error: { code: "unauthenticated" } }),
+    ]);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("6-digit PIN")).toBeTruthy();
+    });
+    fireEvent.change(screen.getByLabelText("6-digit PIN"), { target: { value: "111222" } });
+    fireEvent.click(screen.getByRole("button", { name: "Unlock and continue" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert").textContent).toBe("Wrong PIN, try again.");
     });
   });
 

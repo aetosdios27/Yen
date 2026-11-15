@@ -114,7 +114,14 @@
           "status": { "type": "string", "enum": ["sent"] },
           "channel": { "type": "string", "enum": ["whatsapp", "sms"] },
           "resendAfterSeconds": { "type": "integer", "minimum": 0 },
-          "expiresAt": { "type": "string", "format": "date-time" }
+          "expiresAt": { "type": "string", "format": "date-time" },
+          "simulatedDelivery": {
+            "type": "object",
+            "properties": { "code": { "type": "string", "pattern": "^\\d{6}$" } },
+            "required": ["code"],
+            "additionalProperties": false,
+            "description": "Present only when the development delivery stub handled the message; production never sends this field"
+          }
         },
         "required": ["status", "channel", "resendAfterSeconds", "expiresAt"],
         "additionalProperties": false

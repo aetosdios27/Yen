@@ -42,7 +42,7 @@ import {
   type PinStore,
 } from "./pin/index.js";
 import type { FundRecord } from "./policy.js";
-import { DEFAULT_OBJECTION_WINDOW_HOURS, denyAllPolicy, type Policy } from "./policy.js";
+import { DEFAULT_OBJECTION_WINDOW_HOURS, denyAllPolicy, devPolicy, type Policy } from "./policy.js";
 import { MemoryPrivacyStore, type PrivacyStore } from "./privacy-store.js";
 import type { PublicReadCache } from "./public-cache.js";
 import { MemoryReceiptStore, type ReceiptStore } from "./receipt-store.js";
@@ -212,6 +212,8 @@ export class MemoryDonationPledgeStore implements DonationPledgeStore {
     return { kind: "pledged", donationId };
   }
 }
+
+const DEV_PIN_HMAC_SECRET = "development-only-pin-hmac-secret-change-me";
 
 export function validatePinSecret(secret: unknown): string {
   if (typeof secret !== "string" || secret.trim().length < 32) {
@@ -502,6 +504,16 @@ export function selectVirusScanner(env: NodeJS.ProcessEnv = process.env): VirusS
   return new LocalDemoVirusScannerAdapter();
 }
 
+/**
+ * Picks the authorization policy for the real server. Production keeps the
+ * fail-closed deny-all policy until the production policy lands; every other
+ * environment gets the membership-driven development policy so seeded personas
+ * can act according to their fund roles.
+ */
+export function selectPolicy(env: NodeJS.ProcessEnv = process.env): Policy {
+  return env.NODE_ENV === "production" ? denyAllPolicy : devPolicy;
+}
+
 export function defaultDependencies(
   clock: () => number = Date.now,
   expenseStore?: ExpenseStore,
@@ -550,7 +562,11 @@ export function defaultDependencies(
   ) {
     throw new Error("WEBAUTHN_RP_ID and WEBAUTHN_ORIGIN are required in production");
   }
-  const rawPinSecret = process.env.PIN_HMAC_SECRET;
+  const rawPinSecret =
+    process.env.PIN_HMAC_SECRET ??
+    (process.env.NODE_ENV === undefined || process.env.NODE_ENV === "development"
+      ? DEV_PIN_HMAC_SECRET
+      : undefined);
   const pinSecret = rawPinSecret ? validatePinSecret(rawPinSecret) : null;
   const pinService = new PinService({
     pinStore,
