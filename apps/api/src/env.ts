@@ -13,16 +13,6 @@ const schema = z
     ...clamAvEnv.shape,
     ...payeeRulesEnv.shape,
     DATABASE_URL: z.string().optional(),
-    CORS_ALLOWED_ORIGINS: z
-      .string()
-      .optional()
-      .transform((value) =>
-        (value ?? "")
-          .split(",")
-          .map((origin) => origin.trim())
-          .filter(Boolean),
-      )
-      .pipe(z.array(z.url().refine((origin) => new URL(origin).origin === origin))),
     EVIDENCE_STORAGE_DIR: z.string().min(1).optional(),
     OTP_HASH_KEY: z.string().min(32).optional(),
     CORS_ORIGINS: z

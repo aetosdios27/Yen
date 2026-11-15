@@ -56,8 +56,6 @@
         "NEXT_PUBLIC_API_URL",
         "NEXT_PUBLIC_LOCAL_CHAIN_RPC_URL",
         "REGISTRY_CONTRACT_ADDRESS",
-        "PAYEE_FINGERPRINT_SALT",
-        "CORS_ALLOWED_ORIGINS",
         "NODE_ENV"
       ]
     }
