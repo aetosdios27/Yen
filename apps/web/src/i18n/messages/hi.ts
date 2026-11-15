@@ -591,6 +591,10 @@ export const hi: Messages = {
     receiptLabel: "रसीद / बिल संदर्भ (वैकल्पिक)",
     receiptPlaceholder: "उदा. इनवॉइस #1042",
     receiptHint: "इनवॉइस नंबर या रसीद का विवरण।",
+    billFileLabel: "बिल की फ़ोटो या PDF (वैकल्पिक)",
+    billFileHint: "JPEG, PNG, WebP या PDF, अधिकतम 10 MB। स्वीकृतिकर्ता निर्णय से पहले इसे खोल सकते हैं।",
+    billFileError: "10 MB तक की JPEG, PNG, WebP या PDF फ़ाइल चुनें",
+    submitFailed: "खर्च का अनुरोध जमा नहीं हो सका। फिर कोशिश करें।",
     reviewCta: "खर्च की समीक्षा करें",
     reviewTitle: "खर्च अनुरोध की समीक्षा",
     reviewSummary:

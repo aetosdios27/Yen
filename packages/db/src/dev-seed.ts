@@ -312,15 +312,16 @@ export async function seedDevDatabase(sql: Sql): Promise<DevSeedResult> {
   };
 
   await sql`
-    INSERT INTO funds (id, org_id, title, target_paise, visibility_tier, policy_json, status)
+    INSERT INTO funds (id, org_id, title, target_paise, visibility_tier, policy_json, status, payee_vpa, payee_name)
     VALUES (
       ${fundData.id}, ${fundData.orgId}, ${fundData.title}, ${fundData.targetPaise},
-      ${fundData.visibilityTier}, ${sql.json(fundPolicy)}, ${fundData.status}
+      ${fundData.visibilityTier}, ${sql.json(fundPolicy)}, ${fundData.status},
+      ${fundData.upiVpa}, ${fundData.upiPayeeName}
     )
     ON CONFLICT (id) DO UPDATE
     SET title = EXCLUDED.title, target_paise = EXCLUDED.target_paise,
         visibility_tier = EXCLUDED.visibility_tier, policy_json = EXCLUDED.policy_json,
-        status = EXCLUDED.status
+        status = EXCLUDED.status, payee_vpa = EXCLUDED.payee_vpa, payee_name = EXCLUDED.payee_name
   `;
 
   // 4. Insert Memberships

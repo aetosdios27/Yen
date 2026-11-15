@@ -610,6 +610,10 @@ export const en = {
     receiptLabel: "Receipt / Bill reference (optional)",
     receiptPlaceholder: "e.g. Invoice #1042",
     receiptHint: "Invoice number or physical receipt description.",
+    billFileLabel: "Bill photo or PDF (optional)",
+    billFileHint: "JPEG, PNG, WebP or PDF up to 10 MB. Approvers can open it before they decide.",
+    billFileError: "Choose a JPEG, PNG, WebP or PDF file up to 10 MB",
+    submitFailed: "Could not submit the expense request. Try again.",
     reviewCta: "Review expense",
     reviewTitle: "Review expense request",
     reviewSummary:

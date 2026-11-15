@@ -19,6 +19,8 @@ import { useDocumentTitle, useI18n } from "../../../../../i18n";
 import { getApiBaseUrl } from "../../../../../lib/api-client";
 import {
   type DashboardExpenseItem,
+  type ExpenseEvidenceItem,
+  fetchExpenseEvidence,
   fetchExpenseItem,
   submitExpenseApproval,
   submitExpenseRejection,
@@ -34,6 +36,7 @@ export default function ApproverPage({ params }: ApproverPageProps) {
 
   const [ids, setIds] = useState<{ fundId: string; expenseId: string } | null>(null);
   const [expense, setExpense] = useState<DashboardExpenseItem | null>(null);
+  const [evidence, setEvidence] = useState<readonly ExpenseEvidenceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isOffline, setIsOffline] = useState(false);
@@ -71,11 +74,15 @@ export default function ApproverPage({ params }: ApproverPageProps) {
     setLoading(true);
     setError(null);
     try {
-      const result = await fetchExpenseItem(fundId, expenseId);
+      const [result, bills] = await Promise.all([
+        fetchExpenseItem(fundId, expenseId),
+        fetchExpenseEvidence(fundId, expenseId).catch(() => []),
+      ]);
       if (!result) {
         setError("Expense not found");
       } else {
         setExpense(result);
+        setEvidence(bills);
       }
     } catch {
       setError("Failed to load expense details");
@@ -249,15 +256,21 @@ export default function ApproverPage({ params }: ApproverPageProps) {
                   {t("approver.receipts")}
                 </dt>
                 <dd className="text-small text-ink">
-                  {expense.receiptRef ? (
-                    <a
-                      href={`${getApiBaseUrl()}/v1/funds/${expense.fundId}/expenses/${expense.id}/evidence/${expense.receiptRef}/download`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 font-medium text-primary underline-offset-4 hover:underline"
-                    >
-                      {expense.receiptRef}
-                    </a>
+                  {evidence.length > 0 ? (
+                    <ul className="flex flex-col gap-1">
+                      {evidence.map((item) => (
+                        <li key={item.evidenceId}>
+                          <a
+                            href={`${getApiBaseUrl()}/v1/funds/${expense.fundId}/expenses/${expense.id}/evidence/${item.evidenceId}/download`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 font-medium text-primary underline-offset-4 hover:underline"
+                          >
+                            {item.fileName}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
                   ) : (
                     <span className="text-ink-muted">{t("approver.noReceipts")}</span>
                   )}
