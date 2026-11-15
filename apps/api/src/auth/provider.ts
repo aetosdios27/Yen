@@ -41,13 +41,22 @@ export interface SentOtpRecord {
   readonly sentAt: number;
 }
 
-/** Local-only stub. The in-memory record is available only to tests/dev tooling. */
+/**
+ * Local-only stub. The in-memory record is available only to tests and local
+ * development, where the OTP send response reveals the code as simulated
+ * delivery. Construction is refused in production so no code can ever leave
+ * the process.
+ */
 export class DevStubOtpDeliveryProvider implements DeliveryProvider {
   private readonly deliveries: SentOtpRecord[] = [];
   private readonly responses = new Map<string, DeliveryResponse>();
   private simulateFailure = false;
 
-  constructor(private readonly clock: () => number = Date.now) {}
+  constructor(private readonly clock: () => number = Date.now) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("The development OTP delivery stub is not allowed in production");
+    }
+  }
 
   setSimulateFailure(fail: boolean): void {
     this.simulateFailure = fail;

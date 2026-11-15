@@ -19,6 +19,7 @@ import { formatDate, formatDateTime, formatMoney } from "../../lib/format";
 import { generateOfflineVerifierScript, triggerDownload } from "../../lib/offline-script";
 import {
   type BundleVerificationReport,
+  isSimulatedChain,
   type RecordDetailKind,
   type RecordProofData,
   type RecordVerificationReport,
@@ -402,6 +403,14 @@ function VerifyPageContent() {
                           ? t("verify.sealPending")
                           : t("verify.sealOffline")}
                     </span>
+                    {isSimulatedChain(state.report.technical.chainId) && (
+                      <span
+                        data-testid="simulated-chain-notice"
+                        className="mt-1 inline-block rounded-control border border-border bg-surface px-2 py-0.5 text-[11px] font-medium text-ink"
+                      >
+                        {t("verify.simulatedChainNotice")}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -483,6 +492,17 @@ function VerifyPageContent() {
                             {t("verify.batchSequenceLabel")}
                           </span>
                           <span className="text-ink">{state.report.technical.batchSequence}</span>
+                        </div>
+                      )}
+
+                      {isSimulatedChain(state.report.technical.chainId) && (
+                        <div>
+                          <span className="text-ink-muted block text-[11px]">
+                            {t("verify.chainIdLabel")}
+                          </span>
+                          <span className="text-ink">
+                            {state.report.technical.chainId} ({t("verify.simulatedChainLabel")})
+                          </span>
                         </div>
                       )}
 

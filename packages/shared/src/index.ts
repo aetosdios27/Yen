@@ -83,6 +83,19 @@ export {
 export { addPaise, formatInr, type Paise, paise, type paiseBrand, toPaise } from "./paise.js";
 export { paiseWire } from "./paise-wire.js";
 export { normalizePhone, type PhoneE164, parsePhoneE164 } from "./phone.js";
+export {
+  isSensitiveKey,
+  MAX_SCRUB_DEPTH,
+  REDACTED,
+  REDACTED_AUTHORIZATION,
+  REDACTED_COOKIE,
+  REDACTED_PHONE,
+  REDACTED_TOKEN,
+  REDACTED_VPA,
+  scrubText,
+  scrubValue,
+  TRUNCATED,
+} from "./pii.js";
 export { PRIVACY_NOTICE_VERSION } from "./privacy.js";
 export {
   type DonationReceiptStatus,
@@ -98,6 +111,13 @@ export {
   rootRegistryAddress,
 } from "./registry/abi.js";
 export { type ResilienceOptions, ResilientCall } from "./resilience.js";
+export {
+  buildSentryEnvelope,
+  parseSentryDsn,
+  type SentryDsn,
+  type SentryEvent,
+  sentryEnvelopeHeaders,
+} from "./sentry.js";
 export {
   BURN_ALERT_THRESHOLDS,
   type BurnRate,

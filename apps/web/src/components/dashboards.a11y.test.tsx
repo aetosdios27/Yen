@@ -160,7 +160,8 @@ describe("Dashboard and Approver A11y & Navigation", () => {
     await user.tab();
     expect(document.activeElement).toBe(purposeInput);
 
-    // Tab to receipt input then button
+    // Tab to the receipt reference, the bill file input and then the button
+    await user.tab();
     await user.tab();
     await user.tab();
     expect(document.activeElement).toBe(reviewBtn);

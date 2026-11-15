@@ -33,4 +33,22 @@ describe("web response security headers", () => {
       false,
     );
   });
+
+  it("lets the browser read a loopback local chain only when one is configured", () => {
+    process.env.NEXT_PUBLIC_API_URL = "http://localhost:3001";
+    delete process.env.NEXT_PUBLIC_LOCAL_CHAIN_RPC_URL;
+    const connectSrc = (): string =>
+      proxy(new NextRequest("https://example.test/"))
+        .headers.get("Content-Security-Policy")
+        ?.split("; ")
+        .find((directive) => directive.startsWith("connect-src")) ?? "";
+    expect(connectSrc()).not.toContain("8545");
+
+    process.env.NEXT_PUBLIC_LOCAL_CHAIN_RPC_URL = "http://127.0.0.1:8545";
+    expect(connectSrc()).toContain("http://127.0.0.1:8545");
+
+    process.env.NEXT_PUBLIC_LOCAL_CHAIN_RPC_URL = "http://evil.example:8545";
+    expect(connectSrc()).not.toContain("evil.example");
+    delete process.env.NEXT_PUBLIC_LOCAL_CHAIN_RPC_URL;
+  });
 });

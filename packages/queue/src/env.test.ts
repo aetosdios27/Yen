@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { anchoringSignerMode, parseWorkerEnv } from "./env.js";
+import { anchorDiscoveryCron, anchoringChain, anchoringSignerMode, parseWorkerEnv } from "./env.js";
 
 const DATABASE_URL = "postgres://worker:pw@127.0.0.1:5432/yen";
 
@@ -68,6 +68,41 @@ describe("parseWorkerEnv", () => {
   it("reports every invalid variable in one error", () => {
     expect(() => parseWorkerEnv({ QUEUE_SCHEMA: "bad-name", QUEUE_MIGRATE: "maybe" })).toThrow(
       /DATABASE_URL[\s\S]*QUEUE_SCHEMA[\s\S]*QUEUE_MIGRATE/,
+    );
+  });
+});
+
+describe("anchoringChain", () => {
+  it("defaults to Polygon Amoy and accepts it explicitly in production", () => {
+    expect(anchoringChain({}).id).toBe(80002);
+    expect(anchoringChain({ NODE_ENV: "production", ANCHOR_CHAIN_ID: "80002" }).id).toBe(80002);
+  });
+
+  it("selects the local Foundry chain outside production and refuses it in production", () => {
+    expect(anchoringChain({ NODE_ENV: "development", ANCHOR_CHAIN_ID: "31337" }).id).toBe(31337);
+    expect(() => anchoringChain({ NODE_ENV: "production", ANCHOR_CHAIN_ID: "31337" })).toThrow(
+      "refused in production",
+    );
+  });
+
+  it("rejects any other chain id", () => {
+    expect(() => anchoringChain({ ANCHOR_CHAIN_ID: "1" })).toThrow("ANCHOR_CHAIN_ID");
+  });
+});
+
+describe("anchorDiscoveryCron", () => {
+  it("keeps the registered default when unset", () => {
+    expect(anchorDiscoveryCron({})).toBeUndefined();
+  });
+
+  it("builds a minute-interval cron from a bounded integer", () => {
+    expect(anchorDiscoveryCron({ ANCHOR_SCHEDULE_INTERVAL_MINUTES: "1" })).toBe("*/1 * * * *");
+    expect(anchorDiscoveryCron({ ANCHOR_SCHEDULE_INTERVAL_MINUTES: "59" })).toBe("*/59 * * * *");
+  });
+
+  it.each(["0", "60", "1.5", "abc", ""])("rejects %j", (value) => {
+    expect(() => anchorDiscoveryCron({ ANCHOR_SCHEDULE_INTERVAL_MINUTES: value })).toThrow(
+      "ANCHOR_SCHEDULE_INTERVAL_MINUTES",
     );
   });
 });
