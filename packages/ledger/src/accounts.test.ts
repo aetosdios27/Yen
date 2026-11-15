@@ -1,3 +1,4 @@
+import { SEED_CONSTANTS } from "@yen/db";
 import { describe, expect, it } from "vitest";
 import {
   deterministicUuid,
@@ -58,5 +59,15 @@ describe("deterministic accounts", () => {
     expect(fundAccountName(fundA, "donations")).toBe(`fund:${fundA}:donations`);
     expect(fundAccountName(fundA, "expenses")).toBe(`fund:${fundA}:expenses`);
     expect(fundAccountName(fundA, "pending_spend")).toBe(`fund:${fundA}:pending_spend`);
+  });
+});
+
+describe("demo seed accounts", () => {
+  it("uses the same account ids the ledger derives for the seeded fund", () => {
+    const accounts = getFundAccountIds(SEED_CONSTANTS.fundId);
+    expect(SEED_CONSTANTS.bankAccountId).toBe(accounts.bankId);
+    expect(SEED_CONSTANTS.donationsAccountId).toBe(accounts.donationsId);
+    expect(SEED_CONSTANTS.expensesAccountId).toBe(accounts.expensesId);
+    expect(SEED_CONSTANTS.pendingSpendAccountId).toBe(accounts.pendingSpendId);
   });
 });

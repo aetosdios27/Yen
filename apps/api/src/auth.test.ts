@@ -43,6 +43,29 @@ it("does not report fake OTP delivery as successful in production", async () => 
   ).rejects.toThrow("Delivery provider is not configured");
 });
 
+function withNodeEnv(value: string | undefined, run: () => void) {
+  const original = process.env.NODE_ENV;
+  if (value === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = value;
+  try {
+    run();
+  } finally {
+    if (original === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = original;
+  }
+}
+
+it("refuses to construct the development OTP stub in production", () => {
+  withNodeEnv("production", () => {
+    expect(() => new DevStubOtpDeliveryProvider()).toThrow(
+      "The development OTP delivery stub is not allowed in production",
+    );
+  });
+  withNodeEnv("development", () => {
+    expect(new DevStubOtpDeliveryProvider()).toBeInstanceOf(DevStubOtpDeliveryProvider);
+  });
+});
+
 it("deduplicates development deliveries with the caller's idempotency key", async () => {
   const provider = new DevStubOtpDeliveryProvider(() => 1000);
   const request = {
@@ -187,6 +210,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
       policy: devPolicy,
       principal,
       otpDeliveryProvider,
+      simulateOtpDelivery: true,
       authStore,
       idempotencyStore,
       pinStore,
@@ -315,6 +339,74 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
 
     const delivery = getDelivery(otpDeliveryProvider);
     expect(delivery.channel).toBe("sms");
+  });
+
+  it("reveals the code as simulated delivery only when the development stub handled it", async () => {
+    const { app, otpDeliveryProvider } = createTestSetup();
+    const sendRes = await app.request("/v1/auth/otp/send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", channel: "sms" }),
+    });
+    const sendData = sendOtpResponse.parse(await sendRes.json());
+    expect(sendData.simulatedDelivery).toEqual({ code: getDelivery(otpDeliveryProvider).code });
+
+    const notOptedIn = createApp({
+      authStore: new MemoryAuthStore(),
+      otpHashKey,
+      otpDeliveryProvider: new DevStubOtpDeliveryProvider(),
+    });
+    const notOptedInRes = await notOptedIn.request("/v1/auth/otp/send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", channel: "sms" }),
+    });
+    expect(notOptedInRes.status).toBe(200);
+    expect(await notOptedInRes.json()).not.toHaveProperty("simulatedDelivery");
+
+    const external = createApp({
+      authStore: new MemoryAuthStore(),
+      otpHashKey,
+      simulateOtpDelivery: true,
+      otpDeliveryProvider: {
+        send: async () => ({
+          messageId: "external-1",
+          status: "accepted" as const,
+          idempotencyGuaranteed: true,
+        }),
+      },
+    });
+    const externalRes = await external.request("/v1/auth/otp/send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", channel: "sms" }),
+    });
+    expect(externalRes.status).toBe(200);
+    expect(await externalRes.json()).not.toHaveProperty("simulatedDelivery");
+  });
+
+  it("lets an untrusted OTP session read its PIN status but nothing else", async () => {
+    const { app, otpDeliveryProvider } = createTestSetup();
+    await app.request("/v1/auth/otp/send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", channel: "sms" }),
+    });
+    const verifyRes = await app.request("/v1/auth/otp/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        phone: "+919876543210",
+        code: getDelivery(otpDeliveryProvider).code,
+      }),
+    });
+    const { session } = verifyOtpResponse.parse(await verifyRes.json());
+    const headers = { authorization: `Bearer ${session.token}` };
+
+    const status = await app.request("/v1/auth/pin/status", { headers });
+    expect(status.status).toBe(200);
+    expect(await status.json()).toMatchObject({ isSet: false, status: "not_set" });
+    expect((await app.request("/v1/me", { headers })).status).toBe(401);
   });
 
   it("requires an explicit delivery channel", async () => {

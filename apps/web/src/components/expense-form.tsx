@@ -5,6 +5,7 @@ import { type FormEvent, useState } from "react";
 import { useI18n } from "../i18n";
 import { Button } from "./button";
 import { cn } from "./cn";
+import { ALLOWED_MIME_TYPES, MAX_FILE_SIZE_BYTES } from "./evidence-upload";
 import { Input } from "./input";
 
 const UPI_REGEX = /^[\w.-]+@[\w.-]+$/;
@@ -24,6 +25,7 @@ export interface ValidatedExpenseSubmission {
   payeeUpi: string;
   purpose: string;
   receiptRef?: string | undefined;
+  receiptFile?: File | undefined;
 }
 
 export interface ExpenseFormProps {
@@ -40,6 +42,7 @@ interface FormErrors {
   payeeName?: string | undefined;
   payeeUpi?: string | undefined;
   purpose?: string | undefined;
+  receiptFile?: string | undefined;
 }
 
 export function ExpenseForm({
@@ -59,8 +62,10 @@ export function ExpenseForm({
     purpose: initialValues?.purpose ?? "",
     receiptRef: initialValues?.receiptRef ?? "",
   });
+  const [receiptFile, setReceiptFile] = useState<File | undefined>(undefined);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [validatedPaise, setValidatedPaise] = useState<Paise | null>(null);
 
   const validate = (): { isValid: boolean; paiseAmount: Paise | null; fieldErrors: FormErrors } => {
@@ -102,6 +107,14 @@ export function ExpenseForm({
       fieldErrors.purpose = t("expenseForm.purposeError");
     }
 
+    if (
+      receiptFile &&
+      (!(ALLOWED_MIME_TYPES as readonly string[]).includes(receiptFile.type) ||
+        receiptFile.size > MAX_FILE_SIZE_BYTES)
+    ) {
+      fieldErrors.receiptFile = t("expenseForm.billFileError");
+    }
+
     return {
       isValid: Object.keys(fieldErrors).length === 0 && paiseAmount !== null,
       paiseAmount,
@@ -123,6 +136,7 @@ export function ExpenseForm({
   const handleFinalSubmit = async () => {
     if (validatedPaise === null) return;
     setIsSubmitting(true);
+    setSubmitError(null);
     try {
       await onSubmit({
         amountPaise: validatedPaise,
@@ -131,7 +145,10 @@ export function ExpenseForm({
         payeeUpi: values.payeeUpi.trim(),
         purpose: values.purpose.trim(),
         receiptRef: values.receiptRef?.trim() || undefined,
+        receiptFile,
       });
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : t("expenseForm.submitFailed"));
     } finally {
       setIsSubmitting(false);
     }
@@ -166,6 +183,14 @@ export function ExpenseForm({
             <dt className="text-small font-semibold text-ink-muted">{t("approver.purpose")}</dt>
             <dd className="text-body text-ink">{values.purpose}</dd>
           </div>
+          {receiptFile ? (
+            <div className="sm:col-span-2">
+              <dt className="text-small font-semibold text-ink-muted">
+                {t("expenseForm.billFileLabel")}
+              </dt>
+              <dd className="text-body text-ink">{receiptFile.name}</dd>
+            </div>
+          ) : null}
           {values.receiptRef ? (
             <div className="sm:col-span-2">
               <dt className="text-small font-semibold text-ink-muted">
@@ -175,6 +200,12 @@ export function ExpenseForm({
             </div>
           ) : null}
         </dl>
+
+        {submitError ? (
+          <p role="alert" className="text-small font-semibold text-danger">
+            {submitError}
+          </p>
+        ) : null}
 
         <div className="flex flex-col gap-3 pt-2 sm:flex-row-reverse sm:items-center">
           <Button
@@ -191,7 +222,10 @@ export function ExpenseForm({
             type="button"
             variant="secondary"
             disabled={isSubmitting}
-            onClick={() => setStep("edit")}
+            onClick={() => {
+              setReceiptFile(undefined);
+              setStep("edit");
+            }}
             className="w-full sm:w-auto"
           >
             {t("expenseForm.editCta")}
@@ -302,6 +336,21 @@ export function ExpenseForm({
           onChange={(e) => {
             const val = e.target.value;
             setValues((prev) => ({ ...prev, receiptRef: val }));
+          }}
+        />
+
+        <Input
+          id="expense-receipt-file"
+          type="file"
+          accept={ALLOWED_MIME_TYPES.join(",")}
+          label={t("expenseForm.billFileLabel")}
+          hint={t("expenseForm.billFileHint")}
+          error={errors.receiptFile}
+          onChange={(e) => {
+            setReceiptFile(e.target.files?.[0]);
+            if (errors.receiptFile) {
+              setErrors((prev) => ({ ...prev, receiptFile: undefined }));
+            }
           }}
         />
       </div>

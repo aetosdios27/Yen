@@ -735,6 +735,14 @@ export const sendOtpResponse = z
     channel: z.enum(["whatsapp", "sms"]),
     resendAfterSeconds: z.number().int().nonnegative(),
     expiresAt: z.iso.datetime(),
+    simulatedDelivery: z
+      .object({ code: z.string().regex(/^\d{6}$/) })
+      .strict()
+      .optional()
+      .openapi({
+        description:
+          "Present only when the development delivery stub handled the message; production never sends this field",
+      }),
   })
   .strict()
   .openapi("SendOtpResponse");

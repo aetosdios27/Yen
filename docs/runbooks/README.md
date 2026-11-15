@@ -25,3 +25,16 @@ pnpm exec tsx scripts/check-status.ts
 It checks API liveness and readiness, database readiness, and the public fund
 page, and prints a single JSON status payload. See the script header for
 configuration.
+
+Uptime probing with alerting uses `scripts/check-uptime.ts`:
+
+```sh
+pnpm exec tsx scripts/check-uptime.ts
+```
+
+It probes the web home page, API liveness and readiness, and one public fund
+summary page, prints a single JSON status payload, and POSTs the failed check
+summary to an alert webhook when any probe fails. Repeat alerts are held back
+for five minutes through the optional state file, so a cron cadence shorter
+than the window cannot storm the webhook. See the script header for
+configuration.

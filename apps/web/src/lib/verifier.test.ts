@@ -8,8 +8,13 @@ import {
   salt32,
   toHex,
 } from "@yen/shared";
-import { describe, expect, it } from "vitest";
-import { type RecordProofData, verifyRecordProofData, verifyUploadedBundle } from "./verifier.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  isSimulatedChain,
+  type RecordProofData,
+  verifyRecordProofData,
+  verifyUploadedBundle,
+} from "./verifier.js";
 
 async function createValidProofFixture(): Promise<RecordProofData & { eventRoot: string }> {
   const fundResult = parseFundId("00000000-0000-4000-8000-000000000010");
@@ -177,5 +182,76 @@ describe("Verifier Engine (verifier.ts)", () => {
     expect(report.allValid).toBe(true);
     expect(report.totalEvents).toBe(1);
     expect(report.validEvents).toBe(1);
+  });
+});
+
+describe("local chain trust gate", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  async function localChainProof(): Promise<RecordProofData> {
+    const fixture = await createValidProofFixture();
+    if (!fixture.anchor) throw new Error("Fixture has no anchor");
+    return { ...fixture, anchor: { ...fixture.anchor, chainId: 31337 } };
+  }
+
+  function answerEveryRpcWithTheAnchorRoot(proof: RecordProofData) {
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        jsonrpc: "2.0",
+        id: 1,
+        result: `0x${proof.anchor?.root.replace(/^0x/, "")}`,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("honours chain 31337 only in a non-production build with a configured RPC", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("NEXT_PUBLIC_LOCAL_CHAIN_RPC_URL", "http://127.0.0.1:8545");
+    expect(isSimulatedChain(31337)).toBe(true);
+    expect(isSimulatedChain(80002)).toBe(false);
+
+    vi.stubEnv("NEXT_PUBLIC_LOCAL_CHAIN_RPC_URL", "");
+    expect(isSimulatedChain(31337)).toBe(false);
+
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_LOCAL_CHAIN_RPC_URL", "http://127.0.0.1:8545");
+    expect(isSimulatedChain(31337)).toBe(false);
+  });
+
+  it("reads the root from the configured local RPC and verifies in development", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("NEXT_PUBLIC_LOCAL_CHAIN_RPC_URL", "http://127.0.0.1:8545");
+    const proof = await localChainProof();
+    const fetchMock = answerEveryRpcWithTheAnchorRoot(proof);
+    const report = await verifyRecordProofData(proof);
+    expect(fetchMock).toHaveBeenCalled();
+    expect(report.checks.onChainAnchorValid).toBe(true);
+  });
+
+  it("never verifies a proof that claims chain 31337 in a production build", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_LOCAL_CHAIN_RPC_URL", "http://127.0.0.1:8545");
+    const proof = await localChainProof();
+    const fetchMock = answerEveryRpcWithTheAnchorRoot(proof);
+    const report = await verifyRecordProofData(proof);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(report.checks.onChainAnchorValid).toBe("skipped");
+    expect(report.outcome).toBe("skipped");
+  });
+
+  it("never verifies a proof that claims chain 31337 when no local RPC is configured", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("NEXT_PUBLIC_LOCAL_CHAIN_RPC_URL", "");
+    const proof = await localChainProof();
+    const fetchMock = answerEveryRpcWithTheAnchorRoot(proof);
+    const report = await verifyRecordProofData(proof);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(report.checks.onChainAnchorValid).toBe("skipped");
+    expect(report.outcome).toBe("skipped");
   });
 });

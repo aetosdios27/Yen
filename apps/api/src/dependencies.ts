@@ -42,7 +42,7 @@ import {
   type PinStore,
 } from "./pin/index.js";
 import type { FundRecord } from "./policy.js";
-import { DEFAULT_OBJECTION_WINDOW_HOURS, denyAllPolicy, type Policy } from "./policy.js";
+import { DEFAULT_OBJECTION_WINDOW_HOURS, denyAllPolicy, devPolicy, type Policy } from "./policy.js";
 import { MemoryPrivacyStore, type PrivacyStore } from "./privacy-store.js";
 import type { PublicReadCache } from "./public-cache.js";
 import { MemoryReceiptStore, type ReceiptStore } from "./receipt-store.js";
@@ -81,6 +81,7 @@ export interface Principal {
 export type ApiEnv = {
   Variables: {
     requestId: string;
+    traceId: string;
     principal: Principal | null;
     session: Session | null;
   };
@@ -218,6 +219,8 @@ export class MemoryDonationPledgeStore implements DonationPledgeStore {
     return { kind: "pledged", donationId };
   }
 }
+
+export const DEV_PIN_HMAC_SECRET = "development-only-pin-hmac-secret-change-me";
 
 export function validatePinSecret(secret: unknown): string {
   if (typeof secret !== "string" || secret.trim().length < 32) {
@@ -465,6 +468,9 @@ export interface AppDependencies {
   readonly authStore: AuthStore;
   readonly privacyStore: PrivacyStore;
   readonly otpDeliveryProvider: DeliveryProvider;
+  readonly simulateOtpDelivery: boolean;
+  /** Development-only: objection window in seconds, set from the explicit-development check. */
+  readonly objectionWindowSeconds?: number | undefined;
   readonly otpCooldownMs: number;
   readonly otpExpiryMs: number;
   readonly otpMaxAttempts: number;
@@ -508,6 +514,15 @@ export function selectVirusScanner(env: NodeJS.ProcessEnv = process.env): VirusS
     );
   }
   return new LocalDemoVirusScannerAdapter();
+}
+
+/**
+ * Picks the authorization policy for the real server. Only an explicit
+ * development run gets the membership-driven development policy; every other
+ * environment, including one that never set NODE_ENV, stays deny-all.
+ */
+export function selectPolicy(explicitDevelopment: boolean): Policy {
+  return explicitDevelopment ? devPolicy : denyAllPolicy;
 }
 
 export function defaultDependencies(
@@ -618,8 +633,8 @@ export function defaultDependencies(
     readiness: async () => true,
     errorReporter: createErrorReporter({
       dsn: process.env.SENTRY_DSN,
-      release: process.env.RELEASE_SHA,
-      environment: process.env.NODE_ENV,
+      release: process.env.SENTRY_RELEASE ?? process.env.RELEASE_SHA ?? process.env.GIT_COMMIT_SHA,
+      environment: process.env.SENTRY_ENVIRONMENT ?? process.env.NODE_ENV,
     }),
     rateLimits: rateLimits(rateLimitEnv.parse({})),
     pinStore,
@@ -638,6 +653,7 @@ export function defaultDependencies(
           : "development",
       clock,
     ),
+    simulateOtpDelivery: false,
     otpCooldownMs: 60_000,
     otpExpiryMs: 300_000,
     otpMaxAttempts: 3,

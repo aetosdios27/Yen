@@ -280,10 +280,18 @@ export const devPolicy: Policy = {
   can: (principal, action, resource) => {
     if (action === "expense:add_evidence" || action === "expense:read_evidence") {
       if (resource.kind !== "expense" || !("fund" in resource)) return false;
-      if (resource.fund.owner !== principal.id) return false;
+      const isOwner = resource.fund.owner === principal.id;
+      const staffRoles = (principal.roles ?? [])
+        .filter(isValidRole)
+        .filter((role) => role === "approver" || role === "treasurer");
+      const [staffRole] = staffRoles;
+      if (!isOwner && (action !== "expense:read_evidence" || staffRole === undefined)) return false;
       const fundId = parseFundId(resource.fund.fund.id);
       if (!fundId.ok) return false;
-      const evidenceActor = { id: principal.id, role: "owner" as const };
+      const evidenceActor =
+        !isOwner && staffRole !== undefined
+          ? { id: principal.id, role: staffRole, roles: staffRoles }
+          : { id: principal.id, role: "owner" as const };
       const engineAction = action === "expense:read_evidence" ? "expense:read" : action;
       return policyCan(evidenceActor, engineAction, {
         kind: "expense",

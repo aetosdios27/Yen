@@ -740,7 +740,11 @@ export class ViemRootChain implements RootChain {
   }
 }
 
-export async function registerAnchoringDiscovery(boss: PgBoss, sql: Sql): Promise<void> {
+export async function registerAnchoringDiscovery(
+  boss: PgBoss,
+  sql: Sql,
+  cron = "*/5 * * * *",
+): Promise<void> {
   await boss.createQueue("blockchain-anchoring-discovery");
   await boss.work<Record<string, never>>(
     "blockchain-anchoring-discovery",
@@ -757,7 +761,7 @@ export async function registerAnchoringDiscovery(boss: PgBoss, sql: Sql): Promis
         );
     },
   );
-  await boss.schedule("blockchain-anchoring-discovery", "*/5 * * * *", {});
+  await boss.schedule("blockchain-anchoring-discovery", cron, {});
 }
 
 export async function registerAnchorReconciliation(
