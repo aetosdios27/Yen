@@ -24,3 +24,17 @@ export const publicPledgedPaiseSql = `
 SELECT COALESCE(SUM(amount_paise), 0)::text AS total
 FROM donation_pledges WHERE fund_id = $1 AND status = 'pledged'
 `;
+
+// Public pages revalidate from the log head, so the lookup is gated on public visibility
+// and carries the org id for CDN purge tags.
+export const publicFundHeadSql = `
+SELECT fe.hash, f.org_id,
+  COALESCE((SELECT md5(string_agg(a.id::text, ',' ORDER BY a.id))
+    FROM anchors a WHERE a.fund_id = f.id
+      AND a.status = 'confirmed' AND a.tx_hash IS NOT NULL), '') AS anchor_state_hash
+FROM fund_events fe
+JOIN funds f ON f.id = fe.fund_id AND f.visibility_tier = 'public'
+WHERE fe.fund_id = $1
+ORDER BY fe.seq DESC
+LIMIT 1
+`;

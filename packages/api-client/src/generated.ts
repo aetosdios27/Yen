@@ -4393,6 +4393,8 @@ export interface operations {
           etag?: string;
           /** @description Public short shared cache; authenticated tiers are private and no-store */
           "cache-control"?: string;
+          /** @description Purge targets for tag based CDN invalidation, absent on authenticated views */
+          "cache-tag"?: string;
           /** @description Separates the public and signed-in representations of one URL */
           vary?: string;
           /** @description When the stale copy was refreshed, set only when the origin is unavailable */
@@ -4430,6 +4432,8 @@ export interface operations {
           etag?: string;
           /** @description Public short shared cache; authenticated tiers are private and no-store */
           "cache-control"?: string;
+          /** @description Purge targets for tag based CDN invalidation, absent on authenticated views */
+          "cache-tag"?: string;
           /** @description Separates the public and signed-in representations of one URL */
           vary?: string;
           /** @description When the stale copy was refreshed, set only when the origin is unavailable */
@@ -4521,6 +4525,8 @@ export interface operations {
           etag?: string;
           /** @description Public short shared cache; authenticated tiers are private and no-store */
           "cache-control"?: string;
+          /** @description Purge targets for tag based CDN invalidation, absent on authenticated views */
+          "cache-tag"?: string;
           /** @description Separates the public and signed-in representations of one URL */
           vary?: string;
           /** @description When the stale copy was refreshed, set only when the origin is unavailable */
@@ -4554,6 +4560,8 @@ export interface operations {
           etag?: string;
           /** @description Public short shared cache; authenticated tiers are private and no-store */
           "cache-control"?: string;
+          /** @description Purge targets for tag based CDN invalidation, absent on authenticated views */
+          "cache-tag"?: string;
           /** @description Separates the public and signed-in representations of one URL */
           vary?: string;
           /** @description When the stale copy was refreshed, set only when the origin is unavailable */
@@ -4645,6 +4653,8 @@ export interface operations {
           etag?: string;
           /** @description Public short shared cache; authenticated tiers are private and no-store */
           "cache-control"?: string;
+          /** @description Purge targets for tag based CDN invalidation, absent on authenticated views */
+          "cache-tag"?: string;
           /** @description Separates the public and signed-in representations of one URL */
           vary?: string;
           /** @description When the stale copy was refreshed, set only when the origin is unavailable */
@@ -4699,6 +4709,8 @@ export interface operations {
           etag?: string;
           /** @description Public short shared cache; authenticated tiers are private and no-store */
           "cache-control"?: string;
+          /** @description Purge targets for tag based CDN invalidation, absent on authenticated views */
+          "cache-tag"?: string;
           /** @description Separates the public and signed-in representations of one URL */
           vary?: string;
           /** @description When the stale copy was refreshed, set only when the origin is unavailable */
@@ -4790,6 +4802,8 @@ export interface operations {
           etag?: string;
           /** @description Public short shared cache; authenticated tiers are private and no-store */
           "cache-control"?: string;
+          /** @description Purge targets for tag based CDN invalidation, absent on authenticated views */
+          "cache-tag"?: string;
           /** @description Separates the public and signed-in representations of one URL */
           vary?: string;
           /** @description When the stale copy was refreshed, set only when the origin is unavailable */
@@ -4907,6 +4921,8 @@ export interface operations {
           etag?: string;
           /** @description Public short shared cache; authenticated tiers are private and no-store */
           "cache-control"?: string;
+          /** @description Purge targets for tag based CDN invalidation, absent on authenticated views */
+          "cache-tag"?: string;
           /** @description Separates the public and signed-in representations of one URL */
           vary?: string;
           /** @description When the stale copy was refreshed, set only when the origin is unavailable */
