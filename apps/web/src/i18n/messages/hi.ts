@@ -466,6 +466,9 @@ export const hi: Messages = {
     errorPinMismatch: "दोनों पिन एक जैसे नहीं हैं।",
     errorPinRejected: "ऐसा पिन चुनें जिसका अनुमान लगाना कठिन हो। दोहराव और 123456 जैसे क्रम से बचें।",
     errorPinWrong: "गलत पिन, फिर कोशिश करें।",
+    startOver: "फिर से शुरू करें",
+    retry: "फिर कोशिश करें",
+    errorSessionExpired: "आपका साइन इन समाप्त हो गया। फिर से शुरू करने के लिए अपना फ़ोन नंबर दर्ज करें।",
   },
   offline: {
     title: "आप ऑफ़लाइन हैं",

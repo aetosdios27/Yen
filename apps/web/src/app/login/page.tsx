@@ -20,7 +20,7 @@ export default function LoginPage() {
   const [channel, setChannel] = useState<"whatsapp" | "sms">("whatsapp");
   const [otp, setOtp] = useState("");
   const [simulatedCode, setSimulatedCode] = useState<string | null>(null);
-  const [pinMode, setPinMode] = useState<PinMode>("unlock");
+  const [pinMode, setPinMode] = useState<PinMode | null>(null);
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
   const [loading, setLoading] = useState(false);
@@ -66,7 +66,7 @@ export default function LoginPage() {
         setSimulatedCode(typeof simulated === "string" ? simulated : null);
         setOtp(typeof simulated === "string" ? simulated : "");
         setStep("otp");
-        setCooldownRemaining(data.resendCooldownSeconds ?? 60);
+        setCooldownRemaining(data.resendAfterSeconds ?? 60);
         setErrorMessage(null);
       } else if (res.status === 429) {
         setErrorMessage(t("auth.errorRateLimited"));
@@ -80,6 +80,32 @@ export default function LoginPage() {
       }
     } catch {
       setErrorMessage(t("auth.errorGeneric"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadPinStep = async () => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
+    let mode: PinMode | null = null;
+    try {
+      const statusRes = await fetch(`${apiUrl}/v1/auth/pin/status`, { credentials: "include" });
+      if (statusRes.ok) {
+        const status = await statusRes.json().catch(() => ({}));
+        mode = status.isSet === true ? "unlock" : "setup";
+      }
+    } catch {
+      mode = null;
+    }
+    setPinMode(mode);
+    setErrorMessage(mode === null ? t("auth.errorGeneric") : null);
+    setStep("pin");
+  };
+
+  const handleRetryPinStep = async () => {
+    setLoading(true);
+    try {
+      await loadPinStep();
     } finally {
       setLoading(false);
     }
@@ -109,15 +135,7 @@ export default function LoginPage() {
       await res.json().catch(() => ({}));
 
       if (res.ok) {
-        const statusRes = await fetch(`${apiUrl}/v1/auth/pin/status`, { credentials: "include" });
-        if (!statusRes.ok) {
-          setErrorMessage(t("auth.errorGeneric"));
-          return;
-        }
-        const status = await statusRes.json().catch(() => ({}));
-        setPinMode(status.isSet === true ? "unlock" : "setup");
-        setStep("pin");
-        setErrorMessage(null);
+        await loadPinStep();
       } else if (res.status === 410) {
         setErrorMessage(t("auth.errorOtpExpired"));
       } else if (res.status === 429) {
@@ -164,7 +182,15 @@ export default function LoginPage() {
       } else if (res.status === 400) {
         setErrorMessage(t("auth.errorPinRejected"));
       } else if (res.status === 401) {
-        setErrorMessage(t("auth.errorPinWrong"));
+        const sessionAlive =
+          pinMode === "unlock" &&
+          (await fetch(`${apiUrl}/v1/auth/pin/status`, { credentials: "include" })).ok;
+        if (sessionAlive) {
+          setErrorMessage(t("auth.errorPinWrong"));
+        } else {
+          resetToPhoneStep();
+          setErrorMessage(t("auth.errorSessionExpired"));
+        }
       } else if (res.status === 429) {
         setErrorMessage(t("auth.errorRateLimited"));
       } else {
@@ -177,12 +203,17 @@ export default function LoginPage() {
     }
   };
 
-  const handleChangePhone = () => {
+  const resetToPhoneStep = () => {
     setStep("phone");
     setOtp("");
+    setPin("");
+    setConfirmPin("");
+    setPinMode(null);
     setSimulatedCode(null);
     setErrorMessage(null);
   };
+
+  const handleChangePhone = resetToPhoneStep;
 
   return (
     <div className="mx-auto flex w-full max-w-sm flex-col items-stretch gap-6 py-8">
@@ -320,54 +351,82 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <form onSubmit={handleSubmitPin} className="flex flex-col gap-5" noValidate>
-            <Input
-              id="pin-input"
-              label={t("auth.pinLabel")}
-              type="password"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={6}
-              autoComplete={pinMode === "setup" ? "new-password" : "current-password"}
-              autoFocus
-              value={pin}
-              onChange={(e) => {
-                setPin(e.target.value);
-                if (errorMessage) setErrorMessage(null);
-              }}
-              {...(errorMessage && pinMode === "unlock" ? { error: errorMessage } : {})}
-              required
-            />
-
-            {pinMode === "setup" ? (
+          {pinMode === null ? (
+            <div className="flex flex-col gap-5">
+              {errorMessage ? (
+                <p role="alert" className="text-small font-medium text-danger">
+                  {errorMessage}
+                </p>
+              ) : null}
+              <Button
+                type="button"
+                variant="primary"
+                loading={loading}
+                loadingLabel={t("auth.pinSubmitting")}
+                onClick={handleRetryPinStep}
+                className="w-full"
+              >
+                {t("auth.retry")}
+              </Button>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmitPin} className="flex flex-col gap-5" noValidate>
               <Input
-                id="pin-confirm-input"
-                label={t("auth.pinConfirmLabel")}
+                id="pin-input"
+                label={t("auth.pinLabel")}
                 type="password"
                 inputMode="numeric"
                 pattern="[0-9]*"
                 maxLength={6}
-                autoComplete="new-password"
-                value={confirmPin}
+                autoComplete={pinMode === "setup" ? "new-password" : "current-password"}
+                autoFocus
+                value={pin}
                 onChange={(e) => {
-                  setConfirmPin(e.target.value);
+                  setPin(e.target.value);
                   if (errorMessage) setErrorMessage(null);
                 }}
-                {...(errorMessage ? { error: errorMessage } : {})}
+                {...(errorMessage && pinMode === "unlock" ? { error: errorMessage } : {})}
                 required
               />
-            ) : null}
 
-            <Button
-              type="submit"
-              variant="primary"
-              loading={loading}
-              loadingLabel={t("auth.pinSubmitting")}
-              className="w-full"
-            >
-              {pinMode === "setup" ? t("auth.pinSetupSubmit") : t("auth.pinUnlockSubmit")}
-            </Button>
-          </form>
+              {pinMode === "setup" ? (
+                <Input
+                  id="pin-confirm-input"
+                  label={t("auth.pinConfirmLabel")}
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  autoComplete="new-password"
+                  value={confirmPin}
+                  onChange={(e) => {
+                    setConfirmPin(e.target.value);
+                    if (errorMessage) setErrorMessage(null);
+                  }}
+                  {...(errorMessage ? { error: errorMessage } : {})}
+                  required
+                />
+              ) : null}
+
+              <Button
+                type="submit"
+                variant="primary"
+                loading={loading}
+                loadingLabel={t("auth.pinSubmitting")}
+                className="w-full"
+              >
+                {pinMode === "setup" ? t("auth.pinSetupSubmit") : t("auth.pinUnlockSubmit")}
+              </Button>
+            </form>
+          )}
+
+          <button
+            type="button"
+            onClick={resetToPhoneStep}
+            className="tap-target py-2 text-center text-small font-semibold text-ink-muted hover:text-ink hover:underline"
+          >
+            {t("auth.startOver")}
+          </button>
         </>
       )}
 

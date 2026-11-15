@@ -645,7 +645,8 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         channel,
         resendAfterSeconds: Math.ceil(deps.otpCooldownMs / 1000),
         expiresAt: new Date(expiresAt).toISOString(),
-        ...(deps.otpDeliveryProvider instanceof DevStubOtpDeliveryProvider
+        ...(deps.simulateOtpDelivery &&
+        deps.otpDeliveryProvider instanceof DevStubOtpDeliveryProvider
           ? { simulatedDelivery: { code } }
           : {}),
       },

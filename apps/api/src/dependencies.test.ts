@@ -183,22 +183,24 @@ describe("virus scanner selection", () => {
     expect(() => selectVirusScanner({ NODE_ENV: "production" })).toThrow("CLAMAV_HOST");
   });
 
-  it("derives a local PIN secret only for development", () => {
-    withEnv({ NODE_ENV: "development", PIN_HMAC_SECRET: undefined }, () => {
-      expect(defaultDependencies().pinSecret).toMatch(/^development-only-/);
-    });
-    withEnv({ NODE_ENV: "test", PIN_HMAC_SECRET: undefined }, () => {
-      expect(defaultDependencies().pinSecret).toBeNull();
-    });
-    withEnv({ NODE_ENV: "development", PIN_HMAC_SECRET: "e".repeat(40) }, () => {
+  it("never derives a PIN secret from the environment name", () => {
+    for (const nodeEnv of [undefined, "development", "test"]) {
+      withEnv({ NODE_ENV: nodeEnv, PIN_HMAC_SECRET: undefined }, () => {
+        expect(defaultDependencies().pinSecret).toBeNull();
+      });
+    }
+    withEnv({ NODE_ENV: undefined, PIN_HMAC_SECRET: "e".repeat(40) }, () => {
       expect(defaultDependencies().pinSecret).toBe("e".repeat(40));
     });
   });
 
-  it("keeps the deny-all policy in production and uses the membership policy elsewhere", () => {
-    expect(selectPolicy({ NODE_ENV: "production" })).toBe(denyAllPolicy);
-    expect(selectPolicy({ NODE_ENV: "development" })).toBe(devPolicy);
-    expect(selectPolicy({ NODE_ENV: "test" })).toBe(devPolicy);
+  it("only an explicit development run gets the membership policy", () => {
+    expect(selectPolicy(true)).toBe(devPolicy);
+    expect(selectPolicy(false)).toBe(denyAllPolicy);
+  });
+
+  it("does not simulate OTP delivery unless the server opts in", () => {
+    expect(defaultDependencies().simulateOtpDelivery).toBe(false);
   });
 
   it("defaults to the demo scanner in non-production dependencies", () => {

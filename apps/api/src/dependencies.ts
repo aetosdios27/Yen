@@ -213,7 +213,7 @@ export class MemoryDonationPledgeStore implements DonationPledgeStore {
   }
 }
 
-const DEV_PIN_HMAC_SECRET = "development-only-pin-hmac-secret-change-me";
+export const DEV_PIN_HMAC_SECRET = "development-only-pin-hmac-secret-change-me";
 
 export function validatePinSecret(secret: unknown): string {
   if (typeof secret !== "string" || secret.trim().length < 32) {
@@ -459,6 +459,7 @@ export interface AppDependencies {
   readonly authStore: AuthStore;
   readonly privacyStore: PrivacyStore;
   readonly otpDeliveryProvider: DeliveryProvider;
+  readonly simulateOtpDelivery: boolean;
   readonly otpCooldownMs: number;
   readonly otpExpiryMs: number;
   readonly otpMaxAttempts: number;
@@ -505,13 +506,12 @@ export function selectVirusScanner(env: NodeJS.ProcessEnv = process.env): VirusS
 }
 
 /**
- * Picks the authorization policy for the real server. Production keeps the
- * fail-closed deny-all policy until the production policy lands; every other
- * environment gets the membership-driven development policy so seeded personas
- * can act according to their fund roles.
+ * Picks the authorization policy for the real server. Only an explicit
+ * development run gets the membership-driven development policy; every other
+ * environment, including one that never set NODE_ENV, stays deny-all.
  */
-export function selectPolicy(env: NodeJS.ProcessEnv = process.env): Policy {
-  return env.NODE_ENV === "production" ? denyAllPolicy : devPolicy;
+export function selectPolicy(explicitDevelopment: boolean): Policy {
+  return explicitDevelopment ? devPolicy : denyAllPolicy;
 }
 
 export function defaultDependencies(
@@ -562,11 +562,7 @@ export function defaultDependencies(
   ) {
     throw new Error("WEBAUTHN_RP_ID and WEBAUTHN_ORIGIN are required in production");
   }
-  const rawPinSecret =
-    process.env.PIN_HMAC_SECRET ??
-    (process.env.NODE_ENV === undefined || process.env.NODE_ENV === "development"
-      ? DEV_PIN_HMAC_SECRET
-      : undefined);
+  const rawPinSecret = process.env.PIN_HMAC_SECRET;
   const pinSecret = rawPinSecret ? validatePinSecret(rawPinSecret) : null;
   const pinService = new PinService({
     pinStore,
@@ -645,6 +641,7 @@ export function defaultDependencies(
           : "development",
       clock,
     ),
+    simulateOtpDelivery: false,
     otpCooldownMs: 60_000,
     otpExpiryMs: 300_000,
     otpMaxAttempts: 3,

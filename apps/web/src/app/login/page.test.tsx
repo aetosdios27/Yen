@@ -300,6 +300,7 @@ describe("LoginPage", () => {
       verifiedOk,
       jsonResponse(200, { isSet: true, status: "active" }),
       jsonResponse(401, { error: { code: "unauthenticated" } }),
+      jsonResponse(200, { isSet: true, status: "active" }),
     ]);
 
     await waitFor(() => {
@@ -310,6 +311,107 @@ describe("LoginPage", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("alert").textContent).toBe("Wrong PIN, try again.");
+    });
+  });
+
+  it("returns to the phone step when the session expired during the PIN step", async () => {
+    await signInUntilPinStep([
+      sentOk,
+      verifiedOk,
+      jsonResponse(200, { isSet: false, status: "not_set" }),
+      jsonResponse(401, { error: { code: "unauthenticated" } }),
+    ]);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Confirm PIN")).toBeTruthy();
+    });
+    fireEvent.change(screen.getByLabelText("6-digit PIN"), { target: { value: "482613" } });
+    fireEvent.change(screen.getByLabelText("Confirm PIN"), { target: { value: "482613" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create PIN and continue" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { level: 1, name: "Sign in" })).toBeTruthy();
+    });
+    expect(
+      screen.getByText("Your sign-in expired. Enter your phone number to start again."),
+    ).toBeTruthy();
+  });
+
+  it("treats an unlock 401 as expired when the session is gone", async () => {
+    await signInUntilPinStep([
+      sentOk,
+      verifiedOk,
+      jsonResponse(200, { isSet: true, status: "active" }),
+      jsonResponse(401, { error: { code: "unauthenticated" } }),
+      jsonResponse(401, { error: { code: "unauthenticated" } }),
+    ]);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("6-digit PIN")).toBeTruthy();
+    });
+    fireEvent.change(screen.getByLabelText("6-digit PIN"), { target: { value: "482613" } });
+    fireEvent.click(screen.getByRole("button", { name: "Unlock and continue" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { level: 1, name: "Sign in" })).toBeTruthy();
+    });
+    expect(screen.getByText(/Your sign-in expired/)).toBeTruthy();
+  });
+
+  it("keeps the user on the PIN step and retries when the PIN status call fails", async () => {
+    await signInUntilPinStep([
+      sentOk,
+      verifiedOk,
+      jsonResponse(500, { error: { code: "internal" } }),
+      jsonResponse(200, { isSet: true, status: "active" }),
+    ]);
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert").textContent).toBe("Something went wrong. Please try again.");
+    });
+    expect(screen.queryByLabelText("6-digit code")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("6-digit PIN")).toBeTruthy();
+    });
+    expect(screen.getByRole("button", { name: "Unlock and continue" })).toBeTruthy();
+  });
+
+  it("lets the user start over from the PIN step", async () => {
+    await signInUntilPinStep([
+      sentOk,
+      verifiedOk,
+      jsonResponse(200, { isSet: true, status: "active" }),
+    ]);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("6-digit PIN")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Start over" }));
+
+    expect(screen.getByRole("heading", { level: 1, name: "Sign in" })).toBeTruthy();
+    expect(screen.getByLabelText("Phone number")).toBeTruthy();
+  });
+
+  it("starts the resend cooldown from the API's resendAfterSeconds", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(jsonResponse(200, { status: "sent", resendAfterSeconds: 45 })),
+    );
+    render(
+      <LocaleProvider initialLocale="en">
+        <LoginPage />
+      </LocaleProvider>,
+    );
+
+    fireEvent.change(screen.getByLabelText("Phone number"), {
+      target: { value: "9876543210" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send code" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Resend code in 45s" })).toBeTruthy();
     });
   });
 

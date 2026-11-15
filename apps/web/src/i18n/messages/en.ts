@@ -481,6 +481,9 @@ export const en = {
     errorPinMismatch: "The two PINs do not match.",
     errorPinRejected: "Choose a PIN that is harder to guess. Avoid repeats and runs like 123456.",
     errorPinWrong: "Wrong PIN, try again.",
+    startOver: "Start over",
+    retry: "Try again",
+    errorSessionExpired: "Your sign-in expired. Enter your phone number to start again.",
   },
   offline: {
     title: "You are offline",

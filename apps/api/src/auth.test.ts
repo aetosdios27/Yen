@@ -210,6 +210,7 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
       policy: devPolicy,
       principal,
       otpDeliveryProvider,
+      simulateOtpDelivery: true,
       authStore,
       idempotencyStore,
       pinStore,
@@ -350,9 +351,23 @@ describe("Phone OTP Login and Session Lifecycle Integration", () => {
     const sendData = sendOtpResponse.parse(await sendRes.json());
     expect(sendData.simulatedDelivery).toEqual({ code: getDelivery(otpDeliveryProvider).code });
 
+    const notOptedIn = createApp({
+      authStore: new MemoryAuthStore(),
+      otpHashKey,
+      otpDeliveryProvider: new DevStubOtpDeliveryProvider(),
+    });
+    const notOptedInRes = await notOptedIn.request("/v1/auth/otp/send", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone: "+919876543210", channel: "sms" }),
+    });
+    expect(notOptedInRes.status).toBe(200);
+    expect(await notOptedInRes.json()).not.toHaveProperty("simulatedDelivery");
+
     const external = createApp({
       authStore: new MemoryAuthStore(),
       otpHashKey,
+      simulateOtpDelivery: true,
       otpDeliveryProvider: {
         send: async () => ({
           messageId: "external-1",

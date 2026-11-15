@@ -204,7 +204,7 @@ The seed script creates six personas. Sign in as any of them from the browser at
 3. The first time a persona signs in after a reset, create an approval PIN (the demo PIN is `482613`). Later sign-ins ask for the same PIN to unlock the device.
 4. Use **Sign out** in the header to switch to another persona.
 
-The simulated code only exists when the API runs the development delivery stub. That stub refuses to start when `NODE_ENV=production`, so a production API never returns a code, and development uses the membership-based development policy while production keeps the deny-all policy. Without a `.env`, the API in development falls back to local-only values for `PAYEE_FINGERPRINT_SALT` and `PIN_HMAC_SECRET`, and allows the web origin (`WEB_PORT`, default 3000) through CORS; production requires real values.
+The simulated code only exists when the API is started with `NODE_ENV=development` set explicitly (the `apps/api` `dev` script does this, so `pnpm dev:full` works with no `.env`). That switch also enables the membership-based development policy, local-only fallbacks for `PAYEE_FINGERPRINT_SALT` and `PIN_HMAC_SECRET`, and CORS for the web origin (`WEB_PORT`, default 3000). An unset `NODE_ENV` gets none of these and behaves like production: deny-all policy, no simulated code, no default CORS. The dev OTP stub also refuses to construct when `NODE_ENV=production`.
 
 The shared design system lives in `apps/web`; open `http://localhost:3000/design-system` for its 375 px review page. See [`apps/web/README.md`](apps/web/README.md) for tokens, components, language switching and accessibility checks.
 
