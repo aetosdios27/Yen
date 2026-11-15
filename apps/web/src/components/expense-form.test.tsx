@@ -156,6 +156,59 @@ describe("ExpenseForm", () => {
     expect(screen.getByDisplayValue("Ramesh")).toBeTruthy();
   });
 
+  it("passes the chosen bill file to the submit handler and shows submit failures", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockRejectedValueOnce(new Error("Bill upload failed"));
+    render(
+      <LocaleProvider initialLocale="en">
+        <ExpenseForm
+          fundId="fund-1"
+          initialValues={{
+            amountRupees: "100",
+            payeeName: "Ramesh",
+            payeeUpi: "ramesh@upi",
+            purpose: "Hardware",
+          }}
+          onSubmit={onSubmit}
+        />
+      </LocaleProvider>,
+    );
+
+    const bill = new File([new Uint8Array([137, 80, 78, 71])], "bill.png", { type: "image/png" });
+    await user.upload(screen.getByLabelText(/Bill photo or PDF/), bill);
+    await user.click(screen.getByRole("button", { name: "Review expense" }));
+    expect(screen.getByText("bill.png")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Submit expense" }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ receiptFile: bill }));
+    expect(await screen.findByText("Bill upload failed")).toBeTruthy();
+  });
+
+  it("rejects a bill file that is not an image or PDF", async () => {
+    const user = userEvent.setup({ applyAccept: false });
+    render(
+      <LocaleProvider initialLocale="en">
+        <ExpenseForm
+          fundId="fund-1"
+          initialValues={{
+            amountRupees: "100",
+            payeeName: "Ramesh",
+            payeeUpi: "ramesh@upi",
+            purpose: "Hardware",
+          }}
+          onSubmit={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+
+    await user.upload(
+      screen.getByLabelText(/Bill photo or PDF/),
+      new File(["x"], "notes.txt", { type: "text/plain" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Review expense" }));
+    expect(screen.getByText("Choose a JPEG, PNG, WebP or PDF file up to 10 MB")).toBeTruthy();
+  });
+
   it("renders in Hindi when Hindi locale is active", () => {
     render(
       <LocaleProvider initialLocale="hi">

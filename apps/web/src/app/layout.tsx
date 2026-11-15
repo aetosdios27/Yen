@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import type { ReactNode } from "react";
 import { AppShell } from "../components/app-shell";
+import { ErrorObservability } from "../components/error-observability";
 import { ServiceWorkerRegistration } from "../components/service-worker-registration";
 import { LocaleProvider } from "../i18n";
 import { en } from "../i18n/messages/en";
@@ -47,6 +48,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     <html lang="en">
       <body>
         <LocaleProvider>
+          <ErrorObservability />
           <ServiceWorkerRegistration />
           <AppShell>{children}</AppShell>
         </LocaleProvider>

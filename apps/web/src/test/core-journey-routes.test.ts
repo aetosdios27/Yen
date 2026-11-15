@@ -183,6 +183,7 @@ vi.mock("../lib/expense-service", async () => {
   };
   return {
     createExpenseRequest: vi.fn(async () => undefined),
+    fetchExpenseEvidence: vi.fn(async () => []),
     fetchExpenseItem: vi.fn(async () => treasurerData.pendingExpenses[0]),
     fetchFundTreasurerData: vi.fn(async () => treasurerData),
     submitExpenseApproval: vi.fn(async () => treasurerData.pendingExpenses[0]),

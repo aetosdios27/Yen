@@ -357,6 +357,48 @@ describe("VerifyPage Component (page.tsx)", () => {
     expect(screen.getByText(en.verify.downloadVerifierScript)).toBeDefined();
   }, 20_000);
 
+  it("labels a local Anvil chain as simulated and leaves public chains unlabelled", async () => {
+    const { validProof, bundle } = await createFixtureData();
+    const user = userEvent.setup();
+
+    mockValidProofFetch(validProof, bundle);
+    const publicRender = render(
+      <LocaleProvider initialLocale="en">
+        <VerifyPage />
+      </LocaleProvider>,
+    );
+    await user.type(screen.getByLabelText(en.verify.enterRecordIdLabel), validProof.recordId);
+    await user.click(screen.getByRole("button", { name: en.verify.verifyButton }));
+    await waitFor(() => expect(screen.getByText(en.verify.outcomeVerified)).toBeDefined());
+    expect(screen.queryByTestId("simulated-chain-notice")).toBeNull();
+    expect(screen.queryByText(en.verify.chainIdLabel)).toBeNull();
+    publicRender.unmount();
+
+    vi.stubEnv("NEXT_PUBLIC_LOCAL_CHAIN_RPC_URL", "http://127.0.0.1:8545");
+
+    if (!validProof.anchor) throw new Error("Fixture proof has no anchor");
+    const local: RecordProofData = {
+      ...validProof,
+      anchor: { ...validProof.anchor, chainId: 31337 },
+    };
+    mockValidProofFetch(local, bundle);
+    render(
+      <LocaleProvider initialLocale="en">
+        <VerifyPage />
+      </LocaleProvider>,
+    );
+    await user.type(screen.getByLabelText(en.verify.enterRecordIdLabel), local.recordId);
+    await user.click(screen.getByRole("button", { name: en.verify.verifyButton }));
+    await waitFor(() =>
+      expect(screen.getByTestId("simulated-chain-notice").textContent).toBe(
+        en.verify.simulatedChainNotice,
+      ),
+    );
+    expect(screen.getByText(en.verify.chainIdLabel)).toBeDefined();
+    expect(screen.getByText(`31337 (${en.verify.simulatedChainLabel})`)).toBeDefined();
+    vi.unstubAllEnvs();
+  }, 20_000);
+
   it("toggles expandable technical details for skeptics", async () => {
     const { validProof, bundle } = await createFixtureData();
     mockValidProofFetch(validProof, bundle);
