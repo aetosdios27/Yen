@@ -4,7 +4,12 @@ import { isAbsolute, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createSql, parseDatabaseUrl, seedDevDatabase } from "@yen/db";
 import { formatInr } from "@yen/shared";
-import { localChainRpcUrl, resetLocalChain } from "./dev-chain.js";
+import {
+  type ChainProbe,
+  localChainRpcUrl,
+  probeLocalChain,
+  resetLocalChain,
+} from "./dev-chain.js";
 
 /**
  * The API dev server resolves EVIDENCE_STORAGE_DIR against its own working
@@ -107,11 +112,23 @@ export function dropQueueSchemaSql(schema: string): string {
   return `DROP SCHEMA IF EXISTS "${validated}" CASCADE;`;
 }
 
+/** Acts on a probe taken before any destructive step; anything but a local chain is left alone. */
+export async function resetDemoChain(chainUrl: string, probe: ChainProbe): Promise<string> {
+  if (probe === "unreachable") return `No local chain at ${chainUrl}; nothing to reset`;
+  if (probe === "foreign") {
+    return `${chainUrl} is not a local demo chain, skipping chain reset`;
+  }
+  await resetLocalChain(chainUrl);
+  return `Chain at ${chainUrl} wiped to genesis; dev:full redeploys RootRegistry`;
+}
+
 export async function main(): Promise<void> {
   const root = repoRoot();
   const databaseUrl = process.env.DATABASE_URL || "postgres://postgres:pw@localhost:5432/postgres";
   const parsedUrl = parseDatabaseUrl(databaseUrl, "DATABASE_URL");
   const queueSchema = resolveQueueSchemaName(process.env);
+  const chainUrl = localChainRpcUrl(process.env);
+  const chainProbe = await probeLocalChain(chainUrl);
 
   process.stdout.write("\n======================================================\n");
   process.stdout.write(" Yen Demo Reset (database, evidence, queue, chain)\n");
@@ -136,14 +153,7 @@ export async function main(): Promise<void> {
     await sql.unsafe(dropQueueSchemaSql(queueSchema));
 
     process.stdout.write("4. Resetting the local anchoring chain...\n");
-    const chainUrl = localChainRpcUrl(process.env);
-    if ((await resetLocalChain(chainUrl)) === "reset") {
-      process.stdout.write(
-        `   Chain at ${chainUrl} wiped to genesis; dev:full redeploys RootRegistry\n`,
-      );
-    } else {
-      process.stdout.write(`   No local chain at ${chainUrl}; nothing to reset\n`);
-    }
+    process.stdout.write(`   ${await resetDemoChain(chainUrl, chainProbe)}\n`);
 
     process.stdout.write("5. Running migrations and reseeding demo dataset...\n");
     const result = await seedDevDatabase(sql);

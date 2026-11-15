@@ -1,11 +1,13 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
+import { resetDemoChain } from "./demo-reset.js";
 import {
   ANVIL_DEV_ADDRESS,
   ANVIL_DEV_PRIVATE_KEY,
   appChainEnv,
   localChainRpcUrl,
+  probeLocalChain,
   resetLocalChain,
   workerChainEnv,
 } from "./dev-chain.js";
@@ -59,20 +61,40 @@ describe("local chain configuration", () => {
   });
 });
 
-describe("resetLocalChain", () => {
-  it("wipes a chain with id 31337 back to genesis", async () => {
+describe("probeLocalChain and resetLocalChain", () => {
+  it("classifies a 31337 node as local and wipes it back to genesis", async () => {
     const rpc = await serveRpc(31337);
-    expect(await resetLocalChain(rpc.url)).toBe("reset");
-    expect(rpc.methods).toEqual(["eth_chainId", "anvil_reset"]);
+    expect(await probeLocalChain(rpc.url)).toBe("local");
+    await resetLocalChain(rpc.url);
+    expect(rpc.methods).toEqual(["eth_chainId", "eth_chainId", "anvil_reset"]);
   });
 
-  it("refuses to reset any other chain", async () => {
+  it("classifies any other chain as foreign and refuses to reset it", async () => {
     const rpc = await serveRpc(80002);
-    await expect(resetLocalChain(rpc.url)).rejects.toThrow("not 31337");
-    expect(rpc.methods).toEqual(["eth_chainId"]);
+    expect(await probeLocalChain(rpc.url)).toBe("foreign");
+    await expect(resetLocalChain(rpc.url)).rejects.toThrow("not a 31337 local chain");
+    expect(rpc.methods).not.toContain("anvil_reset");
   });
 
-  it("reports an absent chain instead of failing", async () => {
-    expect(await resetLocalChain("http://127.0.0.1:1")).toBe("unreachable");
+  it("classifies an absent chain as unreachable", async () => {
+    expect(await probeLocalChain("http://127.0.0.1:1")).toBe("unreachable");
+  });
+});
+
+describe("resetDemoChain", () => {
+  it("skips a foreign chain with a clear message instead of failing the reset", async () => {
+    const rpc = await serveRpc(80002);
+    const probe = await probeLocalChain(rpc.url);
+    expect(await resetDemoChain(rpc.url, probe)).toContain(
+      "not a local demo chain, skipping chain reset",
+    );
+    expect(rpc.methods).not.toContain("anvil_reset");
+  });
+
+  it("wipes a local chain and reports an absent one", async () => {
+    const rpc = await serveRpc(31337);
+    expect(await resetDemoChain(rpc.url, "local")).toContain("wiped to genesis");
+    expect(rpc.methods).toContain("anvil_reset");
+    expect(await resetDemoChain("http://127.0.0.1:1", "unreachable")).toContain("nothing to reset");
   });
 });

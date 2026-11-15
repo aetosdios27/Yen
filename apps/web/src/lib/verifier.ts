@@ -111,15 +111,21 @@ export interface BundleVerificationReport {
   };
 }
 
+function localChainRpcUrl(): string | undefined {
+  if (process.env.NODE_ENV === "production") return undefined;
+  return process.env.NEXT_PUBLIC_LOCAL_CHAIN_RPC_URL || undefined;
+}
+
+/** The local chain is honoured only in a non-production build that configures its RPC. */
 export function isSimulatedChain(chainId: number | undefined): boolean {
-  return chainId === foundry.id;
+  return chainId === foundry.id && localChainRpcUrl() !== undefined;
 }
 
 function registryClient(chainId: number | undefined, rpcUrl: string | undefined) {
   const options = { timeout: 3500, retryCount: 0 };
-  if (isSimulatedChain(chainId)) {
-    const localRpc =
-      rpcUrl || process.env.NEXT_PUBLIC_LOCAL_CHAIN_RPC_URL || "http://127.0.0.1:8545";
+  const localRpc = localChainRpcUrl();
+  if (chainId === foundry.id) {
+    if (!localRpc) throw new Error("Local chain proofs are not verifiable in this build");
     return createPublicClient({ chain: foundry, transport: http(localRpc, options) });
   }
   return createPublicClient({

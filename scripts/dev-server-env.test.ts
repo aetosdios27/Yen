@@ -64,4 +64,9 @@ describe("buildDevServerEnv", () => {
       buildDevServerEnv({ CORS_ALLOWED_ORIGINS: "http://localhost:9" }).CORS_ALLOWED_ORIGINS,
     ).toBe("http://localhost:9");
   });
+
+  it("runs every dev process as development, whatever the ambient NODE_ENV", () => {
+    expect(buildDevServerEnv({}).NODE_ENV).toBe("development");
+    expect(buildDevServerEnv({ NODE_ENV: "production" }).NODE_ENV).toBe("development");
+  });
 });

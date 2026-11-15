@@ -160,21 +160,21 @@ export function readLatestSequence(engine: ContainerEngine, registryAddress: str
   return BigInt(value);
 }
 
-export type ChainResetResult = "reset" | "unreachable";
+export type ChainProbe = "local" | "foreign" | "unreachable";
 
-/** Wipes a running local chain back to genesis; refuses anything that is not chain 31337. */
-export async function resetLocalChain(rpcUrl: string): Promise<ChainResetResult> {
-  let chainId: unknown;
+/** Classifies whatever answers on the chain port without changing it. */
+export async function probeLocalChain(rpcUrl: string): Promise<ChainProbe> {
   try {
-    chainId = await rpcRequest(rpcUrl, "eth_chainId");
+    return Number(await rpcRequest(rpcUrl, "eth_chainId")) === LOCAL_CHAIN_ID ? "local" : "foreign";
   } catch {
     return "unreachable";
   }
-  if (Number(chainId) !== LOCAL_CHAIN_ID) {
-    throw new Error(
-      `Refusing to reset ${rpcUrl}: chain id ${String(chainId)} is not ${LOCAL_CHAIN_ID}`,
-    );
+}
+
+/** Wipes a running local chain back to genesis; refuses anything that is not chain 31337. */
+export async function resetLocalChain(rpcUrl: string): Promise<void> {
+  if ((await probeLocalChain(rpcUrl)) !== "local") {
+    throw new Error(`Refusing to reset ${rpcUrl}: it is not a ${LOCAL_CHAIN_ID} local chain`);
   }
   await rpcRequest(rpcUrl, "anvil_reset");
-  return "reset";
 }

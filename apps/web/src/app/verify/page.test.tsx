@@ -374,6 +374,8 @@ describe("VerifyPage Component (page.tsx)", () => {
     expect(screen.queryByText(en.verify.chainIdLabel)).toBeNull();
     publicRender.unmount();
 
+    vi.stubEnv("NEXT_PUBLIC_LOCAL_CHAIN_RPC_URL", "http://127.0.0.1:8545");
+
     if (!validProof.anchor) throw new Error("Fixture proof has no anchor");
     const local: RecordProofData = {
       ...validProof,
@@ -394,6 +396,7 @@ describe("VerifyPage Component (page.tsx)", () => {
     );
     expect(screen.getByText(en.verify.chainIdLabel)).toBeDefined();
     expect(screen.getByText(`31337 (${en.verify.simulatedChainLabel})`)).toBeDefined();
+    vi.unstubAllEnvs();
   }, 20_000);
 
   it("toggles expandable technical details for skeptics", async () => {

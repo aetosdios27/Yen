@@ -83,7 +83,7 @@ async function assertAnchorsMatchChain(
   chain: LocalChain,
 ): Promise<void> {
   const [row] = await sql<{ max: string | null }[]>`
-    SELECT MAX(chain_sequence)::text AS max FROM anchors WHERE chain_id = ${LOCAL_CHAIN_ID}
+    SELECT MAX(chain_sequence)::text AS max FROM anchors WHERE chain_id = ${LOCAL_CHAIN_ID} AND status = 'confirmed'
   `;
   const recorded = BigInt(row?.max ?? 0);
   const onChain = readLatestSequence(chain.engine, chain.registryAddress);

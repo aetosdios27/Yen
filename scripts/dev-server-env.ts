@@ -10,6 +10,7 @@ export function buildDevServerEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const webPort = rest.WEB_PORT || DEFAULT_WEB_PORT;
   return {
     ...rest,
+    NODE_ENV: "development",
     CORS_ALLOWED_ORIGINS:
       rest.CORS_ALLOWED_ORIGINS || `http://localhost:${webPort},http://127.0.0.1:${webPort}`,
     WEB_PORT: webPort,
