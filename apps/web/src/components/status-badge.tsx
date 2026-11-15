@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { type MessageKey, useI18n } from "../i18n";
 import { cn } from "./cn";
 import { AlertTriangleIcon, CheckCircleIcon, ClockIcon, XCircleIcon } from "./icons";
+import { Badge } from "./ui/badge";
 
 export type Status = "verified" | "pending" | "unmatched" | "rejected" | "refunded";
 
@@ -24,11 +25,11 @@ const STATUS_MESSAGE_KEYS = {
 } as const satisfies Record<Status, MessageKey>;
 
 const STATUS_ICONS: Record<Status, ReactNode> = {
-  verified: <CheckCircleIcon className="h-5 w-5 shrink-0" />,
-  pending: <ClockIcon className="h-5 w-5 shrink-0" />,
-  unmatched: <AlertTriangleIcon className="h-5 w-5 shrink-0" />,
-  refunded: <XCircleIcon className="h-5 w-5 shrink-0" />,
-  rejected: <XCircleIcon className="h-5 w-5 shrink-0" />,
+  verified: <CheckCircleIcon className="h-3.5 w-3.5 shrink-0" />,
+  pending: <ClockIcon className="h-3.5 w-3.5 shrink-0" />,
+  unmatched: <AlertTriangleIcon className="h-3.5 w-3.5 shrink-0" />,
+  refunded: <XCircleIcon className="h-3.5 w-3.5 shrink-0" />,
+  rejected: <XCircleIcon className="h-3.5 w-3.5 shrink-0" />,
 };
 
 export type StatusBadgeProps = {
@@ -41,15 +42,16 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
   const { t } = useI18n();
 
   return (
-    <span
+    <Badge
+      variant="outline"
       className={cn(
-        "inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 py-1 text-small font-semibold",
+        "inline-flex min-h-6 items-center gap-1.5 rounded-full border px-2 py-0.5 text-small font-semibold",
         STATUS_STYLES[status],
         className,
       )}
     >
       {STATUS_ICONS[status]}
       {t(STATUS_MESSAGE_KEYS[status])}
-    </span>
+    </Badge>
   );
 }

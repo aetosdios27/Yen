@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { paise } from "@yen/shared";
 import { describe, expect, it, vi } from "vitest";
@@ -167,7 +167,7 @@ describe("Dashboard and Approver A11y & Navigation", () => {
     expect(document.activeElement).toBe(reviewBtn);
   });
 
-  it("supports keyboard dismissal via Escape in ApprovalPinModal", () => {
+  it("supports keyboard dismissal via Escape in ApprovalPinModal", async () => {
     const handleClose = vi.fn();
 
     render(
@@ -176,7 +176,7 @@ describe("Dashboard and Approver A11y & Navigation", () => {
       </LocaleProvider>,
     );
 
-    fireEvent.keyDown(window, { key: "Escape" });
+    await userEvent.setup().keyboard("{Escape}");
     expect(handleClose).toHaveBeenCalledTimes(1);
   });
 

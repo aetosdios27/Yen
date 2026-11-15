@@ -8,6 +8,7 @@ import { getApiClient } from "../lib/api-client";
 import { Button } from "./button";
 import { cn } from "./cn";
 import { Input } from "./input";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
 
 export interface ApprovalPinModalProps {
   readonly isOpen: boolean;
@@ -37,31 +38,15 @@ export function ApprovalPinModal({
   const [error, setError] = useState<string | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       setPin("");
       setError(undefined);
       setIsSubmitting(false);
-      setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [isOpen]);
-
-  // Handle escape key
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -138,29 +123,36 @@ export function ApprovalPinModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div aria-hidden="true" className="fixed inset-0 bg-black/60 backdrop-blur-xs" />
-      <div
-        role="dialog"
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent
         aria-modal="true"
-        aria-labelledby="pin-modal-title"
-        aria-describedby="pin-modal-description"
-        className={cn(
-          "relative z-10 w-full max-w-md rounded-card border-2 border-verified-border bg-surface p-6 shadow-xl",
-          className,
-        )}
+        onOpenAutoFocus={() => {
+          returnFocusRef.current =
+            document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          returnFocusRef.current?.focus();
+        }}
+        showCloseButton={false}
+        className={cn("max-w-md", className)}
       >
-        <h2 id="pin-modal-title" className="text-title font-bold text-ink">
+        <DialogTitle className="text-title font-bold text-ink">
           {t("approver.pinModalTitle")}
-        </h2>
-        <p id="pin-modal-description" className="mt-1 text-small text-ink-muted">
+        </DialogTitle>
+        <DialogDescription className="mt-1 text-small text-ink-muted">
           {t("approver.pinModalDescription")}
           {amountPaise !== undefined && payeeName !== undefined ? (
             <span className="mt-1 block font-medium text-ink">
               {formatInr(amountPaise)} → {payeeName}
             </span>
           ) : null}
-        </p>
+        </DialogDescription>
 
         <form onSubmit={handleSubmit} noValidate className="mt-5 flex flex-col gap-4">
           <Input
@@ -205,7 +197,7 @@ export function ApprovalPinModal({
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

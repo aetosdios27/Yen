@@ -57,11 +57,11 @@ export function SpendingBreakdown({ categories, className }: SpendingBreakdownPr
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-label={`${label}: ${cat.percentage}%`}
-                  className="h-3 w-full overflow-hidden rounded-full bg-border"
+                  className="h-1.5 w-full overflow-hidden rounded-full bg-border"
                 >
                   <div
                     className="h-full rounded-full bg-primary transition-all duration-300"
-                    style={{ width: `${Math.max(2, Math.min(100, cat.percentage))}%` }}
+                    style={{ width: `${Math.max(0, Math.min(100, cat.percentage))}%` }}
                   />
                 </div>
               </div>

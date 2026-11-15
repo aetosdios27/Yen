@@ -2,6 +2,26 @@ import type { Messages } from "./en";
 
 /** Hindi catalogue. Typed as `Messages`, so a missing key fails typecheck. */
 export const hi: Messages = {
+  product: {
+    funds: "आपके फ़ंड",
+    intro: "पैसे और अगले काम देखने के लिए फ़ंड खोलें।",
+    loading: "आपके फ़ंड लोड हो रहे हैं…",
+    error: "फ़ंड लोड नहीं हो सके। फिर कोशिश करें।",
+    signInIntro: "अपने फ़ंड खोलने के लिए साइन इन करें।",
+    emptyTitle: "अभी कोई फ़ंड नहीं",
+    emptyBody: "सामुदायिक फ़ंड बनाएँ या फ़ंड आयोजक से निमंत्रण माँगें।",
+    createFund: "फ़ंड बनाएँ",
+    account: "खाता",
+    member: "सदस्य",
+    allFunds: "सभी फ़ंड",
+    roles: {
+      auditor: "लेखा परीक्षक",
+      owner: "मालिक",
+      treasurer: "कोषाध्यक्ष",
+      approver: "अनुमोदक",
+      member: "सदस्य",
+    },
+  },
   app: {
     name: "Yen",
   },
@@ -12,6 +32,7 @@ export const hi: Messages = {
     designSystemDescription: "375 पिक्सल फ़ोन चौड़ाई पर येन टोकन, घटकों और भाषाओं की समीक्षा।",
   },
   common: {
+    retry: "फिर कोशिश करें",
     skipToContent: "मुख्य सामग्री पर जाएँ",
     loading: "लोड हो रहा है",
     dismiss: "बंद करें",
@@ -21,6 +42,7 @@ export const hi: Messages = {
       "डेमो डेटा: शेष राशि, अनुरोध और स्वीकृति गतिविधि अनुकरण हैं। किसी भुगतान या स्वीकृति की पुष्टि या प्रेषण नहीं होता।",
   },
   nav: {
+    signIn: "साइन इन",
     primary: "मुख्य",
     designSystem: "डिज़ाइन सिस्टम",
     login: "साइन इन",
@@ -576,7 +598,7 @@ export const hi: Messages = {
     subtitle: "स्वीकृति के लिए खर्च अनुरोध बनाएँ",
     amountLabel: "रकम (₹)",
     amountPlaceholder: "0.00",
-    amountHint: "रुपये में रकम दर्ज करें (जैसे 250.00)। यह सीधे पैसे में बदली जाएगी।",
+    amountHint: "रुपये में राशि दर्ज करें, जैसे 250.00।",
     amountErrorRequired: "कृपया रकम दर्ज करें",
     amountErrorInvalid: "मान्य रुपये की रकम दर्ज करें (अधिकतम 2 दशमलव)",
     amountErrorPositive: "रकम शून्य से अधिक होनी चाहिए",

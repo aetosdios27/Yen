@@ -1,7 +1,12 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 @import "../styles/tokens.css";
 
 @layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
   html {
     background-color: var(--color-canvas);
     -webkit-text-size-adjust: 100%;
@@ -51,5 +56,28 @@
     font-size: var(--text-small);
     font-weight: 600;
     text-decoration: none;
+  }
+}
+
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+  }
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-slot] {
+    animation-duration: 0.01ms;
+    transition-duration: 0.01ms;
   }
 }

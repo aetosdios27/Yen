@@ -4,6 +4,26 @@
  * exactly these strings.
  */
 export const en = {
+  product: {
+    funds: "Your funds",
+    intro: "Open a fund to review its money and next actions.",
+    loading: "Loading your funds…",
+    error: "We couldn’t load your funds. Try again.",
+    signInIntro: "Sign in to access the funds you belong to.",
+    emptyTitle: "No funds yet",
+    emptyBody: "Create a community fund, or ask a fund organiser for an invitation.",
+    createFund: "Create a fund",
+    account: "Account",
+    member: "Member",
+    allFunds: "All funds",
+    roles: {
+      auditor: "Auditor",
+      owner: "Owner",
+      treasurer: "Treasurer",
+      approver: "Approver",
+      member: "Member",
+    },
+  },
   app: {
     name: "Yen",
   },
@@ -14,6 +34,7 @@ export const en = {
     designSystemDescription: "A 375 px review of Yen design tokens, components and languages.",
   },
   common: {
+    retry: "Try again",
     skipToContent: "Skip to main content",
     loading: "Loading",
     dismiss: "Dismiss",
@@ -23,6 +44,7 @@ export const en = {
       "Demo data: balances, requests, and approval activity are simulated. No payment or approval is verified or sent.",
   },
   nav: {
+    signIn: "Sign in",
     primary: "Primary",
     designSystem: "Design system",
     login: "Sign in",
@@ -595,7 +617,7 @@ export const en = {
     subtitle: "Create an expense for approver review",
     amountLabel: "Amount (₹)",
     amountPlaceholder: "0.00",
-    amountHint: "Enter amount in rupees (e.g. 250.00). Converted exactly to paise.",
+    amountHint: "Enter an amount in rupees, for example 250.00.",
     amountErrorRequired: "Please enter an amount",
     amountErrorInvalid: "Enter a valid rupee amount (up to 2 decimals)",
     amountErrorPositive: "Amount must be greater than zero",

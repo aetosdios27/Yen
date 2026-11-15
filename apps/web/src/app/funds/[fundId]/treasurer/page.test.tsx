@@ -95,6 +95,21 @@ describe("TreasurerPage", () => {
     expect(screen.queryByText(/Demo data:/)).toBeNull();
   });
 
+  it("keeps the approver view focused on requests", async () => {
+    render(
+      <LocaleProvider initialLocale="en">
+        <TreasurerPage params={Promise.resolve({ fundId: "demo-fund" })} view="approver" />
+      </LocaleProvider>,
+    );
+    await screen.findByText("Ramesh Hardware");
+    expect(screen.queryByText("New Expense")).toBeNull();
+    expect(screen.queryByText("Total balance")).toBeNull();
+    expect(screen.getByText("Approvals (1 of 2)")).toBeTruthy();
+    expect(screen.getAllByRole("link", { name: "Review" })[0]?.getAttribute("href")).toBe(
+      "/funds/demo-fund/approvals/exp-101",
+    );
+  });
+
   it("renders live dashboard data without demo banner in Hindi", async () => {
     render(
       <LocaleProvider initialLocale="hi">

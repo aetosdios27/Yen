@@ -554,3 +554,7 @@ describe("core journey screens contain no broken internal anchors", () => {
     });
   }
 });
+
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ toString: () => "yen_session=test-session" }),
+}));

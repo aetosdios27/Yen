@@ -130,7 +130,7 @@ export default function ApproverPage({ params }: ApproverPageProps) {
   const isRejected = expense?.status === "rejected";
 
   return (
-    <section className="mx-auto flex w-full max-w-xl flex-col gap-5 pb-28 sm:pb-8">
+    <section className="mx-auto flex w-full max-w-2xl flex-col gap-5 pb-28 sm:pb-8">
       {/* Toast Notification */}
       {toastMessage ? (
         <Toast
@@ -204,23 +204,16 @@ export default function ApproverPage({ params }: ApproverPageProps) {
         </div>
       ) : (
         <>
-          {/* Header & WhatsApp Fast-decision Landing notice */}
+          {/* Request and decision state */}
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-small font-semibold uppercase tracking-wider text-primary">
+              <h1 className="text-[1.75rem] font-semibold tracking-tight text-ink">
                 {t("approver.title")}
-              </span>
+              </h1>
               <StatusBadge status={isSettled ? "verified" : isRejected ? "rejected" : "pending"} />
             </div>
-            <h1 className="sr-only">{t("approver.title")}</h1>
             <div className="flex items-baseline justify-between gap-3">
-              <Money amount={expense.amountPaise} className="text-display" />
-            </div>
-            <div
-              role="note"
-              className="rounded-control border border-border bg-canvas px-3.5 py-2 text-small text-ink-muted"
-            >
-              {t("approver.fastDecisionNotice")}
+              <Money amount={expense.amountPaise} className="text-[1.75rem]" />
             </div>
           </div>
 
@@ -316,20 +309,20 @@ export default function ApproverPage({ params }: ApproverPageProps) {
 
           {/* Decision Action Bar (Mobile thumb zone sticky / Desktop standard) */}
           {isPending ? (
-            <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-surface/95 p-3.5 backdrop-blur-md sm:static sm:z-auto sm:border-0 sm:bg-transparent sm:p-0">
+            <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-surface p-3.5 sm:static sm:z-auto sm:border-0 sm:bg-transparent sm:p-0">
               <div className="mx-auto flex max-w-xl gap-3">
                 <Button
                   type="button"
                   variant="primary"
                   onClick={() => setIsPinOpen(true)}
-                  className="flex-1 border-verified-border bg-verified-bg text-verified-ink hover:bg-verified-bg/80 hover:text-verified-ink"
+                  className="flex-1"
                 >
                   <CheckCircleIcon className="h-5 w-5 shrink-0" />
                   <span>{t("approver.approveCta")}</span>
                 </Button>
                 <Button
                   type="button"
-                  variant="danger"
+                  variant="secondary"
                   onClick={() => setIsRejectOpen(true)}
                   className="flex-1"
                 >

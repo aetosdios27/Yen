@@ -20,7 +20,9 @@ test("Hindi verification result reflows at 360px", async ({ page }, testInfo) =>
     route.fulfill({ json: { recordId: "demo", fundId, status: "pending", event } }),
   );
   await page.goto(`/verify?recordId=demo&fundId=${fundId}`);
-  await page.locator("select").selectOption("hi");
+  await page.getByRole("button", { name: "Account", exact: true }).click();
+  await page.getByLabel("Language").selectOption("hi");
+  await page.keyboard.press("Escape");
   await expect(
     page.getByText("खाता बही में दर्ज; अगली सार्वजनिक मुहर की प्रतीक्षा में", { exact: true }),
   ).toBeVisible();

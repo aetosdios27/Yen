@@ -55,3 +55,7 @@ describe("PublicFundPage (Server Component)", () => {
     expect(metadata.title).toBe("Fund Not Found · Yen");
   });
 });
+
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ toString: () => "yen_session=test-session" }),
+}));

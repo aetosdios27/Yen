@@ -158,16 +158,15 @@ export function ExpenseForm({
     return (
       <div
         className={cn(
-          "flex flex-col gap-6 rounded-card border border-border bg-surface p-5 shadow-sm sm:p-6",
+          "flex flex-col gap-6 rounded-card border border-border bg-surface p-5 sm:p-6",
           className,
         )}
       >
         <div className="flex flex-col gap-1">
-          <span className="text-small font-semibold uppercase tracking-wider text-primary">
+          <span className="text-small font-medium text-ink-muted">
             {t("expenseForm.reviewTitle")}
           </span>
-          <h2 className="text-display font-bold text-ink">{formatInr(validatedPaise)}</h2>
-          <p className="mt-1 text-body text-ink-muted">{t("expenseForm.reviewSummary")}</p>
+          <h2 className="text-[1.75rem] font-semibold text-ink">{formatInr(validatedPaise)}</h2>
         </div>
 
         <dl className="grid grid-cols-1 gap-4 rounded-control border border-border bg-canvas p-4 sm:grid-cols-2">
@@ -240,13 +239,12 @@ export function ExpenseForm({
       onSubmit={handleReview}
       noValidate
       className={cn(
-        "flex flex-col gap-5 rounded-card border border-border bg-surface p-5 shadow-sm sm:p-6",
+        "flex flex-col gap-5 rounded-card border border-border bg-surface p-5 sm:p-6",
         className,
       )}
     >
       <div>
         <h2 className="text-title font-bold text-ink">{t("expenseForm.title")}</h2>
-        <p className="mt-0.5 text-small text-ink-muted">{t("expenseForm.subtitle")}</p>
         {spendableBalancePaise !== undefined ? (
           <div className="mt-3 flex items-center justify-between rounded-control border border-border-strong/30 bg-canvas px-3 py-2 text-small">
             <span className="text-ink-muted">{t("treasurer.spendableBalance")}</span>

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { paise } from "@yen/shared";
 import { describe, expect, it, vi } from "vitest";
@@ -68,7 +68,8 @@ describe("ApprovalPinModal", () => {
     });
   });
 
-  it("closes on Escape key press", () => {
+  it("closes on Escape key press", async () => {
+    const user = userEvent.setup();
     const handleClose = vi.fn();
 
     render(
@@ -77,7 +78,7 @@ describe("ApprovalPinModal", () => {
       </LocaleProvider>,
     );
 
-    fireEvent.keyDown(window, { key: "Escape" });
+    await user.keyboard("{Escape}");
     expect(handleClose).toHaveBeenCalledTimes(1);
   });
 

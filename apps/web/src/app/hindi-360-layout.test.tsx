@@ -222,6 +222,8 @@ describe("360 px Hindi layout and reflow guard", () => {
           requesterName: "राहुल शर्मा",
           createdAt: "2026-10-28 10:00",
           submittedAt: "2026-10-28 10:05",
+          approvals: [],
+          requiredQuorum: 2,
         },
       ],
     });

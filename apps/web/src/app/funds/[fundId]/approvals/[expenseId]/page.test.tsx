@@ -115,7 +115,7 @@ describe("ApproverPage", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders expense summary, WhatsApp fast-decision notice, and Approve/Reject buttons", async () => {
+  it("renders expense summary, evidence, and Approve/Reject buttons", async () => {
     render(
       <LocaleProvider initialLocale="en">
         <ApproverPage params={Promise.resolve({ fundId: "demo-fund", expenseId: "exp-101" })} />
@@ -133,7 +133,7 @@ describe("ApproverPage", () => {
     expect(screen.getByText("ramesh@upi")).toBeTruthy();
     expect(screen.getByText("Replacement water valve and pipe fittings")).toBeTruthy();
     expect(screen.getByText(/INV-2026-441/)).toBeTruthy();
-    expect(screen.getByText(/Fast decision:/)).toBeTruthy();
+    expect(screen.queryByText(/Fast decision:/)).toBeNull();
     expect(screen.getByRole("button", { name: "Approve" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Reject" })).toBeTruthy();
     expect(screen.queryByText(/Demo data:/)).toBeNull();

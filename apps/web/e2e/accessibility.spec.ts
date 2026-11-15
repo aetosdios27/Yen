@@ -1,6 +1,6 @@
 import { AxeBuilder } from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
-import { fundId } from "./support/backend";
+import { fundId, isRealBackend, seedSessions, webPort } from "./support/backend";
 
 type AxeViolation = { id: string; impact: string | null; nodes: unknown[] };
 
@@ -33,6 +33,14 @@ test.describe("accessibility (WCAG 2.1 AA, zero critical or serious violations)"
   });
 
   test("fund dashboard", async ({ page }) => {
+    await page.context().addCookies([
+      {
+        name: "yen_session",
+        value: seedSessions.treasurer,
+        url: `http://${isRealBackend ? "localhost" : "127.0.0.1"}:${webPort}`,
+        sameSite: "Lax",
+      },
+    ]);
     await page.goto(`/funds/${fundId}/dashboard`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     expect(await seriousViolations(page)).toEqual([]);

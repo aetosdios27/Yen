@@ -52,6 +52,10 @@ export default function NewExpensePage({ params }: NewExpensePageProps) {
         </Link>
       </nav>
 
+      {fundData ? (
+        <p className="text-small font-medium text-ink-muted">{fundData.fundName}</p>
+      ) : null}
+
       <ExpenseForm
         fundId={fundId}
         spendableBalancePaise={fundData?.spendableBalancePaise}

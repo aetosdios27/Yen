@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { cn } from "./cn";
-import { InboxIcon } from "./icons";
 
 export type EmptyStateProps = {
   title: string;
@@ -13,12 +12,11 @@ export function EmptyState({ title, description, action, className }: EmptyState
   return (
     <div
       className={cn(
-        "flex flex-col items-center gap-3 rounded-card border border-border bg-surface px-4 py-8 text-center",
+        "flex flex-col items-start gap-1 rounded-control border border-border bg-surface px-5 py-5 text-left",
         className,
       )}
     >
-      <InboxIcon className="h-12 w-12 text-ink-muted" />
-      <h3 className="text-title font-semibold text-ink">{title}</h3>
+      <h3 className="text-body font-semibold text-ink">{title}</h3>
       <p className="max-w-prose text-small text-ink-muted">{description}</p>
       {action === undefined ? null : <div className="pt-1">{action}</div>}
     </div>

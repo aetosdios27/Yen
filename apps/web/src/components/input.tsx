@@ -2,6 +2,7 @@
 
 import { type ComponentPropsWithRef, useId } from "react";
 import { cn } from "./cn";
+import { Input as PrimitiveInput } from "./ui/input";
 
 export type InputProps = Omit<ComponentPropsWithRef<"input">, "id"> & {
   id?: string | undefined;
@@ -15,8 +16,12 @@ export function Input({ id, label, hint, error, className, ...props }: InputProp
   const inputId = id ?? generatedId;
   const hintId = `${inputId}-hint`;
   const errorId = `${inputId}-error`;
-  const describedBy = [hint === undefined ? null : hintId, error === undefined ? null : errorId]
-    .filter((value) => value !== null)
+  const describedBy = [
+    props["aria-describedby"],
+    hint === undefined ? null : hintId,
+    error === undefined ? null : errorId,
+  ]
+    .filter((value) => value !== null && value !== undefined && value !== "")
     .join(" ");
 
   return (
@@ -24,11 +29,11 @@ export function Input({ id, label, hint, error, className, ...props }: InputProp
       <label htmlFor={inputId} className="text-small font-semibold text-ink">
         {label}
       </label>
-      <input
+      <PrimitiveInput
         {...props}
         id={inputId}
         className={cn(
-          "tap-target w-full rounded-control border-2 bg-canvas px-4 py-3 text-body text-ink placeholder:text-ink-muted",
+          "tap-target w-full bg-canvas px-3 text-body text-ink placeholder:text-ink-muted",
           error === undefined ? "border-border-strong" : "border-danger",
           className,
         )}

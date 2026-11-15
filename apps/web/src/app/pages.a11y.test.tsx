@@ -1,7 +1,9 @@
-import { it } from "vitest";
+import { it, vi } from "vitest";
 import { LegalPage } from "../components/legal-page";
 import { expectNoA11yViolations } from "../test/a11y";
 import Home from "./page";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 
 it("has no axe violations on the landing page in English", async () => {
   await expectNoA11yViolations(<Home />);

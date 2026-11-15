@@ -71,6 +71,38 @@ databaseSuite("Postgres fund store", (sql, url) => {
     expect((await restarted.get(fundId))?.fund.upiVpa).toBe("newclub@bank");
   });
 
+  it("lists only owned funds and active memberships with fund-scoped roles", async () => {
+    const first = await createFund();
+    const second = await createFund();
+    const memberId = await owner();
+    const store = new PostgresFundStore(sql);
+    await store.addMember({
+      fundId: first.fundId,
+      actorUserId: first.userId,
+      userId: memberId,
+      role: "approver",
+      occurredAt: createdAt,
+    });
+    expect(await store.listForUser(memberId)).toEqual([
+      { id: first.fundId, title: "Persistence test", role: "approver", visibility: "private" },
+    ]);
+    expect((await store.listForUser(first.userId)).map((fund) => fund.id)).toContain(first.fundId);
+    expect((await store.listForUser(first.userId)).map((fund) => fund.id)).not.toContain(
+      second.fundId,
+    );
+    await sql`UPDATE memberships SET role = 'auditor' WHERE fund_id = ${first.fundId} AND user_id = ${memberId}`;
+    expect(await store.listForUser(memberId)).toEqual([
+      { id: first.fundId, title: "Persistence test", role: "auditor", visibility: "private" },
+    ]);
+    await store.removeMember({
+      fundId: first.fundId,
+      actorUserId: first.userId,
+      userId: memberId,
+      occurredAt: createdAt,
+    });
+    expect(await store.listForUser(memberId)).toEqual([]);
+  });
+
   it("commits visibility and v2 event together, and rolls both back on an injected failure", async () => {
     const { userId, fundId } = await createFund();
     const store = new PostgresFundStore(sql);

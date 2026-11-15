@@ -99,9 +99,11 @@ import {
   logoutAllRoute,
   logoutRoute,
   MAX_EVIDENCE_FILE_SIZE_BYTES,
+  type MemberFund,
   manualMatchRoute,
   markRetentionRequiredRoute,
   meRoute,
+  myFundsRoute,
   openapiRoute,
   openapiSchema,
   partnerWebhookRoute,
@@ -510,6 +512,38 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       );
     }
     return c.json(principalSchema.parse({ id: principal.id }), 200);
+  });
+  app.openapi(myFundsRoute, async (c) => {
+    const principal = c.get("principal");
+    if (!principal) throw new ApiError("unauthenticated");
+    c.header("Cache-Control", "private, no-store");
+    const memberFunds = (await funds.listForUser?.(principal.id)) ?? [];
+    const allowed: { member: MemberFund; record: FundRecord }[] = [];
+    for (const member of memberFunds) {
+      const record = await funds.get(member.id);
+      const viewer = { ...principal, role: member.role, roles: [member.role] };
+      if (record && deps.policy.can(viewer, "fund:read", { kind: "fund", fund: record })) {
+        allowed.push({ member, record });
+      }
+    }
+    const redacted = allowed.map(({ member, record }) => ({
+      view: deps.policy.redact(
+        { ...principal, role: member.role, roles: [member.role] },
+        { kind: "fund", fund: record },
+      ),
+      role: member.role,
+    }));
+    return c.json(
+      {
+        funds: redacted.map(({ view, role }) => ({
+          id: view.id,
+          title: view.name,
+          visibility: view.visibility,
+          role,
+        })),
+      },
+      200,
+    );
   });
   app.openapi(getPrivacyConsentsRoute, async (c) => {
     const principal = c.get("principal");

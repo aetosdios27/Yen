@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useI18n } from "../../i18n";
 import { cn } from "../cn";
+import { Button } from "../ui/button";
 import { QrCodeIcon } from "./icons";
 import type { PublicOrg } from "./types";
 
@@ -22,7 +23,7 @@ export function FundHeader({ fundId, name, purpose, org, className }: FundHeader
       <div className="flex flex-wrap items-center gap-2">
         <span
           className={cn(
-            "inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 py-1 text-small font-semibold",
+            "inline-flex min-h-6 items-center gap-1.5 rounded border px-2 py-0.5 text-small font-semibold",
             org.verification === "anchored"
               ? "border-verified-border bg-verified-bg text-verified-ink"
               : "border-border text-ink-muted",
@@ -51,18 +52,20 @@ export function FundHeader({ fundId, name, purpose, org, className }: FundHeader
 
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between md:gap-6">
         <div className="flex-1">
-          <h1 className="text-display font-bold tracking-tight text-ink">{name}</h1>
+          <h1 className="text-[1.75rem] font-semibold tracking-tight text-ink">{name}</h1>
           <p className="mt-2 text-body leading-relaxed text-ink-muted">{purpose}</p>
         </div>
 
         <div className="mt-2 shrink-0 md:mt-0">
-          <Link
-            href={`/funds/${fundId}/donate`}
-            className="tap-target inline-flex items-center justify-center gap-2 rounded-control bg-primary px-5 py-3 text-body font-semibold text-on-solid transition hover:opacity-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-          >
-            <QrCodeIcon className="h-5 w-5 shrink-0" />
-            <span>{t("fund.donateCta")}</span>
-          </Link>
+          <Button asChild>
+            <Link
+              href={`/funds/${fundId}/donate`}
+              className="tap-target inline-flex items-center justify-center gap-2 rounded-control bg-primary px-5 py-3 text-body font-semibold text-on-solid transition hover:opacity-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+            >
+              <QrCodeIcon className="h-5 w-5 shrink-0" />
+              <span>{t("fund.donateCta")}</span>
+            </Link>
+          </Button>
         </div>
       </div>
     </header>

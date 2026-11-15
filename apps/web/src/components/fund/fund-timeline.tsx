@@ -82,7 +82,7 @@ export function FundTimeline({ timeline, fundId, onOpenExplainer, className }: F
             onClick={() => setFilter("all")}
             className={cn(
               "tap-target inline-flex items-center rounded-control px-3 py-1.5 text-small font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
-              filter === "all" ? "bg-surface text-ink shadow-xs" : "text-ink-muted hover:text-ink",
+              filter === "all" ? "bg-surface text-ink" : "text-ink-muted hover:text-ink",
             )}
           >
             {t("fund.filterAll", { count: counts.all })}
@@ -94,9 +94,7 @@ export function FundTimeline({ timeline, fundId, onOpenExplainer, className }: F
             onClick={() => setFilter("donations")}
             className={cn(
               "tap-target inline-flex items-center rounded-control px-3 py-1.5 text-small font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
-              filter === "donations"
-                ? "bg-surface text-ink shadow-xs"
-                : "text-ink-muted hover:text-ink",
+              filter === "donations" ? "bg-surface text-ink" : "text-ink-muted hover:text-ink",
             )}
           >
             {t("fund.filterDonations", { count: counts.donations })}
@@ -108,9 +106,7 @@ export function FundTimeline({ timeline, fundId, onOpenExplainer, className }: F
             onClick={() => setFilter("expenses")}
             className={cn(
               "tap-target inline-flex items-center rounded-control px-3 py-1.5 text-small font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
-              filter === "expenses"
-                ? "bg-surface text-ink shadow-xs"
-                : "text-ink-muted hover:text-ink",
+              filter === "expenses" ? "bg-surface text-ink" : "text-ink-muted hover:text-ink",
             )}
           >
             {t("fund.filterExpenses", { count: counts.expenses })}
@@ -121,7 +117,7 @@ export function FundTimeline({ timeline, fundId, onOpenExplainer, className }: F
       {filteredItems.length === 0 ? (
         <p className="mt-6 text-center text-body text-ink-muted">{t("fund.emptyFilter")}</p>
       ) : (
-        <ol aria-label={t("fund.timelineTitle")} className="mt-6 flex flex-col gap-4">
+        <ol aria-label={t("fund.timelineTitle")} className="mt-4 divide-y divide-border">
           {filteredItems.map((entry) => {
             const isDonation = entry.type === "donation";
             const categoryLabel =
@@ -132,7 +128,7 @@ export function FundTimeline({ timeline, fundId, onOpenExplainer, className }: F
             return (
               <li
                 key={entry.id}
-                className="flex flex-col gap-3 rounded-control border border-border bg-canvas p-4 sm:flex-row sm:items-start sm:justify-between"
+                className="flex flex-col gap-2 py-4 sm:flex-row sm:items-start sm:justify-between"
               >
                 <div className="flex-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -178,7 +174,7 @@ export function FundTimeline({ timeline, fundId, onOpenExplainer, className }: F
                     </p>
                   ) : null}
 
-                  <div className="mt-3">
+                  <div className="mt-2">
                     <VerifiedBadge
                       status={entry.status}
                       evidence={entry.evidence}
@@ -193,7 +189,7 @@ export function FundTimeline({ timeline, fundId, onOpenExplainer, className }: F
                 <div className="shrink-0 text-left sm:text-right">
                   <span
                     className={cn(
-                      "block text-title font-bold tabular-nums",
+                      "block text-body font-semibold tabular-nums",
                       isDonation ? "text-verified-ink" : "text-ink",
                     )}
                   >

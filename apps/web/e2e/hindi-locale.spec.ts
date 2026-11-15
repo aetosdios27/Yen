@@ -9,13 +9,15 @@ import { hostCanDispatchInput } from "./support/host";
  * test and drives the donation flow in Hindi.
  */
 test.describe("hi-IN locale journey", () => {
-  test("landing page switches to Hindi and updates html lang", async ({ page }) => {
+  test("product home switches to Hindi and updates html lang", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
+    await page.getByRole("button", { name: "Account", exact: true }).click();
     await page.getByLabel("Language").selectOption("hi");
+    await page.keyboard.press("Escape");
     await expect(page.locator("html")).toHaveAttribute("lang", "hi");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("जाँच");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("आपके फ़ंड");
   });
 
   test("donation flow completes in Hindi", async ({ browserName, page }) => {
@@ -25,7 +27,9 @@ test.describe("hi-IN locale journey", () => {
     );
     const utr = `${(Date.now() % 900_000_000_000) + 100_000_000_000}`;
     await page.goto(`/funds/${fundId}/donate`);
+    await page.getByRole("button", { name: "Account", exact: true }).click();
     await page.getByLabel("Language").selectOption("hi");
+    await page.keyboard.press("Escape");
     await expect(page.locator("html")).toHaveAttribute("lang", "hi");
 
     await page.getByRole("button", { name: "₹500", exact: true }).click();
@@ -38,7 +42,9 @@ test.describe("hi-IN locale journey", () => {
 
   test("verify page renders in Hindi", async ({ page }) => {
     await page.goto("/verify");
+    await page.getByRole("button", { name: "Account", exact: true }).click();
     await page.getByLabel("Language").selectOption("hi");
+    await page.keyboard.press("Escape");
     await expect(page.locator("html")).toHaveAttribute("lang", "hi");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   });

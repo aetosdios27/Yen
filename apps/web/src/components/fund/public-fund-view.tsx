@@ -34,13 +34,14 @@ export function PublicFundView({ fund, className }: PublicFundViewProps) {
 
       <MoneySummary money={fund.money} />
 
-      <SpendingBreakdown categories={fund.spendingBreakdown} />
-
-      <FundTimeline
-        timeline={fund.timeline}
-        fundId={fund.id}
-        onOpenExplainer={() => setExplainerOpen(true)}
-      />
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
+        <FundTimeline
+          timeline={fund.timeline}
+          fundId={fund.id}
+          onOpenExplainer={() => setExplainerOpen(true)}
+        />
+        <SpendingBreakdown categories={fund.spendingBreakdown} />
+      </div>
 
       <HowDoIKnowModal isOpen={isExplainerOpen} onClose={() => setExplainerOpen(false)} />
     </article>
