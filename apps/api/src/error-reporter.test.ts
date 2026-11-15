@@ -260,3 +260,14 @@ it("tags reports with the request trace id end to end", async () => {
   const { event } = parseEnvelope(captured[0]?.body ?? "");
   expect(event.tags).toMatchObject({ trace_id: response.headers.get("x-trace-id") });
 });
+
+it("scrubs credentials from the stdout fallback message and route", () => {
+  const lines: string[] = [];
+  const reporter = createStdoutErrorReporter({ write: (line) => lines.push(line) });
+  reporter.capture(new Error("Cookie: yen_session=abc123; tracking=secret123"), {
+    requestId: "r",
+    route: "/failure?password=hunter2",
+    status: 500,
+  });
+  expect(lines.join("")).not.toMatch(/abc123|secret123|hunter2/);
+});

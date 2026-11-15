@@ -6,7 +6,6 @@ import {
   scrubValue,
   sentryEnvelopeHeaders,
 } from "@yen/shared";
-import { redactLogText } from "./logging.js";
 
 export type ErrorReportContext = {
   readonly requestId: string;
@@ -57,10 +56,10 @@ function stdoutLine(
     environment,
     requestId: context.requestId,
     traceId: context.traceId ?? null,
-    route: redactLogText(context.route),
+    route: scrubText(context.route),
     status: context.status,
-    errorName: redactLogText(name),
-    message: redactLogText(message),
+    errorName: scrubText(name),
+    message: scrubText(message),
     ...(context.extra === undefined ? {} : { extra: scrubValue(context.extra) }),
   })}\n`;
 }

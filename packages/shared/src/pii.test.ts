@@ -76,11 +76,16 @@ describe("scrubText tokens and credentials", () => {
   it("redacts cookie headers wholesale", () => {
     const scrubbed = scrubText("Cookie: yen_session=abcdef123456; theme=dark");
     expect(scrubbed).not.toContain("abcdef123456");
-    expect(scrubbed).toContain("theme=dark");
+    expect(scrubbed).not.toContain("theme=dark");
   });
 
-  it("keeps non credential values after a cookie header", () => {
-    expect(scrubText("Cookie: yen_session=abcdef123456; theme=dark")).toContain(REDACTED_COOKIE);
+  it("redacts subsequent cookie pairs but preserves the next header", () => {
+    const result = scrubText(
+      "Cookie: yen_session=abc123; tracking=secret123\nAccept: application/json",
+    );
+    expect(result).not.toContain("secret123");
+    expect(result).toContain(REDACTED_COOKIE);
+    expect(result).toContain("Accept: application/json");
   });
 
   it("redacts set-cookie headers", () => {

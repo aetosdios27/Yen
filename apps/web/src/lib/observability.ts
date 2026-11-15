@@ -59,7 +59,9 @@ export function reportClientError(
   const release = clientRelease();
   const name = error instanceof Error ? error.constructor.name : "Unknown";
   const message = error instanceof Error ? error.message : String(error);
-  const route = context.route === undefined ? undefined : scrubRoute(context.route);
+  const pathname =
+    context.route ?? (typeof window === "undefined" ? undefined : window.location.pathname);
+  const route = pathname === undefined ? undefined : scrubRoute(pathname);
   const scrubbedMessage = scrubText(message);
   const report = {
     event: "client_error",

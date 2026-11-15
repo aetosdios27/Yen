@@ -224,3 +224,11 @@ describe("installClientObservability", () => {
     expect(() => installClientObservability(undefined)).not.toThrow();
   });
 });
+
+it("uses the scrubbed browser pathname when error boundaries omit a route", () => {
+  process.env.NEXT_PUBLIC_SENTRY_DSN = "invalid-dsn";
+  vi.stubGlobal("window", { location: { pathname: "/funds/abc" } });
+  const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  reportClientError(new Error("boundary failure"));
+  expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({ route: "/funds/abc" });
+});

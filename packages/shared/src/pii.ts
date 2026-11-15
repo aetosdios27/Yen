@@ -31,6 +31,9 @@ const AUTH_SCHEME_PATTERN = /\b(?:bearer|basic|digest)\s+[A-Za-z0-9._~+/=-]{8,}/
 // carrier (the cookie value itself is a key=value list of session tokens).
 // Values already carrying a [redacted...] tag are left alone so an earlier
 // rule's replacement is not rewritten a second time.
+const COOKIE_HEADER_PATTERN =
+  /\b(set[-_ ]?cookie|cookie)\s*[=:]\s*("[^"\r\n]*"|'[^'\r\n]*'|(?!\[redacted)[^\r\n]+)/gi;
+
 const CREDENTIAL_HEADER_PATTERN =
   /\b(set[-_ ]?cookie|cookie|authorization|auth|x-api-key|api-key)\s*[=:]\s*("[^"]*"|'[^']*'|(?!\[redacted)[^\s,;&}"]+)/gi;
 
@@ -97,6 +100,7 @@ export function isSensitiveKey(key: string): boolean {
 /** Scrubs credentials and personal identifiers out of a free text string. */
 export function scrubText(value: string): string {
   return value
+    .replace(COOKIE_HEADER_PATTERN, (_match, key: string) => `${key}=${REDACTED_COOKIE}`)
     .replace(AUTH_SCHEME_PATTERN, REDACTED_AUTHORIZATION)
     .replace(JWT_PATTERN, REDACTED_TOKEN)
     .replace(CREDENTIAL_HEADER_PATTERN, (_match, key: string) => `${key}=${REDACTED_COOKIE}`)
