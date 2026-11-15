@@ -72,6 +72,7 @@ jobs:
           AWS_REGION: ${{ vars.AWS_REGION }}
           ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
           GIT_SHA: ${{ github.sha }}
+          SENTRY_RELEASE: ${{ github.sha }}
         run: bash scripts/deploy-api.sh image "$GIT_SHA"
 
   # Runs database migrations as a one-off ECS task against the new image

@@ -15,6 +15,20 @@ const schema = z
     DATABASE_URL: z.string().optional(),
     EVIDENCE_STORAGE_DIR: z.string().min(1).optional(),
     OTP_HASH_KEY: z.string().min(32).optional(),
+    CORS_ORIGINS: z
+      .string()
+      .refine(
+        (value) =>
+          value
+            .split(",")
+            .every(
+              (origin) =>
+                URL.canParse(origin.trim()) && new URL(origin.trim()).origin === origin.trim(),
+            ),
+        "Expected a comma-separated list of origins such as http://localhost:3000",
+      )
+      .optional(),
+    WEB_PORT: z.coerce.number().int().min(1).max(65535).optional(),
     PARTNER_WEBHOOK_SECRET: z.string().min(32).optional(),
     WEBAUTHN_RP_ID: z.string().min(1).optional(),
     WEBAUTHN_ORIGIN: z.url().optional(),

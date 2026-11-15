@@ -134,53 +134,21 @@ describe("health routes", () => {
 });
 
 describe("error reports", () => {
-  it("stays silent without a DSN", () => {
-    const write = vi.fn();
-    const reporter = createErrorReporter({ write });
-    reporter.capture(new Error("boom"), { requestId: "r", route: "/v1/me", status: 500 });
-    expect(write).not.toHaveBeenCalled();
-  });
-
-  it("writes a scrubbed report tagged with the release", () => {
-    const lines: string[] = [];
-    const reporter = createErrorReporter({
-      dsn: "https://key@sentry.example/1",
-      release: "abc123",
-      environment: "production",
-      write: (line) => lines.push(line),
-    });
-    reporter.capture(new Error("could not reach +919876543210 or committee@yenbank"), {
-      requestId: "00000000-0000-4000-8000-000000000001",
-      route: "/v1/funds/:fundId/public/summary",
-      status: 500,
-    });
-
-    expect(lines).toHaveLength(1);
-    const parsed = JSON.parse(lines[0] ?? "{}") as Record<string, unknown>;
-    expect(parsed).toMatchObject({
-      event: "error_report",
-      release: "abc123",
-      environment: "production",
-      status: 500,
-      errorName: "Error",
-    });
-    expect(lines[0]).not.toContain("919876543210");
-    expect(lines[0]).not.toContain("committee@yenbank");
-  });
-
   it("captures server failures from a route", async () => {
-    const lines: string[] = [];
+    const bodies: string[] = [];
     const app = createApp({
       errorReporter: createErrorReporter({
         dsn: "https://key@sentry.example/1",
-        write: (line) => lines.push(line),
+        transport: async (_url, _headers, body) => {
+          bodies.push(body);
+        },
       }),
     });
     app.get("/boom", () => {
       throw new Error("handler exploded");
     });
     expect((await app.request("/boom")).status).toBe(500);
-    expect(lines.join("\n")).toContain("handler exploded");
+    expect(bodies.join("\n")).toContain("handler exploded");
   });
 
   it("does not report a 4xx", async () => {

@@ -18,7 +18,7 @@ import { createClientIpResolver, type TrustedProxyHeader } from "./client-ip.js"
 import { rateLimits } from "./config.js";
 import { createDatabaseReady } from "./database-ready.js";
 import { createDeliveryWebhookApp } from "./delivery-webhooks.js";
-import { DefaultInFlightTracker } from "./dependencies.js";
+import { DEV_PIN_HMAC_SECRET, DefaultInFlightTracker, selectPolicy } from "./dependencies.js";
 import { PostgresDeviceSignatureStore } from "./device-signature/store.js";
 import { PostgresDisplayNameStore } from "./display-name-store.js";
 import { PostgresDonationPledgeStore } from "./donation-store.js";
@@ -32,6 +32,7 @@ import { createServerLifecycle, type ServerLifecycle, shutdownOnSignal } from ".
 import { startObservability } from "./observability.js";
 import { PostgresPayeeProfileStore } from "./payee-rules/profile-store.js";
 import { PostgresPinStore } from "./pin/index.js";
+import { DEFAULT_OBJECTION_WINDOW_HOURS } from "./policy.js";
 import { PostgresPrivacyStore } from "./privacy-store.js";
 import { PostgresPublicFundReadStore } from "./public-fund-store.js";
 import { PostgresReceiptStore } from "./receipt-store.js";
@@ -51,6 +52,52 @@ function requiredDeliverySetting(value: string | undefined, name: string): strin
   return value;
 }
 
+const DEV_PAYEE_FINGERPRINT_SALT = "development-only-payee-fingerprint-salt-change-me";
+
+/**
+ * Local-development conveniences (simulated OTP delivery, development policy,
+ * local secrets, default CORS origins) require NODE_ENV=development to be set
+ * explicitly; the schema default for an unset NODE_ENV does not count.
+ */
+export function isExplicitDevelopment(env: NodeJS.ProcessEnv, config: ServerConfig): boolean {
+  return env.NODE_ENV === "development" && config.NODE_ENV === "development";
+}
+
+/**
+ * Development-only shortcut for demos: shortens the donor objection window to this many
+ * seconds. Anywhere but explicit development the variable is not read at all, so production,
+ * test and an unset NODE_ENV always keep the policy window.
+ */
+export function resolveObjectionWindowOverride(
+  env: NodeJS.ProcessEnv,
+  explicitDevelopment: boolean,
+): number | undefined {
+  const raw = env.OBJECTION_WINDOW_SECONDS;
+  if (!explicitDevelopment || raw === undefined || raw === "") return undefined;
+  const seconds = /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
+  if (
+    !Number.isSafeInteger(seconds) ||
+    seconds < 1 ||
+    seconds > DEFAULT_OBJECTION_WINDOW_HOURS * 3600
+  ) {
+    throw new Error(
+      `OBJECTION_WINDOW_SECONDS must be a whole number of seconds between 1 and ${DEFAULT_OBJECTION_WINDOW_HOURS * 3600}`,
+    );
+  }
+  return seconds;
+}
+
+export function resolveCorsOrigins(config: ServerConfig, explicitDevelopment: boolean): string[] {
+  if (config.CORS_ORIGINS) {
+    return config.CORS_ORIGINS.split(",")
+      .map((origin) => origin.trim())
+      .filter((origin) => origin.length > 0);
+  }
+  if (!explicitDevelopment) return [];
+  const port = config.WEB_PORT ?? 3000;
+  return [`http://localhost:${port}`, `http://127.0.0.1:${port}`];
+}
+
 export interface ServerConfig {
   readonly NODE_ENV: "development" | "test" | "production";
   readonly PORT: number;
@@ -63,6 +110,8 @@ export interface ServerConfig {
   readonly OTP_HASH_KEY?: string | undefined;
   readonly PARTNER_WEBHOOK_SECRET?: string | undefined;
   readonly PAYEE_FINGERPRINT_SALT?: string | undefined;
+  readonly CORS_ORIGINS?: string | undefined;
+  readonly WEB_PORT?: number | undefined;
   readonly DELIVERY_PROVIDER?: "stub" | "external" | undefined;
   readonly WHATSAPP_API_BASE_URL?: string | undefined;
   readonly WHATSAPP_API_VERSION?: string | undefined;
@@ -173,11 +222,29 @@ export interface StartedServer {
   readonly port: number;
 }
 
+/**
+ * The public proof and audit-bundle routes read the database directly. Only an explicitly
+ * development process (the literal NODE_ENV, not the schema default) gets that wiring.
+ */
+export function rawSqlDependency(
+  sql: Sql | undefined,
+  rawNodeEnv: string | undefined = process.env.NODE_ENV,
+): { readonly sql?: Sql } {
+  return sql && rawNodeEnv === "development" ? { sql } : {};
+}
+
 export async function startServer(
   config?: ServerConfig,
   options: { readonly registerSignals?: boolean } = {},
 ): Promise<StartedServer> {
   const resolvedConfig = config ?? (await import("./env.js")).env;
+  const explicitDevelopment = isExplicitDevelopment(process.env, resolvedConfig);
+  const objectionWindowSeconds = resolveObjectionWindowOverride(process.env, explicitDevelopment);
+  if (objectionWindowSeconds !== undefined) {
+    console.warn(
+      `Development only: donor objection window shortened to ${objectionWindowSeconds} seconds (OBJECTION_WINDOW_SECONDS)`,
+    );
+  }
   validateProductionDeliveryConfig(resolvedConfig);
   const memory = useMemoryStore(resolvedConfig);
   if (resolvedConfig.NODE_ENV === "production" && !resolvedConfig.DATABASE_URL) {
@@ -190,7 +257,9 @@ export async function startServer(
         connectTimeout: resolvedConfig.DATABASE_POOL_ACQUIRE_TIMEOUT_SECONDS,
       })
     : undefined;
-  const payeeFingerprintSalt = resolvedConfig.PAYEE_FINGERPRINT_SALT;
+  const payeeFingerprintSalt =
+    resolvedConfig.PAYEE_FINGERPRINT_SALT ??
+    (explicitDevelopment ? DEV_PAYEE_FINGERPRINT_SALT : undefined);
   if (payeeFingerprintSalt !== undefined && payeeFingerprintSalt.length < 32) {
     await sql?.end({ timeout: 1 });
     throw new Error("PAYEE_FINGERPRINT_SALT must contain at least 32 characters");
@@ -380,6 +449,14 @@ export async function startServer(
     ...(sql ? { privacyStore: new PostgresPrivacyStore(sql) } : {}),
     ...(sql ? { pinStore: new PostgresPinStore(sql) } : {}),
     ...(sql ? { deviceSignatureStore: new PostgresDeviceSignatureStore(sql) } : {}),
+    policy: selectPolicy(explicitDevelopment),
+    simulateOtpDelivery: explicitDevelopment,
+    ...(objectionWindowSeconds === undefined ? {} : { objectionWindowSeconds }),
+    ...(explicitDevelopment && !process.env.PIN_HMAC_SECRET
+      ? { pinSecret: DEV_PIN_HMAC_SECRET }
+      : {}),
+    corsOrigins: resolveCorsOrigins(resolvedConfig, explicitDevelopment),
+    ...rawSqlDependency(sql),
     otpHashKey: resolvedConfig.OTP_HASH_KEY ?? "development-only-otp-hash-key-change-me",
     partnerWebhookSecret: resolvedConfig.PARTNER_WEBHOOK_SECRET ?? null,
     otpDeliveryProvider: createOtpDeliveryProvider(

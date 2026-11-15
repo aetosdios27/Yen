@@ -57,6 +57,7 @@ import { routePath } from "hono/route";
 import { type AlertStore, MemoryAlertStore } from "./alert-store.js";
 import {
   AuthPinOtpVerifier,
+  DevStubOtpDeliveryProvider,
   generateOtpCode,
   generateSalt,
   generateSessionToken,
@@ -293,11 +294,13 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         allowHeaders: [
           "Content-Type",
           "Idempotency-Key",
+          "X-Approval-Token",
           "X-Request-Id",
           "Traceparent",
           "Tracestate",
         ],
         exposeHeaders: ["X-Request-Id", "X-Trace-Id", "Retry-After", "Idempotent-Replayed"],
+        credentials: true,
       }),
     );
   }
@@ -342,6 +345,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         requestId: c.get("requestId"),
         route: routePath(c, -1) || "unmatched",
         status,
+        traceId: c.get("traceId"),
       });
     }
     if (error && typeof error === "object" && "retryAfterSeconds" in error) {
@@ -642,6 +646,10 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         channel,
         resendAfterSeconds: Math.ceil(deps.otpCooldownMs / 1000),
         expiresAt: new Date(expiresAt).toISOString(),
+        ...(deps.simulateOtpDelivery &&
+        deps.otpDeliveryProvider instanceof DevStubOtpDeliveryProvider
+          ? { simulatedDelivery: { code } }
+          : {}),
       },
       200,
     );
@@ -1492,8 +1500,12 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       ]);
     }
   };
-  const fundPolicyFor = async (fundId: string) =>
-    (await deps.fundStore?.getPolicy?.(fundId)) ?? defaultFundPolicy;
+  const fundPolicyFor = async (fundId: string): Promise<FundPolicy> => {
+    const policy = (await deps.fundStore?.getPolicy?.(fundId)) ?? defaultFundPolicy;
+    return deps.objectionWindowSeconds === undefined
+      ? policy
+      : { ...policy, objectionWindowHours: deps.objectionWindowSeconds / 3600 };
+  };
 
   const toExpenseView = (exp: ExpenseRequest): z.infer<typeof expenseSchema> => ({
     id: exp.id,

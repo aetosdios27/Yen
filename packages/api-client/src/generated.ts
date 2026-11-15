@@ -1630,6 +1630,10 @@ export interface components {
       resendAfterSeconds: number;
       /** Format: date-time */
       expiresAt: string;
+      /** @description Present only when the development delivery stub handled the message; production never sends this field */
+      simulatedDelivery?: {
+        code: string;
+      };
     };
     SendOtpInput: {
       /** @description Phone number (E.164 or 10-digit Indian mobile) */

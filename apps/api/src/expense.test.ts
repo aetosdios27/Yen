@@ -509,3 +509,58 @@ describe("Expense Requests API Routes (YEN-30)", () => {
     expect(payRes.status).toBe(403);
   });
 });
+
+describe("Development objection window override (YEN-89)", () => {
+  async function submitExpense(
+    app: ReturnType<typeof setup>["app"],
+    key: string,
+  ): Promise<ExpensePayload> {
+    const created = await json(
+      await app.request(
+        req(
+          "POST",
+          `/v1/funds/${FUND_ID}/expenses`,
+          {
+            amountPaise: "50000",
+            description: "Generator fuel and maintenance",
+            recipientRef: "rcpt_fuel_vendor",
+            payee: { identity: { kind: "upi", vpa: "fuel@yenbank" }, name: "Fuel Supplier" },
+          },
+          `${key}-create`,
+        ),
+      ),
+    );
+    const res = await app.request(
+      req("POST", `/v1/funds/${FUND_ID}/expenses/${created.id}/submit`, undefined, `${key}-submit`),
+    );
+    expect(res.status).toBe(200);
+    return json(res);
+  }
+
+  async function windowOpen(app: ReturnType<typeof setup>["app"], id: string): Promise<unknown> {
+    const res = await app.request(req("GET", `/v1/funds/${FUND_ID}/expenses/${id}`));
+    return (await json(res)).objectionWindowOpen;
+  }
+
+  it("closes the window after the configured seconds", async () => {
+    const { app, advance } = setup({
+      expenseStore: new InMemoryExpenseStore(),
+      objectionWindowSeconds: 5,
+    });
+    const expense = await submitExpense(app, "override");
+    expect(expense.objectionWindowOpen).toBe(true);
+    advance(4_000);
+    expect(await windowOpen(app, expense.id)).toBe(true);
+    advance(1_100);
+    expect(await windowOpen(app, expense.id)).toBe(false);
+  });
+
+  it("keeps the 48 hour policy window without an override", async () => {
+    const { app, advance } = setup({ expenseStore: new InMemoryExpenseStore() });
+    const expense = await submitExpense(app, "default");
+    advance(47 * 3_600_000);
+    expect(await windowOpen(app, expense.id)).toBe(true);
+    advance(2 * 3_600_000);
+    expect(await windowOpen(app, expense.id)).toBe(false);
+  });
+});
