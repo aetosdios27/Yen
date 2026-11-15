@@ -345,6 +345,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         requestId: c.get("requestId"),
         route: routePath(c, -1) || "unmatched",
         status,
+        traceId: c.get("traceId"),
       });
     }
     if (error && typeof error === "object" && "retryAfterSeconds" in error) {
