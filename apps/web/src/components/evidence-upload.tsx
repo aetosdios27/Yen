@@ -253,7 +253,6 @@ export function EvidenceUpload({
         <h2 id="evidence-section-title" className="text-title font-semibold text-ink">
           {t("evidence.title")}
         </h2>
-        <p className="text-small text-ink-muted">{t("evidence.uploadDescription")}</p>
       </div>
 
       {/* Accessible Error State */}
@@ -269,7 +268,7 @@ export function EvidenceUpload({
       ) : null}
 
       {/* Upload Box / Input Area */}
-      <div className="flex flex-col gap-4 rounded-control border-2 border-dashed border-border-strong bg-canvas p-4 text-center">
+      <div className="flex flex-col gap-4 rounded-control border border-dashed border-border-strong bg-canvas p-4 text-center">
         {/* Hidden mobile-first inputs */}
         <input
           ref={cameraInputRef}
@@ -294,8 +293,8 @@ export function EvidenceUpload({
         />
 
         {!selectedFile ? (
-          <div className="flex flex-col items-center gap-3 py-4">
-            <UploadCloudIcon className="h-10 w-10 text-ink-muted" />
+          <div className="flex flex-col items-center gap-3 py-2">
+            <UploadCloudIcon className="h-6 w-6 text-ink-muted" />
             <div className="flex flex-col gap-1">
               <span className="text-body font-semibold text-ink">{t("evidence.uploadTitle")}</span>
               <span className="text-small text-ink-muted">{t("evidence.uploadDescription")}</span>

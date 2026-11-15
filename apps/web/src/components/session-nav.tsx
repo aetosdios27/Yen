@@ -1,65 +1,109 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { useI18n } from "../i18n";
 import { getApiBaseUrl } from "../lib/api-client";
+import { useProductSession } from "../lib/product-session";
+import { LocaleSwitcher } from "./locale-switcher";
+import { Button } from "./ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 
-export const SESSION_CHANGED_EVENT = "yen:session-changed";
+export { SESSION_CHANGED_EVENT } from "../lib/product-session";
 
 export function SessionNav() {
   const { t } = useI18n();
-  const [displayName, setDisplayName] = useState<string | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const load = () =>
-      fetch(`${getApiBaseUrl()}/v1/me`, { credentials: "include", signal: controller.signal })
-        .then(async (res) => {
-          if (!res.ok) return;
-          const me: { displayName?: string; phone?: string } = await res.json();
-          setDisplayName(me.displayName ?? me.phone ?? "");
-        })
-        .catch(() => undefined);
-    load();
-    window.addEventListener(SESSION_CHANGED_EVENT, load);
-    return () => {
-      controller.abort();
-      window.removeEventListener(SESSION_CHANGED_EVENT, load);
-    };
-  }, []);
-
+  const { session } = useProductSession();
+  const pathname = usePathname();
+  const [signingOut, setSigningOut] = useState(false);
+  const [logoutError, setLogoutError] = useState(false);
+  const fund =
+    session.kind === "ready"
+      ? session.funds.find((item) => pathname?.startsWith(`/funds/${encodeURIComponent(item.id)}`))
+      : undefined;
   const signOut = async () => {
-    await fetch(`${getApiBaseUrl()}/v1/auth/logout`, {
-      method: "POST",
-      credentials: "include",
-    }).catch(() => undefined);
-    window.location.assign("/login");
+    setSigningOut(true);
+    setLogoutError(false);
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/v1/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Logout failed");
+      window.location.assign("/login");
+    } catch {
+      setLogoutError(true);
+      setSigningOut(false);
+    }
   };
-
-  if (displayName === null) {
-    return (
-      <Link
-        href="/login"
-        className="tap-target inline-flex items-center rounded-control text-small font-semibold text-primary underline-offset-4 hover:underline"
-      >
-        {t("nav.login")}
-      </Link>
-    );
-  }
-
   return (
-    <div className="flex items-center gap-3">
-      <span className="text-small font-medium text-ink-muted">
-        {t("nav.signedInAs", { name: displayName })}
-      </span>
-      <button
-        type="button"
-        onClick={signOut}
-        className="tap-target inline-flex items-center rounded-control text-small font-semibold text-primary underline-offset-4 hover:underline"
-      >
-        {t("nav.signOut")}
-      </button>
+    <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-x-4 gap-y-2">
+      {fund && (
+        <span className="mr-auto hidden max-w-full truncate text-small font-medium text-ink-muted sm:block">
+          {fund.title}
+        </span>
+      )}
+      {session.kind === "ready" && (
+        <Link
+          href="/"
+          className="tap-target hidden items-center text-small font-medium text-ink-muted sm:inline-flex"
+        >
+          {t("product.allFunds")}
+        </Link>
+      )}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" className="max-w-52 truncate" aria-label={t("product.account")}>
+            {session.kind === "ready" ? session.name || t("product.member") : t("product.account")}{" "}
+            <span aria-hidden="true">⌄</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuLabel>
+            {session.kind === "ready"
+              ? t("nav.signedInAs", { name: session.name || t("product.member") })
+              : t("product.account")}
+          </DropdownMenuLabel>
+          {session.kind === "ready" && (
+            <DropdownMenuItem asChild className="min-h-12 sm:hidden">
+              <Link href="/">{t("product.allFunds")}</Link>
+            </DropdownMenuItem>
+          )}
+          <div className="px-2 py-3">
+            <LocaleSwitcher />
+          </div>
+          <DropdownMenuSeparator />
+          {session.kind === "ready" ? (
+            <DropdownMenuItem
+              disabled={signingOut}
+              onSelect={(event) => {
+                event.preventDefault();
+                void signOut();
+              }}
+              className="min-h-12"
+            >
+              {t("nav.signOut")}
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem asChild className="min-h-12">
+              <Link href="/login">{t("nav.login")}</Link>
+            </DropdownMenuItem>
+          )}
+          {logoutError && (
+            <p role="alert" className="px-2 py-2 text-small text-danger">
+              {t("auth.errorGeneric")}
+            </p>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

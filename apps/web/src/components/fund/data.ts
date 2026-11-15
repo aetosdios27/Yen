@@ -17,19 +17,22 @@ const VALID_CATEGORIES: readonly SpendingCategoryId[] = [
   "other",
 ];
 
-export async function getPublicFund(fundId: string): Promise<PublicFund | null> {
+export async function getPublicFund(fundId: string, cookie?: string): Promise<PublicFund | null> {
   const client = getApiClient();
 
   try {
     const [summaryRes, breakdownRes, timelineRes] = await Promise.all([
       client.GET("/v1/funds/{fundId}/public/summary", {
         params: { path: { fundId } },
+        ...(cookie ? { headers: { cookie }, cache: "no-store" as const } : {}),
       }),
       client.GET("/v1/funds/{fundId}/public/breakdown", {
         params: { path: { fundId } },
+        ...(cookie ? { headers: { cookie }, cache: "no-store" as const } : {}),
       }),
       client.GET("/v1/funds/{fundId}/public/timeline", {
         params: { path: { fundId } },
+        ...(cookie ? { headers: { cookie }, cache: "no-store" as const } : {}),
       }),
     ]);
 

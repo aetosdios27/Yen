@@ -218,6 +218,37 @@ export const meRoute = createRoute({
   description: "Auth seam: returns only an injected dev/test principal until YEN-22.",
   responses: { 200: jsonResponse(principalSchema, "Current principal"), ...protectedErrors },
 });
+export const memberFundSchema = z
+  .object({
+    id: z.string().uuid(),
+    title: z.string(),
+    role: z.enum(["owner", "treasurer", "approver", "auditor", "member"]),
+    visibility: z.enum(["public", "donors", "members", "private"]),
+  })
+  .strict()
+  .openapi("MemberFund");
+export type MemberFund = z.infer<typeof memberFundSchema>;
+export const myFundsRoute = createRoute({
+  method: "get",
+  path: "/v1/me/funds",
+  operationId: "listMyFunds",
+  security,
+  summary: "Funds the current user owns or actively belongs to",
+  responses: {
+    200: {
+      ...jsonResponse(z.object({ funds: z.array(memberFundSchema) }), "Current user's funds"),
+      headers: {
+        ...responseHeaders,
+        "cache-control": {
+          schema: { type: "string", enum: ["private, no-store"] },
+          description: "Membership data is never shared or stored in caches",
+        },
+      },
+    },
+    ...protectedErrors,
+  },
+});
+
 export const idempotencyKey = z
   .string()
   .min(1)

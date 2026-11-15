@@ -34,7 +34,7 @@ export function LocaleSwitcher({ className, showPseudo = false }: LocaleSwitcher
             setLocale(next);
           }
         }}
-        className="tap-target max-w-full rounded-control border-2 border-border-strong bg-canvas px-3 py-2 text-small font-medium text-ink"
+        className="tap-target min-h-12 max-w-full rounded-control border border-border-strong bg-canvas px-3 py-2 text-small font-medium text-ink"
       >
         {locales.map((option) => (
           <option key={option} value={option}>

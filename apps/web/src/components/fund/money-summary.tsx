@@ -16,28 +16,31 @@ export function MoneySummary({ money, className }: MoneySummaryProps) {
   return (
     <section
       aria-label={t("fund.summaryTitle")}
-      className={cn("grid grid-cols-1 gap-4 sm:grid-cols-3", className)}
+      className={cn(
+        "grid grid-cols-1 divide-y divide-border overflow-hidden rounded-control border border-border bg-surface sm:grid-cols-3 sm:divide-x sm:divide-y-0",
+        className,
+      )}
     >
-      <div className="flex flex-col justify-between rounded-control border border-border bg-surface p-4 shadow-xs">
+      <div className="flex flex-col justify-between p-5">
         <span className="text-small font-medium text-ink-muted">{t("fund.totalRaised")}</span>
         <div className="mt-2">
-          <Money amount={money.totalRaised} className="text-display font-bold text-ink" />
+          <Money amount={money.totalRaised} className="text-[1.75rem] font-semibold text-ink" />
         </div>
       </div>
 
-      <div className="flex flex-col justify-between rounded-control border border-border bg-surface p-4 shadow-xs">
+      <div className="flex flex-col justify-between p-5">
         <span className="text-small font-medium text-ink-muted">{t("fund.totalSpent")}</span>
         <div className="mt-2">
-          <Money amount={money.totalSpent} className="text-display font-bold text-ink" />
+          <Money amount={money.totalSpent} className="text-[1.75rem] font-semibold text-ink" />
         </div>
       </div>
 
-      <div className="flex flex-col justify-between rounded-control border border-verified-border bg-verified-bg/40 p-4 shadow-xs">
+      <div className="flex flex-col justify-between p-5">
         <span className="text-small font-medium text-verified-ink">{t("fund.currentBalance")}</span>
         <div className="mt-2">
           <Money
             amount={money.currentBalance}
-            className="text-display font-bold text-verified-ink"
+            className="text-[1.75rem] font-semibold text-verified-ink"
           />
         </div>
       </div>

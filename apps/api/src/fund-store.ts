@@ -2,6 +2,7 @@ import { appendEvent, ensureFundPseudonym, type Sql, uuidv7 } from "@yen/db";
 import type { FundPolicy } from "@yen/ledger";
 import { ensureFundAccounts } from "@yen/ledger";
 import { type FundId, paise, parseOrgId } from "@yen/shared";
+import { type MemberFund, memberFundSchema } from "./contract.js";
 import type { FundStore } from "./dependencies.js";
 import type { FundRecord } from "./policy.js";
 import { DEFAULT_OBJECTION_WINDOW_HOURS } from "./policy.js";
@@ -55,6 +56,21 @@ export class PostgresFundStore implements FundStore {
         createdAt: new Date(row.created_at).toISOString(),
       },
     };
+  }
+
+  async listForUser(userId: string): Promise<MemberFund[]> {
+    const rows = await this.sql`
+      SELECT DISTINCT ON (f.id) f.id, f.title, f.visibility_tier AS visibility,
+        CASE WHEN o.owner_id = ${userId} THEN 'owner' ELSE m.role END AS role
+      FROM funds f
+      JOIN orgs o ON o.id = f.org_id
+      LEFT JOIN memberships m ON m.fund_id = f.id AND m.user_id = ${userId} AND m.status = 'active'
+      WHERE o.owner_id = ${userId} OR m.user_id IS NOT NULL
+      ORDER BY f.id, CASE m.role WHEN 'owner' THEN 0 WHEN 'treasurer' THEN 1 WHEN 'approver' THEN 2 WHEN 'auditor' THEN 3 ELSE 4 END
+    `;
+    return rows
+      .map((row) => memberFundSchema.parse(row))
+      .sort((a, b) => a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
   }
 
   async rolesFor(fundId: string, userId: string): Promise<string[]> {

@@ -83,6 +83,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/me/funds": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Funds the current user owns or actively belongs to */
+    get: operations["listMyFunds"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/privacy/consents": {
     parameters: {
       query?: never;
@@ -1622,6 +1639,15 @@ export interface components {
       displayName?: string;
       locale?: string;
     };
+    MemberFund: {
+      /** Format: uuid */
+      id: string;
+      title: string;
+      /** @enum {string} */
+      role: "owner" | "treasurer" | "approver" | "auditor" | "member";
+      /** @enum {string} */
+      visibility: "public" | "donors" | "members" | "private";
+    };
     SendOtpResponse: {
       /** @enum {string} */
       status: "sent";
@@ -2658,6 +2684,155 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Principal"];
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource conflict, changed idempotency input, or request in progress */
+      409: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Gateway timeout */
+      504: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  listMyFunds: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current user's funds */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Membership data is never shared or stored in caches */
+          "cache-control"?: "private, no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            funds: components["schemas"]["MemberFund"][];
+          };
         };
       };
       /** @description Validation failed; details contain field paths */

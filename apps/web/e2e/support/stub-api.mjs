@@ -113,6 +113,25 @@ const server = createServer((request, response) => {
     return json(response, 200, { status: "reset" });
   }
 
+  if (request.method === "GET" && (path === "/v1/me" || path === "/v1/me/funds")) {
+    if (!(request.headers.cookie ?? "").includes("yen_session=yen_mock_session_treasurer_token")) {
+      return json(response, 401, {
+        error: { code: "unauthenticated", message: "Sign in required" },
+      });
+    }
+    return json(
+      response,
+      200,
+      path === "/v1/me"
+        ? { id: "00000000-0000-4000-8000-000000000001", displayName: "Aarav Sharma" }
+        : {
+            funds: [
+              { id: fundId, title: state.fund.name, role: "treasurer", visibility: "public" },
+            ],
+          },
+    );
+  }
+
   if (request.method === "POST" && path === "/v1/auth/pin/verify") {
     request.resume();
     return json(response, 200, { approvalToken: `token-${randomUUID()}` });

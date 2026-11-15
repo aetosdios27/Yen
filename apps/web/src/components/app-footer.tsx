@@ -8,8 +8,7 @@ export function AppFooter() {
 
   return (
     <footer className="border-t border-border bg-canvas">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-6 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-small text-ink-muted">{t("footer.note")}</p>
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <nav aria-label={t("footer.navLabel")}>
           <ul className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <li>

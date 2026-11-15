@@ -121,19 +121,19 @@ export function DonationForm({ fundTitle, upiVpa, upiPayeeName, onSubmit }: Dona
   if (status === "pledged") {
     return (
       <section className="mx-auto flex w-full max-w-xl flex-col gap-4 py-6">
-        <h1 className="text-heading font-bold tracking-tight text-ink">
+        <h1 className="text-[1.75rem] font-semibold tracking-tight text-ink">
           {t("donate.pendingTitle")}
         </h1>
         <p
           role="status"
-          className="rounded-card border-2 border-verified-border bg-verified-bg p-4 text-body text-verified-ink"
+          className="rounded-card border border-verified-border bg-verified-bg p-4 text-body text-verified-ink"
         >
           {t("donate.pendingBody")}
         </p>
         <div className="flex flex-col gap-2 pt-2">
           <a
             href={`/receipts/${encodeURIComponent(utr)}`}
-            className="tap-target inline-flex items-center justify-center rounded-control border-2 border-primary bg-primary px-5 py-3 text-body font-semibold text-on-solid hover:bg-primary-hover"
+            className="tap-target inline-flex items-center justify-center rounded-control border border-primary bg-primary px-5 py-3 text-body font-semibold text-on-solid hover:bg-primary-hover"
           >
             {t("donate.viewReceipt")}
           </a>
@@ -149,7 +149,7 @@ export function DonationForm({ fundTitle, upiVpa, upiPayeeName, onSubmit }: Dona
       className="mx-auto flex w-full max-w-xl flex-col gap-6 py-6"
     >
       <header className="flex flex-col gap-2">
-        <h1 className="text-heading font-bold tracking-tight text-ink">
+        <h1 className="text-[1.75rem] font-semibold tracking-tight text-ink">
           {t("donate.title", { fund: fundTitle })}
         </h1>
         <p className="text-body text-ink-muted">{t("donate.intro")}</p>
@@ -172,7 +172,7 @@ export function DonationForm({ fundTitle, upiVpa, upiPayeeName, onSubmit }: Dona
                     setCustom("");
                   }}
                   className={cn(
-                    "tap-target rounded-control border-2 px-4 py-3 text-body font-semibold tabular-nums",
+                    "tap-target rounded-control border px-4 py-3 text-body font-semibold tabular-nums",
                     pressed
                       ? "border-primary bg-primary text-on-solid"
                       : "border-border-strong bg-canvas text-ink hover:bg-primary-subtle",
@@ -199,12 +199,12 @@ export function DonationForm({ fundTitle, upiVpa, upiPayeeName, onSubmit }: Dona
       <section className="flex flex-col gap-3">
         <h2 className="text-title font-semibold text-ink">{t("donate.payTitle")}</h2>
         <p className="text-body text-ink-muted">{t("donate.payBody", { upiId: upiVpa })}</p>
-        <div className="flex flex-col gap-3 rounded-card border-2 border-border bg-surface p-4">
+        <div className="flex flex-col gap-3 rounded-card border border-border bg-surface p-4">
           <p className="text-small font-medium text-ink-muted">{t("donate.upiIdLabel")}</p>
           <code className="break-all text-body font-semibold text-ink">{upiVpa}</code>
           <a
             href={intent}
-            className="tap-target inline-flex items-center justify-center rounded-control border-2 border-primary bg-primary px-5 py-3 text-body font-semibold text-on-solid hover:bg-primary-hover"
+            className="tap-target inline-flex items-center justify-center rounded-control border border-primary bg-primary px-5 py-3 text-body font-semibold text-on-solid hover:bg-primary-hover"
           >
             {t("donate.openUpiApp")}
           </a>

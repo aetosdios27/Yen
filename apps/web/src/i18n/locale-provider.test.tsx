@@ -1,10 +1,20 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { DesignSystemReview } from "../app/design-system/design-system-review";
 import Home from "../app/page";
 import { AppShell } from "../components/app-shell";
 import { LocaleProvider } from "./locale-provider";
+import { hi } from "./messages/hi";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn() }),
+  usePathname: () => "/",
+}));
+
+vi.mock("../lib/product-session", () => ({
+  useProductSession: () => ({ session: { kind: "signedOut" }, retry: vi.fn() }),
+}));
 
 it("switches the whole shell to Hindi without a page reload", async () => {
   const user = userEvent.setup();
@@ -16,13 +26,13 @@ it("switches the whole shell to Hindi without a page reload", async () => {
     </LocaleProvider>,
   );
 
-  expect(screen.getByRole("link", { name: "Design system" })).toBeTruthy();
-  expect(screen.getByText(/Community money you can check/)).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Your funds" })).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "Account" }));
 
   await user.selectOptions(screen.getByLabelText("Language"), "hi");
+  await user.keyboard("{Escape}");
 
-  expect(screen.getByRole("link", { name: "डिज़ाइन सिस्टम" })).toBeTruthy();
-  expect(screen.getByText(/सामुदायिक धन/)).toBeTruthy();
+  expect(screen.getByRole("heading", { name: hi.product.funds })).toBeTruthy();
   expect(document.documentElement.lang).toBe("hi");
 });
 

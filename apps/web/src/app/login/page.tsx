@@ -1,18 +1,21 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
 import { Button } from "../../components/button";
 import { Input } from "../../components/input";
 import { SESSION_CHANGED_EVENT } from "../../components/session-nav";
 import { StatusBadge } from "../../components/status-badge";
 import { useDocumentTitle, useI18n } from "../../i18n";
+import { fundDestination, loadProductSession } from "../../lib/product-session";
 
 type Step = "phone" | "otp" | "pin" | "success";
 type PinMode = "setup" | "unlock";
 
 export default function LoginPage() {
   const { t } = useI18n();
+  const router = useRouter();
   useDocumentTitle("auth.title", "auth.intro");
 
   const [step, setStep] = useState<Step>("phone");
@@ -178,6 +181,12 @@ export default function LoginPage() {
       if (res.ok) {
         window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));
         setStep("success");
+        const session = await loadProductSession().catch(() => null);
+        router.replace(
+          session?.kind === "ready" && session.funds.length === 1 && session.funds[0]
+            ? fundDestination(session.funds[0])
+            : "/",
+        );
         setErrorMessage(null);
       } else if (res.status === 400) {
         setErrorMessage(t("auth.errorPinRejected"));
@@ -220,7 +229,7 @@ export default function LoginPage() {
       {step === "phone" && (
         <>
           <div className="flex flex-col gap-2">
-            <h1 className="text-display font-bold tracking-tight text-ink">{t("auth.title")}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-ink">{t("auth.title")}</h1>
             <p className="text-body text-ink-muted">{t("auth.intro")}</p>
           </div>
 
@@ -248,7 +257,7 @@ export default function LoginPage() {
                 aria-label={t("auth.channelLabel")}
                 className="min-h-11 rounded-md border border-line bg-surface px-3 text-ink"
                 value={channel}
-                onChange={(event) => setChannel(event.target.value as "whatsapp" | "sms")}
+                onChange={(event) => setChannel(event.target.value === "sms" ? "sms" : "whatsapp")}
               >
                 <option value="whatsapp">{t("auth.channelWhatsapp")}</option>
                 <option value="sms">{t("auth.channelSms")}</option>
@@ -271,14 +280,14 @@ export default function LoginPage() {
       {step === "otp" && (
         <>
           <div className="flex flex-col gap-2">
-            <h1 className="text-display font-bold tracking-tight text-ink">{t("auth.otpTitle")}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-ink">{t("auth.otpTitle")}</h1>
             <p className="text-body text-ink-muted">{t("auth.otpIntro", { phone })}</p>
           </div>
 
           {simulatedCode ? (
             <p
               role="status"
-              className="rounded-control border-2 border-unmatched-border bg-unmatched-bg p-3 text-small font-medium text-unmatched-ink"
+              className="rounded-control border border-unmatched-border bg-unmatched-bg p-3 text-small font-medium text-unmatched-ink"
             >
               {t("auth.simulatedDeliveryNotice", { code: simulatedCode })}
             </p>
@@ -343,7 +352,7 @@ export default function LoginPage() {
       {step === "pin" && (
         <>
           <div className="flex flex-col gap-2">
-            <h1 className="text-display font-bold tracking-tight text-ink">
+            <h1 className="text-2xl font-semibold tracking-tight text-ink">
               {pinMode === "setup" ? t("auth.pinSetupTitle") : t("auth.pinUnlockTitle")}
             </h1>
             <p className="text-body text-ink-muted">
@@ -433,7 +442,7 @@ export default function LoginPage() {
       {step === "success" && (
         <div className="flex flex-col items-center gap-4 text-center py-6">
           <StatusBadge status="verified" />
-          <h1 className="text-display font-bold tracking-tight text-ink">
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">
             {t("auth.successHeading")}
           </h1>
           <p className="text-lead text-ink-muted">{t("auth.successDescription")}</p>

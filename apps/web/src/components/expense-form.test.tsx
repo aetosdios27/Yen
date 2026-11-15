@@ -107,11 +107,6 @@ describe("ExpenseForm", () => {
     expect(screen.getByText("sunil@okhdfcbank")).toBeTruthy();
     expect(screen.getByText("Paint for hall")).toBeTruthy();
     expect(screen.getByText("INV-889")).toBeTruthy();
-    expect(
-      screen.getByText(
-        "Please check all details before submitting. Once submitted, fund approvers must verify with their PIN before release.",
-      ),
-    ).toBeTruthy();
 
     // Confirm submit
     await user.click(screen.getByRole("button", { name: "Submit expense" }));

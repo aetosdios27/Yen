@@ -1,5 +1,6 @@
 import { formatInr } from "@yen/shared";
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { getPublicFund } from "../../../components/fund/data";
 import { PublicFundView } from "../../../components/fund/public-fund-view";
@@ -12,7 +13,7 @@ export type FundPageProps = {
 
 export async function generateMetadata(props: FundPageProps): Promise<Metadata> {
   const { fundId } = await props.params;
-  const fund = await getPublicFund(fundId);
+  const fund = await getPublicFund(fundId, (await cookies()).toString());
 
   if (!fund) {
     return {
@@ -54,7 +55,7 @@ export async function generateMetadata(props: FundPageProps): Promise<Metadata> 
 
 export default async function PublicFundPage(props: FundPageProps) {
   const { fundId } = await props.params;
-  const fund = await getPublicFund(fundId);
+  const fund = await getPublicFund(fundId, (await cookies()).toString());
 
   if (!fund) {
     notFound();

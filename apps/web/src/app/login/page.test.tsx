@@ -4,6 +4,9 @@ import { LocaleProvider } from "../../i18n";
 import { expectNoA11yViolations } from "../../test/a11y";
 import LoginPage from "./page";
 
+const { replace } = vi.hoisted(() => ({ replace: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }) }));
+
 describe("LoginPage", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -238,12 +241,19 @@ describe("LoginPage", () => {
     expect((screen.getByLabelText("6-digit code") as HTMLInputElement).value).toBe("");
   });
 
-  it("unlocks the device with the existing PIN and then shows the success view", async () => {
+  it("unlocks the device before routing to the actual fund dashboard", async () => {
+    replace.mockClear();
     const fetchMock = await signInUntilPinStep([
       sentOk,
       verifiedOk,
       jsonResponse(200, { isSet: true, status: "active" }),
       jsonResponse(200, { status: "unlocked" }),
+      jsonResponse(200, { name: "Priya" }),
+      jsonResponse(200, {
+        funds: [
+          { id: "actual-fund", title: "Residents", role: "treasurer", visibility: "members" },
+        ],
+      }),
     ]);
 
     await waitFor(() => {
@@ -257,10 +267,11 @@ describe("LoginPage", () => {
       expect(screen.getByRole("heading", { level: 1, name: "Welcome" })).toBeTruthy();
       expect(screen.getByText("You are signed in to Yen.")).toBeTruthy();
     });
-    expect(fetchMock).toHaveBeenLastCalledWith(
+    expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/v1/auth/device/unlock"),
       expect.objectContaining({ body: JSON.stringify({ pin: "482613" }), credentials: "include" }),
     );
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/funds/actual-fund/dashboard"));
   });
 
   it("creates a PIN for a first sign-in and requires both entries to match", async () => {
@@ -288,7 +299,7 @@ describe("LoginPage", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { level: 1, name: "Welcome" })).toBeTruthy();
     });
-    expect(fetchMock).toHaveBeenLastCalledWith(
+    expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/v1/auth/pin/setup"),
       expect.objectContaining({ body: JSON.stringify({ pin: "482613" }) }),
     );

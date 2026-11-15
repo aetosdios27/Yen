@@ -18,6 +18,7 @@ import {
   TRUSTED_DEVICE_IDLE_TIMEOUT_MS,
 } from "./auth/index.js";
 import { rateLimitEnv, rateLimits } from "./config.js";
+import type { MemberFund } from "./contract.js";
 import { type DeviceSignatureConfig, DeviceSignatureService } from "./device-signature/service.js";
 import { type DeviceSignatureStore, MemoryDeviceSignatureStore } from "./device-signature/store.js";
 import { createErrorReporter, type ErrorReporter } from "./error-reporter.js";
@@ -252,6 +253,7 @@ export class DefaultInFlightTracker implements InFlightTracker {
 }
 
 export interface FundStore {
+  listForUser?(userId: string): Promise<MemberFund[]>;
   readonly persistent?: boolean;
   get(fundId: string): Promise<FundRecord | undefined> | FundRecord | undefined;
   set(fundId: string, fund: FundRecord): void;
@@ -309,6 +311,18 @@ export class MemoryFundStore implements FundStore {
     this.versions.set(fundId, fund.fund.version ?? this.versions.get(fundId) ?? 1);
     if (!this.members.has(fundId))
       this.members.set(fundId, new Map([[fund.owner, new Set(["owner"])]]));
+  }
+
+  async listForUser(userId: string): Promise<MemberFund[]> {
+    const result: MemberFund[] = [];
+    const priority: MemberFund["role"][] = ["owner", "treasurer", "approver", "auditor", "member"];
+    for (const [id, record] of this.funds) {
+      const roles = this.members.get(id)?.get(userId);
+      const role = record.owner === userId ? "owner" : priority.find((value) => roles?.has(value));
+      if (role)
+        result.push({ id, title: record.fund.name, role, visibility: record.fund.visibility });
+    }
+    return result.sort((a, b) => a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
   }
 
   async changeVisibility(input: {

@@ -132,9 +132,9 @@ export async function fetchFundTreasurerData(fundId: string): Promise<FundTreasu
     (e) => e.status === "draft" || e.status === "submitted" || e.status === "hold_reserved",
   );
 
-  const totalBalancePaise = summaryRes.data.raisedPaise
-    ? paise(Number(summaryRes.data.raisedPaise))
-    : paise(0);
+  const totalBalancePaise = paise(
+    Number(summaryRes.data.raisedPaise ?? "0") - Number(summaryRes.data.spentPaise),
+  );
   const heldPaise = pending.reduce((sum, e) => sum + e.amountPaise, 0);
   const spendableBalancePaise = paise(Math.max(0, totalBalancePaise - heldPaise));
 

@@ -2,17 +2,17 @@
 
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { useI18n } from "../i18n";
-import { cn } from "./cn";
 import { LoaderIcon } from "./icons";
+import { Button as PrimitiveButton } from "./ui/button";
 
 export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
 
-const VARIANT_STYLES: Record<ButtonVariant, string> = {
-  primary: "border-primary bg-primary text-on-solid hover:bg-primary-hover",
-  secondary: "border-primary bg-canvas text-primary hover:bg-primary-subtle",
-  danger: "border-danger bg-danger text-on-solid hover:bg-danger-hover",
-  ghost: "border-transparent bg-transparent text-primary hover:bg-primary-subtle",
-};
+const VARIANTS = {
+  primary: "default",
+  secondary: "outline",
+  danger: "destructive",
+  ghost: "ghost",
+} as const;
 
 export type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type"> & {
   variant?: ButtonVariant;
@@ -35,14 +35,11 @@ export function Button({
   const { t } = useI18n();
 
   return (
-    <button
+    <PrimitiveButton
       {...props}
       type={type}
-      className={cn(
-        "tap-target inline-flex items-center justify-center gap-2 rounded-control border-2 px-5 py-3 text-body font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60",
-        VARIANT_STYLES[variant],
-        className,
-      )}
+      variant={VARIANTS[variant]}
+      className={className}
       disabled={disabled === true || loading}
       aria-busy={loading || undefined}
     >
@@ -51,6 +48,6 @@ export function Button({
       ) : null}
       <span>{children}</span>
       {loading ? <span className="sr-only">{loadingLabel ?? t("common.loading")}</span> : null}
-    </button>
+    </PrimitiveButton>
   );
 }
