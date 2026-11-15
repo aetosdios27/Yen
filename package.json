@@ -11,6 +11,7 @@
     "dev:full": "tsx scripts/dev-full.ts",
     "db:migrate": "pnpm --filter @yen/db migrate",
     "privacy:erase-contact": "tsx packages/db/src/privacy-contact-cli.ts",
+    "pilot:metrics": "tsx scripts/pilot-metrics.ts",
     "db:seed": "tsx scripts/seed.ts",
     "db:reset": "tsx scripts/db-reset.ts",
     "demo:reset": "tsx scripts/demo-reset.ts",
