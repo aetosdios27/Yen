@@ -4,6 +4,7 @@ import { isAbsolute, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createSql, parseDatabaseUrl, seedDevDatabase } from "@yen/db";
 import { formatInr } from "@yen/shared";
+import { localChainRpcUrl, resetLocalChain } from "./dev-chain.js";
 
 /**
  * The API dev server resolves EVIDENCE_STORAGE_DIR against its own working
@@ -134,7 +135,17 @@ export async function main(): Promise<void> {
     await sql.unsafe("GRANT ALL ON SCHEMA public TO public;");
     await sql.unsafe(dropQueueSchemaSql(queueSchema));
 
-    process.stdout.write("4. Running migrations and reseeding demo dataset...\n");
+    process.stdout.write("4. Resetting the local anchoring chain...\n");
+    const chainUrl = localChainRpcUrl(process.env);
+    if ((await resetLocalChain(chainUrl)) === "reset") {
+      process.stdout.write(
+        `   Chain at ${chainUrl} wiped to genesis; dev:full redeploys RootRegistry\n`,
+      );
+    } else {
+      process.stdout.write(`   No local chain at ${chainUrl}; nothing to reset\n`);
+    }
+
+    process.stdout.write("5. Running migrations and reseeding demo dataset...\n");
     const result = await seedDevDatabase(sql);
 
     process.stdout.write("\n======================================================\n");

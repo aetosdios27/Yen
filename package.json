@@ -15,7 +15,7 @@
     "db:reset": "tsx scripts/db-reset.ts",
     "demo:reset": "tsx scripts/demo-reset.ts",
     "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down",
+    "docker:down": "docker compose --profile chain down",
     "check": "biome ci .",
     "format": "biome check --write .",
     "typecheck": "turbo run typecheck",

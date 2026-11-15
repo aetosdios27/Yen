@@ -4,6 +4,7 @@ import {
   DEFAULT_API_PORT,
   DEFAULT_API_URL,
   DEFAULT_WEB_PORT,
+  DEV_PAYEE_FINGERPRINT_SALT,
 } from "./dev-server-env.js";
 
 describe("buildDevServerEnv", () => {
@@ -45,5 +46,22 @@ describe("buildDevServerEnv", () => {
       DATABASE_URL: "postgres://postgres:pw@localhost:5432/postgres",
     });
     expect(env.DATABASE_URL).toBe("postgres://postgres:pw@localhost:5432/postgres");
+  });
+
+  it("supplies a dev-only payee fingerprint salt the API requires with PostgreSQL, unless set", () => {
+    expect(DEV_PAYEE_FINGERPRINT_SALT.length).toBeGreaterThanOrEqual(32);
+    expect(buildDevServerEnv({}).PAYEE_FINGERPRINT_SALT).toBe(DEV_PAYEE_FINGERPRINT_SALT);
+    expect(
+      buildDevServerEnv({ PAYEE_FINGERPRINT_SALT: "x".repeat(40) }).PAYEE_FINGERPRINT_SALT,
+    ).toBe("x".repeat(40));
+  });
+
+  it("lets the web origin call the api from the browser, unless overridden", () => {
+    expect(buildDevServerEnv({ WEB_PORT: "3200" }).CORS_ALLOWED_ORIGINS).toBe(
+      "http://localhost:3200,http://127.0.0.1:3200",
+    );
+    expect(
+      buildDevServerEnv({ CORS_ALLOWED_ORIGINS: "http://localhost:9" }).CORS_ALLOWED_ORIGINS,
+    ).toBe("http://localhost:9");
   });
 });
