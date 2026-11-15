@@ -13,7 +13,8 @@ import { createApp } from "./app.js";
 import { PostgresDonationPledgeStore } from "./donation-store.js";
 import { PostgresExpenseStore } from "./expense-store.js";
 import { PostgresFundStore } from "./fund-store.js";
-import { PostgresPublicFundReadStore } from "./public-fund-store.js";
+import { PublicReadCache } from "./public-cache.js";
+import { PostgresPublicFundHeadStore, PostgresPublicFundReadStore } from "./public-fund-store.js";
 import { PostgresReceiptStore } from "./receipt-store.js";
 import { PostgresReconciliationStore } from "./reconciliation/postgres-store.js";
 
@@ -62,7 +63,9 @@ databaseSuite("public HTTP financial proof with Postgres stores", (sql) => {
     const expenses = new PostgresExpenseStore(sql);
     const pledges = new PostgresDonationPledgeStore(sql);
     const bank = new PostgresReconciliationStore(sql, alerts);
+    let now = Date.now();
     const app = createApp({
+      publicReadCache: new PublicReadCache({ clock: () => now }),
       principal: null,
       sql,
       receiptStore: new PostgresReceiptStore(sql),
@@ -70,7 +73,13 @@ databaseSuite("public HTTP financial proof with Postgres stores", (sql) => {
       expenseStore: expenses,
       donationPledgeStore: pledges,
       publicFundReadStore: new PostgresPublicFundReadStore(sql),
+      publicFundHead: new PostgresPublicFundHeadStore(sql).get.bind(
+        new PostgresPublicFundHeadStore(sql),
+      ),
       reconciliationStore: bank,
+      // The state proofs below read no-cache repeatedly, which consumes the
+      // per ip miss budget; these tests prove ledger states, not origin protection.
+      fundReadMissLimit: { capacity: 1000, refillMs: 1000 },
     });
     async function comparePlans() {
       const original = await sql.unsafe<{ id: string }[]>(originalAnchoredSql, [fundId]);
@@ -134,7 +143,20 @@ databaseSuite("public HTTP financial proof with Postgres stores", (sql) => {
         .parse(await (await read("timeline")).json());
       return body.items.find((item: { id: string }) => item.id === id)?.verified;
     }
-    return { fundId, app, expenses, bank, read, totals, pledge, credit, state };
+    return {
+      fundId,
+      app,
+      expenses,
+      bank,
+      read,
+      totals,
+      pledge,
+      credit,
+      state,
+      advance: () => {
+        now += 60_001;
+      },
+    };
   }
 
   it("proves HTTP totals against ledger balances before and after statement reconciliation, isolated by fund", async () => {
@@ -153,6 +175,58 @@ databaseSuite("public HTTP financial proof with Postgres stores", (sql) => {
       pledgedPaise: "0",
       verification: "bank-matched",
     });
+  });
+
+  it("validates public pages from the event log head", async () => {
+    const f = await fixture();
+    await f.pledge();
+    const head = (
+      await sql`SELECT hash FROM fund_events WHERE fund_id = ${f.fundId} ORDER BY seq DESC LIMIT 1`
+    )[0]?.hash;
+    const orgId = (await sql`SELECT org_id FROM funds WHERE id = ${f.fundId}`)[0]?.org_id;
+    expect(head).toBeDefined();
+    expect(orgId).toBeDefined();
+
+    const first = await f.app.request(`/v1/funds/${f.fundId}/public/summary`);
+    expect(first.status).toBe(200);
+    expect(first.headers.get("etag")).toBe(`W/"${f.fundId}-${head}"`);
+    expect(first.headers.get("cache-tag")).toBe(`fund-${f.fundId}, org-${orgId}`);
+    expect(first.headers.get("cache-control")).toBe(
+      "public, s-maxage=60, stale-while-revalidate=300, stale-if-error=86400",
+    );
+
+    const second = await f.app.request(`/v1/funds/${f.fundId}/public/summary`, {
+      headers: { "if-none-match": first.headers.get("etag") ?? "" },
+    });
+    expect(second.status).toBe(304);
+    expect(await second.text()).toBe("");
+    expect(second.headers.get("etag")).toBe(`W/"${f.fundId}-${head}"`);
+  });
+
+  it("rotates conditional validators when anchors confirm without a fund event", async () => {
+    const f = await fixture();
+    const donation = await f.pledge();
+    await f.credit(donation.utr);
+    const chain = new FakeChain();
+    const worker = new AnchoringWorker(sql, chain, signer, alerts);
+    await worker.runFund(f.fundId);
+    const url = `/v1/funds/${f.fundId}/public/summary`;
+    const first = await f.app.request(url);
+    expect(await first.json()).toMatchObject({ verification: "bank-matched" });
+    const headBefore = (await new PostgresPublicFundHeadStore(sql).get(f.fundId))?.latestEventHash;
+    chain.blockNumber = 112n;
+    await worker.runFund(f.fundId);
+    await reconcileAnchors(sql, chain, alerts);
+    expect((await new PostgresPublicFundHeadStore(sql).get(f.fundId))?.latestEventHash).toBe(
+      headBefore,
+    );
+    f.advance();
+    const response = await f.app.request(url, {
+      headers: { "if-none-match": first.headers.get("etag") ?? "" },
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("etag")).not.toBe(first.headers.get("etag"));
+    expect(await response.json()).toMatchObject({ verification: "anchored" });
   });
 
   it("retains both refund movements and a truthful receipt while HTTP totals equal the ledger", async () => {

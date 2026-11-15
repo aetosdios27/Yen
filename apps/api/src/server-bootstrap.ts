@@ -34,7 +34,7 @@ import { PostgresPayeeProfileStore } from "./payee-rules/profile-store.js";
 import { PostgresPinStore } from "./pin/index.js";
 import { DEFAULT_OBJECTION_WINDOW_HOURS } from "./policy.js";
 import { PostgresPrivacyStore } from "./privacy-store.js";
-import { PostgresPublicFundReadStore } from "./public-fund-store.js";
+import { PostgresPublicFundHeadStore, PostgresPublicFundReadStore } from "./public-fund-store.js";
 import { PostgresReceiptStore } from "./receipt-store.js";
 import { PostgresReconciliationStore } from "./reconciliation/postgres-store.js";
 import { createFaultTracker } from "./runtime-faults.js";
@@ -257,6 +257,7 @@ export async function startServer(
         connectTimeout: resolvedConfig.DATABASE_POOL_ACQUIRE_TIMEOUT_SECONDS,
       })
     : undefined;
+  const publicFundHeadStore = sql ? new PostgresPublicFundHeadStore(sql) : undefined;
   const payeeFingerprintSalt =
     resolvedConfig.PAYEE_FINGERPRINT_SALT ??
     (explicitDevelopment ? DEV_PAYEE_FINGERPRINT_SALT : undefined);
@@ -409,6 +410,9 @@ export async function startServer(
     isShuttingDown: () => lifecycleInstance?.isShuttingDown ?? false,
     ...(sql ? { donationPledgeStore: new PostgresDonationPledgeStore(sql) } : {}),
     ...(sql ? { publicFundReadStore: new PostgresPublicFundReadStore(sql) } : {}),
+    ...(publicFundHeadStore
+      ? { publicFundHead: publicFundHeadStore.get.bind(publicFundHeadStore) }
+      : {}),
     ...(sql ? { receiptStore: new PostgresReceiptStore(sql) } : {}),
     ...(sql ? { fundSubscriptionStore: new PostgresFundSubscriptionStore(sql) } : {}),
     ...(sql ? { reconciliationStore: new PostgresReconciliationStore(sql) } : {}),

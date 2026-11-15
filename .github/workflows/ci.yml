@@ -90,10 +90,12 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           TURBO_CACHE_DIR: .turbo
         run: |
+          # Load test budgets are measured in the isolated Load Tests workflow;
+          # measuring them under turbo's parallel test storm breaches p99s.
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            pnpm turbo run typecheck test build --filter="...[origin/${BASE_REF}]"
+            pnpm turbo run typecheck test build --filter="...[origin/${BASE_REF}]" --filter='!@yen/load-tests'
           else
-            pnpm turbo run typecheck test build
+            pnpm turbo run typecheck test build --filter='!@yen/load-tests'
           fi
 
       - name: Accessibility (axe, zero violations)
