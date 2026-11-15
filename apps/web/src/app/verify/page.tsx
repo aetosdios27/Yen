@@ -344,7 +344,7 @@ function VerifyPageContent() {
                 <AlertTriangleIcon className="h-6 w-6 shrink-0 mt-0.5" />
               )}
 
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <span className="text-xs uppercase tracking-wider font-bold opacity-80">
                   {state.report.outcome === "verified"
                     ? t("verify.outcomeVerified")
@@ -548,7 +548,7 @@ function VerifyPageContent() {
               ) : (
                 <AlertTriangleIcon className="h-6 w-6 shrink-0 mt-0.5" />
               )}
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <h2 className="text-title font-bold">
                   {state.report.allValid
                     ? t("verify.bundlePassedTitle", { count: state.report.totalEvents })
