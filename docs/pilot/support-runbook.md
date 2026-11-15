@@ -84,7 +84,8 @@ HI: "अगर 6 अंकों का कोड नहीं आया: 1) द
 
 Escalation note: if several users on one network report missing OTPs together, treat it as
 SEV-2 (notification delivery failing per `docs/runbooks/incident-response.md`) and hand it to
-the on-call. In local development OTP delivery is stubbed and no code is sent at all; during
+the on-call. In local development OTP transport is stubbed: the generated code appears in the login
+screen’s simulated-delivery notice rather than arriving by SMS. During
 the pilot the SMS provider (Exotel with DLT templates, see
 `docs/runbooks/demo-recording.md` section 9) must be configured.
 

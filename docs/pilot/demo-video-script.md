@@ -13,7 +13,7 @@ same edit can ship in either language or both.
 - Total runtime: 180 seconds. Every shot below has a fixed window; if a take overruns, cut
   narration, not the honesty sentences. The sentences marked [honesty] are mandatory.
 - Zero on-screen text promises that the app does not keep. If a component is simulated locally,
-  the closer discloses it (section 6 of `docs/runbooks/demo-recording.md`).
+  the closer discloses it (section 9 of `docs/runbooks/demo-recording.md`).
 - Record at 1440x900 or larger. One shot (shot 6) is recorded in a 390 px wide window to show
   the phone layout.
 - The fund shown is the seeded demo fund; do not blur anything, the data is fictional.
@@ -24,43 +24,45 @@ Follow `docs/runbooks/demo-recording.md` exactly:
 
 1. `pnpm demo:reset`, then `pnpm dev:full` (web on http://localhost:3000, API on
    http://localhost:3001).
-2. Start the local ClamAV daemon and restart with `CLAMAV_HOST=localhost` so the bill upload
-   works in shot 7.
-3. Seed the browser session cookies and run the PIN setup calls for Aarav Sharma (treasurer),
-   Priya Verma and Rohan Iyer (approvers) with recording PIN `482613`.
-4. Prepare `assets/demo-fixtures/bill.jpg` (a real phone photo of a paper invoice).
-5. Optional, for the anchored verify state in shot 10: local Anvil chain plus queue worker per
-   section 8 of the runbook. Without it, shot 10 records the pending-seal state instead; both
-   are honest, pick one and do not mix.
+2. Sign in through `/login` as Aarav Sharma (treasurer), Priya Verma and Rohan Iyer
+   (approvers), using separate browser profiles. Follow the simulated OTP notice and create
+   the recording PIN `482613` as described in section 4 of the recording runbook.
+3. Prepare a real phone photo of a paper invoice, or use
+   `apps/web/e2e-real/fixtures/bill.png`. The development scanner is a disclosed clean stub;
+   no ClamAV daemon is needed for this local recording.
+4. `dev:full` starts the local Anvil chain and queue worker by default (section 8 of the
+   runbook). Wait for the anchor before shot 10, or record pending seal and say so.
+5. Use the seeded fund for shots 4 onward. Shots 2 and 3 demonstrate a separate newly
+   created fund; return to the seeded fund afterward. Use the new expense from shot 6
+   for both approvals; seeded expenses are metadata and are not readable by this API.
 
 Seeded identifiers used below (from `packages/db/src/dev-seed.ts`):
 
-| Thing                  | Value                                                                              |
-| ---------------------- | ---------------------------------------------------------------------------------- |
-| Fund ID                | `01940000-0000-7000-8000-000000000002`                                             |
-| Public fund URL        | `http://localhost:3000/funds/01940000-0000-7000-8000-000000000002`                 |
-| Treasurer persona      | Aarav Sharma, cookie `yen_mock_session_treasurer_token`                            |
-| Approver personas      | Priya Verma (`..._approver1_token`), Rohan Iyer (`..._approver2_token`, hi locale) |
-| Backup pending expense | `01940000-0000-7000-8000-000000000062` (25,000 INR, batteries)                     |
+| Thing             | Value                                                              |
+| ----------------- | ------------------------------------------------------------------ |
+| Fund ID           | `01940000-0000-7000-8000-000000000002`                             |
+| Public fund URL   | `http://localhost:3000/funds/01940000-0000-7000-8000-000000000002` |
+| Treasurer persona | Aarav Sharma, browser sign-in via `/login`                         |
+| Approver personas | Priya Verma and Rohan Iyer (hi locale), browser sign-in            |
 
 ## Shot list
 
-| Shot | Window         | Screen or camera           | Route or target                                     | Length |
-| ---- | -------------- | -------------------------- | --------------------------------------------------- | ------ |
-| 1    | 00:00 to 00:12 | Screen                     | `/` landing, then title card                        | 12 s   |
-| 2    | 00:12 to 00:40 | Screen                     | `/onboarding` wizard, steps 1 to 5                  | 28 s   |
-| 3    | 00:40 to 00:54 | Screen                     | `/invites/accept?code=...` on second phone          | 14 s   |
-| 4    | 00:54 to 01:14 | Screen                     | `/funds/[fundId]/donate`                            | 20 s   |
-| 5    | 01:14 to 01:28 | Screen                     | `/receipts/[id]`                                    | 14 s   |
-| 6    | 01:28 to 01:56 | Screen, 390 px window      | `/funds/[fundId]/treasurer` and `/expenses/new`     | 28 s   |
-| 7    | 01:56 to 02:10 | Screen split with terminal | evidence upload API call                            | 14 s   |
-| 8    | 02:10 to 02:34 | Screen                     | `/funds/[fundId]/approvals/[expenseId]` + PIN modal | 24 s   |
-| 9    | 02:34 to 02:46 | Screen                     | quorum reached, second approver                     | 12 s   |
-| 10   | 02:46 to 03:06 | Screen                     | `/funds/[fundId]` timeline, `/verify`               | 20 s   |
-| 11   | 03:06 to 03:20 | Screen                     | closer card with support contact                    | 14 s   |
+| Shot | Window         | Screen or camera      | Route or target                                     | Length |
+| ---- | -------------- | --------------------- | --------------------------------------------------- | ------ |
+| 1    | 00:00 to 00:12 | Screen                | `/` landing, then title card                        | 12 s   |
+| 2    | 00:12 to 00:32 | Screen                | `/onboarding` wizard, steps 1 to 5                  | 20 s   |
+| 3    | 00:32 to 00:46 | Screen                | `/invites/accept?code=...` on second phone          | 14 s   |
+| 4    | 00:46 to 01:02 | Screen                | `/funds/[fundId]/donate`                            | 16 s   |
+| 5    | 01:02 to 01:16 | Screen                | `/receipts/[id]`                                    | 14 s   |
+| 6    | 01:16 to 01:44 | Screen, 390 px window | `/funds/[fundId]/treasurer` and `/expenses/new`     | 28 s   |
+| 7    | 01:44 to 01:58 | Screen                | uploaded evidence and download link                 | 14 s   |
+| 8    | 01:58 to 02:22 | Screen                | `/funds/[fundId]/approvals/[expenseId]` + PIN modal | 24 s   |
+| 9    | 02:22 to 02:34 | Screen                | quorum reached, second approver                     | 12 s   |
+| 10   | 02:34 to 02:46 | Screen                | `/funds/[fundId]` timeline, `/verify`               | 12 s   |
+| 11   | 02:46 to 03:00 | Screen                | closer card with support contact                    | 14 s   |
 
-Windows sum to 200 seconds; the edit must land at 180. The cut points marked (cut to fit) are
-the sanctioned trims: shorten shots 2, 4 and 10 narration, never the [honesty] lines.
+Windows sum to 180 seconds. Rehearse narration in the selected language and trim the
+marked shots to their fixed windows; never remove the [honesty] lines.
 
 ## Shot narration and on-screen actions
 
@@ -74,7 +76,7 @@ funds" with a second line in Hindi.
 - HI narration: "छात्र क्लब पैसा जुटाते हैं, और सदस्य जानना चाहते हैं कि पैसा कहाँ गया। यह है
   येन, एक क्लब फ़ंड की पारदर्शी खाता बही।"
 
-### Shot 2: Treasurer creates the fund (00:12 to 00:40, cut to fit)
+### Shot 2: Treasurer creates the fund (00:12 to 00:32)
 
 On-screen: Aarav walks the `/onboarding` wizard: club details, fund details (show the paise
 hint), payment details (UPI VPA `iitd.robotics@sbi`), two approvers, visibility. End on the
@@ -90,17 +92,20 @@ hint), payment details (UPI VPA `iitd.robotics@sbi`), two approvers, visibility.
 - (cut to fit) Trim by fast-stepping the wizard between steps 1 and 4; hold step 5 and the
   ready screen for at least 6 seconds.
 
-### Shot 3: Co-approver accepts (00:40 to 00:54)
+### Shot 3: Co-approver accepts (00:32 to 00:46)
 
-On-screen: second phone profile, the invite link opens `/invites/accept`, name and phone
-entered, "You are now an approver." confirmed.
+On-screen: second phone profile opens `/invites/accept`, enters name and phone and
+shows the pending-owner-confirmation message. Add a caption: "Owner confirmation, second
+acceptance and operator approver provisioning required before live approvals." Do not show
+an invite acceptance as proof of approval eligibility. Shots 8 and 9 use the separately
+seeded approver accounts on the seeded fund.
 
-- EN narration: "Each co-approver accepts the invite on their own phone, with the same number
-  the invite went to. Setup needs two approvers before money can move."
-- HI narration: "हर सह-स्वीकर्ता अपने ही फ़ोन पर निमंत्रण स्वीकार करता है, उसी नंबर से जिस पर
-  निमंत्रण आया था। पैसा चलने से पहले दो स्वीकर्ताओं का सेटअप ज़रूरी है।"
+- EN narration: "Accept the invite, wait for owner confirmation, then accept again. The pilot
+  team must separately confirm your approver access before you approve expenses."
+- HI narration: "निमंत्रण स्वीकार करें, मालिक की पुष्टि के बाद फिर स्वीकार करें। खर्च की
+  स्वीकृति से पहले पायलट टीम आपकी स्वीकर्ता पहुँच अलग से सुनिश्चित करेगी।"
 
-### Shot 4: Donor gives by UPI (00:54 to 01:14, cut to fit)
+### Shot 4: Donor gives by UPI (00:46 to 01:02)
 
 On-screen: public fund page, then `/funds/[fundId]/donate`: amount chips, the UPI QR, then the
 12-digit reference form. Submit and land on the "Donation recorded, waiting for the bank"
@@ -114,7 +119,7 @@ screen.
   तक दान प्रतीक्षारत दिखता है। [honesty] उससे पहले यह राशि खर्च योग्य नहीं होती।"
 - (cut to fit) Trim the amount-chip pause; hold the pending screen for 4 seconds.
 
-### Shot 5: Receipt certificate (01:14 to 01:28)
+### Shot 5: Receipt certificate (01:02 to 01:16)
 
 On-screen: `/receipts/[id]` with the "Awaiting bank statement" badge, then the tax notice
 block.
@@ -124,7 +129,7 @@ block.
 - HI narration: "हर दान की अपनी रसीद प्रमाणपत्र बनती है, जिसका अपना सत्यापन लिंक होता है।
   रसीद साफ बताती है कि यह 80G कर रसीद नहीं है।"
 
-### Shot 6: Treasurer files an expense (01:28 to 01:56)
+### Shot 6: Treasurer files an expense (01:16 to 01:44)
 
 On-screen: treasurer dashboard in a 390 px wide window: spendable balance, then
 `/funds/[fundId]/expenses/new`: 12500.00 to `Robu.in Innovation Labs`, purpose, camera
@@ -132,23 +137,23 @@ capturing the paper bill, review, submit. End on the pending list with "Submitte
 
 - EN narration: "The treasurer files an expense: amount, payee, purpose, and a photo of the
   paper bill, up to 10 megabytes. The moment it is submitted, the spendable balance drops by
-  the same amount. That is the hold. [honesty] The money stays held until two approvals
-  release it."
+  the same amount. That is the hold. [honesty] Two approvals approve the request; the bank debit match
+  settles the hold."
 - HI narration: "खजांची खर्च दर्ज करता है: रकम, पाने वाला, उद्देश्य, और कागज़ी बिल की तस्वीर,
   अधिकतम 10 मेगाबाइट। प्रस्तुत होते ही खर्च योग्य शेष उतना घट जाता है। यही रोक है। [honesty]
-  दो स्वीकृतियों से जारी होने तक यह पैसा रोका रहता है।"
+  दो स्वीकृतियों से अनुरोध मंज़ूर होता है; बैंक डेबिट के मिलान से रोक का निपटान होता है।"
 
-### Shot 7: The bill is hashed and pinned (01:56 to 02:10)
+### Shot 7: The bill is hashed and pinned (01:44 to 01:58)
 
-On-screen: split view: the upload API response on the right terminal (`fileSha256`,
-`duplicateDetected: false`, clean `scan`), the approval screen on the left.
+On-screen: the uploaded bill on the approval screen. Open its download link to show
+the same bytes; the API verifies their SHA-256 before serving them. No terminal upload is needed.
 
 - EN narration: "Before any approver sees the bill, the server computes its fingerprint and
   pins it. The exact bytes the approver sees are the bytes the treasurer uploaded."
 - HI narration: "किसी स्वीकर्ता को बिल दिखने से पहले ही सर्वर उसका फ़िंगरप्रिंट बनाकर पिन कर
   देता है। स्वीकर्ता जो बाइट देखता है, वही बाइट खजांची ने अपलोड किए थे।"
 
-### Shot 8: Co-approver approves with the PIN (02:10 to 02:34)
+### Shot 8: Co-approver approves with the PIN (01:58 to 02:22)
 
 On-screen: Rohan's profile, hi locale: the approval screen for the new expense, amount largest
 on screen, bill photo visible, then the PIN modal, `482613`, success toast, timeline at
@@ -160,17 +165,17 @@ on screen, bill photo visible, then the PIN modal, `482613`, success toast, time
 - HI narration: "सह-स्वीकर्ता WhatsApp लिंक खोलकर रकम, पाने वाले और बिल जाँचता है, और 6 अंकों
   के पिन से स्वीकृति देता है। गलत पिन पाँच बार पर बंद हो जाता है; स्क्रीन यह बताती है।"
 
-### Shot 9: Quorum (02:34 to 02:46)
+### Shot 9: Quorum (02:22 to 02:34)
 
-On-screen: Priya's profile approving the same expense; status flips to approved; treasurer
-dashboard balance updates.
+On-screen: Priya's profile approving the same expense; status flips to approved; the hold remains
+until bank reconciliation.
 
 - EN narration: "A single approver can never release money. The second approval reaches
-  quorum, and the balance updates without anyone asking."
+  quorum. The hold remains until the bank debit is matched."
 - HI narration: "अकेला स्वीकर्ता कभी पैसा जारी नहीं कर सकता। दूसरी स्वीकृति से पूर्ण संख्या पूरी
-  होती है, और शेष बिना किसी कहे बदल जाता है।"
+  होती है। बैंक डेबिट मिलने तक राशि रोकी रहती है।"
 
-### Shot 10: Anyone can check the record (02:46 to 03:06, cut to fit)
+### Shot 10: Anyone can check the record (02:34 to 02:46)
 
 On-screen: signed-out browser: public fund page, timeline badge tap, `/verify` running the
 check, "Verified" outcome with the pass headline. If the local chain was configured, show the
@@ -182,7 +187,7 @@ on-chain registry line too.
   वह लिखे जाने के बाद बदला या नहीं। यह जांच ब्राउज़र में ही चलती है।"
 - (cut to fit) Trim the scroll on the fund page; hold the verification outcome for 4 seconds.
 
-### Shot 11: Closer (03:06 to 03:20, edit ends at 03:00)
+### Shot 11: Closer (02:46 to 03:00)
 
 On-screen: plain card, three lines: "Yen never holds the money", "Two approvals before any
 payout", "Every record can be checked by anyone". Last line: the pilot support contact and
@@ -190,20 +195,18 @@ locale note.
 
 - EN narration: "During the pilot, the club's treasurer and approvers get WhatsApp support
   with a 30-minute response target during the fest. Part of the stack is simulated locally in
-  this recording: SMS delivery, the virus scan and the on-chain anchor. The list is in the
+  this recording: SMS delivery, the virus scan and the bank feed. The anchor uses a real local chain. The list is in the
   demo recording runbook."
 - HI narration: "पायलट के दौरान क्लब के खजांची और स्वीकर्ताओं को WhatsApp सपोर्ट मिलता है,
   उत्सव के दिनों में 30 मिनट के भीतर जवाब के लक्ष्य के साथ। इस रिकॉर्डिंग में स्टैक के कुछ हिस्से
-  लोकल रूप से सिमुलेटेड हैं: SMS डिलीवरी, वायरस स्कैन और ऑन-चेन एंकर। सूची डेमो रिकॉर्डिंग
+  लोकल रूप से सिमुलेटेड हैं: SMS डिलीवरी, वायरस स्कैन और बैंक फ़ीड। एंकर असली लोकल चेन पर है। सूची डेमो रिकॉर्डिंग
   रनबुक में है।"
 
 ## Retake rules
 
 - Reset between retakes: `pnpm demo:reset`, restart `pnpm dev:full`, repeat the pre-roll
-  cookie and PIN steps, then re-record only the affected shot.
-- If the Journey 1 retakes pile up, approve the seeded backup pending expense
-  `01940000-0000-7000-8000-000000000062` in shots 8 and 9 instead; it starts every reset in
-  `submitted` state with zero approvals.
-- The verify page shows "Pending seal" until an anchor lands. Either wait for the 5-minute
+  browser sign-in and PIN steps, then re-record only the affected shot.
+- For approval retakes, create and submit a fresh expense with uploaded evidence.
+- The verify page shows "Pending seal" until an anchor lands. Either wait for the one-minute
   discovery tick with the local chain, or record the pending state and keep the narration
   neutral about on-chain status.

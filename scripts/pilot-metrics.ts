@@ -91,11 +91,11 @@ export interface MetricsQueryRunner {
 export function createPostgresRunner(url: string): MetricsQueryRunner {
   const sql = createSql(url, { max: 1, connectTimeout: 5, prepare: false });
   return {
-    runTimeToFirstFund: () => sql.unsafe<TimeToFirstFundRow>(timeToFirstFundSql),
-    runApprovalTurnaround: () => sql.unsafe<ApprovalTurnaroundRow>(approvalTurnaroundSql),
-    runDonationStatuses: () => sql.unsafe<DonationStatusRow>(donationStatusSql),
+    runTimeToFirstFund: () => sql.unsafe<TimeToFirstFundRow[]>(timeToFirstFundSql),
+    runApprovalTurnaround: () => sql.unsafe<ApprovalTurnaroundRow[]>(approvalTurnaroundSql),
+    runDonationStatuses: () => sql.unsafe<DonationStatusRow[]>(donationStatusSql),
     runDonationVerificationTimes: () =>
-      sql.unsafe<DonationVerificationTimeRow>(donationVerificationTimeSql),
+      sql.unsafe<DonationVerificationTimeRow[]>(donationVerificationTimeSql),
     end: () => sql.end({ timeout: 2 }),
   };
 }
