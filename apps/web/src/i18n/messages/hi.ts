@@ -726,6 +726,8 @@ export const hi: Messages = {
     batchSequenceLabel: "मुहर बैच क्रम",
     txHashLabel: "लेनदेन संदर्भ",
     chainIdLabel: "नेटवर्क आईडी",
+    simulatedChainLabel: "सिमुलेटेड स्थानीय चेन",
+    simulatedChainNotice: "सिमुलेटेड स्थानीय चेन, सार्वजनिक नेटवर्क नहीं",
     merklePathLabel: "समावेशन पाथ चरण",
     offlineNotice: "सर्वर के दावों पर निर्भर किए बिना ब्राउज़र में सीधे क्रिप्टोग्राफ़िक जांच द्वारा सत्यापित।",
     backToFund: "वापस फंड पर जाएं",

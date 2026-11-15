@@ -81,6 +81,7 @@ export interface ServerConfig {
   readonly CLAMAV_TIMEOUT_MS?: number | undefined;
   readonly CLAMAV_MAX_SIZE_BYTES?: number | undefined;
   readonly DATABASE_URL?: string | undefined;
+  readonly CORS_ALLOWED_ORIGINS?: readonly string[] | undefined;
   readonly EVIDENCE_STORAGE_DIR?: string | undefined;
   readonly OTP_HASH_KEY?: string | undefined;
   readonly PARTNER_WEBHOOK_SECRET?: string | undefined;
@@ -354,6 +355,7 @@ export async function startServer(
       : undefined;
 
   const app = createApp({
+    corsOrigins: [...(resolvedConfig.CORS_ALLOWED_ORIGINS ?? [])],
     ...(resolvedConfig.CLAMAV_HOST
       ? {
           virusScanner: new ClamAvVirusScannerAdapter({
@@ -413,6 +415,7 @@ export async function startServer(
       ? { pinSecret: DEV_PIN_HMAC_SECRET }
       : {}),
     corsOrigins: resolveCorsOrigins(resolvedConfig, explicitDevelopment),
+    ...(sql ? { sql } : {}),
     otpHashKey: resolvedConfig.OTP_HASH_KEY ?? "development-only-otp-hash-key-change-me",
     partnerWebhookSecret: resolvedConfig.PARTNER_WEBHOOK_SECRET ?? null,
     otpDeliveryProvider: createOtpDeliveryProvider(

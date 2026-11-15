@@ -16,7 +16,7 @@ import {
   verifyEventProof,
 } from "@yen/shared";
 import { type Address, createPublicClient, http } from "viem";
-import { polygonAmoy } from "viem/chains";
+import { foundry, polygonAmoy } from "viem/chains";
 
 export type VerificationOutcome = "verified" | "skipped" | "pending" | "failed";
 
@@ -111,6 +111,23 @@ export interface BundleVerificationReport {
   };
 }
 
+export function isSimulatedChain(chainId: number | undefined): boolean {
+  return chainId === foundry.id;
+}
+
+function registryClient(chainId: number | undefined, rpcUrl: string | undefined) {
+  const options = { timeout: 3500, retryCount: 0 };
+  if (isSimulatedChain(chainId)) {
+    const localRpc =
+      rpcUrl || process.env.NEXT_PUBLIC_LOCAL_CHAIN_RPC_URL || "http://127.0.0.1:8545";
+    return createPublicClient({ chain: foundry, transport: http(localRpc, options) });
+  }
+  return createPublicClient({
+    chain: polygonAmoy,
+    transport: http(rpcUrl || "https://rpc-amoy.polygon.technology", options),
+  });
+}
+
 /**
  * Reads root from RootRegistry smart contract via viem public client.
  */
@@ -119,15 +136,10 @@ export async function verifyOnChainRoot(
   sequence: number,
   expectedRootHex: string,
   rpcUrl?: string,
+  chainId?: number,
 ): Promise<{ valid: boolean; onChainRoot?: string; error?: string }> {
   try {
-    const client = createPublicClient({
-      chain: polygonAmoy,
-      transport: http(rpcUrl || "https://rpc-amoy.polygon.technology", {
-        timeout: 3500,
-        retryCount: 0,
-      }),
-    });
+    const client = registryClient(chainId, rpcUrl);
 
     const rootBytes32 = (await client.readContract({
       address: contractAddress as Address,
@@ -303,6 +315,7 @@ export async function verifyRecordProofData(
       anchor.sequence,
       anchor.root,
       options?.rpcUrl,
+      anchor.chainId,
     );
 
     if (onChainResult.onChainRoot !== undefined) {

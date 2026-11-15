@@ -748,6 +748,8 @@ export const en = {
     batchSequenceLabel: "Seal batch sequence",
     txHashLabel: "Transaction reference",
     chainIdLabel: "Network ID",
+    simulatedChainLabel: "Simulated local chain",
+    simulatedChainNotice: "Simulated local chain, not a public network",
     merklePathLabel: "Inclusion path steps",
     offlineNotice:
       "Verified using in-browser cryptographic checks without relying on server claims.",

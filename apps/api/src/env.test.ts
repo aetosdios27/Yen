@@ -29,6 +29,7 @@ beforeEach(() => {
   vi.stubEnv("SERVER_MAX_HEADER_SIZE_BYTES", undefined);
   vi.stubEnv("WEBAUTHN_RP_ID", undefined);
   vi.stubEnv("WEBAUTHN_ORIGIN", undefined);
+  vi.stubEnv("CORS_ALLOWED_ORIGINS", undefined);
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -125,6 +126,20 @@ it("lists every invalid variable", async () => {
   vi.stubEnv("NODE_ENV", "invalid-private-value");
   await expect(import("./env.js")).rejects.toThrow(/NODE_ENV[\s\S]*PORT/);
   await expect(import("./env.js")).rejects.not.toThrow("invalid-private-value");
+});
+
+it("parses CORS_ALLOWED_ORIGINS into exact origins and defaults to none", async () => {
+  vi.stubEnv("PORT", "3001");
+  expect((await import("./env.js")).env.CORS_ALLOWED_ORIGINS).toEqual([]);
+  vi.resetModules();
+  vi.stubEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000, http://127.0.0.1:3000");
+  expect((await import("./env.js")).env.CORS_ALLOWED_ORIGINS).toEqual([
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+  ]);
+  vi.resetModules();
+  vi.stubEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000/path");
+  await expect(import("./env.js")).rejects.toThrow("CORS_ALLOWED_ORIGINS");
 });
 
 it("accepts configured rate limits", async () => {
