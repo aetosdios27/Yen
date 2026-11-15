@@ -3,6 +3,7 @@
 import { formatInr } from "@yen/shared";
 import { useMemo, useState } from "react";
 import { type MessageKey, useI18n } from "../../i18n";
+import { formatDate as formatDateForLocale } from "../../lib/format";
 import { cn } from "../cn";
 import type { PublicTimelineEntry, SpendingCategoryId } from "./types";
 import { VerifiedBadge } from "./verified-badge";
@@ -53,18 +54,7 @@ export function FundTimeline({ timeline, fundId, onOpenExplainer, className }: F
     return timeline;
   }, [timeline, filter]);
 
-  const formatDate = (isoString: string) => {
-    try {
-      const date = new Date(isoString);
-      return date.toLocaleDateString(locale === "hi" ? "hi-IN" : "en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      });
-    } catch {
-      return isoString;
-    }
-  };
+  const formatDate = (isoString: string) => formatDateForLocale(isoString, locale);
 
   return (
     <section

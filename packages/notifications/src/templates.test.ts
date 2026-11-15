@@ -1,6 +1,7 @@
 import { paise } from "@yen/shared";
 import { describe, expect, it } from "vitest";
 import { renderNotificationTemplate } from "./templates.js";
+import type { NotificationTemplateId } from "./types.js";
 
 describe("Notification templates (EN / HI)", () => {
   const fundTitle = "Community Water Fund";
@@ -223,6 +224,75 @@ describe("Notification templates (EN / HI)", () => {
           "en",
         ),
       ).toThrow();
+    });
+  });
+
+  describe("locale parity sweep", () => {
+    const DEVANAGARI = /[\u0900-\u097F]/;
+    const escapedTitle = fundTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    const fixtureData: Record<NotificationTemplateId, unknown> = {
+      approval_needed: {
+        fund_title: fundTitle,
+        expense_id: expenseId,
+        amount_paise: paise(15000),
+        purpose: "Pump Repair",
+      },
+      approved_rejected: {
+        fund_title: fundTitle,
+        expense_id: expenseId,
+        amount_paise: paise(250000),
+        decision: "approved",
+      },
+      donation_received: {
+        fund_title: fundTitle,
+        donation_id: donationId,
+        amount_paise: paise(50000),
+      },
+      objection_raised: {
+        fund_title: fundTitle,
+        objection_id: objectionId,
+        expense_id: expenseId,
+      },
+      weekly_summary: {
+        fund_title: fundTitle,
+        period_start: "2026-10-21",
+        period_end: "2026-10-28",
+        donations_count: 12,
+        total_donations_paise: paise(150000),
+        expenses_count: 3,
+        total_expenses_paise: paise(45000),
+      },
+      large_expense_alert: {
+        fund_title: fundTitle,
+        expense_id: expenseId,
+        amount_paise: paise(7500000),
+        description: "Generator purchase",
+      },
+      fund_alert: {
+        fund_title: fundTitle,
+        alert_type: "expense_hold",
+        severity: "warning",
+        title: "Hold reserved",
+        variant: "raised",
+      },
+    };
+
+    it("renders every template in Hindi with Devanagari copy distinct from English", () => {
+      const templateIds = Object.keys(fixtureData) as NotificationTemplateId[];
+      for (const templateId of templateIds) {
+        const data = fixtureData[templateId];
+        const en = renderNotificationTemplate(templateId, data, "en");
+        const hi = renderNotificationTemplate(templateId, data, "hi");
+        expect(en.locale, String(templateId)).toBe("en");
+        expect(hi.locale, String(templateId)).toBe("hi");
+        expect(hi.subject, String(templateId)).not.toBe(en.subject);
+        expect(hi.body, String(templateId)).not.toBe(en.body);
+        expect(DEVANAGARI.test(hi.subject ?? ""), `${String(templateId)} subject`).toBe(true);
+        expect(DEVANAGARI.test(hi.body), `${String(templateId)} body`).toBe(true);
+        expect(en.subject ?? "", String(templateId)).toMatch(new RegExp(escapedTitle));
+        expect(hi.subject ?? "", String(templateId)).toMatch(new RegExp(escapedTitle));
+      }
     });
   });
 });
