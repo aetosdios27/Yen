@@ -147,13 +147,25 @@ pnpm dev:full
 3. Seed the complete development dataset (`pnpm db:seed`):
    - **Demo Organization**: IIT Delhi Robotics Club
    - **Active Fund**: RoboCup 2026 Asia Fund with payee VPA (`iitd.robotics@sbi`) and UPI details
-   - **Users & Personas**: 1 treasurer, 2 approvers, and 3 donors with valid mock sessions
+   - **Users & Personas**: 1 treasurer, 2 approvers, and 3 donors who sign in through the login screen
    - **Expense Requests**: 3 realistic requests (1 approved with invoice evidence, 1 pending approval, 1 paid)
    - **Double-Entry Ledger**: Initial verified balance (₹4,65,000) with double-entry zero-sum invariant
    - **Append-Only Event Log**: 23 chained audit events verified by database triggers
-4. Boot the Next.js frontend (`http://localhost:3000`) and Hono API (`http://localhost:3001`) in parallel, with the web app pointed at the API via `NEXT_PUBLIC_API_URL`.
+4. Start a local Anvil chain (chain id 31337) from the `chain` profile in `docker-compose.yml`, deploy `RootRegistry` to it and boot the queue worker against it, so new records anchor without extra terminals.
+5. Boot the Next.js frontend (`http://localhost:3000`) and Hono API (`http://localhost:3001`) in parallel, with the web app pointed at the API via `NEXT_PUBLIC_API_URL`.
 
 The web and API ports are pinned separately (3000 and 3001) so they never collide. Override them per app with `WEB_PORT` and `API_PORT`, for example `WEB_PORT=3100 API_PORT=3200 pnpm dev:full`.
+
+### Local Anchoring Chain
+
+The local chain is simulated: the verify page labels chain id 31337 as a simulated local chain, never as a public network. Anvil mines a block every second and the worker checks for new events every minute, so an appended event shows as anchored on the verify page within about a minute and as confirmed (the public fund page's verified state) within about two. Deployment runs `forge` inside the Anvil container, so the first start needs internet access to pull the Foundry image and its pinned compiler.
+
+- `pnpm dev:full --no-chain` skips the chain and the worker; records stay pending.
+- `ANVIL_PORT` moves the chain off port 8545.
+- `pnpm demo:reset` wipes the chain back to genesis together with the database; `dev:full` redeploys `RootRegistry` at the same address. `dev:full` stops with a message if the database holds anchors the chain no longer has, which happens only when the chain is reset without the database.
+- `pnpm docker:down` also stops the chain container.
+
+The worker signs with Anvil's public first-account key, only on chain 31337 and never when `NODE_ENV=production`. The anchoring variables are documented in `.env.example`.
 
 ### Receipt Upload in Local Demo Mode
 
@@ -186,18 +198,33 @@ Production refuses the demo scanner: `CLAMAV_HOST` is required there.
 | `pnpm docker:down` | Stop running development containers                              |
 | `pnpm verify`      | Run Biome lint/format checks, typecheck, test suites, and build  |
 
-### Demo Personas and Mock Sessions
+### Demo Personas and Sign-In
 
-The seed script creates ready-to-use personas with valid mock sessions:
+The seed script creates six personas. Sign in as any of them from the browser at `http://localhost:3000/login`; no devtools or curl is needed.
 
-| Persona        | Name            | Phone (E.164)   | Role        | Mock Session Token                 |
-| -------------- | --------------- | --------------- | ----------- | ---------------------------------- |
-| **Treasurer**  | Aarav Sharma    | `+919876543210` | `treasurer` | `yen_mock_session_treasurer_token` |
-| **Approver 1** | Priya Verma     | `+919876543211` | `approver`  | `yen_mock_session_approver1_token` |
-| **Approver 2** | Rohan Iyer      | `+919876543212` | `approver`  | `yen_mock_session_approver2_token` |
-| **Donor 1**    | Ananya Sen      | `+919876543213` | `member`    | `yen_mock_session_donor1_token`    |
-| **Donor 2**    | Vikram Malhotra | `+919876543214` | `member`    | `yen_mock_session_donor2_token`    |
-| **Donor 3**    | Sunita Rao      | `+919876543215` | `member`    | `yen_mock_session_donor3_token`    |
+| Persona        | Name            | Phone (E.164)   | Role        |
+| -------------- | --------------- | --------------- | ----------- |
+| **Treasurer**  | Aarav Sharma    | `+919876543210` | `treasurer` |
+| **Approver 1** | Priya Verma     | `+919876543211` | `approver`  |
+| **Approver 2** | Rohan Iyer      | `+919876543212` | `approver`  |
+| **Donor 1**    | Ananya Sen      | `+919876543213` | `member`    |
+| **Donor 2**    | Vikram Malhotra | `+919876543214` | `member`    |
+| **Donor 3**    | Sunita Rao      | `+919876543215` | `member`    |
+
+1. Enter the persona's phone number and press **Send code**. Delivery is simulated in development: no message is sent, and the login screen shows the code with a "Simulated delivery" notice and fills it in for you.
+2. Press **Verify and continue**.
+3. The first time a persona signs in after a reset, create an approval PIN (the demo PIN is `482613`). Later sign-ins ask for the same PIN to unlock the device.
+4. Use **Sign out** in the header to switch to another persona.
+
+The simulated code only exists when the API is started with `NODE_ENV=development` set explicitly (the `apps/api` `dev` script does this, so `pnpm dev:full` works with no `.env`). That switch also enables the membership-based development policy, local-only fallbacks for `PAYEE_FINGERPRINT_SALT` and `PIN_HMAC_SECRET`, and CORS for the web origin (`WEB_PORT`, default 3000). An unset `NODE_ENV` gets none of these and behaves like production: deny-all policy, no simulated code, no default CORS. The dev OTP stub also refuses to construct when `NODE_ENV=production`.
+
+### Shortened Objection Window (Development Only)
+
+After the approval quorum, an expense normally waits out a 48 hour donor objection window before it can be approved and paid. `pnpm dev:full` sets `OBJECTION_WINDOW_SECONDS=5` so the demo does not wait two days. The API reads the variable only when `NODE_ENV=development` is set explicitly; with `NODE_ENV` unset, `test` or `production` it is not read and the policy window (48 hours by default) always applies. A value must be a whole number of seconds from 1 to 172800 and anything else stops the API at startup. Set `OBJECTION_WINDOW_SECONDS` yourself to use a different value, for example `OBJECTION_WINDOW_SECONDS=30 pnpm dev:full`.
+
+### Rehearsing the Demo Journey
+
+With `pnpm dev:full` running, `pnpm e2e:demo` plays the whole story in a real browser against the real stack, with no stub API: a donor pledges, the bank statement credit matches it, the treasurer files an expense with a bill, two approvers approve it with the PIN, the bank debit settles it, the worker anchors the records and the public fund page and verify page show the result. Run `pnpm demo:reset` and restart `pnpm dev:full` first for a clean take, and install the browser once with `pnpm --filter @yen/web e2e:install`. It is not part of CI because it needs the containers. See [`docs/runbooks/demo-recording.md`](docs/runbooks/demo-recording.md).
 
 The shared design system lives in `apps/web`; open `http://localhost:3000/design-system` for its 375 px review page. See [`apps/web/README.md`](apps/web/README.md) for tokens, components, language switching and accessibility checks.
 

@@ -3,6 +3,7 @@ import {
   buildDevServerEnv,
   DEFAULT_API_PORT,
   DEFAULT_API_URL,
+  DEFAULT_OBJECTION_WINDOW_SECONDS,
   DEFAULT_WEB_PORT,
 } from "./dev-server-env.js";
 
@@ -45,5 +46,17 @@ describe("buildDevServerEnv", () => {
       DATABASE_URL: "postgres://postgres:pw@localhost:5432/postgres",
     });
     expect(env.DATABASE_URL).toBe("postgres://postgres:pw@localhost:5432/postgres");
+  });
+
+  it("runs every dev process as development, whatever the ambient NODE_ENV", () => {
+    expect(buildDevServerEnv({}).NODE_ENV).toBe("development");
+    expect(buildDevServerEnv({ NODE_ENV: "production" }).NODE_ENV).toBe("development");
+  });
+
+  it("shortens the donor objection window for the demo unless told otherwise", () => {
+    expect(buildDevServerEnv({}).OBJECTION_WINDOW_SECONDS).toBe(DEFAULT_OBJECTION_WINDOW_SECONDS);
+    expect(buildDevServerEnv({ OBJECTION_WINDOW_SECONDS: "30" }).OBJECTION_WINDOW_SECONDS).toBe(
+      "30",
+    );
   });
 });

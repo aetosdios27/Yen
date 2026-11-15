@@ -60,11 +60,13 @@ databaseSuite("dev-seed database integration", (sql) => {
     expect(result.fund.upiVpa).toBe("iitd.robotics@sbi");
     expect(result.fund.visibilityTier).toBe("public");
     const fundRows =
-      await sql`SELECT title, status, visibility_tier, policy_json FROM funds WHERE id = ${result.fund.id}`;
+      await sql`SELECT title, status, visibility_tier, policy_json, payee_vpa, payee_name FROM funds WHERE id = ${result.fund.id}`;
     expect(fundRows[0]?.title).toBe("RoboCup 2026 Asia Fund");
     expect(fundRows[0]?.status).toBe("active");
     expect(fundRows[0]?.visibility_tier).toBe("public");
     expect(fundRows[0]?.policy_json.upiVpa).toBe("iitd.robotics@sbi");
+    expect(fundRows[0]?.payee_vpa).toBe("iitd.robotics@sbi");
+    expect(fundRows[0]?.payee_name).toBe("IIT Delhi Robotics Club");
 
     // Verify Users, Pseudonyms, and Sessions
     expect(result.users).toHaveLength(6);

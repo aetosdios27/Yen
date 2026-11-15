@@ -15,6 +15,17 @@ describe("ApproverPage", () => {
       .mockImplementation(
         (path: string, options?: { params?: { path?: { expenseId?: string } } }) => {
           const expenseId = options?.params?.path?.expenseId;
+          if (path.endsWith("/evidence")) {
+            const evidenceId = expenseId === "exp-101" ? "INV-2026-441" : "BILL-8902";
+            return Promise.resolve({
+              response: { status: 200 },
+              data: {
+                evidence: [
+                  { evidenceId, fileName: evidenceId, mimeType: "image/png", fileSha256: "" },
+                ],
+              },
+            });
+          }
           if (expenseId === "exp-101" || path.includes("exp-101")) {
             return Promise.resolve({
               response: { status: 200 },

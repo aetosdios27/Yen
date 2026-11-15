@@ -55,6 +55,24 @@ describe("evidence policy adapter", () => {
     ).toBe(false);
   });
 
+  it("lets fund approvers and treasurers read evidence but not attach it", () => {
+    const resource = {
+      kind: "expense",
+      fund: evidenceFund,
+      expenseId: "00000000-0000-4000-8000-000000000011",
+    } as const;
+    const approver = { id: "00000000-0000-4000-8000-000000000003", roles: ["approver"] };
+    expect(devPolicy.can(approver, "expense:read_evidence", resource)).toBe(true);
+    expect(devPolicy.can(approver, "expense:add_evidence", resource)).toBe(false);
+    expect(
+      devPolicy.can({ ...approver, roles: ["treasurer"] }, "expense:read_evidence", resource),
+    ).toBe(true);
+    expect(
+      devPolicy.can({ ...approver, roles: ["member"] }, "expense:read_evidence", resource),
+    ).toBe(false);
+    expect(devPolicy.can({ id: approver.id }, "expense:read_evidence", resource)).toBe(false);
+  });
+
   it("fails closed when authorization inputs are malformed", () => {
     expect(
       devPolicy.can({ id: evidenceFund.owner }, "expense:add_evidence", {

@@ -67,6 +67,7 @@ export function isPendingDeviceAuthRoute(path: string): boolean {
   return (
     clean === "/v1/auth/logout" ||
     clean === "/v1/auth/pin/setup" ||
+    clean === "/v1/auth/pin/status" ||
     clean === "/v1/auth/pin/reset/request" ||
     clean === "/v1/auth/pin/reset/confirm" ||
     clean === "/v1/auth/device/unlock"

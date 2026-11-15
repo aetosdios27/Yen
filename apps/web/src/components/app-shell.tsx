@@ -6,6 +6,7 @@ import { useI18n } from "../i18n";
 import { AppFooter } from "./app-footer";
 import { InstallPrompt } from "./install-prompt";
 import { LocaleSwitcher } from "./locale-switcher";
+import { SessionNav } from "./session-nav";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { t } = useI18n();
@@ -26,12 +27,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               {t("app.name")}
             </Link>
             <nav aria-label={t("nav.primary")} className="flex items-center gap-4">
-              <Link
-                href="/login"
-                className="tap-target inline-flex items-center rounded-control text-small font-semibold text-primary underline-offset-4 hover:underline"
-              >
-                {t("nav.login")}
-              </Link>
+              <SessionNav />
               <Link
                 href="/design-system"
                 className="tap-target inline-flex items-center rounded-control text-small font-semibold text-ink-muted underline-offset-4 hover:underline"
