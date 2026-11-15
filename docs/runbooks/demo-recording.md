@@ -469,9 +469,9 @@ pnpm e2e:demo
 
 The spec does not start the stack; it reads `WEB_PORT`, `API_PORT` and
 `NEXT_PUBLIC_API_URL` like `dev:full` does, so export the same values for both.
-It needs a fresh `pnpm demo:reset` (restart `dev:full` afterwards) between
-runs only if the OTP rate limits (five codes per phone and ten per address
-every ten minutes) are exhausted; otherwise it generates a new UPI reference per
-run and can be repeated. Expect about two minutes, most of it waiting for the
+Run `pnpm demo:reset` (and restart `dev:full`) before every run: the spec's
+locators assume a clean fund timeline, and the OTP rate limits (five codes per
+phone and ten per address every ten minutes) also allow only a few sign-ins.
+Expect about two minutes, most of it waiting for the
 one-minute anchoring tick. It is not part of the CI jobs because it needs the
 containers.
