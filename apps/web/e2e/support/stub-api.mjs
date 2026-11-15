@@ -20,7 +20,7 @@ const corsHeaders = {
 const fundId = "00000000-0000-4000-8000-0000000000f1";
 const expenseId = "00000000-0000-4000-8000-0000000000e1";
 
-const state = {
+const seededState = () => ({
   fund: {
     fundId,
     name: "RoboCup 2026 Asia Fund",
@@ -45,7 +45,9 @@ const state = {
     },
   ],
   pledges: [],
-};
+});
+
+let state = seededState();
 
 const json = (response, status, body) => {
   response.writeHead(status, {
@@ -105,6 +107,11 @@ const server = createServer((request, response) => {
 
   if (path === "/health") return json(response, 200, { status: "ok" });
   if (path === "/__state") return json(response, 200, state);
+  if (request.method === "POST" && path === "/__reset") {
+    request.resume();
+    state = seededState();
+    return json(response, 200, { status: "reset" });
+  }
 
   if (request.method === "POST" && path === "/v1/auth/pin/verify") {
     request.resume();

@@ -235,6 +235,9 @@ export async function createExpenseRequest(
       header: { "Idempotency-Key": crypto.randomUUID() },
     },
   });
+  if (submitRes.error || !submitRes.data) {
+    throw new Error(submitRes.error?.error?.message ?? "Failed to submit expense request");
+  }
 
   const finalData = submitRes.data ?? createRes.data;
   return toDashboardExpenseItem(finalData);
