@@ -1,4 +1,6 @@
 import { parseDatabaseUrl } from "@yen/db";
+import type { Chain } from "viem";
+import { foundry, polygonAmoy } from "viem/chains";
 import * as z from "zod";
 import { DEFAULT_SCHEMA } from "./config.js";
 
@@ -51,4 +53,28 @@ export function anchoringSignerMode(env: NodeJS.ProcessEnv): "kms" | "local" {
   throw new Error(
     "ANCHOR_KMS_KEY_ID is required; local signing requires ANCHOR_ALLOW_LOCAL_SIGNER=true outside production",
   );
+}
+
+export function anchoringChain(env: NodeJS.ProcessEnv): Chain {
+  const configured = env.ANCHOR_CHAIN_ID;
+  if (configured === undefined || configured === String(polygonAmoy.id)) return polygonAmoy;
+  if (configured === String(foundry.id)) {
+    if (env.NODE_ENV === "production") {
+      throw new Error(
+        "ANCHOR_CHAIN_ID 31337 is a local development chain and is refused in production",
+      );
+    }
+    return foundry;
+  }
+  throw new Error(`ANCHOR_CHAIN_ID must be ${polygonAmoy.id} or ${foundry.id}`);
+}
+
+export function anchorDiscoveryCron(env: NodeJS.ProcessEnv): string | undefined {
+  const configured = env.ANCHOR_SCHEDULE_INTERVAL_MINUTES;
+  if (configured === undefined) return undefined;
+  const minutes = Number(configured);
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 59) {
+    throw new Error("ANCHOR_SCHEDULE_INTERVAL_MINUTES must be an integer from 1 to 59");
+  }
+  return `*/${minutes} * * * *`;
 }

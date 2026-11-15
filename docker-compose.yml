@@ -51,6 +51,24 @@ services:
       # Fresh clamav/clamav containers download signature databases first.
       start_period: 5m
 
+  # Local EVM node for demo anchoring. Opt-in via the "chain" profile; `pnpm dev:full` starts it.
+  # Blocks are mined every second so the worker's 12-block confirmation depth passes in seconds.
+  chain:
+    image: ghcr.io/foundry-rs/foundry:v1.5.0
+    container_name: yen-anvil
+    profiles: ["chain"]
+    restart: unless-stopped
+    entrypoint: ["anvil"]
+    command: ["--host", "0.0.0.0", "--chain-id", "31337", "--block-time", "1"]
+    ports:
+      - "127.0.0.1:${ANVIL_PORT:-8545}:8545"
+    healthcheck:
+      test: ["CMD", "cast", "chain-id", "--rpc-url", "http://127.0.0.1:8545"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 3s
+
 volumes:
   postgres_data:
   redis_data:

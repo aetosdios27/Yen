@@ -151,9 +151,21 @@ pnpm dev:full
    - **Expense Requests**: 3 realistic requests (1 approved with invoice evidence, 1 pending approval, 1 paid)
    - **Double-Entry Ledger**: Initial verified balance (₹4,65,000) with double-entry zero-sum invariant
    - **Append-Only Event Log**: 23 chained audit events verified by database triggers
-4. Boot the Next.js frontend (`http://localhost:3000`) and Hono API (`http://localhost:3001`) in parallel, with the web app pointed at the API via `NEXT_PUBLIC_API_URL`.
+4. Start a local Anvil chain (chain id 31337) from the `chain` profile in `docker-compose.yml`, deploy `RootRegistry` to it and boot the queue worker against it, so new records anchor without extra terminals.
+5. Boot the Next.js frontend (`http://localhost:3000`) and Hono API (`http://localhost:3001`) in parallel, with the web app pointed at the API via `NEXT_PUBLIC_API_URL`.
 
 The web and API ports are pinned separately (3000 and 3001) so they never collide. Override them per app with `WEB_PORT` and `API_PORT`, for example `WEB_PORT=3100 API_PORT=3200 pnpm dev:full`.
+
+### Local Anchoring Chain
+
+The local chain is simulated: the verify page labels chain id 31337 as a simulated local chain, never as a public network. Anvil mines a block every second and the worker checks for new events every minute, so an appended event shows as anchored on the verify page within about a minute and as confirmed (the public fund page's verified state) within about two. Deployment runs `forge` inside the Anvil container, so the first start needs internet access to pull the Foundry image and its pinned compiler.
+
+- `pnpm dev:full --no-chain` skips the chain and the worker; records stay pending.
+- `ANVIL_PORT` moves the chain off port 8545.
+- `pnpm demo:reset` wipes the chain back to genesis together with the database; `dev:full` redeploys `RootRegistry` at the same address. `dev:full` stops with a message if the database holds anchors the chain no longer has, which happens only when the chain is reset without the database.
+- `pnpm docker:down` also stops the chain container.
+
+The worker signs with Anvil's public first-account key, only on chain 31337 and never when `NODE_ENV=production`. The anchoring variables are documented in `.env.example`.
 
 ### Receipt Upload in Local Demo Mode
 

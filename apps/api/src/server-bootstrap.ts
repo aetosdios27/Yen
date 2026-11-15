@@ -197,6 +197,17 @@ export interface StartedServer {
   readonly port: number;
 }
 
+/**
+ * The public proof and audit-bundle routes read the database directly. Only an explicitly
+ * development process (the literal NODE_ENV, not the schema default) gets that wiring.
+ */
+export function rawSqlDependency(
+  sql: Sql | undefined,
+  rawNodeEnv: string | undefined = process.env.NODE_ENV,
+): { readonly sql?: Sql } {
+  return sql && rawNodeEnv === "development" ? { sql } : {};
+}
+
 export async function startServer(
   config?: ServerConfig,
   options: { readonly registerSignals?: boolean } = {},
@@ -413,6 +424,7 @@ export async function startServer(
       ? { pinSecret: DEV_PIN_HMAC_SECRET }
       : {}),
     corsOrigins: resolveCorsOrigins(resolvedConfig, explicitDevelopment),
+    ...rawSqlDependency(sql),
     otpHashKey: resolvedConfig.OTP_HASH_KEY ?? "development-only-otp-hash-key-change-me",
     partnerWebhookSecret: resolvedConfig.PARTNER_WEBHOOK_SECRET ?? null,
     otpDeliveryProvider: createOtpDeliveryProvider(

@@ -335,52 +335,42 @@ Persona: Rohan Iyer (co-approver, hi locale), signed in as in section 4, PIN
 Persona: none; everything in this journey is public, no cookie needed. Record
 it in a clean browser profile so no session leaks into the shot.
 
-### Anchor availability (optional but recommended)
+### Anchor availability
 
 The record proof endpoint returns `status: "pending"` with a
-`pendingWindow` message until an anchor has landed for the event. To record
-the full anchored state, run the queue worker against a local chain before
-this journey:
+`pendingWindow` message until an anchor has landed for the event. `pnpm dev:full`
+starts everything needed to record the anchored state, with no extra terminals:
 
-```sh
-# Terminal A: local EVM chain
-anvil
+- an Anvil chain (chain id 31337, one block per second) from the `chain`
+  profile in `docker-compose.yml`, on host port 8545 (`ANVIL_PORT` changes it);
+- `RootRegistry`, deployed to that chain with `forge` inside the container, at
+  the fixed address `0x5FbDB2315678afecb367f032d93F642f64180aa3`;
+- the queue worker (`pnpm --filter @yen/queue start`), configured through the
+  variables in `scripts/dev-chain.ts` (`workerChainEnv`): local signer using
+  Anvil's first public account, `ANCHOR_CHAIN_ID=31337`, `QUEUE_MIGRATE=true` and a
+  one-minute discovery interval (`ANCHOR_SCHEDULE_INTERVAL_MINUTES=1`; the
+  production default stays five minutes).
 
-# Terminal B: deploy RootRegistry with the publisher set to the worker signer
-cd contracts
-forge create src/RootRegistry.sol:RootRegistry \
-  --rpc-url http://localhost:8545 \
-  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
-  --constructor-args 0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A
-```
-
-The constructor argument is the address of the demo signer key below
-(computed from that exact private key). Then start the worker:
-
-```sh
-pnpm --filter @yen/queue build
-DATABASE_URL=postgres://postgres:pw@localhost:5432/postgres \
-QUEUE_MIGRATE=true \
-ANCHOR_RPC_URL=http://localhost:8545 \
-ROOT_REGISTRY_ADDRESS=0x<DEPLOYED_ADDRESS> \
-ANCHOR_PRIVATE_KEY=0x1111111111111111111111111111111111111111111111111111111111111111 \
-ANCHOR_ALLOW_LOCAL_SIGNER=true \
-pnpm --filter @yen/queue start
-```
+The first start needs internet access to pull the Foundry image
+(`ghcr.io/foundry-rs/foundry`) and its pinned compiler. Pass `--no-chain` to
+`pnpm dev:full` to skip all of this and record the pending state instead.
 
 Notes, all verified against the code:
 
-- `QUEUE_MIGRATE=true` is required on the first worker start after
-  `pnpm demo:reset`, because the reset drops the pg-boss schema.
-- The anchoring discovery job runs every 5 minutes
-  (`registerAnchoringDiscovery` in `packages/queue/src/anchoring.ts`), so
-  allow a few minutes between the expense approval and the anchored status.
+- Timing: the seeded events anchor within a minute of the worker starting.
+  After a new event, the verify page shows it as anchored within about a
+  minute (the next discovery tick publishes it), and the anchor reaches
+  `confirmed` (12 blocks, the state the public fund page counts) on the tick
+  after that, so allow about two minutes before relying on confirmed state.
+- `pnpm demo:reset` also wipes the local chain to genesis. The next
+  `pnpm dev:full` redeploys the registry at the same address. If the database
+  still holds anchors that the chain no longer has, `dev:full` stops and asks
+  for `pnpm demo:reset`.
 - The API proof response reports `contractAddress` from
-  `REGISTRY_CONTRACT_ADDRESS` when set; export it with the deployed address
-  for a complete on-camera payload.
-- Without a chain configured, the journey still works end to end: the verify
-  page shows the pending state and the tamper-evident event log. Decide which
-  story you want on camera.
+  `REGISTRY_CONTRACT_ADDRESS`, and the browser reads the on-chain root from
+  `NEXT_PUBLIC_LOCAL_CHAIN_RPC_URL`; `dev:full` sets both.
+- Stop the stack with Ctrl+C. The chain container keeps running; stop it with
+  `pnpm docker:down`.
 
 ### Shots
 
@@ -397,9 +387,11 @@ Notes, all verified against the code:
 3. Merkle inclusion proof. On the same page, narrate the verification report:
    the client recomputes the record hash from the event and salt and checks
    the Merkle proof path against the public seal root
-   (`apps/web/src/lib/verifier.ts`, `verifyEventProof`). With a local chain
-   running, the page also reports the on-chain registry check; otherwise it
-   states that on-chain verification was skipped or offline.
+   (`apps/web/src/lib/verifier.ts`, `verifyEventProof`). The page also reads
+   the root back from the registry on the local chain and reports the
+   on-chain check, labelled "Simulated local chain, not a public network";
+   with `--no-chain` it states that on-chain verification was skipped or
+   offline.
 4. Offline verification (optional closer). From the verify page, download the
    offline verifier script or the audit bundle and show that the same proof
    verifies without any server connection.
@@ -409,15 +401,15 @@ Notes, all verified against the code:
 Say on camera (or in the description) which parts are simulated locally. This
 list matches what the code actually does in local development.
 
-| Component                | Local simulation                                                                                                                                                                                                                                                                                         | Where it lives                                                                       |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| SMS DLT gateway          | OTPs and notifications are handed to `DevStubOtpDeliveryProvider` / in-memory channel providers; no SMS is sent. Real sending requires the Exotel provider with DLT entity and template IDs via env credentials.                                                                                         | `apps/api/src/auth/provider.ts`, `packages/notifications/src/channels/exotel-sms.ts` |
-| WhatsApp Business Cloud  | Same stub treatment; the Meta webhook receiver (`GET/POST /v1/delivery/webhooks/meta`) is mounted when `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN` and `EXOTEL_RELAY_WEBHOOK_SECRET` are set.                                                                                                         | `apps/api/src/server-bootstrap.ts`, `apps/api/src/delivery-webhooks.ts`              |
-| Payment partner webhooks | `POST /v1/reconciliation/webhooks/partner` accepts simulated UPI virtual account credit notifications. Requests must carry `X-Webhook-Timestamp` and `X-Webhook-Signature` (HMAC-SHA256 of `v1.<timestamp>.<body>` under `PARTNER_WEBHOOK_SECRET`); unsigned or tampered requests are rejected with 401. | `apps/api/src/app.ts` (`partnerWebhookRoute`)                                        |
-| Virus scanner            | With `CLAMAV_HOST` set, uploads are scanned over ClamAV's INSTREAM protocol (`ClamAvVirusScannerAdapter`). Without it, uploads fail closed through `UnconfiguredVirusScannerAdapter`.                                                                                                                    | `apps/api/src/virus-scanner.ts`                                                      |
-| Blockchain anchor        | The queue worker publishes Merkle roots to a `RootRegistry` contract through `ANCHOR_RPC_URL`. Locally that is Anvil; staging uses Polygon Amoy. Signing uses `ANCHOR_PRIVATE_KEY` with `ANCHOR_ALLOW_LOCAL_SIGNER=true` outside production, or KMS in production.                                       | `packages/queue/src/anchoring.ts`, `contracts/src/RootRegistry.sol`                  |
-| Bank statement feed      | The reconciliation statement endpoint ingests CSV bank statements (`POST /v1/reconciliation/statements`) instead of a live bank API connection.                                                                                                                                                          | `apps/api/src/reconciliation/`                                                       |
-| Redis                    | Started by docker compose but unused by application code; all durable state is PostgreSQL.                                                                                                                                                                                                               | `docker-compose.yml`                                                                 |
+| Component                | Local simulation                                                                                                                                                                                                                                                                                                                                                                                                         | Where it lives                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| SMS DLT gateway          | OTPs and notifications are handed to `DevStubOtpDeliveryProvider` / in-memory channel providers; no SMS is sent. Real sending requires the Exotel provider with DLT entity and template IDs via env credentials.                                                                                                                                                                                                         | `apps/api/src/auth/provider.ts`, `packages/notifications/src/channels/exotel-sms.ts`        |
+| WhatsApp Business Cloud  | Same stub treatment; the Meta webhook receiver (`GET/POST /v1/delivery/webhooks/meta`) is mounted when `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN` and `EXOTEL_RELAY_WEBHOOK_SECRET` are set.                                                                                                                                                                                                                         | `apps/api/src/server-bootstrap.ts`, `apps/api/src/delivery-webhooks.ts`                     |
+| Payment partner webhooks | `POST /v1/reconciliation/webhooks/partner` accepts simulated UPI virtual account credit notifications. Requests must carry `X-Webhook-Timestamp` and `X-Webhook-Signature` (HMAC-SHA256 of `v1.<timestamp>.<body>` under `PARTNER_WEBHOOK_SECRET`); unsigned or tampered requests are rejected with 401.                                                                                                                 | `apps/api/src/app.ts` (`partnerWebhookRoute`)                                               |
+| Virus scanner            | With `CLAMAV_HOST` set, uploads are scanned over ClamAV's INSTREAM protocol (`ClamAvVirusScannerAdapter`). Without it, uploads fail closed through `UnconfiguredVirusScannerAdapter`.                                                                                                                                                                                                                                    | `apps/api/src/virus-scanner.ts`                                                             |
+| Blockchain anchor        | Simulated: the queue worker publishes Merkle roots to a `RootRegistry` contract on a local Anvil chain (chain id 31337, started by `pnpm dev:full`), which the verify page labels "Simulated local chain, not a public network". Staging uses Polygon Amoy (80002). The worker signs with Anvil's public dev key (`ANCHOR_PRIVATE_KEY`, `ANCHOR_ALLOW_LOCAL_SIGNER=true`) outside production and with KMS in production. | `packages/queue/src/anchoring.ts`, `contracts/src/RootRegistry.sol`, `scripts/dev-chain.ts` |
+| Bank statement feed      | The reconciliation statement endpoint ingests CSV bank statements (`POST /v1/reconciliation/statements`) instead of a live bank API connection.                                                                                                                                                                                                                                                                          | `apps/api/src/reconciliation/`                                                              |
+| Redis                    | Started by docker compose but unused by application code; all durable state is PostgreSQL.                                                                                                                                                                                                                                                                                                                               | `docker-compose.yml`                                                                        |
 
 ## 10. Shot list and pacing
 
@@ -448,12 +440,12 @@ Recording tips:
 
 ## 11. Troubleshooting
 
-| Symptom                                                    | Cause                                                                             | Fix                                                                    |
-| ---------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Upload returns 503 "malware scanner is unavailable"        | No ClamAV daemon at `CLAMAV_HOST`                                                 | Start the daemon (section 6) or record without the upload step         |
-| Upload returns 400 on a valid-looking file                 | Declared MIME type does not match the file magic bytes                            | Keep the original extension and pass `;type=image/jpeg` in curl        |
-| `/v1/me` returns 401 right after sign-in                   | The session is not a trusted device yet                                           | Finish the PIN step on the login screen (section 4)                    |
-| PIN modal rejects the PIN                                  | PIN violates the rules in `apps/api/src/pin/rules.ts`                             | Use `482613` or another non-pattern six-digit PIN                      |
-| Worker exits immediately with "Invalid worker environment" | Missing `DATABASE_URL`, or `ANCHOR_ALLOW_LOCAL_SIGNER` not `true` with no KMS key | Export the full env block from section 8                               |
-| Verify page says "proof data is incomplete"                | No anchor has landed yet (worker not running or discovery job not fired)          | Wait for the 5-minute discovery tick or record the pending-state story |
-| `demo:reset` fails with ECONNREFUSED                       | PostgreSQL is not running                                                         | `docker compose up -d` and retry                                       |
+| Symptom                                                    | Cause                                                                             | Fix                                                                     |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Upload returns 503 "malware scanner is unavailable"        | No ClamAV daemon at `CLAMAV_HOST`                                                 | Start the daemon (section 6) or record without the upload step          |
+| Upload returns 400 on a valid-looking file                 | Declared MIME type does not match the file magic bytes                            | Keep the original extension and pass `;type=image/jpeg` in curl         |
+| `/v1/me` returns 401 right after sign-in                   | The session is not a trusted device yet                                           | Finish the PIN step on the login screen (section 4)                     |
+| PIN modal rejects the PIN                                  | PIN violates the rules in `apps/api/src/pin/rules.ts`                             | Use `482613` or another non-pattern six-digit PIN                       |
+| Worker exits immediately with "Invalid worker environment" | Missing `DATABASE_URL`, or `ANCHOR_ALLOW_LOCAL_SIGNER` not `true` with no KMS key | Start through `pnpm dev:full`, which sets the worker environment        |
+| Verify page says "proof data is incomplete"                | No anchor has landed yet (worker not running or discovery job not fired)          | Wait for the next one-minute discovery tick, or restart `pnpm dev:full` |
+| `demo:reset` fails with ECONNREFUSED                       | PostgreSQL is not running                                                         | `docker compose up -d` and retry                                        |

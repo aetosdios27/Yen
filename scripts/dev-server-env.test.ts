@@ -46,4 +46,9 @@ describe("buildDevServerEnv", () => {
     });
     expect(env.DATABASE_URL).toBe("postgres://postgres:pw@localhost:5432/postgres");
   });
+
+  it("runs every dev process as development, whatever the ambient NODE_ENV", () => {
+    expect(buildDevServerEnv({}).NODE_ENV).toBe("development");
+    expect(buildDevServerEnv({ NODE_ENV: "production" }).NODE_ENV).toBe("development");
+  });
 });

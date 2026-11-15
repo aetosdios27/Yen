@@ -11,7 +11,7 @@ import {
   ViemRootChain,
 } from "./anchoring.js";
 import { DEFAULT_QUEUES } from "./config.js";
-import { anchoringSignerMode, parseWorkerEnv } from "./env.js";
+import { anchorDiscoveryCron, anchoringChain, anchoringSignerMode, parseWorkerEnv } from "./env.js";
 import { registerRetention } from "./retention.js";
 import { WorkerRuntime } from "./worker.js";
 
@@ -54,15 +54,21 @@ const anchorConfigured = Boolean(anchorRpc && anchorAddress);
 let anchorPublisherAddress: `0x${string}` | undefined;
 let anchorChain: ViemRootChain | undefined;
 let anchorResilience: ReturnType<typeof createAnchorRpcResilience> | undefined;
+let anchorDiscoverySchedule: string | undefined;
 if (anchorRpc && anchorAddress) {
-  anchorChain = new ViemRootChain(anchorRpc, anchorAddress as `0x${string}`);
-  anchorResilience = createAnchorRpcResilience();
   let signerMode: "kms" | "local";
   try {
+    anchorChain = new ViemRootChain(
+      anchorRpc,
+      anchorAddress as `0x${string}`,
+      anchoringChain(process.env),
+    );
+    anchorDiscoverySchedule = anchorDiscoveryCron(process.env);
     signerMode = anchoringSignerMode(process.env);
   } catch (error) {
-    fail(error instanceof Error ? error.message : "Invalid anchoring signer configuration");
+    fail(error instanceof Error ? error.message : "Invalid anchoring configuration");
   }
+  anchorResilience = createAnchorRpcResilience();
   const signer = signerMode === "kms" ? new KmsRootSigner() : LocalDevRootSigner.fromEnvironment();
   anchorPublisherAddress = (await signer.getAccount()).address;
   const anchoring = new AnchoringWorker(
@@ -135,8 +141,8 @@ void registerChainVerification(worker.getBoss(), worker.getSql()).catch((error) 
   reportRegistrationFailure("Chain verification", error),
 );
 if (anchorConfigured && anchorChain && anchorResilience) {
-  void registerAnchoringDiscovery(worker.getBoss(), worker.getSql()).catch((error) =>
-    reportRegistrationFailure("Anchoring discovery", error),
+  void registerAnchoringDiscovery(worker.getBoss(), worker.getSql(), anchorDiscoverySchedule).catch(
+    (error) => reportRegistrationFailure("Anchoring discovery", error),
   );
   void registerAnchorReconciliation(
     worker.getBoss(),
