@@ -142,6 +142,7 @@ export interface PublicFundReadStore {
 /** Head of a public fund's event log, used as the public read validator. */
 export type PublicFundHead = {
   readonly latestEventHash: string;
+  readonly anchorStateHash: string;
   readonly orgId: string | null;
 };
 

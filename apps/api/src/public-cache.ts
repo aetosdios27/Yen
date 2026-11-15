@@ -146,11 +146,15 @@ export function etagFor(body: unknown): string {
 }
 
 /**
- * Weak validator derived from the fund's latest event hash: any event on the fund
- * changes it, and the origin can compare it with a single head lookup.
+ * Weak validator derived from the event head and confirmed anchor set, so
+ * confirmations rotate it even when they do not append a fund event.
  */
-export function eventHashEtag(fundId: string, latestEventHash: string): string {
-  return `W/"${fundId}-${latestEventHash}"`;
+export function eventHashEtag(
+  fundId: string,
+  latestEventHash: string,
+  anchorStateHash = "",
+): string {
+  return `W/"${fundId}-${latestEventHash}${anchorStateHash ? `-${anchorStateHash}` : ""}"`;
 }
 
 /** Purge targets for CDNs that support tag-based invalidation. */

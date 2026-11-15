@@ -951,10 +951,12 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   const headReader = deps.publicFundHead;
   // The head lookup must never block a page: when it fails the page path still
   // runs and can fall back to the last good copy inside the stale window.
-  const fundHead = async (fundId: string) => {
+  const fundHead = async (fundId: string, revalidate = false) => {
     if (!headReader) return null;
     try {
-      const hit = await publicReadCache.load(fundId, FUND_HEAD_KIND, () => headReader(fundId));
+      const hit = await publicReadCache.load(fundId, FUND_HEAD_KIND, () => headReader(fundId), {
+        revalidate,
+      });
       return hit.body;
     } catch {
       return null;
@@ -984,7 +986,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     }
     const head = await fundHead(options.fundId);
     if (!head) return false;
-    const etag = eventHashEtag(options.fundId, head.latestEventHash);
+    const etag = eventHashEtag(options.fundId, head.latestEventHash, head.anchorStateHash);
     if (!matchesEtag(ifNoneMatch, etag)) return false;
     setPublicReadHeaders(c, etag, fundCacheTags(options.fundId, head.orgId));
     return true;
@@ -1014,9 +1016,9 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     }
     const revalidate = isNoCacheRequest(c);
     const ifNoneMatch = c.req.header("if-none-match");
-    const head = await fundHead(options.fundId);
+    const head = await fundHead(options.fundId, revalidate);
     if (!revalidate && head) {
-      const etag = eventHashEtag(options.fundId, head.latestEventHash);
+      const etag = eventHashEtag(options.fundId, head.latestEventHash, head.anchorStateHash);
       if (matchesEtag(ifNoneMatch, etag)) {
         setPublicReadHeaders(c, etag, fundCacheTags(options.fundId, head.orgId));
         return { notModified: true, body: undefined as T };
@@ -1024,7 +1026,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     }
     const meta = head
       ? {
-          etag: eventHashEtag(options.fundId, head.latestEventHash),
+          etag: eventHashEtag(options.fundId, head.latestEventHash, head.anchorStateHash),
           cacheTag: fundCacheTags(options.fundId, head.orgId),
         }
       : { cacheTag: fundCacheTags(options.fundId, null) };

@@ -9,7 +9,7 @@ Anonymous responses on the public fund pages (`/public/summary`, `/public/breakd
 | Header                        | Value                                                                   | Meaning                                                                                                                                                                |
 | ----------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Cache-Control`               | `public, s-maxage=60, stale-while-revalidate=300, stale-if-error=86400` | Shared caches keep a copy for 60 seconds, may serve it stale for 300 more while revalidating in the background, and may serve it for a day when the origin is failing. |
-| `ETag`                        | `W/"<fundId>-<latestEventHash>"`                                        | Weak validator derived from the head of the fund's event log. Any appended event rotates it.                                                                           |
+| `ETag`                        | `W/"<fundId>-<latestEventHash>[-<anchorStateHash>]"`                                        | Weak validator derived from the head of the fund's event log. Any appended event or change to the confirmed anchor set rotates it.                                                                           |
 | `Cache-Tag`                   | `fund-<fundId>, org-<orgId>`                                            | Purge targets. Tags are emitted even when the validator falls back to a body hash in memory mode.                                                                      |
 | `Vary`                        | `authorization, cookie`                                                 | A signed in visitor gets the private view at the same URL, so shared caches must never mix them.                                                                       |
 | `Warning`, `X-Yen-Data-As-Of` | `110 - "Response is stale"`, ISO timestamp                              | Present only when the origin served the last good copy after a failure inside the stale window.                                                                        |
@@ -18,15 +18,15 @@ Authenticated responses never carry public cache headers: they are stamped `priv
 
 ## Validator Lifecycle
 
-The public response validator is `W/"<fundId>-<latestEventHash>"`. The origin compares an incoming `If-None-Match` against the event log head using one indexed query (`publicFundHeadSql`) that also gates on `visibility_tier = 'public'` and returns the org id for purge tags. Consequences:
+The public response validator is `W/"<fundId>-<latestEventHash>[-<anchorStateHash>]"`. The origin compares an incoming `If-None-Match` against the event log head using one indexed query (`publicFundHeadSql`) that also gates on `visibility_tier = 'public'` and returns the org id for purge tags. Consequences:
 
 - A conditional request against a cold origin costs one head lookup and returns `304` without the page read.
 - A conditional request against a warm origin cache costs zero queries.
 - Any fund event (pledges, verifications, expenses, membership and policy changes) rotates the validator, so validators never mask content that the event log produced.
-- Mutations that change public content without appending a fund event do not rotate the validator. Today that is anchor confirmation (timeline and summary `verified` fields flipping from `bank-matched` to `anchored`) and the officeholder display name flag. Deployments must purge `fund-<fundId>` through the CDN when those change, as described below, or accept staleness until the next fund event.
+- The same query includes a digest of confirmed anchor IDs with transaction hashes, so confirmations rotate validators without a new fund event. Other non-event mutations, such as officeholder display flags, still require explicit invalidation.
 - When the head lookup is unavailable (memory mode, or a failed lookup), responses fall back to the SHA 256 body hash validator, which behaves like the pre YEN-59 scheme.
 
-`Cache-Control: no-cache` from the client forces the full origin produce before answering; if the fresh body matches the client validator, the origin still answers `304` after doing the work.
+`Cache-Control: no-cache` from the client refreshes both the head and full origin produce before answering; if the fresh body matches the client validator, the origin still answers `304` after doing the work.
 
 ## Purge Flow via Cache-Tag
 

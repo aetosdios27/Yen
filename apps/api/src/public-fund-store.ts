@@ -81,10 +81,12 @@ export class PostgresPublicFundHeadStore {
   constructor(private readonly sql: Sql) {}
 
   async get(fundId: string): Promise<PublicFundHead | null> {
-    const rows = await this.sql.unsafe<{ hash: string; org_id: string }[]>(publicFundHeadSql, [
-      fundId,
-    ]);
+    const rows = await this.sql.unsafe<
+      { hash: string; org_id: string; anchor_state_hash: string }[]
+    >(publicFundHeadSql, [fundId]);
     const row = rows[0];
-    return row ? { latestEventHash: row.hash, orgId: row.org_id } : null;
+    return row
+      ? { latestEventHash: row.hash, anchorStateHash: row.anchor_state_hash, orgId: row.org_id }
+      : null;
   }
 }

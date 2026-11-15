@@ -104,7 +104,7 @@ function fixture(options: FixtureOptions = {}) {
     if (fundId !== fundA && fundId !== fundB) return null;
     reads.heads += 1;
     if (options.headGate) await options.headGate;
-    return { latestEventHash: headHash, orgId: orgIdFor(fundId) };
+    return { latestEventHash: headHash, anchorStateHash: "", orgId: orgIdFor(fundId) };
   };
 
   const memoryRateLimits = new MemoryRateLimitStore();
@@ -268,6 +268,19 @@ describe("public fund CDN validators and tags", () => {
     expect(response.status).toBe(304);
     expect(response.headers.get("etag")).toBe(eventHashEtag(fundA, hashOne));
     expect(apps.reads.donations).toBe(2);
+  });
+
+  it("refreshes the head for no-cache reads after another instance writes", async () => {
+    const apps = fixture();
+    await createPublicFunds(apps);
+    const first = await apps.publicApp.request(summaryUrl(fundA));
+    apps.setHeadHash(hashTwo);
+    const response = await apps.publicApp.request(summaryUrl(fundA), {
+      headers: { "cache-control": "no-cache", "if-none-match": first.headers.get("etag") ?? "" },
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("etag")).toBe(eventHashEtag(fundA, hashTwo));
+    expect(apps.reads.heads).toBe(2);
   });
 
   it("rotates the validator after an event advances the log head", async () => {

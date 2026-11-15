@@ -62,7 +62,7 @@ function buildApp(options: {
     },
     publicFundHead: async (id) => {
       counters.headLookups += 1;
-      return id === fundId ? { latestEventHash: headHash, orgId } : null;
+      return id === fundId ? { latestEventHash: headHash, anchorStateHash: "", orgId } : null;
     },
     logger: { log: () => undefined },
     idGenerator: () => fundId,
