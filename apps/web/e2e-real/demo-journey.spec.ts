@@ -241,6 +241,9 @@ test("a donation, an approved expense and its bank debit end up anchored and pub
         },
       )
       .toBe("anchored");
+    await treasurer.goto(`/funds/${FUND_ID}`);
+    await expect(treasurer.getByText("All bank matches anchored")).toBeVisible();
+    await shot(treasurer, "06-records-anchored");
   });
 
   await test.step("7. the public fund page and verify page show the money and the on-chain proof", async () => {
