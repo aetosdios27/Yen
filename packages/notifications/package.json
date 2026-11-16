@@ -23,7 +23,7 @@
     "@yen/eventlog": "workspace:*",
     "@yen/queue": "workspace:*",
     "@yen/shared": "workspace:*",
-    "postgres": "^4.1.0",
+    "postgres": "^4.1.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
