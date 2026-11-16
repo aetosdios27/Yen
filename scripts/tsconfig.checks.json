@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": { "noEmit": true, "types": ["node"] },
+  "include": [
+    "source-check.ts",
+    "source-check.test.ts",
+    "design-rules.ts",
+    "code-rules.ts",
+    "check-baseline.ts",
+    "run-source-check.ts",
+    "check-design.ts",
+    "check-code.ts"
+  ]
+}

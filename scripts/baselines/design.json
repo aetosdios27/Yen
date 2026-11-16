@@ -1,0 +1,162 @@
+[
+  {
+    "file": "apps/web/src/app/design-system/design-system-review.tsx",
+    "rule": "arbitrary-property",
+    "count": 6
+  },
+  {
+    "file": "apps/web/src/app/funds/[fundId]/approvals/[expenseId]/page.tsx",
+    "rule": "arbitrary-value",
+    "count": 2
+  },
+  {
+    "file": "apps/web/src/app/funds/[fundId]/treasurer/page.tsx",
+    "rule": "arbitrary-value",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/app/verify/page.tsx",
+    "rule": "arbitrary-value",
+    "count": 13
+  },
+  {
+    "file": "apps/web/src/app/verify/page.tsx",
+    "rule": "palette-class",
+    "count": 4
+  },
+  {
+    "file": "apps/web/src/app/verify/page.tsx",
+    "rule": "text-opacity",
+    "count": 2
+  },
+  {
+    "file": "apps/web/src/components/approval-pin-modal.tsx",
+    "rule": "arbitrary-value",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/components/donation-form.tsx",
+    "rule": "arbitrary-value",
+    "count": 2
+  },
+  {
+    "file": "apps/web/src/components/evidence-upload.tsx",
+    "rule": "arbitrary-value",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/components/evidence-upload.tsx",
+    "rule": "inline-style",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/components/expense-form.tsx",
+    "rule": "arbitrary-value",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/components/expense-timeline.tsx",
+    "rule": "arbitrary-value",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/components/fund/fund-header.tsx",
+    "rule": "arbitrary-value",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/components/fund/how-do-i-know-modal.tsx",
+    "rule": "arbitrary-value",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/components/fund/money-summary.tsx",
+    "rule": "arbitrary-value",
+    "count": 3
+  },
+  {
+    "file": "apps/web/src/components/fund/public-fund-view.tsx",
+    "rule": "arbitrary-value",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/components/fund/spending-breakdown.tsx",
+    "rule": "inline-style",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/components/fund/verified-badge.tsx",
+    "rule": "palette-class",
+    "count": 4
+  },
+  {
+    "file": "apps/web/src/components/ui/badge.tsx",
+    "rule": "arbitrary-value",
+    "count": 2
+  },
+  {
+    "file": "apps/web/src/components/ui/button.tsx",
+    "rule": "arbitrary-value",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/components/ui/card.tsx",
+    "rule": "arbitrary-value",
+    "count": 2
+  },
+  {
+    "file": "apps/web/src/components/ui/dialog.tsx",
+    "rule": "arbitrary-value",
+    "count": 5
+  },
+  {
+    "file": "apps/web/src/components/ui/dropdown-menu.tsx",
+    "rule": "arbitrary-value",
+    "count": 2
+  },
+  {
+    "file": "apps/web/src/components/ui/input.tsx",
+    "rule": "arbitrary-value",
+    "count": 2
+  },
+  {
+    "file": "apps/web/src/components/ui/select.tsx",
+    "rule": "arbitrary-value",
+    "count": 3
+  },
+  {
+    "file": "apps/web/src/components/ui/table.tsx",
+    "rule": "arbitrary-value",
+    "count": 2
+  },
+  {
+    "file": "apps/web/src/components/ui/tabs.tsx",
+    "rule": "arbitrary-value",
+    "count": 21
+  },
+  {
+    "file": "apps/web/src/components/ui/tabs.tsx",
+    "rule": "text-opacity",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/i18n/messages/en.ts",
+    "rule": "colour-literal",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/i18n/messages/en.ts",
+    "rule": "interface-word",
+    "count": 5
+  },
+  {
+    "file": "apps/web/src/i18n/messages/hi.ts",
+    "rule": "colour-literal",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/i18n/messages/hi.ts",
+    "rule": "interface-word",
+    "count": 1
+  }
+]

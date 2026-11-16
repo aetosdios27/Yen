@@ -1,0 +1,397 @@
+[
+  {
+    "file": "apps/api/src/app.ts",
+    "rule": "file-size",
+    "count": 2814
+  },
+  {
+    "file": "apps/api/src/auth/index.ts",
+    "rule": "barrel-index",
+    "count": 1
+  },
+  {
+    "file": "apps/api/src/auth/stores.ts",
+    "rule": "file-size",
+    "count": 565
+  },
+  {
+    "file": "apps/api/src/contract.ts",
+    "rule": "file-size",
+    "count": 2469
+  },
+  {
+    "file": "apps/api/src/dependencies.ts",
+    "rule": "file-size",
+    "count": 399
+  },
+  {
+    "file": "apps/api/src/device-signature/service.ts",
+    "rule": "file-size",
+    "count": 21
+  },
+  {
+    "file": "apps/api/src/device-signature/store.ts",
+    "rule": "file-size",
+    "count": 92
+  },
+  {
+    "file": "apps/api/src/fund-store.ts",
+    "rule": "file-size",
+    "count": 35
+  },
+  {
+    "file": "apps/api/src/middleware.ts",
+    "rule": "file-size",
+    "count": 141
+  },
+  {
+    "file": "apps/api/src/pin/index.ts",
+    "rule": "barrel-index",
+    "count": 1
+  },
+  {
+    "file": "apps/api/src/pin/service.ts",
+    "rule": "file-size",
+    "count": 231
+  },
+  {
+    "file": "apps/api/src/policy.ts",
+    "rule": "file-size",
+    "count": 196
+  },
+  {
+    "file": "apps/api/src/postgres-stores.ts",
+    "rule": "file-size",
+    "count": 61
+  },
+  {
+    "file": "apps/api/src/privacy-store.ts",
+    "rule": "file-size",
+    "count": 81
+  },
+  {
+    "file": "apps/api/src/reconciliation/memory-store.ts",
+    "rule": "file-size",
+    "count": 117
+  },
+  {
+    "file": "apps/api/src/reconciliation/postgres-store.ts",
+    "rule": "file-size",
+    "count": 257
+  },
+  {
+    "file": "apps/api/src/server-bootstrap.ts",
+    "rule": "file-size",
+    "count": 281
+  },
+  {
+    "file": "apps/api/src/stores.ts",
+    "rule": "file-size",
+    "count": 41
+  },
+  {
+    "file": "apps/web/src/app/about/build/page.tsx",
+    "rule": "api-fetch",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/app/design-system/design-system-review.tsx",
+    "rule": "file-size",
+    "count": 119
+  },
+  {
+    "file": "apps/web/src/app/funds/[fundId]/approvals/[expenseId]/page.tsx",
+    "rule": "file-size",
+    "count": 160
+  },
+  {
+    "file": "apps/web/src/app/funds/[fundId]/donate/donate-client.tsx",
+    "rule": "api-fetch",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/app/funds/[fundId]/donate/page.tsx",
+    "rule": "api-fetch",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/app/funds/[fundId]/treasurer/page.tsx",
+    "rule": "file-size",
+    "count": 28
+  },
+  {
+    "file": "apps/web/src/app/login/page.tsx",
+    "rule": "api-fetch",
+    "count": 5
+  },
+  {
+    "file": "apps/web/src/app/login/page.tsx",
+    "rule": "file-size",
+    "count": 259
+  },
+  {
+    "file": "apps/web/src/app/receipts/[id]/page.tsx",
+    "rule": "api-fetch",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/app/unsubscribe/unsubscribe-client.tsx",
+    "rule": "api-fetch",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/app/verify/page.tsx",
+    "rule": "api-fetch",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/app/verify/page.tsx",
+    "rule": "file-size",
+    "count": 431
+  },
+  {
+    "file": "apps/web/src/components/approval-pin-modal.tsx",
+    "rule": "file-size",
+    "count": 3
+  },
+  {
+    "file": "apps/web/src/components/donation-form.tsx",
+    "rule": "file-size",
+    "count": 65
+  },
+  {
+    "file": "apps/web/src/components/evidence-upload.tsx",
+    "rule": "api-fetch",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/components/evidence-upload.tsx",
+    "rule": "file-size",
+    "count": 386
+  },
+  {
+    "file": "apps/web/src/components/expense-form.tsx",
+    "rule": "file-size",
+    "count": 168
+  },
+  {
+    "file": "apps/web/src/components/expense-timeline.tsx",
+    "rule": "file-size",
+    "count": 16
+  },
+  {
+    "file": "apps/web/src/components/fund/fund-timeline.tsx",
+    "rule": "file-size",
+    "count": 6
+  },
+  {
+    "file": "apps/web/src/components/fund/index.ts",
+    "rule": "barrel-index",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/components/index.ts",
+    "rule": "barrel-index",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/components/money.test-d.tsx",
+    "rule": "ts-suppression",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/components/onboarding-wizard.tsx",
+    "rule": "api-fetch",
+    "count": 2
+  },
+  {
+    "file": "apps/web/src/components/onboarding-wizard.tsx",
+    "rule": "file-size",
+    "count": 305
+  },
+  {
+    "file": "apps/web/src/components/owner-invite-accept.tsx",
+    "rule": "api-fetch",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/components/receipt-view.tsx",
+    "rule": "api-fetch",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/components/receipt-view.tsx",
+    "rule": "file-size",
+    "count": 112
+  },
+  {
+    "file": "apps/web/src/components/session-nav.tsx",
+    "rule": "api-fetch",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/components/ui/dropdown-menu.tsx",
+    "rule": "file-size",
+    "count": 27
+  },
+  {
+    "file": "apps/web/src/components/waitlist-form.tsx",
+    "rule": "api-fetch",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/components/waitlist-form.tsx",
+    "rule": "file-size",
+    "count": 30
+  },
+  {
+    "file": "apps/web/src/i18n/index.ts",
+    "rule": "barrel-index",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/i18n/messages/en.ts",
+    "rule": "file-size",
+    "count": 529
+  },
+  {
+    "file": "apps/web/src/i18n/messages/hi.ts",
+    "rule": "file-size",
+    "count": 493
+  },
+  {
+    "file": "apps/web/src/lib/expense-service.ts",
+    "rule": "api-fetch",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/lib/expense-service.ts",
+    "rule": "file-size",
+    "count": 35
+  },
+  {
+    "file": "apps/web/src/lib/observability.ts",
+    "rule": "api-fetch",
+    "count": 1
+  },
+  {
+    "file": "apps/web/src/lib/product-session.ts",
+    "rule": "api-fetch",
+    "count": 2
+  },
+  {
+    "file": "apps/web/src/lib/verifier.ts",
+    "rule": "file-size",
+    "count": 152
+  },
+  {
+    "file": "packages/api-client/src/generated.ts",
+    "rule": "file-size",
+    "count": 13321
+  },
+  {
+    "file": "packages/db/src/alerts.ts",
+    "rule": "file-size",
+    "count": 105
+  },
+  {
+    "file": "packages/db/src/dev-seed.ts",
+    "rule": "file-size",
+    "count": 495
+  },
+  {
+    "file": "packages/db/src/events.ts",
+    "rule": "file-size",
+    "count": 150
+  },
+  {
+    "file": "packages/db/src/query-plan.ts",
+    "rule": "file-size",
+    "count": 40
+  },
+  {
+    "file": "packages/db/src/query-registry.ts",
+    "rule": "file-size",
+    "count": 7
+  },
+  {
+    "file": "packages/db/src/rows.ts",
+    "rule": "file-size",
+    "count": 19
+  },
+  {
+    "file": "packages/db/src/sql-statements.ts",
+    "rule": "file-size",
+    "count": 40
+  },
+  {
+    "file": "packages/eventlog/src/model.ts",
+    "rule": "file-size",
+    "count": 118
+  },
+  {
+    "file": "packages/eventlog/src/pseudonym.test-d.ts",
+    "rule": "ts-suppression",
+    "count": 1
+  },
+  {
+    "file": "packages/ledger/src/expense/service.ts",
+    "rule": "file-size",
+    "count": 93
+  },
+  {
+    "file": "packages/ledger/src/expense/state-machine.ts",
+    "rule": "file-size",
+    "count": 75
+  },
+  {
+    "file": "packages/ledger/src/operations.ts",
+    "rule": "file-size",
+    "count": 984
+  },
+  {
+    "file": "packages/notifications/src/compliance.ts",
+    "rule": "file-size",
+    "count": 142
+  },
+  {
+    "file": "packages/notifications/src/store.ts",
+    "rule": "file-size",
+    "count": 679
+  },
+  {
+    "file": "packages/notifications/src/worker.ts",
+    "rule": "file-size",
+    "count": 128
+  },
+  {
+    "file": "packages/policy/src/engine.ts",
+    "rule": "file-size",
+    "count": 107
+  },
+  {
+    "file": "packages/policy/src/redact.ts",
+    "rule": "file-size",
+    "count": 427
+  },
+  {
+    "file": "packages/queue/src/anchoring.ts",
+    "rule": "file-size",
+    "count": 490
+  },
+  {
+    "file": "packages/shared/src/merkle/bundle.ts",
+    "rule": "file-size",
+    "count": 161
+  },
+  {
+    "file": "packages/shared/src/receipts/pdf.ts",
+    "rule": "file-size",
+    "count": 71
+  },
+  {
+    "file": "packages/verifier/src/verify.ts",
+    "rule": "file-size",
+    "count": 143
+  }
+]
