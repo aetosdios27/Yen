@@ -625,6 +625,7 @@ export const en = {
     statusSettled: "Settled",
   },
   expenseForm: {
+    noPermission: "Only the fund owner or treasurer can create expenses.",
     title: "New expense request",
     subtitle: "Create an expense for approver review",
     amountLabel: "Amount (₹)",

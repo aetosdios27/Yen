@@ -1,6 +1,6 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * Route fixtures for the five core journeys documented in
@@ -16,6 +16,22 @@ const { FUND_ID, EXPENSE_ID, RECEIPT_ID } = vi.hoisted(() => ({
   EXPENSE_ID: "00000000-0000-4000-8000-0000000000e1",
   RECEIPT_ID: "00000000-0000-4000-8000-00000000000001",
 }));
+
+beforeEach(() => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: string | Request) => {
+      const url = typeof input === "string" ? input : input.url;
+      const data = url.endsWith("/me/funds")
+        ? { funds: [{ id: FUND_ID, title: "Robotics", role: "owner", visibility: "public" }] }
+        : { displayName: "Aarav Sharma" };
+      return new Response(JSON.stringify(data), {
+        headers: { "content-type": "application/json" },
+      });
+    }),
+  );
+});
+afterEach(() => vi.unstubAllGlobals());
 
 interface JourneyRoute {
   readonly journey: number;
@@ -225,7 +241,6 @@ vi.mock("../env", () => ({ env: { NEXT_PUBLIC_API_URL: "http://api.test" } }));
 
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { createElement, Suspense } from "react";
-import { beforeEach } from "vitest";
 import ApproverPage from "../app/funds/[fundId]/approvals/[expenseId]/page";
 import DonatePage from "../app/funds/[fundId]/donate/page";
 import NewExpensePage from "../app/funds/[fundId]/expenses/new/page";

@@ -605,6 +605,7 @@ export const hi: Messages = {
     statusSettled: "संपन्न",
   },
   expenseForm: {
+    noPermission: "केवल निधि स्वामी या खजांची खर्च बना सकते हैं।",
     title: "नया खर्च अनुरोध",
     subtitle: "स्वीकृति के लिए खर्च अनुरोध बनाएँ",
     amountLabel: "रकम (₹)",

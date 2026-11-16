@@ -8,6 +8,24 @@ import TreasurerPage from "./page";
 
 describe("TreasurerPage", () => {
   beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async (input: string) =>
+          new Response(
+            JSON.stringify(
+              input.endsWith("/funds")
+                ? {
+                    funds: [
+                      { id: "demo-fund", title: "Robotics", role: "owner", visibility: "public" },
+                    ],
+                  }
+                : { displayName: "Aarav Sharma" },
+            ),
+            { headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
     vi.spyOn(apiClientModule, "getApiClient").mockReturnValue({
       GET: vi.fn().mockImplementation((path: string) => {
         if (path.includes("/balances"))
@@ -73,6 +91,7 @@ describe("TreasurerPage", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 

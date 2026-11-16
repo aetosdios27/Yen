@@ -92,6 +92,21 @@ databaseSuite("repeatable demo startup and ledger balances", (sql, url) => {
       principal: { id: "00000000-0000-4000-8000-000000000099", role: "approver" },
     });
     expect((await outsider.request(`/v1/funds/${seed.fund.id}/balances`)).status).toBe(404);
+    const approver = seed.users.find((user) => user.role === "approver");
+    if (!approver) throw new Error("Missing approver fixture");
+    const approverApp = createApp({ ...options, principal: { id: approver.id, role: "approver" } });
+    const deniedCreation = await approverApp.request(`/v1/funds/${seed.fund.id}/expenses`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "Idempotency-Key": "approver-cannot-create" },
+      body: JSON.stringify({
+        amountPaise: "100",
+        description: "Permission probe",
+        recipientRef: "vendor@upi",
+        category: "Other",
+        evidence: [],
+      }),
+    });
+    expect(deniedCreation.status).toBe(403);
     const member = seed.users.find((user) => user.role === "member");
     if (!member) throw new Error("Missing member fixture");
     const memberApp = createApp({ ...options, principal: { id: member.id, role: "member" } });

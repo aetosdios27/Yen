@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { createSql, ensureFundPseudonym } from "@yen/db";
+import { getBalances } from "@yen/ledger";
 import { createApp } from "../../../api/dist/app.js";
 import { PostgresAuthStore } from "../../../api/dist/auth/stores.js";
 import { PostgresDeviceSignatureStore } from "../../../api/dist/device-signature/store.js";
@@ -54,6 +55,7 @@ const app = createApp({
   reconciliationStore: new PostgresReconciliationStore(sql),
   expenseStore: new PostgresExpenseStore(sql),
   fundStore: new PostgresFundStore(sql),
+  readFundBalances: (fundId) => getBalances(sql, fundId),
   evidenceStore: new PostgresEvidenceStore(sql),
   storageAdapter: evidenceStorage,
   payeeProfileStore: new PostgresPayeeProfileStore(sql),
