@@ -52,6 +52,8 @@ Requires Node 24.21.0 (`.nvmrc`) and pnpm 12.6.0 (`packageManager` in
 
 ## Conventions
 
+The binding rules are [docs/engineering/CODE-QUALITY.md](docs/engineering/CODE-QUALITY.md) for all code and [docs/design/DESIGN.md](docs/design/DESIGN.md) for `apps/web`. The short list:
+
 - Money is integer **paise** with the `Paise` branded type. Never floats.
 - Parse external input with zod at the boundary; no `any`.
 - No secrets in the repo; push protection and gitleaks are on.
