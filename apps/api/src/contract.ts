@@ -322,7 +322,20 @@ export const getFundBalancesRoute = createRoute({
   description:
     "Staff-only ledger balances. Reservations include every pending ledger hold, independently of expense workflow status.",
   request: { params: z.object({ fundId: z.string().uuid() }) },
-  responses: { 200: jsonResponse(fundBalancesSchema, "Ledger balances"), ...protectedErrors },
+  responses: {
+    200: {
+      ...jsonResponse(fundBalancesSchema, "Ledger balances"),
+      headers: {
+        ...responseHeaders,
+        "cache-control": {
+          schema: { type: "string", enum: ["private, no-store"] },
+          required: true,
+          description: "Staff balances are never cached",
+        },
+      },
+    },
+    ...protectedErrors,
+  },
 });
 
 export const changeFundVisibilityRoute = createRoute({

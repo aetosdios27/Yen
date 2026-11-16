@@ -30,6 +30,8 @@ export async function prepareDemoAccounts(
     .parse(env.PIN_HMAC_SECRET ?? DEV_PIN_HMAC_SECRET);
   await sql.begin(async (transaction) => {
     for (const user of users.filter((user) => user.role !== "member")) {
+      await transaction`DELETE FROM auth_otp_attempt_limits WHERE phone = ${user.phone}`;
+      await transaction`DELETE FROM auth_otps WHERE phone = ${user.phone}`;
       const salt = generatePinSalt();
       const pinHash = await hashPin(user.id, salt, DEMO_PIN, secret);
       const rows = await transaction`

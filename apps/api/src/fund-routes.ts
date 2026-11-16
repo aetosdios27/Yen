@@ -42,7 +42,10 @@ export function registerFundVisibilityRoute(
     ) {
       throw new ApiError("forbidden");
     }
-    if (!deps.readFundBalances) throw new ApiError("overloaded");
+    if (!deps.readFundBalances) {
+      c.header("retry-after", "1");
+      throw new ApiError("overloaded");
+    }
     const balances = await deps.readFundBalances(id);
     c.header("cache-control", "private, no-store");
     return c.json(redactFundBalances(balances), 200);

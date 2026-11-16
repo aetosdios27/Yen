@@ -30,14 +30,21 @@ export NEXT_PUBLIC_API_URL="http://localhost:${API_PORT}"
 # Refuse occupied ports before restoring credentials or starting a second stack.
 node --input-type=module <<'JS'
 import { createServer } from 'node:net';
+let requestedPort;
+try {
 const url = new URL(process.env.DATABASE_URL);
 if (!['postgres:', 'postgresql:'].includes(url.protocol) || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) throw Error('Demo requires a loopback PostgreSQL database');
 if (process.env.WEB_PORT === process.env.API_PORT) throw Error('Web and API ports must differ');
 for (const value of [process.env.WEB_PORT, process.env.API_PORT]) {
+  requestedPort = value;
   if (!/^\d+$/.test(value) || Number(value) < 1024 || Number(value) > 65535) throw Error('Invalid demo port');
   const server = createServer();
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(Number(value), resolve); });
   await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+}
+} catch (error) {
+  console.error(error.code === 'EADDRINUSE' ? `Port ${requestedPort} is already in use. Stop the existing demo or choose WEB_PORT and API_PORT.` : error.message);
+  process.exit(1);
 }
 JS
 # Compose uses fixed container names; reuse their project across Git worktrees.

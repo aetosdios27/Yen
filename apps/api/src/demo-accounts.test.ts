@@ -36,8 +36,10 @@ databaseSuite("repeatable demo startup and ledger balances", (sql, url) => {
     const env = { NODE_ENV: "development", DATABASE_URL: url };
     await prepareDemoAccounts(sql, seed.users, env);
     await sql`UPDATE user_approval_pins SET pin_hash=${"deliberately-drifted-hash"}, status='locked_out', failed_attempts=5, total_failed_24h=10, locked_until=now()+interval '1 hour'`;
+    await sql`INSERT INTO auth_otp_attempt_limits (phone, attempts, window_started_at, updated_at) VALUES (${"+919876543210"}, 3, now(), now())`;
     await prepareDemoAccounts(sql, seed.users, env);
     await prepareDemoAccounts(sql, seed.users, env);
+    expect(await sql`SELECT phone FROM auth_otp_attempt_limits`).toHaveLength(0);
     const app = createApp({
       policy: devPolicy,
       authStore: new PostgresAuthStore(sql),
@@ -85,6 +87,11 @@ databaseSuite("repeatable demo startup and ledger balances", (sql, url) => {
     });
     const anonymous = createApp(options);
     expect((await anonymous.request(`/v1/funds/${seed.fund.id}/balances`)).status).toBe(401);
+    const outsider = createApp({
+      ...options,
+      principal: { id: "00000000-0000-4000-8000-000000000099", role: "approver" },
+    });
+    expect((await outsider.request(`/v1/funds/${seed.fund.id}/balances`)).status).toBe(404);
     const member = seed.users.find((user) => user.role === "member");
     if (!member) throw new Error("Missing member fixture");
     const memberApp = createApp({ ...options, principal: { id: member.id, role: "member" } });

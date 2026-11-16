@@ -239,7 +239,7 @@ it("denies every documented funds route with the default policy", async () => {
       )
       .map(([method]) => ({ path, method })),
   );
-  expect(routes).toHaveLength(3);
+  expect(routes).toHaveLength(4);
   for (const route of routes) {
     const url = route.path.replace("{fundId}", inboundId);
     const init =

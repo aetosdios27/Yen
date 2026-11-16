@@ -4460,6 +4460,8 @@ export interface operations {
           "x-request-id": string;
           /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
           "x-trace-id": string;
+          /** @description Staff balances are never cached */
+          "cache-control": "private, no-store";
           [name: string]: unknown;
         };
         content: {

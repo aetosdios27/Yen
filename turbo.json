@@ -57,6 +57,8 @@
         "NEXT_PUBLIC_LOCAL_CHAIN_RPC_URL",
         "REGISTRY_CONTRACT_ADDRESS",
         "OBJECTION_WINDOW_SECONDS",
+        "PIN_HMAC_SECRET",
+        "CORS_ORIGINS",
         "NODE_ENV"
       ]
     }

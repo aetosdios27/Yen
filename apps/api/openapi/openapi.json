@@ -4222,6 +4222,11 @@
                 "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
                 "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
                 "required": true
+              },
+              "cache-control": {
+                "schema": { "type": "string", "enum": ["private, no-store"] },
+                "required": true,
+                "description": "Staff balances are never cached"
               }
             },
             "content": {
