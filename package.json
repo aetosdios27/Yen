@@ -18,14 +18,16 @@
     "e2e:demo": "pnpm --filter @yen/web e2e:real",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose --profile chain down",
-    "check": "biome ci .",
+    "check": "biome ci . && pnpm check:design && pnpm test:design",
     "format": "biome check --write .",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:load": "pnpm --filter @yen/load-tests test:load",
     "build": "turbo run build",
     "repro:build": "bash scripts/repro-build.sh",
-    "verify": "pnpm check && turbo run typecheck test build"
+    "verify": "pnpm check && turbo run typecheck test build",
+    "check:design": "tsx scripts/check-design.ts",
+    "test:design": "vitest run scripts/design-gate.test.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.6",

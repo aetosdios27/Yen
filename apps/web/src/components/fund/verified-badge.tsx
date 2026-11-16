@@ -39,7 +39,7 @@ export function VerifiedBadge({
       text: t("fund.verifiedBadge"),
     },
     skipped: {
-      className: "border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200",
+      className: "border-amber-500/30 bg-amber-500/10 text-amber-900 ",
       icon: <QuestionMarkCircleIcon className="h-4 w-4 shrink-0" />,
       text: t("verify.outcomeSkipped"),
     },
