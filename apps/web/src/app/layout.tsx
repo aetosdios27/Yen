@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { AppShell } from "../components/app-shell";
 import { ErrorObservability } from "../components/error-observability";
 import { ServiceWorkerRegistration } from "../components/service-worker-registration";
+import { Toaster } from "../components/ui/toaster";
 import { LocaleProvider } from "../i18n";
 import { en } from "../i18n/messages/en";
 import { fontVariables } from "../styles/fonts";
@@ -52,6 +53,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           <ErrorObservability />
           <ServiceWorkerRegistration />
           <AppShell>{children}</AppShell>
+          <Toaster />
         </LocaleProvider>
       </body>
     </html>

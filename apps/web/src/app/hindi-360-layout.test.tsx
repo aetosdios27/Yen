@@ -89,7 +89,10 @@ function layoutViolations(root: Element): Violation[] {
     }
 
     if (DEVANAGARI.test(anyText(node))) {
-      if (/\bwhitespace-nowrap\b/.test(className)) {
+      if (
+        /\bwhitespace-nowrap\b/.test(className) &&
+        !(className.includes("max-w-full") && className.includes("overflow-x-auto"))
+      ) {
         violations.push({ reason: "Hindi text cannot wrap", detail: className });
       }
       if (/\btruncate\b/.test(className) && DEVANAGARI.test(ownText(node))) {

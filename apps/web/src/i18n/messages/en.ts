@@ -4,6 +4,7 @@
  * exactly these strings.
  */
 export const en = {
+  precision: { credit: "Components by {name}" },
   product: {
     funds: "Your funds",
     intro: "Open a fund to review its money and next actions.",

@@ -1,6 +1,6 @@
 @theme {
   --font-sans: var(--font-geist), var(--font-devanagari-sans), sans-serif;
-  --font-display: var(--font-instrument), var(--font-devanagari-display), serif;
+  --font-display: var(--font-sans);
   --font-mono: var(--font-geist-mono), monospace;
 
   /* Type scale: 16 px body and supporting text. */
@@ -25,7 +25,6 @@
   --text-figure--font-weight: 600;
   --text-display-sm: 2.5rem;
   --text-display-sm--line-height: 1.1;
-  --text-hero: 5.5rem;
   --text-hero--line-height: 1;
   --text-body--font-weight: 400;
   --text-lead--font-weight: 400;
@@ -35,50 +34,52 @@
   --text-display-sm--font-weight: 400;
   --text-hero--font-weight: 400;
 
-  --color-sunken: #f2f2ed;
-  --color-ink-faint: #6b736d;
-  --color-night: #08130c;
-  --color-on-night: #f4f6f1;
+  --color-sunken: #fafafa;
+  --color-ink-faint: #6e6e6e;
+  --color-night: #0a0a0a;
+  --color-on-night: #ffffff;
 
   /* Raw values live here; semantic aliases below preserve existing callers. */
-  --color-canvas: #fafaf7;
+  --color-canvas: #ffffff;
   --color-surface: #ffffff;
-  --color-ink: #0b0f0c;
-  --color-ink-muted: #4d554f;
-  --color-rule: #e4e6e1;
+  --color-ink: #0a0a0a;
+  --color-ink-muted: #595959;
+  --color-rule: #ebebeb;
   --color-border: var(--color-rule);
-  --color-border-strong: #5f756a;
+  --color-border-strong: #8f8f8f;
 
-  /* Actions. White on primary is 9.1:1 and white on danger is 8.3:1. */
-  --color-primary: #14532d;
-  --color-primary-hover: #0f3f22;
-  --color-primary-subtle: #e3f3e8;
+  /* Actions use ink; signal fills always use on-signal ink. */
+  --color-primary: #0a0a0a;
+  --color-primary-hover: #262626;
+  --color-primary-subtle: #f1f1f1;
   --color-on-solid: #ffffff;
-  --color-danger: #991b1b;
-  --color-danger-hover: #7f1d1d;
+  --color-danger: #a01f15;
+  --color-danger-hover: #a01f15;
 
-  /* 6.7:1 on white, above the 3:1 non-text requirement. */
-  --color-focus: #1d4ed8;
+  /* Focus is reserved for keyboard interaction. */
+  --color-focus: #2563eb;
 
   /* Status colours pair with a word and an icon, never colour alone. */
-  --color-verified-bg: #dcfce7;
-  --color-verified-ink: #14532d;
-  --color-verified-border: #86efac;
-  --color-pending-bg: #fef9c3;
-  --color-pending-ink: #78350f;
-  --color-pending-border: #fde047;
-  --color-unmatched-bg: #ffedd5;
-  --color-unmatched-ink: #7c2d12;
-  --color-unmatched-border: #fdba74;
-  --color-rejected-bg: #fee2e2;
-  --color-rejected-ink: #7f1d1d;
-  --color-rejected-border: #fca5a5;
+  --color-verified-bg: #e8f8ef;
+  --color-verified-ink: #05693c;
+  --color-verified-border: #e8f8ef;
+  --color-pending-bg: #fff3dd;
+  --color-pending-ink: #8a4a00;
+  --color-pending-border: #fff3dd;
+  --color-unmatched-bg: #fff3dd;
+  --color-unmatched-ink: #8a4a00;
+  --color-unmatched-border: #fff3dd;
+  --color-rejected-bg: #ffecec;
+  --color-rejected-ink: #a01f15;
+  --color-rejected-border: #ffecec;
 
   --spacing-tap: 3rem;
   --container-phone: 23.4375rem;
-  --radius-control: 0.5rem;
-  --radius-card: 0.75rem;
-  --shadow-card: none;
+  --radius-control: 0.625rem;
+  --radius-card: 1rem;
+  --shadow-card:
+    0 0 0 1px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.04),
+    0 14px 32px -14px rgba(0, 0, 0, 0.16);
   --shadow-overlay: 0 8px 32px #0b0f0c26;
   --motion-fast: 120ms;
   --motion-base: 200ms;
@@ -87,6 +88,23 @@
   --container-app: 70rem;
   --container-marketing: 75rem;
   --container-prose: 40rem;
+  --color-soft: var(--color-sunken);
+  --color-line: var(--color-rule);
+  --color-signal: #00b862;
+  --color-on-signal: var(--color-ink);
+  --color-signal-bg: var(--color-verified-bg);
+  --color-signal-ink: var(--color-verified-ink);
+  --color-neutral: #f1f1f1;
+  --color-night-muted: #a1a1a1;
+  --color-terminal: #141414;
+  --color-terminal-green: #3ddc8f;
+  --color-grid: #f3f3f3;
+  --shadow-raised:
+    0 0 0 1px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.04),
+    0 32px 64px -24px rgba(0, 0, 0, 0.24);
+  --tracking-heading: -0.04em;
+  --spacing-grid: 1.75rem;
+  --text-hero: 4.75rem;
   --gradient-night: linear-gradient(180deg, var(--color-night), var(--color-primary));
 }
 

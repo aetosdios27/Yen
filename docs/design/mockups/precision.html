@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  .lab { display:flex; align-items:baseline; gap:10px; margin:30px 0 10px; font-family:var(--font-sans); }
+  .lab:first-child { margin-top:0; }
+  .lab b { font-size:14px; font-weight:600; color:var(--foreground); }
+  .lab span { font-size:12px; color:var(--muted-foreground); }
+  .c { --ink:#0a0a0a; --mut:#5f5f5f; --faint:#8c8c8c; --line:#ebebeb; --soft:#fafafa; --sig:#00b862; --sig-bg:#e8f8ef; --sig-ink:#067a46;
+       --amb-bg:#fff3dd; --amb-ink:#9a5200; --red-bg:#ffecec; --red-ink:#b42318;
+       --sh:0 0 0 1px rgba(0,0,0,.05),0 1px 2px rgba(0,0,0,.04),0 14px 32px -14px rgba(0,0,0,.16);
+       --sh-lg:0 0 0 1px rgba(0,0,0,.06),0 2px 4px rgba(0,0,0,.04),0 32px 64px -24px rgba(0,0,0,.24);
+       background:#fff; color:var(--ink); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;
+       font-family:"Geist",system-ui,sans-serif; font-size:13px; line-height:1.45; font-variant-numeric:tabular-nums; }
+  .c * { box-sizing:border-box; margin:0; }
+  .mono { font-family:"Geist Mono",ui-monospace,monospace; }
+  .top { display:flex; justify-content:space-between; align-items:center; padding:13px 22px; border-bottom:1px solid var(--line); }
+  .logo { font-weight:700; font-size:17px; letter-spacing:-.05em; display:flex; align-items:center; gap:7px; }
+  .logo i { width:16px; height:16px; border-radius:5px; background:var(--ink); display:grid; place-items:center; }
+  .logo i::after { content:""; width:6px; height:6px; border-radius:50%; background:var(--sig); }
+  .nav { display:flex; gap:18px; align-items:center; color:var(--mut); font-size:12.5px; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; height:36px; padding:0 14px; border-radius:10px; font-weight:500; font-size:12.5px; white-space:nowrap; }
+  .btn.k { background:var(--ink); color:#fff; box-shadow:0 1px 0 rgba(255,255,255,.2) inset,0 1px 2px rgba(0,0,0,.3); }
+  .btn.o { background:#fff; box-shadow:var(--sh); }
+  .btn.g { background:var(--sig); color:#fff; }
+  .tag { font-family:"Geist Mono",monospace; font-size:10.5px; padding:3px 7px; border-radius:6px; display:inline-flex; gap:5px; align-items:center; white-space:nowrap; }
+  .tag.ok { color:var(--sig-ink); background:var(--sig-bg); } .tag.wait { color:var(--amb-ink); background:var(--amb-bg); }
+  .tag.err { color:var(--red-ink); background:var(--red-bg); } .tag.n { color:var(--mut); background:#f1f1f1; }
+  .tag i { width:5px; height:5px; border-radius:50%; background:currentColor; display:block; }
+  .card { background:#fff; border-radius:16px; box-shadow:var(--sh); }
+  .k { font-size:11.5px; color:var(--mut); }
+  .n { font-weight:600; letter-spacing:-.045em; line-height:1; }
+  .gridbg { background-image:linear-gradient(#f3f3f3 1px,transparent 1px),linear-gradient(90deg,#f3f3f3 1px,transparent 1px); background-size:28px 28px; }
+  h1,h2 { letter-spacing:-.05em; font-weight:600; }
+  /* home */
+  .hero { display:grid; grid-template-columns:1fr 1.1fr; gap:24px; padding:42px 22px 46px; align-items:center; }
+  .hero h1 { font-size:46px; line-height:1; margin:16px 0 14px; }
+  .hero :where(h1) span, .sec :where(h2) span { color:#a3a3a3; }
+  .sub { color:var(--mut); font-size:14.5px; max-width:36ch; }
+  .stack { position:relative; padding:0 0 34px 0; }
+  .stack .float { position:absolute; right:-6px; bottom:0; width:212px; padding:12px 14px; border-radius:14px; background:#fff; box-shadow:var(--sh-lg); }
+  .ch { display:flex; justify-content:space-between; align-items:center; padding:11px 15px; border-bottom:1px solid var(--line); font-size:12px; color:var(--mut); }
+  .tx { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 15px; border-top:1px solid #f2f2f2; font-size:12.5px; }
+  .tx small { display:block; color:var(--faint); font-size:11px; }
+  .bar { display:flex; height:8px; border-radius:99px; overflow:hidden; margin:13px 0 6px; background:#f0f0f0; }
+  .bar i { display:block; background:var(--ink); } .bar i + i { background:var(--sig); }
+  .strip { display:grid; grid-template-columns:repeat(4,1fr); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+  .strip div { padding:16px 22px; border-right:1px solid var(--line); } .strip div:last-child { border:0; }
+  .strip b { display:block; font-size:22px; font-weight:600; letter-spacing:-.04em; } .strip span { font-size:11.5px; color:var(--mut); }
+  .sec { padding:38px 22px; }
+  .sec h2 { font-size:30px; line-height:1.05; max-width:20ch; }
+  .three { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:22px; }
+  .f { background:var(--soft); border-radius:16px; padding:14px; box-shadow:inset 0 0 0 1px var(--line); }
+  .f .ui { background:#fff; border-radius:12px; box-shadow:var(--sh); padding:12px; min-height:104px; font-size:11.5px; }
+  .f h3 { font-size:14px; font-weight:600; letter-spacing:-.02em; margin:14px 0 4px; } .f p { color:var(--mut); font-size:12.5px; }
+  .pinrow { display:flex; gap:5px; margin-top:8px; } .pinrow b { width:22px; height:26px; border-radius:6px; background:#f3f3f3; display:grid; place-items:center; font-size:13px; }
+  .who { display:flex; align-items:center; gap:7px; padding:5px 0; } .who u { width:20px; height:20px; border-radius:50%; background:var(--ink); color:#fff; font-size:9px; font-weight:600; display:grid; place-items:center; text-decoration:none; }
+  .dark { background:#0a0a0a; color:#fff; padding:34px 22px; display:grid; grid-template-columns:1fr 1.1fr; gap:24px; align-items:center; }
+  .dark h2 { font-size:30px; line-height:1.05; } .dark p { color:#a1a1a1; margin-top:10px; max-width:34ch; font-size:13.5px; }
+  .term { background:#141414; border-radius:14px; box-shadow:0 0 0 1px #262626; padding:14px; font-family:"Geist Mono",monospace; font-size:11px; line-height:1.75; color:#bdbdbd; }
+  .term em { font-style:normal; color:#3ddc8f; } .term s { text-decoration:none; color:#6f6f6f; }
+  /* app */
+  .app { display:grid; grid-template-columns:156px 1fr; min-height:460px; }
+  .side { border-right:1px solid var(--line); background:var(--soft); padding:14px 10px; display:flex; flex-direction:column; gap:2px; }
+  .side .it { padding:7px 9px; border-radius:8px; color:var(--mut); font-size:12.5px; display:flex; justify-content:space-between; align-items:center; }
+  .side .it.on { background:#fff; color:var(--ink); font-weight:500; box-shadow:var(--sh); }
+  .side :where(.it) b { font-family:"Geist Mono",monospace; font-size:10px; background:var(--ink); color:#fff; border-radius:99px; padding:1px 6px; font-weight:500; }
+  .fundsel { display:flex; align-items:center; gap:8px; padding:7px 9px 12px; font-weight:600; font-size:12.5px; letter-spacing:-.02em; }
+  .fundsel u { width:22px; height:22px; border-radius:7px; background:linear-gradient(135deg,#0a0a0a,#3a3a3a); color:#fff; font-size:10px; display:grid; place-items:center; text-decoration:none; }
+  .main { padding:20px 22px 24px; min-width:0; }
+  .mh { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; }
+  .mh h1 { font-size:24px; line-height:1.1; }
+  .kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:16px 0; }
+  .kpi { padding:14px; } .kpi .n { font-size:24px; margin-top:6px; } .kpi small { display:block; color:var(--faint); font-size:11px; margin-top:5px; }
+  .alert { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 14px; border-radius:14px; background:#fffaf0; box-shadow:inset 0 0 0 1px #f5dfb3; margin-top:16px; }
+  .alert b { font-weight:600; display:block; letter-spacing:-.01em; } .alert span { color:var(--mut); font-size:12px; }
+  .tbl { margin-top:14px; overflow:hidden; }
+  .th, .tr { display:grid; grid-template-columns:62px minmax(0,1.5fr) minmax(0,1fr) 88px; gap:10px; align-items:center; padding:9px 14px; }
+  .th { font-size:11px; color:var(--faint); background:var(--soft); border-bottom:1px solid var(--line); }
+  .tr { border-top:1px solid #f2f2f2; font-size:12.5px; } .tr:first-of-type { border:0; }
+  .tr small { display:block; color:var(--faint); font-size:11px; } .tr .d { color:var(--faint); font-size:11.5px; } .r { text-align:right; }
+  .chips { display:flex; gap:6px; margin-top:16px; } .chip { padding:5px 10px; border-radius:99px; font-size:12px; color:var(--mut); box-shadow:inset 0 0 0 1px var(--line); white-space:nowrap; } .chip.on { background:var(--ink); color:#fff; box-shadow:none; }
+  /* fund public */
+  .pub { padding:26px 22px; }
+  .pub :where(.mh) h1 { font-size:32px; }
+  .two { display:grid; grid-template-columns:minmax(0,1fr) 196px; gap:14px; margin-top:4px; }
+  .cat { padding:14px; } .cat .l { display:flex; justify-content:space-between; font-size:12px; margin-top:11px; } .cat .b { height:5px; border-radius:99px; background:#f0f0f0; margin-top:5px; overflow:hidden; } .cat .b i { display:block; height:100%; background:var(--ink); border-radius:99px; }
+  /* verify */
+  .ver { padding:34px 22px 30px; }
+  .vc { max-width:520px; margin:0 auto; overflow:hidden; box-shadow:var(--sh-lg); }
+  .vhead { padding:24px 22px 20px; text-align:center; background:linear-gradient(180deg,#f0fbf5,#fff); border-bottom:1px solid var(--line); }
+  .badge { width:44px; height:44px; border-radius:14px; background:var(--sig); display:grid; place-items:center; margin:0 auto 14px; box-shadow:0 8px 20px -6px rgba(0,184,98,.6); }
+  .vhead h1 { font-size:24px; line-height:1.1; } .vhead p { color:var(--mut); margin-top:6px; }
+  .facts { display:grid; grid-template-columns:repeat(3,1fr); border-bottom:1px solid var(--line); } .facts div { padding:13px 16px; border-right:1px solid var(--line); } .facts div:last-child { border:0; } .facts b { display:block; font-weight:600; letter-spacing:-.02em; margin-top:2px; }
+  .step { display:grid; grid-template-columns:20px 1fr auto; gap:10px; align-items:start; padding:11px 16px; border-top:1px solid #f2f2f2; } .step:first-child { border:0; }
+  .step u { width:18px; height:18px; border-radius:50%; background:var(--sig-bg); display:grid; place-items:center; margin-top:1px; text-decoration:none; }
+  .step b { font-weight:500; display:block; } .step span { color:var(--faint); font-size:11.5px; }
+  .vfoot { display:flex; justify-content:space-between; align-items:center; padding:11px 16px; background:var(--soft); border-top:1px solid var(--line); font-size:12px; color:var(--mut); }
+  /* phones */
+  .phones { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .ph { display:flex; flex-direction:column; min-height:500px; font-size:13px; }
+  .ph .pt { display:flex; justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1px solid var(--line); }
+  .ph .pb { padding:16px 14px; flex:1; background:var(--soft); }
+  .ph h1 { font-size:20px; line-height:1.15; }
+  .kv { margin-top:12px; } .kv div { display:flex; justify-content:space-between; gap:10px; padding:9px 12px; border-top:1px solid #f2f2f2; font-size:12.5px; } .kv div:first-child { border:0; } .kv span { color:var(--mut); } .kv b { font-weight:500; text-align:right; }
+  .dock { padding:10px 14px 14px; border-top:1px solid var(--line); background:#fff; display:grid; gap:8px; } .dock .btn { height:46px; font-size:14px; border-radius:12px; }
+  .qr { width:120px; height:120px; margin:14px auto 10px; border-radius:12px; border:10px solid #fff; box-shadow:var(--sh); background:conic-gradient(#0a0a0a 25%,transparent 0 50%,#0a0a0a 0 75%,transparent 0) 0 0/20px 20px,#fff; }
+  .amt { display:flex; align-items:baseline; justify-content:center; gap:4px; margin-top:14px; } .amt .n { font-size:40px; } .amt span { font-size:22px; color:var(--faint); font-weight:500; }
+  .quick { display:flex; gap:6px; justify-content:center; margin-top:12px; }
+  .otp { display:flex; gap:6px; margin-top:14px; } .otp b { flex:1; height:46px; border-radius:10px; background:#fff; box-shadow:var(--sh); display:grid; place-items:center; font-size:18px; font-weight:600; } .otp b.cur { box-shadow:0 0 0 2px var(--ink); }
+  @media (max-width:560px) {
+    .hero,.dark,.two,.three,.phones,.kpis { grid-template-columns:1fr; } .strip,.facts { grid-template-columns:1fr 1fr; } .app { grid-template-columns:1fr; } .side { display:none; }
+    .hero h1 { font-size:36px; } .nav .h { display:none; } .th,.tr { grid-template-columns:minmax(0,1fr) 88px; } .th span:nth-child(1),.th span:nth-child(3),.tr .d,.tr .st { display:none; } .stack .float { position:static; width:auto; margin-top:10px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="lab"><b>01 Home</b><span>The product is the hero. Proof is shown, not described.</span></div>
+<div class="c">
+  <div class="top"><span class="logo"><i></i>yen</span><div class="nav"><span class="h">Product</span><span class="h">Verify a record</span><span class="h">हिन्दी</span><span class="h">Sign in</span><span class="btn k">Start a fund</span></div></div>
+  <div class="hero gridbg">
+    <div>
+      <span class="tag ok"><i></i>31 records sealed · 0 edited</span>
+      <h1>The ledger for money <span>people share.</span></h1>
+      <p class="sub">Run a club fund where every spend needs two approvals and every record can be checked by anyone, forever.</p>
+      <div style="display:flex;gap:8px;margin-top:20px"><span class="btn k" style="height:40px">Start a fund</span><span class="btn o" style="height:40px">Check a record</span></div>
+    </div>
+    <div class="stack">
+      <div class="card" style="box-shadow:var(--sh-lg)">
+        <div class="ch"><span>RoboCup 2026 Asia Fund</span><span class="tag ok"><i></i>VERIFIED</span></div>
+        <div style="padding:15px"><div class="k">Balance</div><div class="n" style="font-size:34px;margin-top:5px">₹4,90,000</div>
+          <div class="bar"><i style="width:2.5%"></i><i style="width:97.5%"></i></div>
+          <div style="display:flex;justify-content:space-between" class="k"><span>Spent ₹12,500</span><span>Raised ₹5,02,500</span></div></div>
+        <div class="tx"><div>SBT kit and sensors<small>2 of 2 approved · bill attached</small></div><div>− ₹12,500</div></div>
+        <div class="tx"><div>Sunita Rao<small>Donation · bank matched</small></div><div>+ ₹1,00,000</div></div>
+        <div class="tx" style="padding-bottom:44px"><div>Vikram Malhotra<small>Donation · bank matched</small></div><div>+ ₹2,00,000</div></div>
+      </div>
+      <div class="float">
+        <div style="display:flex;gap:9px;align-items:center"><span style="width:26px;height:26px;border-radius:9px;background:var(--sig);display:grid;place-items:center"><svg aria-hidden="true" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2.4"><path d="M3.5 8.5l3 3 6-7"/></svg></span>
+          <div><b style="font-weight:600;letter-spacing:-.01em">Record 24 checked</b><div class="k" style="font-size:11px">Not changed since 15 Nov 2026</div></div></div>
+        <div class="mono" style="font-size:10px;color:var(--faint);margin-top:9px;padding-top:9px;border-top:1px solid var(--line)">seal 9d34cba7…5992f · batch 2</div>
+      </div>
+    </div>
+  </div>
+  <div class="strip">
+    <div><b>₹0</b><span>held by Yen</span></div><div><b>2 of 2</b><span>approvals per spend</span></div><div><b>48 h</b><span>for donors to object</span></div><div><b>0</b><span>records ever edited</span></div>
+  </div>
+  <div class="sec">
+    <h2>Trust that doesn't depend <span>on the treasurer.</span></h2>
+    <div class="three">
+      <div class="f"><div class="ui"><div class="k">Pay ₹2,500 to</div><b style="font-weight:600">iitd.robotics@sbi</b><div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center"><span class="tag n">UPI</span><span class="tag ok"><i></i>bank matched</span></div><div class="k" style="margin-top:8px;font-size:11px">Straight to the club's account</div></div><h3>Money never touches us</h3><p>Donors pay the club's own UPI id. Yen reads the bank statement and matches every credit.</p></div>
+      <div class="f"><div class="ui"><div class="who"><u>PV</u>Priya Verma<span class="tag ok" style="margin-left:auto">approved</span></div><div class="who"><u>RI</u>Rohan Iyer<span class="tag wait" style="margin-left:auto">PIN</span></div><div class="pinrow"><b>•</b><b>•</b><b>•</b><b>•</b><b></b><b></b></div></div><h3>No one spends alone</h3><p>Every expense needs a bill and two people, each with their own PIN. Donors can object.</p></div>
+      <div class="f"><div class="ui mono" style="font-size:10.5px;line-height:1.7;color:var(--mut)">record 24<br>− ₹12,500 · Robu.in<br><span style="color:var(--faint)">seal</span> 9d34cba7…5992f<br><span class="tag ok" style="margin-top:6px"><i></i>matches public seal</span></div><h3>Records can't be rewritten</h3><p>Each record is sealed in public. Anyone can check one in seconds, without trusting Yen.</p></div>
+    </div>
+  </div>
+  <div class="dark">
+    <div><h2>Don't take our word for it.</h2><p>Your browser recomputes the proof itself and reads the seal from a public chain. If we changed a record, the check fails.</p><span class="btn g" style="margin-top:16px;height:40px">Check a record</span></div>
+    <div class="term"><s>$</s> yen verify --record 24<br>fingerprint  a5bd5702…dc04a  <em>match</em><br>batch 2      30 sibling records <em>included</em><br>public seal  9d34cba7…5992f  <em>match</em><br><s>read from Polygon, not from Yen</s><br><em>✓ not changed since 15 Nov 2026, 7:12 pm</em></div>
+  </div>
+</div>
+
+<div class="lab"><b>02 Treasurer workspace</b><span>Sidebar app. A queue of what needs you, then the numbers, then the ledger.</span></div>
+<div class="c">
+  <div class="app">
+    <div class="side">
+      <div class="fundsel"><u>R</u>RoboCup 2026</div>
+      <div class="it on">Overview</div><div class="it">Expenses<b>2</b></div><div class="it">Donations</div><div class="it">Bank<b>1</b></div><div class="it">People</div><div class="it">Public page</div>
+      <div style="margin-top:auto" class="it">Aarav Sharma</div>
+    </div>
+    <div class="main">
+      <div class="mh"><div><div class="k">Monday, 16 Nov</div><h1>Good morning, Aarav</h1></div><div style="display:flex;gap:8px"><span class="btn o">Upload statement</span><span class="btn k">New expense</span></div></div>
+      <div class="alert"><div><b>1 bank debit has no approved expense</b><span>₹3,200 to "ZOMATO" on 14 Nov. Everyone in the fund can see this.</span></div><span class="btn o">Review</span></div>
+      <div class="kpis">
+        <div class="card kpi"><div class="k">Balance</div><div class="n">₹4,90,000</div><small>Matches SBI statement, 15 Nov</small></div>
+        <div class="card kpi"><div class="k">Can spend now</div><div class="n">₹4,31,600</div><small>₹58,400 held for 2 expenses</small></div>
+        <div class="card kpi"><div class="k">Raised this month</div><div class="n">₹2,500</div><small>1 donation, 1 waiting for bank</small></div>
+      </div>
+      <div class="card tbl">
+        <div class="th"><span>Date</span><span>Expense</span><span>Status</span><span class="r">Amount</span></div>
+        <div class="tr"><span class="d">Today</span><div>Team jerseys<small>Decathlon Sports India</small></div><span class="st"><span class="tag wait"><i></i>1 of 2 approved</span></span><span class="r">₹18,400</span></div>
+        <div class="tr"><span class="d">15 Nov</span><div>Venue deposit<small>IIT Delhi Estate Office</small></div><span class="st"><span class="tag wait"><i></i>objection window 31 h</span></span><span class="r">₹40,000</span></div>
+        <div class="tr"><span class="d">15 Nov</span><div>SBT kit and sensors<small>Robu.in Innovation Labs</small></div><span class="st"><span class="tag ok"><i></i>paid · sealed</span></span><span class="r">₹12,500</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="lab"><b>03 Public fund page</b><span>What a donor opens from WhatsApp. No sign-in.</span></div>
+<div class="c">
+  <div class="top"><span class="logo"><i></i>yen</span><div class="nav"><span>हिन्दी</span><span class="btn o">Share</span></div></div>
+  <div class="pub gridbg">
+    <div class="mh"><div><span class="tag ok"><i></i>all 31 records sealed</span><h1 style="margin-top:10px">RoboCup 2026 Asia Fund</h1><div class="k" style="margin-top:4px;font-size:12.5px">IIT Delhi Robotics Club · 2 approvers · started 2 Jan 2026</div></div><span class="btn k" style="height:42px;padding:0 18px">Donate by UPI</span></div>
+    <div class="kpis">
+      <div class="card kpi"><div class="k">Raised</div><div class="n">₹5,02,500</div><small>4 donations</small></div>
+      <div class="card kpi"><div class="k">Spent</div><div class="n">₹12,500</div><small>1 expense, bill attached</small></div>
+      <div class="card kpi"><div class="k">Balance</div><div class="n">₹4,90,000</div><small>Matches the bank on 15 Nov</small></div>
+    </div>
+    <div class="two">
+      <div>
+        <div class="chips" style="margin-top:0"><span class="chip on">All 5</span><span class="chip">Money in 4</span><span class="chip">Money out 1</span></div>
+        <div class="card tbl" style="margin-top:10px">
+          <div class="tr"><span class="d">15 Nov</span><div>SBT kit and sensors<small>Robu.in Innovation Labs · 1 bill</small></div><span class="st"><span class="tag ok"><i></i>paid · sealed</span></span><span class="r">− ₹12,500</span></div>
+          <div class="tr"><span class="d">15 Nov</span><div>M. K.<small>Donation</small></div><span class="st"><span class="tag wait"><i></i>waiting for bank</span></span><span class="r">+ ₹2,500</span></div>
+          <div class="tr"><span class="d">4 Jan</span><div>Sunita Rao<small>Donation</small></div><span class="st"><span class="tag ok"><i></i>sealed</span></span><span class="r">+ ₹1,00,000</span></div>
+          <div class="tr"><span class="d">3 Jan</span><div>Vikram Malhotra<small>Donation</small></div><span class="st"><span class="tag ok"><i></i>sealed</span></span><span class="r">+ ₹2,00,000</span></div>
+        </div>
+      </div>
+      <div class="card cat"><div class="k">Where the money went</div>
+        <div class="l"><span>Equipment</span><span>₹12,500</span></div><div class="b"><i style="width:100%;background:var(--sig)"></i></div>
+        <div class="l"><span>Travel</span><span>₹0</span></div><div class="b"></div>
+        <div class="l"><span>Registration</span><span>₹0</span></div><div class="b"></div>
+        <div class="k" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:11.5px">Every expense needs 2 of 2 approvers. Donors have 48 hours to object.</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="lab"><b>04 Verify a record</b><span>One card. The verdict, the three checks, the technical proof one tap away.</span></div>
+<div class="c">
+  <div class="ver gridbg">
+    <div class="card vc">
+      <div class="vhead"><div class="badge"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2.2"><path d="M3.5 8.5l3 3 6-7"/></svg></div><h1>This record has not been changed</h1><p>Checked in your browser just now. Nothing was taken on trust from Yen.</p></div>
+      <div class="facts"><div><span class="k">Record 24</span><b>− ₹12,500</b></div><div><span class="k">Written</span><b>15 Nov 2026, 7:12 pm</b></div><div><span class="k">Fund</span><b>RoboCup 2026 Asia</b></div></div>
+      <div>
+        <div class="step"><u><svg aria-hidden="true" width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#067a46" stroke-width="2.6"><path d="M3.5 8.5l3 3 6-7"/></svg></u><div><b>The record matches its fingerprint</b><span>Recomputed from the record itself</span></div><span class="mono" style="font-size:10.5px;color:var(--faint)">a5bd5702…dc04a</span></div>
+        <div class="step"><u><svg aria-hidden="true" width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#067a46" stroke-width="2.6"><path d="M3.5 8.5l3 3 6-7"/></svg></u><div><b>It is part of sealed batch 2</b><span>Together with 30 other records</span></div><span class="mono" style="font-size:10.5px;color:var(--faint)">5 steps</span></div>
+        <div class="step"><u><svg aria-hidden="true" width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#067a46" stroke-width="2.6"><path d="M3.5 8.5l3 3 6-7"/></svg></u><div><b>The public seal matches</b><span>Read from the public registry, not from Yen</span></div><span class="tag n">simulated chain</span></div>
+      </div>
+      <div class="vfoot"><span>Technical details and audit file</span><span>View on block explorer ↗</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="lab"><b>05 Phone</b><span>Sign in, approve with one docked action, donate.</span></div>
+<div class="phones">
+  <div class="c ph">
+    <div class="pt"><span class="logo"><i></i>yen</span><span class="k">हिन्दी</span></div>
+    <div class="pb"><h1>Enter the code</h1><div class="k" style="margin-top:6px;font-size:12.5px">Sent on WhatsApp to +91 98765 43211</div>
+      <div class="otp"><b>5</b><b>2</b><b>7</b><b class="cur"></b><b></b><b></b></div>
+      <div class="k" style="margin-top:14px">Resend in 45 s · Change number</div>
+      <div class="card" style="margin-top:22px;padding:12px;border-radius:14px"><div class="k">Next: your 6-digit PIN</div><div style="font-size:12.5px;margin-top:3px">The PIN approves money. The code only proves your phone.</div></div></div>
+    <div class="dock"><span class="btn k">Continue</span></div>
+  </div>
+  <div class="c ph">
+    <div class="pt"><span class="k">‹ Expenses</span><span class="tag wait"><i></i>0 of 2</span></div>
+    <div class="pb"><div class="k">Expense to approve</div><div class="n" style="font-size:34px;margin-top:6px">₹18,400</div><h1 style="margin-top:8px;font-size:17px">Team jerseys</h1>
+      <div class="card kv" style="border-radius:14px">
+        <div><span>Pay to</span><b>Decathlon Sports India</b></div><div><span>UPI id</span><b class="mono" style="font-size:11.5px">decathlon@hdfcbank</b></div>
+        <div><span>Asked by</span><b>Aarav, 4:05 pm</b></div><div><span>Bill</span><b style="text-decoration:underline;text-underline-offset:3px">invoice-2291.pdf</b></div><div><span>Balance after</span><b>₹4,13,200</b></div></div>
+      <div style="margin-top:10px"><span class="tag err"><i></i>first payment to this UPI id</span></div></div>
+    <div class="dock" style="grid-template-columns:1fr 1.7fr"><span class="btn o">Reject</span><span class="btn k">Approve with PIN</span></div>
+  </div>
+  <div class="c ph">
+    <div class="pt"><span class="logo"><i></i>yen</span><span class="tag ok"><i></i>verified fund</span></div>
+    <div class="pb" style="text-align:center"><div class="k">Donate to</div><h1 style="font-size:17px;margin-top:3px">RoboCup 2026 Asia Fund</h1>
+      <div class="amt"><span>₹</span><div class="n">2,500</div></div>
+      <div class="quick"><span class="chip">₹500</span><span class="chip on">₹2,500</span><span class="chip">₹10,000</span></div>
+      <div class="qr"></div><div class="mono" style="font-size:11.5px">iitd.robotics@sbi</div><div class="k" style="margin-top:4px">Goes straight to the club's bank</div></div>
+    <div class="dock"><span class="btn k">Pay with any UPI app</span></div>
+  </div>
+</div>
+
+</body>
+</html>

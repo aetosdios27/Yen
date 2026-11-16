@@ -81,3 +81,20 @@
     transition-duration: 0.01ms;
   }
 }
+
+@layer base {
+  h1,
+  h2,
+  h3 {
+    letter-spacing: var(--tracking-heading);
+    font-weight: 600;
+  }
+}
+@layer utilities {
+  .precision-grid {
+    background-image:
+      linear-gradient(var(--color-grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--color-grid) 1px, transparent 1px);
+    background-size: var(--spacing-grid) var(--spacing-grid);
+  }
+}

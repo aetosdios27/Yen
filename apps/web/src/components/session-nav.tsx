@@ -61,7 +61,15 @@ export function SessionNav() {
       )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="max-w-52 truncate" aria-label={t("product.account")}>
+          <Button
+            variant="outline"
+            className="max-w-52 truncate"
+            aria-label={
+              session.kind === "ready"
+                ? `${t("product.account")}: ${session.name || t("product.member")}`
+                : t("product.account")
+            }
+          >
             {session.kind === "ready" ? session.name || t("product.member") : t("product.account")}{" "}
             <span aria-hidden="true">⌄</span>
           </Button>

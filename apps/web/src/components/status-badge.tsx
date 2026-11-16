@@ -45,7 +45,7 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
     <Badge
       variant="outline"
       className={cn(
-        "inline-flex min-h-6 items-center gap-1.5 rounded-full border px-2 py-0.5 text-small font-semibold",
+        "inline-flex min-h-8 items-center gap-2 rounded-control px-2 py-1 text-caption font-mono font-medium max-w-full overflow-x-auto whitespace-nowrap",
         STATUS_STYLES[status],
         className,
       )}

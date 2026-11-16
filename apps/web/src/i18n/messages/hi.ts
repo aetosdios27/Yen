@@ -2,6 +2,7 @@ import type { Messages } from "./en";
 
 /** Hindi catalogue. Typed as `Messages`, so a missing key fails typecheck. */
 export const hi: Messages = {
+  precision: { credit: "घटक: {name}" },
   product: {
     funds: "आपके फ़ंड",
     intro: "पैसे और अगले काम देखने के लिए फ़ंड खोलें।",

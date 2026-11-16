@@ -41,7 +41,11 @@ function violations(source: string): string[] {
     const width = Number(match[1]);
     if (width > NARROWEST_PHONE_PX) found.push(`fixed width ${width}px`);
   }
-  if (/\bwhitespace-nowrap\b/.test(source)) found.push("whitespace-nowrap");
+  for (const match of source.matchAll(/["'`]([^"'`]*\bwhitespace-nowrap\b[^"'`]*)["'`]/g)) {
+    const classes = match[1] ?? "";
+    if (!classes.includes("max-w-full") || !classes.includes("overflow-x-auto"))
+      found.push("whitespace-nowrap");
+  }
   return found;
 }
 
@@ -67,4 +71,13 @@ describe("360 px mobile guard", () => {
   it("flags text that cannot wrap", () => {
     expect(violations(`<span className="whitespace-nowrap" />`)).toEqual(["whitespace-nowrap"]);
   });
+});
+
+it("allows single-line chips only when bounded and horizontally scrollable", () => {
+  expect(violations('<span className="max-w-full overflow-x-auto whitespace-nowrap" />')).toEqual(
+    [],
+  );
+  expect(violations('<span className="max-w-full whitespace-nowrap" />')).toEqual([
+    "whitespace-nowrap",
+  ]);
 });

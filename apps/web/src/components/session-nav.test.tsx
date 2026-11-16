@@ -18,7 +18,7 @@ function ready(name: string) {
 it("offers sign in inside the account menu", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 }));
   renderNav();
-  fireEvent.pointerDown(screen.getByRole("button", { name: "Account" }), {
+  fireEvent.pointerDown(screen.getByRole("button", { name: /^Account/ }), {
     button: 0,
     ctrlKey: false,
   });
@@ -34,6 +34,6 @@ it("refreshes the API name when login changes the session", async () => {
   await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
   act(() => window.dispatchEvent(new Event(SESSION_CHANGED_EVENT)));
   await waitFor(() =>
-    expect(screen.getByRole("button", { name: "Account" }).textContent).toContain("Priya Verma"),
+    expect(screen.getByRole("button", { name: /^Account/ }).textContent).toContain("Priya Verma"),
   );
 });
