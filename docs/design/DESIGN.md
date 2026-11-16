@@ -4,19 +4,23 @@ These rules are binding for every change under `apps/web`. A pull request that
 breaks one is not mergeable. "Should" does not appear in this file: every rule
 is a requirement. If a rule is wrong, change this file in its own PR first.
 
-The product has two audiences on one system: a treasurer on a low-end Android
-phone, and a stranger deciding whether to trust a fund. Both need the same
-thing from the interface: it looks like a ledger someone careful keeps.
+The product serves treasurers making daily decisions and donors checking a fund.
+The approved Precision direction uses an exact, monochrome workspace, meaningful
+figures and green verification signals. The public home shows the real product;
+it does not invent balances, activity or financial guarantees.
 
-## 1. Direction: ink on ledger paper
+## 1. Direction: Precision
 
-- The interface is typographic. Structure comes from type size, weight, rules
-  and whitespace. It never comes from boxes, shadows, colour fills or icons.
-- One brand hue (seal green). Under 3% of pixels on any screen are coloured.
-  Money, names and facts are ink. Colour means state, never decoration.
-- Numbers are the hero. On every money screen the largest element is a figure.
-- Calm and exact. No element exists to fill space, and no element moves
-  unless it explains a change.
+- White ground, near-black ink, one bright green reserved for checked state.
+  Primary actions use ink. Green never decorates a heading or an unrelated action.
+- Typography and alignment carry hierarchy. Sheets may use the defined depth
+  tokens; depth explains grouping or overlap rather than filling the page.
+- On money screens the largest element is a figure. Dense work uses a row list
+  or table, with a navigation rail on desktop and equivalent mobile navigation.
+- Public pages explain collection, independent approval and checkable records.
+  A shown product fragment uses actual, consented or explicitly simulated data.
+- Every simulated provider, amount or outcome is labelled at its point of use.
+  Do not claim public-chain publication or an unedited history without evidence.
 
 ## 2. Tokens
 
@@ -28,22 +32,27 @@ classes. `tokens.test.ts` checks every text pair for contrast.
 
 | Token                    | Value     | Use                                               |
 | ------------------------ | --------- | ------------------------------------------------- |
-| `--color-canvas`         | `#fafaf7` | Page ground (ledger paper)                        |
+| `--color-canvas`         | `#ffffff` | Page ground                                       |
 | `--color-surface`        | `#ffffff` | Raised sheet: forms, receipts, overlays           |
-| `--color-sunken`         | `#f2f2ed` | Inset wells: code, hashes, table header           |
-| `--color-ink`            | `#0b0f0c` | Text, figures, icons, rules that carry meaning    |
-| `--color-ink-muted`      | `#4d554f` | Secondary text. At least 7:1 on canvas            |
-| `--color-ink-faint`      | `#6b736d` | Captions and placeholders. At least 4.5:1         |
-| `--color-rule`           | `#e4e6e1` | Hairlines between rows and sections               |
-| `--color-border-strong`  | `#5f756a` | Input outlines. At least 3:1 on canvas            |
-| `--color-primary`        | `#14532d` | Seal green: the one primary action, verified mark |
-| `--color-primary-hover`  | `#0f3f22` | Hover and pressed state of primary                |
-| `--color-primary-subtle` | `#e3f3e8` | Verified background                               |
-| `--color-night`          | `#08130c` | Dark band on marketing pages and the verdict card |
-| `--color-on-night`       | `#f4f6f1` | Text on night                                     |
+| `--color-sunken`         | `#fafafa` | Inset wells: code, hashes, table header           |
+| `--color-ink`            | `#0a0a0a` | Text, figures, icons, rules that carry meaning    |
+| `--color-ink-muted`      | `#595959` | Secondary text. At least 7:1 on canvas            |
+| `--color-ink-faint`      | `#6e6e6e` | Captions and placeholders. At least 4.5:1         |
+| `--color-rule`           | `#ebebeb` | Hairlines between rows and sections               |
+| `--color-border-strong`  | `#8f8f8f` | Input outlines. At least 3:1 on canvas            |
+| `--color-primary`        | `#0a0a0a` | Ink: the one primary action                       |
+| `--color-primary-hover`  | `#262626` | Hover and pressed state of primary                |
+| `--color-primary-subtle` | `#f1f1f1` | Neutral action background                         |
+| `--color-night`          | `#0a0a0a` | Dark band on marketing pages and the verdict card |
+| `--color-on-night`       | `#ffffff` | Text on night                                     |
 | `--color-on-solid`       | `#ffffff` | Text on primary and danger                        |
-| `--color-danger`         | `#991b1b` | Destructive action, rejected state                |
-| `--color-focus`          | `#1d4ed8` | Focus ring only                                   |
+| `--color-danger`         | `#a01f15` | Destructive action, rejected state                |
+| `--color-focus`          | `#2563eb` | Focus ring only                                   |
+
+Additional Precision tokens: `signal` (#00b862) with near-black text,
+`signal-bg` and `signal-ink` for verified surfaces, and `night-muted` (#a1a1a1)
+for secondary text on dark surfaces. Each text/background pair passes the token
+contrast tests. White text is prohibited on signal green.
 
 Status tokens (`verified`, `pending`, `unmatched`, `rejected`, each with `-bg`,
 `-ink`, `-border`) keep their current values. A status is always a word plus
@@ -61,11 +70,11 @@ Rules:
 
 Fonts are self-hosted with `next/font` (no runtime font requests):
 
-| Role    | Family                                       | Use                                                               |
-| ------- | -------------------------------------------- | ----------------------------------------------------------------- |
-| Sans    | Geist, then Noto Sans Devanagari             | All interface text and all figures                                |
-| Display | Instrument Serif, then Tiro Devanagari Hindi | Marketing headlines, fund title, the verify verdict. Nowhere else |
-| Mono    | Geist Mono                                   | Hashes, record ids, UPI references. Never prose or money          |
+| Role    | Family                           | Use                                                      |
+| ------- | -------------------------------- | -------------------------------------------------------- |
+| Sans    | Geist, then Noto Sans Devanagari | All interface text and all figures                       |
+| Display | Geist, then Noto Sans Devanagari | Public headlines, fund title and verify verdict          |
+| Mono    | Geist Mono                       | Hashes, record ids, UPI references. Never prose or money |
 
 Scale (rem at 16 px root). These are the only sizes:
 
@@ -77,15 +86,15 @@ Scale (rem at 16 px root). These are the only sizes:
 | `text-title`      | 1.5 / 1.3          | 600    | Section headings                             |
 | `text-heading`    | 2 / 1.2            | 600    | Page headings                                |
 | `text-figure`     | 2.5 / 1.1          | 600    | Key money figures                            |
-| `text-display`    | 3.5 / 1.05         | 400    | Display serif, desktop                       |
-| `text-display-sm` | 2.5 / 1.1          | 400    | Display serif under 640 px                   |
-| `text-hero`       | 5.5 / 1            | 400    | Marketing hero headline, desktop only        |
+| `text-display`    | 3.5 / 1.05         | 400    | Display sans, desktop                        |
+| `text-display-sm` | 2.5 / 1.1          | 400    | Display sans under 640 px                    |
+| `text-hero`       | 4.75 / 1           | 400    | Marketing hero headline, desktop only        |
 
 Rules:
 
 - Body text is never under 16 px. `text-caption` is for labels of 4 words or
   fewer, never sentences.
-- Weights are 400, 500 and 600. No 700, no 300, no italics outside the display serif.
+- Weights are 400, 500 and 600. No 700, no 300 and no decorative italics.
 - Every figure uses `tabular-nums`. Money in a column is right-aligned.
 - Sentence case everywhere. No all-caps except `text-caption` eyebrows with
   `tracking-wide`, at most one per section.
@@ -98,11 +107,12 @@ Rules:
   24, 32 (Tailwind units). No arbitrary values (`p-[13px]`, `mt-[7px]`).
 - Section rhythm: 64 px between sections on mobile, 96 px on desktop. 24 px
   between a heading and its content. 16 px between related items.
-- Radius: `--radius-control` 8 px for inputs and buttons, `--radius-card`
-  12 px for sheets and overlays, `rounded-full` for status pills and avatars.
+- Radius: `--radius-control` 10 px for inputs and buttons, `--radius-card`
+  16 px for sheets and overlays, `rounded-full` for status pills and avatars.
   Nothing else.
-- Depth: no shadows on anything in the page flow. One token,
-  `--shadow-overlay`, for dialogs, sheets, popovers and menus only.
+- Depth uses only `--shadow-card` for a product sheet, `--shadow-raised`
+  for a layered product fragment and `--shadow-overlay` for overlays. Never
+  apply depth to each record in a list or nest shadowed cards.
 - Borders are 1 px `--color-rule`. A bordered box never sits inside another
   bordered box.
 
@@ -115,8 +125,10 @@ Rules:
 - Movement distance is 8 px or less. Scale is between 0.98 and 1.
 - No scroll-jacking, parallax, cursor effects, looping animation, confetti or
   auto-playing carousels.
-- Motion is CSS only (`tw-animate-css`, transitions, View Transitions). No
-  animation library.
+- Prefer CSS transitions. The approved Rare UI controls may use Motion, and
+  Scritto may animate changed figures. No other animation dependency is added.
+  Initial money values are legible immediately; do not count up from invented
+  values. Every control retains a static reduced-motion rendering.
 - `prefers-reduced-motion: reduce` removes all movement and keeps opacity changes.
 - The one signature moment: when a record verifies, the seal mark draws once
   in 400 ms. Nothing else in the product celebrates.
@@ -131,7 +143,7 @@ Rules:
   8 columns, side 4 columns of 12). No three-column product layouts.
 - Left-aligned by default. Centre alignment is allowed only for the marketing
   hero, empty states and the sign-in sheet.
-- A screen has one primary action. It is the only filled green button in view.
+- A screen has one primary action. It is the only filled ink button in view.
   Everything else is a secondary (outlined) or tertiary (text) button.
 - The first viewport of every product screen answers: where am I, what is the
   number, what do I do next.
@@ -147,11 +159,12 @@ a primitive there first, shown on `/design-system`, before a screen uses it.
   Variants: `primary`, `secondary`, `tertiary`, `danger`. No icon-only buttons
   without an `aria-label` and a tooltip. No more than two buttons side by side.
 - **Figure**: label (`text-caption`, muted) above the amount (`text-figure`).
-  Figures sit on the canvas separated by hairlines. Never in tinted boxes.
+  Figures sit on the canvas or one product sheet. Never give each figure its own coloured box.
 - **Row list**: the default for records. One row, one fact per column, hairline
   between rows, whole row is the link. Not cards.
-- **Sheet**: white surface, 12 px radius, 1 px rule. Used for forms, receipts
-  and overlays only. A page has at most one sheet in the flow.
+- **Sheet**: white surface, 16 px radius, 1 px rule. Used for forms, receipts,
+  product summaries, public product fragments and overlays. A page has at most
+  one sheet in the flow; the depth and nesting restrictions above still apply.
 - **Status pill**: icon, word, status colours. At most one per row.
 - **Field**: visible label above, hint below, error replaces hint. Never a
   placeholder as the label. Errors say what to do.
@@ -187,7 +200,7 @@ a primitive there first, shown on `/design-system`, before a screen uses it.
 Any of these fails review:
 
 - Gradients, glass blur, glows, neon, noise textures, decorative blobs.
-- Shadows on cards. Cards inside cards. Coloured or tinted card backgrounds.
+- Untokened shadows, nested shadowed cards, decorative tinted record cards.
 - Purple, blue or teal as brand colour. More than one accent hue.
 - Emoji, stock illustration, 3D renders, generic "dashboard" hero screenshots.
 - Rows of identical icon-plus-heading-plus-sentence feature cards.
@@ -223,8 +236,17 @@ A screen is done when all of these hold, and the PR shows the evidence:
 
 - `pnpm check:design` (added by YEN-99) scans `apps/web/src` for banned patterns (raw colours,
   palette classes, arbitrary values, inline styles, `dark:`, banned words) and
-  fails CI. Existing violations are listed in a baseline file. The baseline
-  only shrinks: a PR that adds an entry fails.
+  fails CI. Existing violations are listed in a baseline file. The recorded legacy baseline only shrinks: a PR that adds an entry fails.
+  The foundation must install the missing commands before a screen PR opens.
+  Parked checker code is not evidence that a gate has run.
 - `/design-system` shows every token and primitive. It is the reference
   render. A primitive that is not on that page does not exist.
 - Reviewers reject on any rule in this file without further argument.
+
+## 9. Approved implementation references
+
+Precision was approved in the implementation session on 16 November 2026.
+Rare UI supplies selected controls, not page layouts; Scritto is limited to
+figures that actually change. Keep their licence notices in `docs/licenses`.
+Public claims, data access, money semantics and the quality gates above remain
+requirements. This direction does not authorise a production payment deployment.
