@@ -22,7 +22,7 @@ export async function prepareDemoAccounts(
   sql: Sql,
   users: DevSeedResult["users"],
   env: NodeJS.ProcessEnv,
-): Promise<void> {
+): Promise<string> {
   assertLocalDemo(env);
   const secret = z
     .string()
@@ -52,6 +52,7 @@ export async function prepareDemoAccounts(
       }
     }
   });
+  return secret;
 }
 
 export async function verifyDemoLogins(

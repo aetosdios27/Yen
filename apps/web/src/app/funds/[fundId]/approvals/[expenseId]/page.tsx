@@ -291,6 +291,7 @@ export default function ApproverPage({ params }: ApproverPageProps) {
 
           {expense.status === "approved" && ids ? (
             <ExpenseBankMatch
+              expenseId={ids.expenseId}
               fundId={ids.fundId}
               onMatched={() => loadExpense(ids.fundId, ids.expenseId)}
             />

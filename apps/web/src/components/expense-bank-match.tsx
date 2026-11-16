@@ -6,7 +6,15 @@ import { getApiClient } from "../lib/api-client";
 import { useProductSession } from "../lib/product-session";
 import { Button } from "./button";
 
-export function ExpenseBankMatch({ fundId, onMatched }: { fundId: string; onMatched: () => void }) {
+export function ExpenseBankMatch({
+  fundId,
+  expenseId,
+  onMatched,
+}: {
+  fundId: string;
+  expenseId: string;
+  onMatched: () => void;
+}) {
   const { t } = useI18n();
   const { session } = useProductSession();
   const [file, setFile] = useState<File | null>(null);
@@ -25,7 +33,12 @@ export function ExpenseBankMatch({ fundId, onMatched }: { fundId: string; onMatc
         body: { fundId, csvContent: await file.text() },
       });
       if (result.error) throw new Error(result.error.error.message);
-      if (result.data.matchedCount === 0) setState("unmatched");
+      const expense = await getApiClient().GET("/v1/funds/{fundId}/expenses/{expenseId}", {
+        params: { path: { fundId, expenseId } },
+      });
+      if (expense.error) throw new Error(expense.error.error.message);
+      if (expense.data.status !== "paid" && expense.data.status !== "reconciled")
+        setState("unmatched");
       else {
         setState("idle");
         onMatched();

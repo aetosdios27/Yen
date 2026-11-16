@@ -14,6 +14,7 @@ import { createOtpDeliveryProvider, PostgresAuthStore } from "./auth/index.js";
 import { DEV_PIN_HMAC_SECRET } from "./dependencies.js";
 import { PostgresFundStore } from "./fund-store.js";
 import { PostgresPinStore } from "./pin/store.js";
+import { devPolicy } from "./policy.js";
 
 afterEach(() => vi.unstubAllEnvs());
 it.each([undefined, "production", "test"])("refuses demo PIN changes in %s", (NODE_ENV) => {
@@ -38,6 +39,7 @@ databaseSuite("repeatable demo startup and ledger balances", (sql, url) => {
     await prepareDemoAccounts(sql, seed.users, env);
     await prepareDemoAccounts(sql, seed.users, env);
     const app = createApp({
+      policy: devPolicy,
       authStore: new PostgresAuthStore(sql),
       pinStore: new PostgresPinStore(sql),
       pinSecret: DEV_PIN_HMAC_SECRET,
@@ -68,6 +70,7 @@ databaseSuite("repeatable demo startup and ledger balances", (sql, url) => {
     const before = await getBalances(sql, seed.fund.id);
     await sql.begin((tx) => reserveForExpense(tx, { fundId: seed.fund.id, amount: paise(10000) }));
     const options = {
+      policy: devPolicy,
       fundStore: new PostgresFundStore(sql),
       readFundBalances: (fundId: string) => getBalances(sql, fundId),
     };

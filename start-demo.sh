@@ -40,6 +40,17 @@ for (const value of [process.env.WEB_PORT, process.env.API_PORT]) {
   await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
 }
 JS
+# Compose uses fixed container names; reuse their project across Git worktrees.
+for engine in docker podman; do
+  if command -v "$engine" >/dev/null && "$engine" compose version >/dev/null 2>&1; then
+    if existing_project=$("$engine" inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' yen-postgres 2>/dev/null); then
+      if [[ -n "$existing_project" && "$existing_project" != '<no value>' ]]; then
+        export COMPOSE_PROJECT_NAME="$existing_project"
+      fi
+    fi
+    break
+  fi
+done
 pnpm install --frozen-lockfile
 pnpm turbo run build --filter='@yen/api^...' --filter=@yen/api-client
 exec pnpm dev:full --demo "$@"

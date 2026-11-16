@@ -92,7 +92,7 @@ describe("TreasurerPage", () => {
 
     expect(screen.getByText("Treasurer dashboard")).toBeTruthy();
     expect(screen.getByText("Spendable balance")).toBeTruthy();
-    expect(screen.getByText("Pending expenses")).toBeTruthy();
+    expect(screen.getByText("Expenses awaiting completion")).toBeTruthy();
     expect(screen.getByText("Ramesh Hardware")).toBeTruthy();
     expect(screen.getByText("Shakti Electricians")).toBeTruthy();
     expect(screen.getAllByText("New Expense").length).toBeGreaterThan(0);
@@ -183,6 +183,6 @@ describe("TreasurerPage", () => {
 
     expect(screen.getByText("खजांची डैशबोर्ड")).toBeTruthy();
     expect(screen.getByText("खर्च योग्य शेष")).toBeTruthy();
-    expect(screen.getByText("लंबित खर्च")).toBeTruthy();
+    expect(screen.getByText("पूरे होने की प्रतीक्षा में खर्च")).toBeTruthy();
   });
 });

@@ -372,7 +372,7 @@ describe("journey 3: treasurer files an expense request", () => {
     ).toBeDefined();
     await waitFor(() => expect(screen.getByText("Total balance")).toBeDefined());
     expect(screen.getByText("Spendable balance")).toBeDefined();
-    expect(screen.getByText("Pending expenses")).toBeDefined();
+    expect(screen.getByText("Expenses awaiting completion")).toBeDefined();
     expect(screen.getByRole("link", { name: "New Expense" })).toBeDefined();
     expect(screen.getByRole("link", { name: "Review" })).toBeDefined();
   });

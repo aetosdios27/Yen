@@ -37,12 +37,15 @@ async function signIn(browser: Browser, phone: string): Promise<Page> {
   const confirm = page.getByLabel("Confirm PIN");
   if (await confirm.isVisible()) await confirm.fill(PIN);
   await page.getByRole("button", { name: /Create PIN and continue|Unlock and continue/ }).click();
-  await expect(page.getByText(/Signed in as/)).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/funds/${FUND_ID}/dashboard$`));
   return page;
 }
 
 async function shot(page: Page, name: string) {
-  await page.screenshot({ path: join(SHOTS_DIR, `${name}.png`), fullPage: true });
+  for (const width of [390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.screenshot({ path: join(SHOTS_DIR, `${name}-${width}.png`), fullPage: true });
+  }
 }
 
 async function getJson<T>(request: APIRequestContext, path: string): Promise<T> {
@@ -195,27 +198,46 @@ test("a donation, an approved expense and its bank debit end up anchored and pub
 
   let bankTransactionId = "";
   await test.step("5. the bank debit settles the expense and is reconciled", async () => {
-    const result = await postJson<{
-      matchedCount: number;
-      transactions: { id: string; type: string; reconciliationStatus: string }[];
-    }>(treasurer.request, "/v1/reconciliation/statements", {
-      fundId: FUND_ID,
-      csvContent: statementCsv([
-        `${statementDate()},"UPI/DR/${debitUtr}/robu@ybl/Robu.in Innovation Labs",${debitUtr},${statementDate()},12500.00,,0.00`,
-      ]),
-    });
-    expect(result.matchedCount).toBe(1);
-    expect(result.transactions[0]).toMatchObject({
-      type: "debit",
-      reconciliationStatus: "matched",
-    });
-    bankTransactionId = result.transactions[0]?.id ?? "";
-
+    await treasurer.goto(`/funds/${FUND_ID}/dashboard`);
+    await expect(treasurer.locator("li", { hasText: purpose })).toBeVisible();
+    const balances = await getJson<{
+      bankPaise: string;
+      reservedPaise: string;
+      availablePaise: string;
+    }>(treasurer.request, `/v1/funds/${FUND_ID}/balances`);
+    expect(BigInt(balances.reservedPaise)).toBeGreaterThanOrEqual(BigInt(EXPENSE_PAISE));
+    expect(BigInt(balances.availablePaise)).toBe(
+      BigInt(balances.bankPaise) - BigInt(balances.reservedPaise),
+    );
+    await shot(treasurer, "05a-approved-reservation-retained");
+    const baseline = process.env.E2E_BEFORE_WEB_URL;
+    if (baseline) {
+      await treasurer.goto(`${baseline}/funds/${FUND_ID}/dashboard`);
+      await expect(treasurer.getByText("Spendable balance")).toBeVisible();
+      await expect(treasurer.locator("li", { hasText: purpose })).toHaveCount(0);
+      await shot(treasurer, "before-approved-expense-missing");
+    }
+    await treasurer.goto(`/funds/${FUND_ID}/approvals/${expenseId}`);
+    await expect(treasurer.getByRole("heading", { name: "Match the bank payment" })).toBeVisible();
+    await shot(treasurer, "05b-bank-match-action");
+    const csv = statementCsv([
+      `${statementDate()},"UPI/DR/${debitUtr}/robu@ybl/Robu.in Innovation Labs",${debitUtr},${statementDate()},12500.00,,0.00`,
+    ]);
+    await treasurer
+      .getByLabel("Bank statement CSV")
+      .setInputFiles({
+        name: "bank-statement.csv",
+        mimeType: "text/csv",
+        buffer: Buffer.from(csv),
+      });
+    await treasurer.getByRole("button", { name: "Import and match statement" }).click();
+    await expect(treasurer.getByLabel("Bank statement CSV")).toHaveCount(0);
     const paid = await getJson<{ status: string; bankTransactionId: string }>(
       treasurer.request,
       `/v1/funds/${FUND_ID}/expenses/${expenseId}`,
     );
-    expect(paid).toMatchObject({ status: "paid", bankTransactionId });
+    expect(paid.status).toBe("paid");
+    bankTransactionId = paid.bankTransactionId;
 
     const reconciled = await postJson<{ status: string }>(
       treasurer.request,

@@ -125,6 +125,7 @@ async function main(): Promise<void> {
   const withChain = !process.argv.includes("--no-chain");
   const demo = process.argv.includes("--demo");
   if (demo) assertLocalDemo({ ...process.env, DATABASE_URL: databaseUrl });
+  let demoPinSecret: string | undefined;
   let demoUsers: Awaited<ReturnType<typeof seedDevDatabase>>["users"] = [];
 
   process.stdout.write("\n======================================================\n");
@@ -158,7 +159,7 @@ async function main(): Promise<void> {
   try {
     const seedResult = await seedDevDatabase(sql);
     if (demo) {
-      await prepareDemoAccounts(sql, seedResult.users, {
+      demoPinSecret = await prepareDemoAccounts(sql, seedResult.users, {
         ...process.env,
         DATABASE_URL: databaseUrl,
       });
@@ -176,6 +177,7 @@ async function main(): Promise<void> {
   const devEnv = buildDevServerEnv({
     ...process.env,
     DATABASE_URL: databaseUrl,
+    ...(demoPinSecret ? { PIN_HMAC_SECRET: demoPinSecret } : {}),
     ...(chain ? appChainEnv(chain.rpcUrl, chain.registryAddress) : {}),
   });
   process.stdout.write(
