@@ -60,3 +60,7 @@ describe("buildDevServerEnv", () => {
     );
   });
 });
+
+it("uses the selected API port for the browser URL", () => {
+  expect(buildDevServerEnv({ API_PORT: "3101" }).NEXT_PUBLIC_API_URL).toBe("http://localhost:3101");
+});

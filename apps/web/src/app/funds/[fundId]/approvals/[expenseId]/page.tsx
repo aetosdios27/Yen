@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ApprovalPinModal } from "../../../../../components/approval-pin-modal";
 import { Button } from "../../../../../components/button";
+import { ExpenseBankMatch } from "../../../../../components/expense-bank-match";
 import { ExpenseTimeline } from "../../../../../components/expense-timeline";
 import {
   AlertTriangleIcon,
@@ -287,6 +288,13 @@ export default function ApproverPage({ params }: ApproverPageProps) {
             rejectedAt={expense.rejectedAt}
             rejectionReason={expense.rejectionReason}
           />
+
+          {expense.status === "approved" && ids ? (
+            <ExpenseBankMatch
+              fundId={ids.fundId}
+              onMatched={() => loadExpense(ids.fundId, ids.expenseId)}
+            />
+          ) : null}
 
           {/* Already Decided Banners */}
           {isSettled ? (

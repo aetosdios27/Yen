@@ -10,6 +10,10 @@ describe("TreasurerPage", () => {
   beforeEach(() => {
     vi.spyOn(apiClientModule, "getApiClient").mockReturnValue({
       GET: vi.fn().mockImplementation((path: string) => {
+        if (path.includes("/balances"))
+          return Promise.resolve({
+            data: { bankPaise: "500000", reservedPaise: "45000", availablePaise: "455000" },
+          });
         if (path.includes("/summary")) {
           return Promise.resolve({
             response: { status: 200 },

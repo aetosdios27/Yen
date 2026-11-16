@@ -304,6 +304,27 @@ export const getFundRoute = createRoute({
   responses: { 200: jsonResponse(fundSchema, "Fake fund"), ...protectedErrors },
 });
 
+export const fundBalancesSchema = z
+  .object({
+    bankPaise: paiseWire,
+    reservedPaise: paiseWire,
+    availablePaise: paiseWire,
+  })
+  .strict()
+  .openapi("FundBalances");
+
+export const getFundBalancesRoute = createRoute({
+  method: "get",
+  path: "/v1/funds/{fundId}/balances",
+  tags: ["funds"],
+  operationId: "getFundBalances",
+  security,
+  description:
+    "Staff-only ledger balances. Reservations include every pending ledger hold, independently of expense workflow status.",
+  request: { params: z.object({ fundId: z.string().uuid() }) },
+  responses: { 200: jsonResponse(fundBalancesSchema, "Ledger balances"), ...protectedErrors },
+});
+
 export const changeFundVisibilityRoute = createRoute({
   method: "put",
   path: "/v1/funds/{fundId}/visibility",

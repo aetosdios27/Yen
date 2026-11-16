@@ -115,9 +115,10 @@ export function toDashboardExpenseItem(exp: {
 
 export async function fetchFundTreasurerData(fundId: string): Promise<FundTreasurerData> {
   const client = getApiClient();
-  const [summaryRes, expensesRes] = await Promise.all([
+  const [summaryRes, expensesRes, balancesRes] = await Promise.all([
     client.GET("/v1/funds/{fundId}/public/summary", { params: { path: { fundId } } }),
     client.GET("/v1/funds/{fundId}/expenses", { params: { path: { fundId } } }),
+    client.GET("/v1/funds/{fundId}/balances", { params: { path: { fundId } } }),
   ]);
 
   if (summaryRes.error) {
@@ -127,16 +128,19 @@ export async function fetchFundTreasurerData(fundId: string): Promise<FundTreasu
     throw new Error(expensesRes.error?.error?.message ?? "Could not load fund expenses");
   }
 
+  if (balancesRes.error) throw new Error(balancesRes.error.error.message);
+
   const allExpenses = (expensesRes.data ?? []).map(toDashboardExpenseItem);
   const pending = allExpenses.filter(
-    (e) => e.status === "draft" || e.status === "submitted" || e.status === "hold_reserved",
+    (e) =>
+      e.status === "draft" ||
+      e.status === "submitted" ||
+      e.status === "hold_reserved" ||
+      e.status === "approved",
   );
 
-  const totalBalancePaise = paise(
-    Number(summaryRes.data.raisedPaise ?? "0") - Number(summaryRes.data.spentPaise),
-  );
-  const heldPaise = pending.reduce((sum, e) => sum + e.amountPaise, 0);
-  const spendableBalancePaise = paise(Math.max(0, totalBalancePaise - heldPaise));
+  const totalBalancePaise = paise(Number(balancesRes.data.bankPaise));
+  const spendableBalancePaise = paise(Number(balancesRes.data.availablePaise));
 
   return {
     fundId,

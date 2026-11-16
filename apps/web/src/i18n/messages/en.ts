@@ -589,12 +589,24 @@ export const en = {
     checkRecord: "Check this record",
     checkRecordAria: "Check this record in the verifier",
   },
+  bankMatch: {
+    title: "Match the bank payment",
+    description:
+      "Approval reserves money; it does not prove payment. Upload the bank CSV after the transfer. Only a matching bank debit marks the expense paid.",
+    file: "Bank statement CSV",
+    submit: "Import and match statement",
+    saving: "Matching statement…",
+    error: "The statement could not be imported. Check the CSV and try again.",
+    unmatched:
+      "Statement imported, but no transactions matched. The expense remains unpaid until its bank debit matches.",
+  },
+
   treasurer: {
     title: "Treasurer dashboard",
     totalBalance: "Total balance",
     spendableBalance: "Spendable balance",
     pendingRequestsCount: "Pending requests ({count})",
-    pendingExpenses: "Pending expenses",
+    pendingExpenses: "Expenses awaiting completion",
     newExpenseCta: "New Expense",
     emptyTitle: "No pending expenses",
     emptyDescription: "When an expense request is drafted or submitted, it will appear here.",

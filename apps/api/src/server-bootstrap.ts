@@ -2,6 +2,7 @@ import type { Server } from "node:http";
 import { resolve } from "node:path";
 import { serve } from "@hono/node-server";
 import { createSql, ensureFundPseudonym, type Sql } from "@yen/db";
+import { getBalances } from "@yen/ledger";
 import {
   ExotelSmsProvider,
   PostgresFundSubscriptionStore,
@@ -417,7 +418,12 @@ export async function startServer(
     ...(sql ? { fundSubscriptionStore: new PostgresFundSubscriptionStore(sql) } : {}),
     ...(sql ? { reconciliationStore: new PostgresReconciliationStore(sql) } : {}),
     ...(sql ? { displayNameStore: new PostgresDisplayNameStore(sql) } : {}),
-    ...(sql ? { expenseStore: new PostgresExpenseStore(sql) } : {}),
+    ...(sql
+      ? {
+          expenseStore: new PostgresExpenseStore(sql),
+          readFundBalances: (fundId: string) => getBalances(sql, fundId),
+        }
+      : {}),
     ...(sql ? { fundStore: new PostgresFundStore(sql) } : {}),
     ...(sql ? { alertStore: new PostgresAlertStore(sql) } : {}),
     ...(sql && evidenceStorage
