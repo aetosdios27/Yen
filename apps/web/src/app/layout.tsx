@@ -6,6 +6,7 @@ import { ErrorObservability } from "../components/error-observability";
 import { ServiceWorkerRegistration } from "../components/service-worker-registration";
 import { LocaleProvider } from "../i18n";
 import { en } from "../i18n/messages/en";
+import { fontVariables } from "../styles/fonts";
 import { MANIFEST_THEME_COLOR } from "./manifest";
 import "./globals.css";
 
@@ -45,7 +46,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // nonce supplied by proxy.ts instead of prerendering nonce-free HTML.
   await headers();
   return (
-    <html lang="en">
+    <html lang="en" className={fontVariables}>
       <body>
         <LocaleProvider>
           <ErrorObservability />

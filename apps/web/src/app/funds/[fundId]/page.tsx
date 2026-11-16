@@ -1,9 +1,9 @@
-import { formatInr } from "@yen/shared";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { getPublicFund } from "../../../components/fund/data";
 import { PublicFundView } from "../../../components/fund/public-fund-view";
+import { formatMoney } from "../../../lib/format";
 
 export type FundPageProps = {
   params: Promise<{
@@ -23,7 +23,7 @@ export async function generateMetadata(props: FundPageProps): Promise<Metadata> 
   }
 
   const title = `${fund.name} · ${fund.org.name} · Yen`;
-  const description = `${fund.purpose} · Current balance: ${formatInr(fund.money.currentBalance)}`;
+  const description = `${fund.purpose} · Current balance: ${formatMoney(fund.money.currentBalance, { paise: "always" })}`;
   const ogImageUrl = `/icons/icon-512.png`;
 
   return {
