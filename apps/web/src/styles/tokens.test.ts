@@ -87,7 +87,9 @@ describe("design tokens", () => {
   });
 
   it("meets 4.5:1 for supporting text", () => {
-    expectContrast("color-ink-muted", "color-canvas", 4.5);
+    expectContrast("color-ink-muted", "color-canvas", 7);
+    expectContrast("color-ink-faint", "color-canvas", 4.5);
+    expectContrast("color-on-night", "color-night", 7);
     expectContrast("color-ink-muted", "color-surface", 4.5);
   });
 
