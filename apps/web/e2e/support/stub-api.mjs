@@ -152,6 +152,18 @@ const server = createServer((request, response) => {
       upiPayeeName: "Robotics Club Committee",
     });
 
+  if (request.method === "GET" && path === `/v1/funds/${fundId}/balances`) {
+    const summary = publicSummary();
+    const bankPaise = BigInt(summary.raisedPaise) - BigInt(summary.spentPaise);
+    const reservedPaise = state.expenses
+      .filter((expense) => expense.status === "submitted" || expense.status === "approved")
+      .reduce((sum, expense) => sum + BigInt(expense.amountPaise), 0n);
+    return json(response, 200, {
+      bankPaise: String(bankPaise),
+      reservedPaise: String(reservedPaise),
+      availablePaise: String(bankPaise - reservedPaise),
+    });
+  }
   if (request.method === "GET" && path === `/v1/funds/${fundId}/expenses`)
     return json(response, 200, state.expenses);
 

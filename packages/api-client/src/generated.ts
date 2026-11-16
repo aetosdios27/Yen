@@ -318,6 +318,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/funds/{fundId}/balances": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Staff-only ledger balances. Reservations include every pending ledger hold, independently of expense workflow status. */
+    get: operations["getFundBalances"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/funds/{fundId}/visibility": {
     parameters: {
       query?: never;
@@ -1745,6 +1762,14 @@ export interface components {
       upiPayeeName: string;
       /** @enum {string} */
       visibility?: "public" | "donors" | "members" | "private";
+    };
+    FundBalances: {
+      /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
+      bankPaise: string;
+      /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
+      reservedPaise: string;
+      /** @description Nonnegative integer paise as a canonical decimal string; never a JSON number. */
+      availablePaise: string;
     };
     PublicExpenseDetail: {
       /** Format: uuid */
@@ -4292,6 +4317,155 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Fund"];
+        };
+      };
+      /** @description Validation failed; details contain field paths */
+      400: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Access denied */
+      403: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource not found */
+      404: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Resource conflict, changed idempotency input, or request in progress */
+      409: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit exceeded */
+      429: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Internal failure; no private error information */
+      500: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Rate limit store at capacity */
+      503: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Seconds until retry */
+          "retry-after": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+      /** @description Gateway timeout */
+      504: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorEnvelope"];
+        };
+      };
+    };
+  };
+  getFundBalances: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        fundId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Ledger balances */
+      200: {
+        headers: {
+          /** @description Request correlation ID */
+          "x-request-id": string;
+          /** @description OpenTelemetry trace ID, or request correlation ID when tracing is disabled */
+          "x-trace-id": string;
+          /** @description Staff balances are never cached */
+          "cache-control": "private, no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FundBalances"];
         };
       };
       /** @description Validation failed; details contain field paths */

@@ -2,6 +2,12 @@ import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { connect } from "node:net";
 import { createSql, parseDatabaseUrl, seedDevDatabase } from "@yen/db";
 import {
+  assertLocalDemo,
+  DEMO_PIN,
+  prepareDemoAccounts,
+  verifyDemoLogins,
+} from "./demo-accounts.js";
+import {
   appChainEnv,
   type ContainerEngine,
   detectContainerEngine,
@@ -117,6 +123,10 @@ async function main(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL || "postgres://postgres:pw@localhost:5432/postgres";
   const parsedUrl = parseDatabaseUrl(databaseUrl, "DATABASE_URL");
   const withChain = !process.argv.includes("--no-chain");
+  const demo = process.argv.includes("--demo");
+  if (demo) assertLocalDemo({ ...process.env, DATABASE_URL: databaseUrl });
+  let demoPinSecret: string | undefined;
+  let demoUsers: Awaited<ReturnType<typeof seedDevDatabase>>["users"] = [];
 
   process.stdout.write("\n======================================================\n");
   process.stdout.write(" Yen One-Command Local Development Setup (dev:full)\n");
@@ -138,11 +148,23 @@ async function main(): Promise<void> {
   // Step 3: Start the local anchoring chain and deploy RootRegistry
   const chain = withChain ? await startLocalChain(engine, process.env) : undefined;
 
+  if (demo && withChain && !chain)
+    throw new Error(
+      "Local chain unavailable. Use --no-chain explicitly for a demo without anchoring.",
+    );
+
   // Step 4: Run migrations and seed database
   process.stdout.write("\nRunning migrations and seeding demo dataset...\n");
   const sql = createSql(parsedUrl);
   try {
     const seedResult = await seedDevDatabase(sql);
+    if (demo) {
+      demoPinSecret = await prepareDemoAccounts(sql, seedResult.users, {
+        ...process.env,
+        DATABASE_URL: databaseUrl,
+      });
+      demoUsers = seedResult.users;
+    }
     process.stdout.write(
       `✓ Database ready: ${seedResult.users.length} users, ${seedResult.expenses.length} expenses, ${seedResult.eventCount} events.\n`,
     );
@@ -155,6 +177,7 @@ async function main(): Promise<void> {
   const devEnv = buildDevServerEnv({
     ...process.env,
     DATABASE_URL: databaseUrl,
+    ...(demoPinSecret ? { PIN_HMAC_SECRET: demoPinSecret } : {}),
     ...(chain ? appChainEnv(chain.rpcUrl, chain.registryAddress) : {}),
   });
   process.stdout.write(
@@ -170,6 +193,36 @@ async function main(): Promise<void> {
     stdio: "inherit",
     env: devEnv,
   });
+
+  if (demo) {
+    void waitForPort(Number(devEnv.API_PORT))
+      .then(async (ready) => {
+        if (!ready) throw new Error("Demo API did not start");
+        if (!(await waitForPort(Number(devEnv.WEB_PORT))))
+          throw new Error("Demo frontend did not start");
+        await verifyDemoLogins(`http://localhost:${devEnv.API_PORT}`, demoUsers);
+        process.stdout.write(
+          `\nDemo logins verified. Open http://localhost:${devEnv.WEB_PORT}/login\n`,
+        );
+        for (const user of demoUsers.filter((user) => user.role !== "member")) {
+          process.stdout.write(
+            `${user.displayName} (${user.role}): ${user.phone} / demo PIN ${DEMO_PIN}\n`,
+          );
+        }
+        process.stdout.write(
+          withChain
+            ? "Local chain requested; check the worker output for anchoring.\n"
+            : "Anchoring disabled (--no-chain); new records remain pending.\n",
+        );
+      })
+      .catch((error: unknown) => {
+        process.stderr.write(
+          `Demo readiness failed: ${error instanceof Error ? error.message : String(error)}\n`,
+        );
+        child.kill("SIGINT");
+        process.exitCode = 1;
+      });
+  }
 
   let worker: ChildProcess | undefined;
   let stopping = false;
@@ -197,7 +250,7 @@ async function main(): Promise<void> {
   child.on("exit", (code) => {
     stopping = true;
     worker?.kill("SIGINT");
-    process.exit(code ?? 0);
+    process.exit(process.exitCode ? Number(process.exitCode) : (code ?? 0));
   });
 }
 

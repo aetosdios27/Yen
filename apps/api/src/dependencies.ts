@@ -429,6 +429,9 @@ export interface AuditBundleProvider {
 }
 
 export interface AppDependencies {
+  readonly readFundBalances?:
+    | ((fundId: string) => Promise<import("@yen/ledger").FundBalances>)
+    | undefined;
   readonly waitlistStore: WaitlistStore;
   readonly sql?: Sql | undefined;
   readonly auditBundleProvider?: AuditBundleProvider | undefined;

@@ -284,6 +284,28 @@
         "required": ["name", "targetPaise", "upiVpa", "upiPayeeName"],
         "additionalProperties": false
       },
+      "FundBalances": {
+        "type": "object",
+        "properties": {
+          "bankPaise": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$",
+            "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
+          },
+          "reservedPaise": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$",
+            "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
+          },
+          "availablePaise": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$",
+            "description": "Nonnegative integer paise as a canonical decimal string; never a JSON number."
+          }
+        },
+        "required": ["bankPaise", "reservedPaise", "availablePaise"],
+        "additionalProperties": false
+      },
       "PublicExpenseDetail": {
         "type": "object",
         "properties": {
@@ -3997,6 +4019,219 @@
               }
             },
             "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Fund" } } }
+          },
+          "400": {
+            "description": "Validation failed; details contain field paths",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "409": {
+            "description": "Resource conflict, changed idempotency input, or request in progress",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "500": {
+            "description": "Internal failure; no private error information",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "503": {
+            "description": "Rate limit store at capacity",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              },
+              "retry-after": {
+                "schema": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                "description": "Seconds until retry",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          },
+          "504": {
+            "description": "Gateway timeout",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/funds/{fundId}/balances": {
+      "get": {
+        "tags": ["funds"],
+        "operationId": "getFundBalances",
+        "security": [{ "bearerAuth": [] }],
+        "description": "Staff-only ledger balances. Reservations include every pending ledger hold, independently of expense workflow status.",
+        "parameters": [
+          {
+            "schema": { "type": "string", "format": "uuid" },
+            "required": true,
+            "name": "fundId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ledger balances",
+            "headers": {
+              "x-request-id": {
+                "schema": { "type": "string", "format": "uuid" },
+                "description": "Request correlation ID",
+                "required": true
+              },
+              "x-trace-id": {
+                "schema": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+                "description": "OpenTelemetry trace ID, or request correlation ID when tracing is disabled",
+                "required": true
+              },
+              "cache-control": {
+                "schema": { "type": "string", "enum": ["private, no-store"] },
+                "required": true,
+                "description": "Staff balances are never cached"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/FundBalances" } }
+            }
           },
           "400": {
             "description": "Validation failed; details contain field paths",

@@ -11,6 +11,8 @@ import { Button as ActionButton } from "../../../../components/ui/button";
 import { useDocumentTitle, useI18n } from "../../../../i18n";
 import { type FundTreasurerData, fetchFundTreasurerData } from "../../../../lib/expense-service";
 
+import { useProductSession } from "../../../../lib/product-session";
+
 export interface TreasurerPageProps {
   params: Promise<{ fundId: string }>;
   view?: "treasurer" | "approver";
@@ -18,6 +20,7 @@ export interface TreasurerPageProps {
 
 export default function TreasurerPage({ params, view = "treasurer" }: TreasurerPageProps) {
   const { t } = useI18n();
+  const { session } = useProductSession();
   useDocumentTitle("treasurer.title", "treasurer.fundOverview");
 
   const [resolvedFundId, setResolvedFundId] = useState<string | null>(null);
@@ -73,6 +76,11 @@ export default function TreasurerPage({ params, view = "treasurer" }: TreasurerP
   };
 
   const currentFundId = resolvedFundId;
+  const role =
+    session.kind === "ready"
+      ? session.funds.find((fund) => fund.id === currentFundId)?.role
+      : undefined;
+  const canCreate = role === "owner" || role === "treasurer";
 
   return (
     <section className="mx-auto flex w-full max-w-4xl flex-col gap-6 pb-8">
@@ -103,11 +111,15 @@ export default function TreasurerPage({ params, view = "treasurer" }: TreasurerP
             {data ? data.fundName : t("treasurer.fundOverview")}
           </span>
           <h1 className="text-[1.75rem] font-semibold tracking-tight text-ink">
-            {t(view === "approver" ? "treasurer.pendingExpenses" : "treasurer.title")}
+            {t(
+              view === "approver" || role === "approver"
+                ? "treasurer.pendingExpenses"
+                : "treasurer.title",
+            )}
           </h1>
         </div>
 
-        {currentFundId && data && view === "treasurer" ? (
+        {currentFundId && data && view === "treasurer" && canCreate ? (
           <div className="flex sm:justify-end">
             <ActionButton asChild className="w-full sm:w-auto">
               <Link

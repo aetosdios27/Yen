@@ -8,8 +8,30 @@ import TreasurerPage from "./page";
 
 describe("TreasurerPage", () => {
   beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async (input: string) =>
+          new Response(
+            JSON.stringify(
+              input.endsWith("/funds")
+                ? {
+                    funds: [
+                      { id: "demo-fund", title: "Robotics", role: "owner", visibility: "public" },
+                    ],
+                  }
+                : { displayName: "Aarav Sharma" },
+            ),
+            { headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
     vi.spyOn(apiClientModule, "getApiClient").mockReturnValue({
       GET: vi.fn().mockImplementation((path: string) => {
+        if (path.includes("/balances"))
+          return Promise.resolve({
+            data: { bankPaise: "500000", reservedPaise: "45000", availablePaise: "455000" },
+          });
         if (path.includes("/summary")) {
           return Promise.resolve({
             response: { status: 200 },
@@ -69,6 +91,7 @@ describe("TreasurerPage", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -88,7 +111,7 @@ describe("TreasurerPage", () => {
 
     expect(screen.getByText("Treasurer dashboard")).toBeTruthy();
     expect(screen.getByText("Spendable balance")).toBeTruthy();
-    expect(screen.getByText("Pending expenses")).toBeTruthy();
+    expect(screen.getByText("Expenses awaiting completion")).toBeTruthy();
     expect(screen.getByText("Ramesh Hardware")).toBeTruthy();
     expect(screen.getByText("Shakti Electricians")).toBeTruthy();
     expect(screen.getAllByText("New Expense").length).toBeGreaterThan(0);
@@ -179,6 +202,6 @@ describe("TreasurerPage", () => {
 
     expect(screen.getByText("खजांची डैशबोर्ड")).toBeTruthy();
     expect(screen.getByText("खर्च योग्य शेष")).toBeTruthy();
-    expect(screen.getByText("लंबित खर्च")).toBeTruthy();
+    expect(screen.getByText("पूरे होने की प्रतीक्षा में खर्च")).toBeTruthy();
   });
 });

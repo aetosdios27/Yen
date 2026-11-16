@@ -95,6 +95,15 @@ it("validates every documented status and sent header against the committed Open
   const clock = () => currentTime;
   const otpDeliveryProvider = new DevStubOtpDeliveryProvider(clock);
   const base = {
+    readFundBalances: async (fundId: string) => ({
+      fundId,
+      bankPaise: 10n,
+      pendingSpendPaise: 0n,
+      availablePaise: 10n,
+      donationsPaise: 10n,
+      pledgedPaise: 0n,
+      expensesPaise: 0n,
+    }),
     principal: { id: "00000000-0000-4000-8000-000000000001", role: "owner" as const },
     idGenerator,
     clock,

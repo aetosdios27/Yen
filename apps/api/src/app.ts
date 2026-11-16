@@ -911,6 +911,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     return { id: id.value, resource: { kind: "fund", fund: entry } as const };
   };
   registerFundVisibilityRoute(app, {
+    readFundBalances: deps.readFundBalances,
     fundStore: funds,
     getFund: getFundOrNotFound,
     authorizeFund: authorizedFund,

@@ -16,7 +16,8 @@ const SHOTS_DIR = process.env.E2E_SHOTS_DIR ?? join(HERE, ".results", "shots");
 const BILL_PATH = join(HERE, "fixtures", "bill.png");
 
 const PLEDGE_PAISE = 250000;
-const EXPENSE_PAISE = 1250000;
+const EXPENSE_PAISE = 1250000 + Number(String(Date.now()).slice(-5));
+const EXPENSE_RUPEES = `${BigInt(EXPENSE_PAISE) / 100n}.${String(BigInt(EXPENSE_PAISE) % 100n).padStart(2, "0")}`;
 const inr = (paise: number) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(paise / 100);
 
@@ -37,12 +38,15 @@ async function signIn(browser: Browser, phone: string): Promise<Page> {
   const confirm = page.getByLabel("Confirm PIN");
   if (await confirm.isVisible()) await confirm.fill(PIN);
   await page.getByRole("button", { name: /Create PIN and continue|Unlock and continue/ }).click();
-  await expect(page.getByText(/Signed in as/)).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/funds/${FUND_ID}/dashboard$`));
   return page;
 }
 
 async function shot(page: Page, name: string) {
-  await page.screenshot({ path: join(SHOTS_DIR, `${name}.png`), fullPage: true });
+  for (const width of [390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.screenshot({ path: join(SHOTS_DIR, `${name}-${width}.png`), fullPage: true });
+  }
 }
 
 async function getJson<T>(request: APIRequestContext, path: string): Promise<T> {
@@ -110,20 +114,23 @@ test("a donation, an approved expense and its bank debit end up anchored and pub
     await expect(
       treasurer.getByText(inr(Number(before.raisedPaise) + PLEDGE_PAISE)).first(),
     ).toBeVisible();
-    await expect(treasurer.getByText("M. K.")).toBeVisible();
+    await expect(treasurer.getByText("M. K.").first()).toBeVisible();
     await shot(treasurer, "02-fund-shows-matched-donation");
   });
 
   let expenseId = "";
-  const billSha256 = createHash("sha256").update(readFileSync(BILL_PATH)).digest("hex");
+  const billBytes = Buffer.concat([readFileSync(BILL_PATH), Buffer.from(run)]);
+  const billSha256 = createHash("sha256").update(billBytes).digest("hex");
 
   await test.step("3. the treasurer files an expense with a bill and an approver can open it", async () => {
     await treasurer.goto(`/funds/${FUND_ID}/expenses/new`);
-    await treasurer.getByLabel("Amount (₹)").fill("12500.00");
+    await treasurer.getByLabel("Amount (₹)").fill(EXPENSE_RUPEES);
     await treasurer.getByLabel("Payee name").fill("Robu.in Innovation Labs");
     await treasurer.getByLabel("Payee UPI VPA").fill("robu@ybl");
     await treasurer.getByLabel("Purpose").fill(purpose);
-    await treasurer.getByLabel("Bill photo or PDF (optional)").setInputFiles(BILL_PATH);
+    await treasurer
+      .getByLabel("Bill photo or PDF (optional)")
+      .setInputFiles({ name: "bill.png", mimeType: "image/png", buffer: billBytes });
     await treasurer.getByRole("button", { name: "Review expense" }).click();
     await expect(treasurer.getByText("Review expense request")).toBeVisible();
     await shot(treasurer, "03a-expense-review-with-bill");
@@ -195,27 +202,44 @@ test("a donation, an approved expense and its bank debit end up anchored and pub
 
   let bankTransactionId = "";
   await test.step("5. the bank debit settles the expense and is reconciled", async () => {
-    const result = await postJson<{
-      matchedCount: number;
-      transactions: { id: string; type: string; reconciliationStatus: string }[];
-    }>(treasurer.request, "/v1/reconciliation/statements", {
-      fundId: FUND_ID,
-      csvContent: statementCsv([
-        `${statementDate()},"UPI/DR/${debitUtr}/robu@ybl/Robu.in Innovation Labs",${debitUtr},${statementDate()},12500.00,,0.00`,
-      ]),
+    await treasurer.goto(`/funds/${FUND_ID}/dashboard`);
+    await expect(treasurer.locator("li", { hasText: purpose })).toBeVisible();
+    const balances = await getJson<{
+      bankPaise: string;
+      reservedPaise: string;
+      availablePaise: string;
+    }>(treasurer.request, `/v1/funds/${FUND_ID}/balances`);
+    expect(BigInt(balances.reservedPaise)).toBeGreaterThanOrEqual(BigInt(EXPENSE_PAISE));
+    expect(BigInt(balances.availablePaise)).toBe(
+      BigInt(balances.bankPaise) - BigInt(balances.reservedPaise),
+    );
+    await shot(treasurer, "05a-approved-reservation-retained");
+    const baseline = process.env.E2E_BEFORE_WEB_URL;
+    if (baseline) {
+      await treasurer.goto(`${baseline}/funds/${FUND_ID}/dashboard`);
+      await expect(treasurer.getByText("Spendable balance")).toBeVisible();
+      await expect(treasurer.locator("li", { hasText: purpose })).toHaveCount(0);
+      await shot(treasurer, "before-approved-expense-missing");
+    }
+    await treasurer.goto(`/funds/${FUND_ID}/approvals/${expenseId}`);
+    await expect(treasurer.getByRole("heading", { name: "Match the bank payment" })).toBeVisible();
+    await shot(treasurer, "05b-bank-match-action");
+    const csv = statementCsv([
+      `${statementDate()},"UPI/DR/${debitUtr}/robu@ybl/Robu.in Innovation Labs",${debitUtr},${statementDate()},${EXPENSE_RUPEES},,0.00`,
+    ]);
+    await treasurer.getByLabel("Bank statement CSV").setInputFiles({
+      name: "bank-statement.csv",
+      mimeType: "text/csv",
+      buffer: Buffer.from(csv),
     });
-    expect(result.matchedCount).toBe(1);
-    expect(result.transactions[0]).toMatchObject({
-      type: "debit",
-      reconciliationStatus: "matched",
-    });
-    bankTransactionId = result.transactions[0]?.id ?? "";
-
+    await treasurer.getByRole("button", { name: "Import and match statement" }).click();
+    await expect(treasurer.getByLabel("Bank statement CSV")).toHaveCount(0);
     const paid = await getJson<{ status: string; bankTransactionId: string }>(
       treasurer.request,
       `/v1/funds/${FUND_ID}/expenses/${expenseId}`,
     );
-    expect(paid).toMatchObject({ status: "paid", bankTransactionId });
+    expect(paid.status).toBe("paid");
+    bankTransactionId = paid.bankTransactionId;
 
     const reconciled = await postJson<{ status: string }>(
       treasurer.request,
@@ -257,7 +281,7 @@ test("a donation, an approved expense and its bank debit end up anchored and pub
     ).toBeVisible();
     await shot(visitor, "07a-public-fund-page");
 
-    const spend = visitor.locator("li", { hasText: "An expense was marked reconciled." });
+    const spend = visitor.locator("li", { hasText: "An expense was marked reconciled." }).last();
     await spend.getByRole("link", { name: "Check this record" }).click();
     await expect(visitor).toHaveURL(/\/verify\?/);
     await expect(visitor.getByTestId("simulated-chain-notice")).toHaveText(
