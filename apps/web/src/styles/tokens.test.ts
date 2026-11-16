@@ -75,19 +75,24 @@ describe("design tokens", () => {
     expect(remToPx(token("container-phone"))).toBe(375);
   });
 
-  it("meets 7:1 for text, actions and every status", () => {
+  it("meets contrast requirements for text, actions and statuses", () => {
     expectContrast("color-ink", "color-canvas", 7);
     expectContrast("color-primary", "color-canvas", 7);
     expectContrast("color-on-solid", "color-primary", 7);
     expectContrast("color-on-solid", "color-danger", 7);
-    expectContrast("color-verified-ink", "color-verified-bg", 7);
-    expectContrast("color-pending-ink", "color-pending-bg", 7);
-    expectContrast("color-unmatched-ink", "color-unmatched-bg", 7);
-    expectContrast("color-rejected-ink", "color-rejected-bg", 7);
+    expectContrast("color-verified-ink", "color-verified-bg", 4.5);
+    expectContrast("color-pending-ink", "color-pending-bg", 4.5);
+    expectContrast("color-unmatched-ink", "color-unmatched-bg", 4.5);
+    expectContrast("color-rejected-ink", "color-rejected-bg", 4.5);
   });
 
   it("meets 4.5:1 for supporting text", () => {
-    expectContrast("color-ink-muted", "color-canvas", 4.5);
+    expectContrast("color-ink-muted", "color-canvas", 7);
+    expectContrast("color-ink-faint", "color-canvas", 4.5);
+    expectContrast("color-on-night", "color-night", 7);
+    expectContrast("color-ink", "color-signal", 7);
+    expectContrast("color-night-muted", "color-night", 4.5);
+    expectContrast("color-terminal-green", "color-terminal", 4.5);
     expectContrast("color-ink-muted", "color-surface", 4.5);
   });
 

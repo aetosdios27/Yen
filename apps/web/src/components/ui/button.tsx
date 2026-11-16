@@ -4,17 +4,20 @@ import type * as React from "react";
 import { cn } from "../cn";
 
 const buttonVariants = cva(
-  "min-h-12 min-w-12 inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-base font-medium whitespace-normal transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "tap-target inline-flex shrink-0 items-center justify-center gap-2 rounded-control px-4 text-body font-medium whitespace-normal transition-opacity disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        destructive:
-          "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 ",
-        outline: "border bg-background  hover:bg-accent hover:text-accent-foreground ",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground ",
-        link: "text-primary underline-offset-4 hover:underline",
+        default: "bg-primary text-on-solid hover:opacity-90",
+        primary: "bg-primary text-on-solid hover:opacity-90",
+        signal: "bg-signal text-on-signal hover:opacity-90",
+        destructive: "bg-danger text-on-solid hover:opacity-90",
+        danger: "bg-danger text-on-solid hover:opacity-90",
+        outline: "bg-surface text-ink shadow-card hover:bg-soft",
+        secondary: "bg-surface text-ink shadow-card hover:bg-soft",
+        tertiary: "text-ink-muted hover:bg-soft hover:text-ink",
+        ghost: "text-ink-muted hover:bg-soft hover:text-ink",
+        link: "text-ink underline-offset-4 hover:underline",
       },
       size: {
         default: "min-h-12 px-4 py-2 has-[>svg]:px-3",

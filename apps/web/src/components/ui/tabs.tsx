@@ -22,11 +22,11 @@ function Tabs({
 }
 
 const tabsListVariants = cva(
-  "group/tabs-list min-h-12 inline-flex w-fit items-center justify-center rounded-lg p-[3px] text-muted-foreground group-data-[orientation=horizontal]/tabs:min-h-12 group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:flex-col data-[variant=line]:rounded-none",
+  "group/tabs-list flex max-w-full flex-nowrap gap-2 overflow-x-auto p-1",
   {
     variants: {
       variant: {
-        default: "bg-muted",
+        default: "bg-transparent",
         line: "gap-1 bg-transparent",
       },
     },
@@ -56,10 +56,7 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "relative min-h-12 inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-base font-medium whitespace-normal text-foreground/60 transition-all group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 group-data-[variant=line]/tabs-list:data-[state=active]:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        "group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-[state=active]:bg-transparent ",
-        "data-[state=active]:bg-background data-[state=active]:text-foreground ",
-        "after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-[state=active]:after:opacity-100",
+        "tap-target inline-flex shrink-0 items-center justify-center rounded-full border border-line bg-surface px-4 py-2 text-body text-ink-muted max-w-full min-w-max whitespace-normal data-[state=active]:border-primary data-[state=active]:bg-primary data-[state=active]:text-on-solid disabled:opacity-50",
         className,
       )}
       {...props}
