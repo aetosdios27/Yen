@@ -1,8 +1,9 @@
 "use client";
 
-import { formatInr, type Paise } from "@yen/shared";
+import type { Paise } from "@yen/shared";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
+import { formatMoney } from "../lib/format";
 import { Button } from "./button";
 import { cn } from "./cn";
 import { Input } from "./input";
@@ -84,7 +85,7 @@ export function RejectionModal({
           {t("approver.rejectModalDescription")}
           {amountPaise !== undefined && payeeName !== undefined ? (
             <span className="mt-1 block font-medium text-ink">
-              {formatInr(amountPaise)} → {payeeName}
+              {formatMoney(amountPaise, { paise: "always" })} → {payeeName}
             </span>
           ) : null}
         </DialogDescription>
