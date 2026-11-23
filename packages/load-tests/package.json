@@ -19,15 +19,15 @@
     "test:load": "node --import=tsx src/cli.ts"
   },
   "dependencies": {
-    "@hono/node-server": "2.1.6",
+    "@hono/node-server": "2.1.11",
     "@hono/zod-openapi": "1.6.3",
     "@yen/api": "workspace:*",
     "@yen/db": "workspace:*",
     "@yen/policy": "workspace:*",
     "@yen/shared": "workspace:*",
     "autocannon": "^8.0.0",
-    "hono": "4.13.17",
-    "postgres": "^4.1.0",
+    "hono": "4.13.19",
+    "postgres": "^4.1.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -35,6 +35,6 @@
     "@types/node": "^26.6.6",
     "tsx": "4.23.15",
     "typescript": "^7.0.2",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.1"
   }
 }
