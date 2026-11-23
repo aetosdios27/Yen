@@ -37,8 +37,8 @@
     "@types/node": "^26.6.6",
     "@yen/notifications": "workspace:*",
     "@yen/queue": "workspace:*",
-    "fast-check": "^4.10.2",
+    "fast-check": "^4.10.3",
     "typescript": "^7.0.2",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.1"
   }
 }

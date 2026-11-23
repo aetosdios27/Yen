@@ -19,10 +19,10 @@
     "dev:mock": "pnpm --filter @yen/shared build && PORT=${API_PORT:-3001} tsx --env-file-if-exists=.env src/mock-server.ts"
   },
   "dependencies": {
-    "@hono/node-server": "2.1.6",
+    "@hono/node-server": "2.1.11",
     "@hono/zod-openapi": "1.6.3",
     "@opentelemetry/api": "^1.10.0",
-    "@opentelemetry/context-async-hooks": "^3.1.0",
+    "@opentelemetry/context-async-hooks": "^3.1.1",
     "@simplewebauthn/server": "14.1.0",
     "@yen/db": "workspace:*",
     "@yen/eventlog": "workspace:*",
@@ -32,11 +32,11 @@
     "@yen/queue": "workspace:*",
     "@yen/shared": "workspace:*",
     "bcryptjs": "^3.0.3",
-    "hono": "4.13.17",
+    "hono": "4.13.19",
     "zod": "4.6.7"
   },
   "devDependencies": {
-    "@opentelemetry/sdk-metrics": "^3.1.0",
+    "@opentelemetry/sdk-metrics": "^3.1.1",
     "@opentelemetry/sdk-trace-base": "^2.12.0",
     "@opentelemetry/sdk-trace-node": "^2.12.0",
     "@types/bcryptjs": "^3.0.0",
@@ -44,7 +44,7 @@
     "ajv": "^8.20.0",
     "tsx": "4.23.15",
     "typescript": "^7.0.2",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.1"
   },
   "exports": {
     ".": {
